@@ -6,7 +6,7 @@ entitlements-service after successful in-scope commands.
 ## Purpose
 
 After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`),
-extensions call `EmitContributorBilling` with the org scope, target ID(s), and optional git
+extensions call `EmitContributorBilling` with the org scope, entity ID(s), and optional git
 contributor snapshot. The entitlements-service ingest endpoint produces Kafka billing events.
 
 This package is **Part 1** of CLI delivery. Wiring into extension repos is handled in separate
@@ -23,12 +23,12 @@ defer emitter.WaitWithTimeout(contributorbilling.DefaultTimeout)
 
 emitter.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
     HTTPClient: client,
-    IngestURL:  apiURL + contributorbilling.DefaultIngestPath,
+    IngestURL:  apiURL,
     AuthHeader: "token " + token,
-    Capability: contributorbilling.CapabilityOSS, // oss | code | iac
+    Capability: contributorbilling.CapabilityOSS, // oss | code | iac — caller-side gating only
     ScopeID:    orgID,
     Items: []contributorbilling.BillingItem{
-        {TargetID: targetID},
+        {EntityID: projectID}, // EntityType defaults to project → contributors_entity_id project:<uuid>
     },
     RepoPath:            ".",
     CollectContributors: true,
@@ -67,36 +67,39 @@ goroutine and are included in the wait count.
 
 ## Ingest contract
 
+Aligned with entitlements-service `POST /hidden/orgs/{org_id}/contributing_devs?version=2024-10-15`.
+
+Each `BillingItem` is emitted as a separate JSON:API POST:
+
 ```
-POST {IngestURL}
+POST {IngestURL}/hidden/orgs/{org_id}/contributing_devs?version=2024-10-15
 Authorization: token <SNYK_TOKEN>
-Content-Type: application/json
+Content-Type: application/vnd.api+json
 ```
 
 ```json
 {
-  "source": "cli",
-  "capability": "oss",
-  "items": [
-    {
-      "scope_id": "<org-uuid>",
-      "target_id": "<target-uuid>",
+  "data": {
+    "type": "contributing_devs",
+    "attributes": {
+      "contributors_entity_id": "project:<project-uuid>",
       "contributors": [
         {
           "email": "dev@example.com",
-          "latest_commit_date": "2026-01-15T12:00:00Z"
+          "commit_date": "2026-01-15T12:00:00Z"
         }
       ]
     }
-  ]
+  }
 }
 ```
 
-- Expected success response: **202 Accepted**
-- Callers send `scope_id`, `target_id`, and `contributors`
-- `DefaultIngestPath` matches the draft OpenAPI in `pkg/apiclients/entitlements_service`; replace when the official spec is vendored
+- Expected success response: **201 Created**
+- `ScopeID` is the org UUID path parameter
+- `BillingItem.EntityID` is the entity UUID; `BillingItem.EntityType` defaults to `project` (`project`, `target`, or `revision`)
+- `Capability` is validated client-side for telemetry/gating; it is not sent on the HTTP payload
 
-See `testdata/golden_ingest_payload.json` for a multi-item golden fixture (Part 2 TS alignment).
+See `testdata/golden_ingest_payload.json` for a golden fixture.
 
 ## Contributor collection
 
@@ -107,7 +110,7 @@ When `CollectContributors` is true, the package runs git log for items with empt
 - Per email: keep the **most recent** commit timestamp
 - Sorted by email for stable JSON
 - Non-git or empty repo: empty contributors, no error
-- `EmitOptions.RepoPath` is the default git root; set `BillingItem.RepoPath` to override per project when a single POST spans multiple directories
+- `EmitOptions.RepoPath` is the default git root; set `BillingItem.RepoPath` to override per entity when one emit spans multiple directories
 - Git collection failures are surfaced on `Result.ContributorCollectionErr` while the POST still proceeds with empty contributors for affected items
 
 Semantics align with:
@@ -135,26 +138,27 @@ apply here.
 | Outcome | Reason | When |
 |---------|--------|------|
 | `skipped` | `empty_items` | No items provided |
-| `skipped` | `missing_target_id` | All items missing `target_id` |
+| `skipped` | `missing_entity_id` | All items missing `EntityID` |
 | `skipped` | `missing_capability` | `Capability` is empty |
 | `skipped` | `invalid_capability` | `Capability` is not one of `oss`, `code`, or `iac` |
 | `skipped` | `missing_scope_id` | `ScopeID` is empty |
 | `failed` | `marshal_error` | Ingest payload could not be marshaled |
 | `failed` | `missing_ingest_url` | `IngestURL` is empty |
 | `failed` | `request_error` | HTTP request could not be constructed |
-| `failed` | `http_error` | Network error or non-202 response (`Result.Err` set for unexpected status) |
+| `failed` | `http_error` | Network error or non-201 response (`Result.Err` set for unexpected status) |
 | `failed` | `timeout` | POST exceeded `Timeout` (default 5s) |
-| `emitted` | — | HTTP 202; check `ContributorCollectionErr` if git collection failed |
+| `emitted` | — | HTTP 201; check `ContributorCollectionErr` if git collection failed |
 
-Items with empty `target_id` are dropped; remaining valid items are still emitted.
+Items with empty `EntityID` are dropped; remaining valid items are still emitted (one POST each).
 
 ## Future call sites (out of scope for this package)
 
-| Repo | When | Capability | Target ID source |
+| Repo | When | Capability | Entity ID source |
 |------|------|------------|------------------|
-| cli-extension-os-flows | Dragonfly monitor success | `oss` | monitor response `target_id` |
-| cli-extension-iac | ShareResultsRegistry (Path B) | `iac` | share response `target_id` |
-| code-client-go | Native `--report` success | `code` | `ResultMetaData.TargetId` |
+| cliv2 + legacy TS | Monitor / IaC share success | `oss` / `iac` | capture middleware project IDs → `project:<uuid>` |
+| cli-extension-os-flows | Dragonfly monitor success | `oss` | monitor response project public ID |
+| cli-extension-iac | ShareResultsRegistry (Path B) | `iac` | share response project public ID |
+| code-client-go | Native `--report` success | `code` | `ResultMetaData.TargetId` as `target:<uuid>` |
 
 Not in scope: IaC Path C (cloud upload), SCLE Code `--report`, container/docker monitor.
 

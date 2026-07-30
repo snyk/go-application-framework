@@ -13,9 +13,12 @@ type Contributor struct {
 	LatestCommitDate time.Time
 }
 
-// BillingItem is one target scope within a single ingest POST.
+// BillingItem is one entity scope emitted as a separate ingest POST.
 type BillingItem struct {
-	TargetID     string
+	// EntityID is the UUID portion of contributors_entity_id (paired with EntityType).
+	EntityID string
+	// EntityType is the ES ingest entity prefix (project, target, revision). Defaults to project.
+	EntityType   string
 	Contributors []Contributor
 	// RepoPath overrides EmitOptions.RepoPath for contributor collection on this item.
 	RepoPath string
@@ -53,7 +56,7 @@ type SkipReason string
 
 const (
 	SkipReasonEmptyItems        SkipReason = "empty_items"
-	SkipReasonMissingTargetID   SkipReason = "missing_target_id"
+	SkipReasonMissingEntityID   SkipReason = "missing_entity_id"
 	SkipReasonMissingCapability SkipReason = "missing_capability"
 	SkipReasonInvalidCapability SkipReason = "invalid_capability"
 	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"

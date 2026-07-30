@@ -14,7 +14,6 @@ import (
 func TestMarshalIngestPayload_MatchesGoldenFixture(t *testing.T) {
 	t.Parallel()
 
-	scopeID := "11111111-1111-1111-1111-111111111111"
 	contributors := []Contributor{
 		{
 			Email:            "alice@example.com",
@@ -26,12 +25,12 @@ func TestMarshalIngestPayload_MatchesGoldenFixture(t *testing.T) {
 		},
 	}
 
-	items := []BillingItem{
-		{TargetID: "22222222-2222-2222-2222-222222222222", Contributors: contributors},
-		{TargetID: "33333333-3333-3333-3333-333333333333", Contributors: contributors},
+	item := BillingItem{
+		EntityID:     "22222222-2222-2222-2222-222222222222",
+		Contributors: contributors,
 	}
 
-	body, err := marshalIngestRequest(CapabilityOSS, scopeID, items, nil)
+	body, err := marshalIngestRequest(item, nil)
 	require.NoError(t, err)
 
 	goldenPath := filepath.Join("testdata", "golden_ingest_payload.json")
@@ -48,36 +47,49 @@ func TestMarshalIngestPayload_MatchesGoldenFixture(t *testing.T) {
 func TestMarshalIngestPayload_SkipsZeroLatestCommitDate(t *testing.T) {
 	t.Parallel()
 
-	items := []BillingItem{
-		{
-			TargetID: "project-a",
-			Contributors: []Contributor{
-				{Email: "valid@example.com", LatestCommitDate: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)},
-				{Email: "invalid@example.com"},
-			},
+	item := BillingItem{
+		EntityID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		Contributors: []Contributor{
+			{Email: "valid@example.com", LatestCommitDate: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)},
+			{Email: "invalid@example.com"},
 		},
 	}
 
-	body, err := marshalIngestRequest(CapabilityOSS, "org-uuid", items, nil)
+	body, err := marshalIngestRequest(item, nil)
 	require.NoError(t, err)
 
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal(body, &got))
 
-	payloadItems, ok := got["items"].([]interface{})
+	data, ok := got["data"].(map[string]interface{})
 	require.True(t, ok)
-	require.Len(t, payloadItems, 1)
-
-	firstItem, ok := payloadItems[0].(map[string]interface{})
+	attributes, ok := data["attributes"].(map[string]interface{})
 	require.True(t, ok)
-	contributors, ok := firstItem["contributors"].([]interface{})
+	contributors, ok := attributes["contributors"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, contributors, 1)
 
 	contributor, ok := contributors[0].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "valid@example.com", contributor["email"])
-	assert.Equal(t, "2026-01-15T12:00:00Z", contributor["latest_commit_date"])
+	assert.Equal(t, "2026-01-15T12:00:00Z", contributor["commit_date"])
+}
+
+func TestContributorsEntityID_DefaultsToProject(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "project:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", contributorsEntityID(BillingItem{
+		EntityID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+	}))
+}
+
+func TestContributorsEntityID_UsesExplicitEntityType(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "target:cccccccc-cccc-4ccc-8ccc-cccccccccccc", contributorsEntityID(BillingItem{
+		EntityID:   "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+		EntityType: EntityTypeTarget,
+	}))
 }
 
 func TestCloneItems(t *testing.T) {
@@ -85,8 +97,9 @@ func TestCloneItems(t *testing.T) {
 
 	original := []BillingItem{
 		{
-			TargetID: "project-a",
-			RepoPath: "repo-a",
+			EntityID:   "project-a",
+			EntityType: EntityTypeTarget,
+			RepoPath:   "repo-a",
 			Contributors: []Contributor{
 				{Email: "dev@example.com", LatestCommitDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 			},
@@ -96,11 +109,13 @@ func TestCloneItems(t *testing.T) {
 	cloned := cloneItems(original)
 	require.Len(t, cloned, 1)
 
-	original[0].TargetID = "mutated"
+	original[0].EntityID = "mutated"
+	original[0].EntityType = EntityTypeProject
 	original[0].RepoPath = "mutated-repo"
 	original[0].Contributors[0].Email = "mutated@example.com"
 
-	assert.Equal(t, "project-a", cloned[0].TargetID)
+	assert.Equal(t, "project-a", cloned[0].EntityID)
+	assert.Equal(t, EntityTypeTarget, cloned[0].EntityType)
 	assert.Equal(t, "repo-a", cloned[0].RepoPath)
 	assert.Equal(t, "dev@example.com", cloned[0].Contributors[0].Email)
 }
@@ -117,29 +132,29 @@ func TestFilterItems(t *testing.T) {
 
 	t.Run("all missing target id", func(t *testing.T) {
 		t.Parallel()
-		items, reason := filterItems([]BillingItem{{TargetID: ""}, {TargetID: "  "}})
+		items, reason := filterItems([]BillingItem{{EntityID: ""}, {EntityID: "  "}})
 		assert.Empty(t, items)
-		assert.Equal(t, SkipReasonMissingTargetID, reason)
+		assert.Equal(t, SkipReasonMissingEntityID, reason)
 	})
 
 	t.Run("keeps valid items", func(t *testing.T) {
 		t.Parallel()
 		items, reason := filterItems([]BillingItem{
-			{TargetID: ""},
-			{TargetID: "project-a"},
+			{EntityID: ""},
+			{EntityID: "project-a"},
 		})
 		require.Len(t, items, 1)
-		assert.Equal(t, "project-a", items[0].TargetID)
+		assert.Equal(t, "project-a", items[0].EntityID)
 		assert.Empty(t, reason)
 	})
 
 	t.Run("trims target id", func(t *testing.T) {
 		t.Parallel()
 		items, reason := filterItems([]BillingItem{
-			{TargetID: "  project-a  "},
+			{EntityID: "  project-a  "},
 		})
 		require.Len(t, items, 1)
-		assert.Equal(t, "project-a", items[0].TargetID)
+		assert.Equal(t, "project-a", items[0].EntityID)
 		assert.Empty(t, reason)
 	})
 }

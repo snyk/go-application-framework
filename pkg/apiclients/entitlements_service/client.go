@@ -7,23 +7,26 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
 )
 
-// IngestPath is the draft entitlements-service contributor ingest path.
-// TODO: replace spec.yaml with the official entitlements-service OpenAPI once available.
-const IngestPath = "/rest/api/hidden/contributors/ingest"
+// DefaultIngestAPIVersion matches the entitlements-service Contributing Devs Ingest API version.
+const DefaultIngestAPIVersion = "2024-10-15"
 
-// IngestRequest is the contributor billing ingest payload.
-type IngestRequest = v20260729.ContributorIngestRequest
+// IngestRequest is the JSON:API body for one entity ingest POST.
+type IngestRequest = v20260729.CreateContributingDevsApplicationVndAPIPlusJSONRequestBody
 
 // IngestClient posts contributor billing ingest payloads to entitlements-service.
 type IngestClient struct {
-	api v20260729.ClientWithResponsesInterface
+	api     v20260729.ClientWithResponsesInterface
+	version string
 }
 
 // NewIngestClient creates a client for the ingest endpoint at ingestURL.
-// ingestURL may be a host root (e.g. https://api.snyk.io) or include IngestPath.
+// ingestURL must be the API host root (e.g. https://api.snyk.io).
 func NewIngestClient(httpClient *http.Client, ingestURL string) (*IngestClient, error) {
 	server, err := ingestServerURL(ingestURL)
 	if err != nil {
@@ -40,15 +43,24 @@ func NewIngestClient(httpClient *http.Client, ingestURL string) (*IngestClient, 
 		return nil, fmt.Errorf("create entitlements-service client: %w", err)
 	}
 
-	return &IngestClient{api: api}, nil
+	return &IngestClient{
+		api:     api,
+		version: DefaultIngestAPIVersion,
+	}, nil
 }
 
-// IngestContributors POSTs a contributor billing ingest payload.
-func (c *IngestClient) IngestContributors(
+// CreateContributingDevs POSTs contributors for one entity to entitlements-service ingest.
+func (c *IngestClient) CreateContributingDevs(
 	ctx context.Context,
+	orgID string,
 	authHeader string,
 	body IngestRequest,
-) (*v20260729.IngestContributorsResponse, error) {
+) (*v20260729.CreateContributingDevsResponse, error) {
+	parsedOrgID, err := uuid.Parse(strings.TrimSpace(orgID))
+	if err != nil {
+		return nil, fmt.Errorf("parse org id: %w", err)
+	}
+
 	var editors []v20260729.RequestEditorFn
 	if authHeader != "" {
 		editors = append(editors, func(_ context.Context, req *http.Request) error {
@@ -57,7 +69,17 @@ func (c *IngestClient) IngestContributors(
 		})
 	}
 
-	return c.api.IngestContributorsWithResponse(ctx, body, editors...)
+	params := &v20260729.CreateContributingDevsParams{
+		Version: c.version,
+	}
+
+	return c.api.CreateContributingDevsWithApplicationVndAPIPlusJSONBodyWithResponse(
+		ctx,
+		openapi_types.UUID(parsedOrgID),
+		params,
+		body,
+		editors...,
+	)
 }
 
 func ingestServerURL(ingestURL string) (string, error) {
@@ -69,7 +91,7 @@ func ingestServerURL(ingestURL string) (string, error) {
 		return "", fmt.Errorf("ingest URL must include scheme and host")
 	}
 
-	parsed.Path = strings.TrimSuffix(parsed.Path, IngestPath)
+	parsed.Path = ""
 	parsed.RawPath = ""
 	parsed.RawQuery = ""
 	parsed.Fragment = ""

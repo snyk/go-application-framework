@@ -1,72 +1,106 @@
 openapi: 3.0.3
 info:
-  title: Entitlements Service Contributor Ingest API
+  title: Contributing Devs Ingest API
   description: |
-    Draft OpenAPI for CLI contributor billing ingest. Replace with the official
-    entitlements-service spec when available.
-  version: 2026-07-29
+    entitlements-service hidden ingest API for CLI Active Contributor billing.
+    Vendored from contributingDevsIngestApi (2024-10-15); sweater-comb refs inlined for codegen.
+  version: 2024-10-15
 servers:
   - url: /
 paths:
-  /rest/api/hidden/contributors/ingest:
+  /hidden/orgs/{org_id}/contributing_devs:
     post:
-      operationId: ingestContributors
-      summary: Ingest CLI contributor billing events
+      operationId: createContributingDevs
+      summary: Ingest contributors for an entity
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
-          application/json:
+          application/vnd.api+json:
             schema:
-              $ref: '#/components/schemas/ContributorIngestRequest'
+              $ref: '#/components/schemas/CreateContributingDevsRequestBody'
       responses:
-        "202":
-          description: Accepted
+        "201":
+          description: Contributors accepted and published
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/CreateContributingDevsResponseBody'
         "400":
           description: Bad request
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
         "500":
           description: Internal server error
 components:
   schemas:
-    ContributorIngestRequest:
+    CreateContributingDevsRequestBody:
       type: object
       required:
-        - source
-        - capability
-        - items
+        - data
       properties:
-        source:
-          type: string
-        capability:
-          type: string
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/ContributorIngestItem'
-    ContributorIngestItem:
+        data:
+          type: object
+          required:
+            - type
+            - attributes
+          properties:
+            type:
+              type: string
+              enum:
+                - contributing_devs
+            attributes:
+              $ref: '#/components/schemas/ContributingDevsIngestAttributes'
+    ContributingDevsIngestAttributes:
       type: object
       required:
-        - scope_id
-        - target_id
+        - contributors_entity_id
         - contributors
       properties:
-        scope_id:
-          type: string
-        target_id:
+        contributors_entity_id:
           type: string
         contributors:
           type: array
           items:
-            $ref: '#/components/schemas/ContributorIngestContributor'
-    ContributorIngestContributor:
+            $ref: '#/components/schemas/Contributor'
+    Contributor:
       type: object
       required:
         - email
-        - latest_commit_date
+        - commit_date
       properties:
         email:
           type: string
-        latest_commit_date:
+        commit_date:
           type: string
           format: date-time
+    CreateContributingDevsResponseBody:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - id
+            - type
+          properties:
+            id:
+              type: string
+            type:
+              type: string

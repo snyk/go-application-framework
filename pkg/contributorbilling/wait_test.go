@@ -23,7 +23,7 @@ func TestWaitWithTimeout_WaitsForInFlightEmit(t *testing.T) {
 	blockPost := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-blockPost
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
 
@@ -35,9 +35,9 @@ func TestWaitWithTimeout_WaitsForInFlightEmit(t *testing.T) {
 		HTTPClient: server.Client(),
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
-		ScopeID:    "org-uuid",
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
 		Items: []contributorbilling.BillingItem{
-			{TargetID: "project-1"},
+			{EntityID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -73,7 +73,7 @@ func TestWaitWithTimeout_TimesOut(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-blockPost
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
 
@@ -81,9 +81,9 @@ func TestWaitWithTimeout_TimesOut(t *testing.T) {
 		HTTPClient: server.Client(),
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
-		ScopeID:    "org-uuid",
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
 		Items: []contributorbilling.BillingItem{
-			{TargetID: "project-1"},
+			{EntityID: "project-1"},
 		},
 	})
 

@@ -2,46 +2,50 @@ package contributorbilling
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog"
 	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
 )
 
-func buildIngestRequest(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) v20260729.ContributorIngestRequest {
-	payloadItems := make([]v20260729.ContributorIngestItem, len(items))
-	for i, item := range items {
-		contributors := make([]v20260729.ContributorIngestContributor, 0, len(item.Contributors))
-		for _, contributor := range item.Contributors {
-			if contributor.LatestCommitDate.IsZero() {
-				if logger != nil {
-					logger.Debug().
-						Str("email", contributor.Email).
-						Msg("contributor billing: skipping contributor with zero latest commit date")
-				}
-				continue
+func buildIngestRequest(item BillingItem, logger *zerolog.Logger) v20260729.CreateContributingDevsApplicationVndAPIPlusJSONRequestBody {
+	contributors := make([]v20260729.Contributor, 0, len(item.Contributors))
+	for _, contributor := range item.Contributors {
+		if contributor.LatestCommitDate.IsZero() {
+			if logger != nil {
+				logger.Debug().
+					Str("email", contributor.Email).
+					Msg("contributor billing: skipping contributor with zero latest commit date")
 			}
-
-			contributors = append(contributors, v20260729.ContributorIngestContributor{
-				Email:            contributor.Email,
-				LatestCommitDate: contributor.LatestCommitDate.UTC(),
-			})
+			continue
 		}
 
-		payloadItems[i] = v20260729.ContributorIngestItem{
-			ScopeId:      scopeID,
-			TargetId:     item.TargetID,
-			Contributors: contributors,
-		}
+		contributors = append(contributors, v20260729.Contributor{
+			Email:      contributor.Email,
+			CommitDate: contributor.LatestCommitDate.UTC(),
+		})
 	}
 
-	return v20260729.ContributorIngestRequest{
-		Source:     SourceCLI,
-		Capability: capability,
-		Items:      payloadItems,
+	request := v20260729.CreateContributingDevsApplicationVndAPIPlusJSONRequestBody{}
+	request.Data.Type = v20260729.ContributingDevs
+	request.Data.Attributes = v20260729.ContributingDevsIngestAttributes{
+		ContributorsEntityId: contributorsEntityID(item),
+		Contributors:         contributors,
 	}
+	return request
 }
 
-func marshalIngestRequest(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) ([]byte, error) {
-	request := buildIngestRequest(capability, scopeID, items, logger)
+func contributorsEntityID(item BillingItem) string {
+	entityType := strings.TrimSpace(item.EntityType)
+	if entityType == "" {
+		entityType = EntityTypeProject
+	}
+
+	return fmt.Sprintf("%s:%s", entityType, item.EntityID)
+}
+
+func marshalIngestRequest(item BillingItem, logger *zerolog.Logger) ([]byte, error) {
+	request := buildIngestRequest(item, logger)
 	return json.Marshal(request)
 }

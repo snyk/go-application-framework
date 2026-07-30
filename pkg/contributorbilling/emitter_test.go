@@ -19,12 +19,12 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 	blockPost := make(chan struct{})
 	slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-blockPost
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(slowServer.Close)
 
 	fastServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(fastServer.Close)
 
@@ -35,9 +35,9 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 		HTTPClient: slowServer.Client(),
 		IngestURL:  slowServer.URL,
 		Capability: contributorbilling.CapabilityOSS,
-		ScopeID:    "org-uuid",
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
 		Items: []contributorbilling.BillingItem{
-			{TargetID: "project-1"},
+			{EntityID: "project-1"},
 		},
 	})
 
@@ -49,9 +49,9 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 		HTTPClient: fastServer.Client(),
 		IngestURL:  fastServer.URL,
 		Capability: contributorbilling.CapabilityOSS,
-		ScopeID:    "org-uuid",
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
 		Items: []contributorbilling.BillingItem{
-			{TargetID: "project-2"},
+			{EntityID: "project-2"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result

@@ -6,18 +6,22 @@ import (
 )
 
 const (
-	// SourceCLI is the ingest payload source value for CLI-originated billing events.
-	SourceCLI = "cli"
-
-	// CapabilityOSS is the ingest capability for open-source monitor flows.
+	// CapabilityOSS is the CLI product flow for open-source monitor billing emit.
 	CapabilityOSS = "oss"
-	// CapabilityCode is the ingest capability for Snyk Code report flows.
+	// CapabilityCode is the CLI product flow for Snyk Code report billing emit.
 	CapabilityCode = "code"
-	// CapabilityIaC is the ingest capability for IaC registry share flows.
+	// CapabilityIaC is the CLI product flow for IaC registry share billing emit.
 	CapabilityIaC = "iac"
 
-	// DefaultIngestPath is the draft entitlements-service ingest path from the OpenAPI spec.
-	DefaultIngestPath = entitlements_service.IngestPath
+	// EntityTypeProject is the default ES ingest entity type for Registry project public IDs.
+	EntityTypeProject = "project"
+	// EntityTypeTarget is the ES ingest entity type when callers have an org target UUID.
+	EntityTypeTarget = "target"
+	// EntityTypeRevision is the ES ingest entity type for revision-scoped entities.
+	EntityTypeRevision = "revision"
+
+	// DefaultIngestAPIVersion matches entitlements-service Contributing Devs Ingest API version.
+	DefaultIngestAPIVersion = entitlements_service.DefaultIngestAPIVersion
 
 	// DefaultTimeout bounds the fire-and-forget HTTP POST so callers are never blocked.
 	DefaultTimeout = 5 * time.Second

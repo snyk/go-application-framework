@@ -9,32 +9,12 @@ import (
 	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
 )
 
-func TestIngestServerURL(t *testing.T) {
+func TestNewIngestClient(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name      string
-		ingestURL string
-	}{
-		{
-			name:      "host only",
-			ingestURL: "https://api.snyk.io",
-		},
-		{
-			name:      "full ingest URL",
-			ingestURL: "https://api.snyk.io" + entitlements_service.IngestPath,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			client, err := entitlements_service.NewIngestClient(nil, tt.ingestURL)
-			require.NoError(t, err)
-			require.NotNil(t, client)
-		})
-	}
+	client, err := entitlements_service.NewIngestClient(nil, "https://api.snyk.io")
+	require.NoError(t, err)
+	require.NotNil(t, client)
 
 	t.Run("invalid URL", func(t *testing.T) {
 		t.Parallel()

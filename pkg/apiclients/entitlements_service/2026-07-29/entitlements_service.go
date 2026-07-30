@@ -13,30 +13,54 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// ContributorIngestContributor defines model for ContributorIngestContributor.
-type ContributorIngestContributor struct {
-	Email            string    `json:"email"`
-	LatestCommitDate time.Time `json:"latest_commit_date"`
+// Defines values for CreateContributingDevsRequestBodyDataType.
+const (
+	ContributingDevs CreateContributingDevsRequestBodyDataType = "contributing_devs"
+)
+
+// ContributingDevsIngestAttributes defines model for ContributingDevsIngestAttributes.
+type ContributingDevsIngestAttributes struct {
+	Contributors         []Contributor `json:"contributors"`
+	ContributorsEntityId string        `json:"contributors_entity_id"`
 }
 
-// ContributorIngestItem defines model for ContributorIngestItem.
-type ContributorIngestItem struct {
-	Contributors []ContributorIngestContributor `json:"contributors"`
-	ScopeId      string                         `json:"scope_id"`
-	TargetId     string                         `json:"target_id"`
+// Contributor defines model for Contributor.
+type Contributor struct {
+	CommitDate time.Time `json:"commit_date"`
+	Email      string    `json:"email"`
 }
 
-// ContributorIngestRequest defines model for ContributorIngestRequest.
-type ContributorIngestRequest struct {
-	Capability string                  `json:"capability"`
-	Items      []ContributorIngestItem `json:"items"`
-	Source     string                  `json:"source"`
+// CreateContributingDevsRequestBody defines model for CreateContributingDevsRequestBody.
+type CreateContributingDevsRequestBody struct {
+	Data struct {
+		Attributes ContributingDevsIngestAttributes          `json:"attributes"`
+		Type       CreateContributingDevsRequestBodyDataType `json:"type"`
+	} `json:"data"`
 }
 
-// IngestContributorsJSONRequestBody defines body for IngestContributors for application/json ContentType.
-type IngestContributorsJSONRequestBody = ContributorIngestRequest
+// CreateContributingDevsRequestBodyDataType defines model for CreateContributingDevsRequestBody.Data.Type.
+type CreateContributingDevsRequestBodyDataType string
+
+// CreateContributingDevsResponseBody defines model for CreateContributingDevsResponseBody.
+type CreateContributingDevsResponseBody struct {
+	Data struct {
+		Id   string `json:"id"`
+		Type string `json:"type"`
+	} `json:"data"`
+}
+
+// CreateContributingDevsParams defines parameters for CreateContributingDevs.
+type CreateContributingDevsParams struct {
+	Version string `form:"version" json:"version"`
+}
+
+// CreateContributingDevsApplicationVndAPIPlusJSONRequestBody defines body for CreateContributingDevs for application/vnd.api+json ContentType.
+type CreateContributingDevsApplicationVndAPIPlusJSONRequestBody = CreateContributingDevsRequestBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -111,14 +135,14 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// IngestContributorsWithBody request with any body
-	IngestContributorsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// CreateContributingDevsWithBody request with any body
+	CreateContributingDevsWithBody(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	IngestContributors(ctx context.Context, body IngestContributorsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateContributingDevsWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, body CreateContributingDevsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) IngestContributorsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewIngestContributorsRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateContributingDevsWithBody(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateContributingDevsRequestWithBody(c.Server, orgId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +153,8 @@ func (c *Client) IngestContributorsWithBody(ctx context.Context, contentType str
 	return c.Client.Do(req)
 }
 
-func (c *Client) IngestContributors(ctx context.Context, body IngestContributorsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewIngestContributorsRequest(c.Server, body)
+func (c *Client) CreateContributingDevsWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, body CreateContributingDevsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateContributingDevsRequestWithApplicationVndAPIPlusJSONBody(c.Server, orgId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -141,27 +165,34 @@ func (c *Client) IngestContributors(ctx context.Context, body IngestContributors
 	return c.Client.Do(req)
 }
 
-// NewIngestContributorsRequest calls the generic IngestContributors builder with application/json body
-func NewIngestContributorsRequest(server string, body IngestContributorsJSONRequestBody) (*http.Request, error) {
+// NewCreateContributingDevsRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateContributingDevs builder with application/vnd.api+json body
+func NewCreateContributingDevsRequestWithApplicationVndAPIPlusJSONBody(server string, orgId openapi_types.UUID, params *CreateContributingDevsParams, body CreateContributingDevsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewIngestContributorsRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateContributingDevsRequestWithBody(server, orgId, params, "application/vnd.api+json", bodyReader)
 }
 
-// NewIngestContributorsRequestWithBody generates requests for IngestContributors with any type of body
-func NewIngestContributorsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewCreateContributingDevsRequestWithBody generates requests for CreateContributingDevs with any type of body
+func NewCreateContributingDevsRequestWithBody(server string, orgId openapi_types.UUID, params *CreateContributingDevsParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/rest/api/hidden/contributors/ingest")
+	operationPath := fmt.Sprintf("/hidden/orgs/%s/contributing_devs", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -169,6 +200,24 @@ func NewIngestContributorsRequestWithBody(server string, contentType string, bod
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -224,19 +273,20 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// IngestContributorsWithBodyWithResponse request with any body
-	IngestContributorsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IngestContributorsResponse, error)
+	// CreateContributingDevsWithBodyWithResponse request with any body
+	CreateContributingDevsWithBodyWithResponse(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateContributingDevsResponse, error)
 
-	IngestContributorsWithResponse(ctx context.Context, body IngestContributorsJSONRequestBody, reqEditors ...RequestEditorFn) (*IngestContributorsResponse, error)
+	CreateContributingDevsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, body CreateContributingDevsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateContributingDevsResponse, error)
 }
 
-type IngestContributorsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
+type CreateContributingDevsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *CreateContributingDevsResponseBody
 }
 
 // Status returns HTTPResponse.Status
-func (r IngestContributorsResponse) Status() string {
+func (r CreateContributingDevsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -244,41 +294,51 @@ func (r IngestContributorsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r IngestContributorsResponse) StatusCode() int {
+func (r CreateContributingDevsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-// IngestContributorsWithBodyWithResponse request with arbitrary body returning *IngestContributorsResponse
-func (c *ClientWithResponses) IngestContributorsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IngestContributorsResponse, error) {
-	rsp, err := c.IngestContributorsWithBody(ctx, contentType, body, reqEditors...)
+// CreateContributingDevsWithBodyWithResponse request with arbitrary body returning *CreateContributingDevsResponse
+func (c *ClientWithResponses) CreateContributingDevsWithBodyWithResponse(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateContributingDevsResponse, error) {
+	rsp, err := c.CreateContributingDevsWithBody(ctx, orgId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseIngestContributorsResponse(rsp)
+	return ParseCreateContributingDevsResponse(rsp)
 }
 
-func (c *ClientWithResponses) IngestContributorsWithResponse(ctx context.Context, body IngestContributorsJSONRequestBody, reqEditors ...RequestEditorFn) (*IngestContributorsResponse, error) {
-	rsp, err := c.IngestContributors(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateContributingDevsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId openapi_types.UUID, params *CreateContributingDevsParams, body CreateContributingDevsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateContributingDevsResponse, error) {
+	rsp, err := c.CreateContributingDevsWithApplicationVndAPIPlusJSONBody(ctx, orgId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseIngestContributorsResponse(rsp)
+	return ParseCreateContributingDevsResponse(rsp)
 }
 
-// ParseIngestContributorsResponse parses an HTTP response from a IngestContributorsWithResponse call
-func ParseIngestContributorsResponse(rsp *http.Response) (*IngestContributorsResponse, error) {
+// ParseCreateContributingDevsResponse parses an HTTP response from a CreateContributingDevsWithResponse call
+func ParseCreateContributingDevsResponse(rsp *http.Response) (*CreateContributingDevsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &IngestContributorsResponse{
+	response := &CreateContributingDevsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreateContributingDevsResponseBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
 	}
 
 	return response, nil

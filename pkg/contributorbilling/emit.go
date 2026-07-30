@@ -27,8 +27,9 @@ func cloneItems(items []BillingItem) []BillingItem {
 	cloned := make([]BillingItem, len(items))
 	for i, item := range items {
 		cloned[i] = BillingItem{
-			TargetID: item.TargetID,
-			RepoPath: item.RepoPath,
+			EntityID:   item.EntityID,
+			EntityType: item.EntityType,
+			RepoPath:   item.RepoPath,
 		}
 		if len(item.Contributors) > 0 {
 			cloned[i].Contributors = append([]Contributor(nil), item.Contributors...)
@@ -72,9 +73,7 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		collectionErr = fillContributors(items, opts.RepoPath, time.Now(), opts.Logger)
 	}
 
-	request := buildIngestRequest(opts.Capability, opts.ScopeID, items, opts.Logger)
-
-	result := postIngest(parent, opts, request)
+	result := postIngest(parent, opts, items)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
 	}
@@ -157,16 +156,16 @@ func filterItems(items []BillingItem) ([]BillingItem, SkipReason) {
 
 	filtered := make([]BillingItem, 0, len(items))
 	for _, item := range items {
-		targetID := strings.TrimSpace(item.TargetID)
-		if targetID == "" {
+		entityID := strings.TrimSpace(item.EntityID)
+		if entityID == "" {
 			continue
 		}
-		item.TargetID = targetID
+		item.EntityID = entityID
 		filtered = append(filtered, item)
 	}
 
 	if len(filtered) == 0 {
-		return nil, SkipReasonMissingTargetID
+		return nil, SkipReasonMissingEntityID
 	}
 
 	return filtered, ""
@@ -178,7 +177,7 @@ func missingIngestURLResult(logger *zerolog.Logger) Result {
 	return Result{Status: ResultStatusFailed, FailReason: FailReasonMissingIngestURL, Err: err}
 }
 
-func postIngest(parent context.Context, opts EmitOptions, request entitlements_service.IngestRequest) Result {
+func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) Result {
 	if strings.TrimSpace(opts.IngestURL) == "" {
 		return missingIngestURLResult(opts.Logger)
 	}
@@ -192,7 +191,27 @@ func postIngest(parent context.Context, opts EmitOptions, request entitlements_s
 		return Result{Status: ResultStatusFailed, FailReason: FailReasonRequestError, Err: err}
 	}
 
-	resp, err := client.IngestContributors(ctx, opts.AuthHeader, request)
+	var lastStatus int
+	for _, item := range items {
+		request := buildIngestRequest(item, opts.Logger)
+		result := postSingleIngest(ctx, client, opts, request)
+		if result.Status != ResultStatusEmitted {
+			return result
+		}
+		lastStatus = result.HTTPStatus
+	}
+
+	opts.Logger.Debug().Int("status", lastStatus).Int("items", len(items)).Msg("contributor billing: emitted")
+	return Result{Status: ResultStatusEmitted, HTTPStatus: lastStatus}
+}
+
+func postSingleIngest(
+	ctx context.Context,
+	client *entitlements_service.IngestClient,
+	opts EmitOptions,
+	request entitlements_service.IngestRequest,
+) Result {
+	resp, err := client.CreateContributingDevs(ctx, opts.ScopeID, opts.AuthHeader, request)
 	if err != nil {
 		failReason := FailReasonHTTPError
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -202,8 +221,7 @@ func postIngest(parent context.Context, opts EmitOptions, request entitlements_s
 		return Result{Status: ResultStatusFailed, FailReason: failReason, Err: err}
 	}
 
-	if resp.StatusCode() == http.StatusAccepted {
-		opts.Logger.Debug().Int("status", resp.StatusCode()).Msg("contributor billing: emitted")
+	if resp.StatusCode() == http.StatusCreated {
 		return Result{Status: ResultStatusEmitted, HTTPStatus: resp.StatusCode()}
 	}
 
