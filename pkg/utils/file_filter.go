@@ -23,9 +23,8 @@ import (
 
 // Feature flags gating FileFilter behavior. They live here, next to the behavior they gate.
 const (
-	FF_FILE_FILTER_METACHARACTER_FIX            string = "internal_snyk_file_filter_metacharacter_fix_enabled"            // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
-	FF_GITIGNORE_RESPECT_TRACKED_FILES          string = "internal_snyk_gitignore_respect_tracked_files_enabled"          // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
-	FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX string = "internal_snyk_file_filter_respect_parent_exclusion_fix_enabled" // FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX (boolean) enables the fix for nested ignore files re-including files from excluded parent directories (CLI-1685)
+	FF_FILE_FILTER_METACHARACTER_FIX   string = "internal_snyk_file_filter_metacharacter_fix_enabled"   // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
+	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled" // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
 )
 
 // by default, all rules are valid
