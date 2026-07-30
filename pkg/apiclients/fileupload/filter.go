@@ -1,12 +1,11 @@
 package fileupload
 
-import "os"
-
 // fileToFilter represents the metadata about a file that a Filter function gets
 // in order to decide if the file should be filtered or not.
 type fileToFilter struct {
 	Path string
-	Stat os.FileInfo
+	// Size is the size of the transcoded content, which is what gets uploaded.
+	Size int64
 }
 
 // SkippedFile represents a file that was skipped.
