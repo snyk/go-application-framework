@@ -376,9 +376,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
-	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX, "snykFileFilterMetacharacterFix")
-	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES, "snykGitIgnoreTrackedFiles")
-	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX, "snykFileFilterRespectParentExclusionFix")
+	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
+		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:            "snykFileFilterMetacharacterFix",
+		pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES:          "snykGitIgnoreTrackedFiles",
+		pkg_utils.FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX: "snykFileFilterRespectParentExclusionFix",
+	})
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {

@@ -11,8 +11,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
 )
 
 type fileFilterTestCase struct {
@@ -443,7 +441,8 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 			createFileInPath(t, appFile, []byte("x"))
 			createFileInPath(t, gitignore, []byte("node_modules\n"))
 
-			fileFilter := NewFileFilter(base, &log.Logger)
+			config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
+			fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules([]string{".gitignore"})
 			assert.NoError(t, err)
 
@@ -899,7 +898,8 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			fileFilter := NewFileFilter(root, &log.Logger)
+			config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
 
@@ -1475,17 +1475,6 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 	}
 }
 
-// fakeConfig is a configtypes.Configuration that only answers GetBool. Embedding the interface
-// keeps the stub to the methods the FileFilter actually uses; anything else panics, which is what
-// we want if the FileFilter ever starts reading more than feature flags off the config.
-// pkg/configuration cannot be used here: it depends on this package via internal/utils.
-type fakeConfig struct {
-	configtypes.Configuration
-	flags map[string]bool
-}
-
-func (f *fakeConfig) GetBool(key string) bool { return f.flags[key] }
-
 // TestFileFilter_MetacharacterFixToggle is the end-to-end regression net for the feature-flag
 // gate around the special-character-path fix (CLI-1648). A ".gitignore" rule for a directory whose
 // path contains regex metacharacters must reproduce the old behavior (the directory is NOT
@@ -1546,31 +1535,14 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 			"flag on: node_modules must be excluded even though the base path has metacharacters")
 	})
 
-	t.Run("no config keeps the fix enabled", func(t *testing.T) {
+	t.Run("no config keeps the fix disabled", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
 		fileFilter := NewFileFilter(base, &log.Logger)
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
-		assert.NotContains(t, filtered, nodeModulesFile,
-			"without a config the FileFilter keeps the behavior existing callers rely on")
-	})
-}
-
-func TestWithConfig(t *testing.T) {
-	t.Run("resolves the metacharacter fix from the config", func(t *testing.T) {
-		config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
-		assert.True(t, NewFileFilter("", &log.Logger, WithConfig(config)).enableIgnoreRuleMetacharacterFix)
-
-		config = &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false}}
-		assert.False(t, NewFileFilter("", &log.Logger, WithConfig(config)).enableIgnoreRuleMetacharacterFix)
-	})
-
-	t.Run("a nil config is rejected and leaves the default in place", func(t *testing.T) {
-		fileFilter := NewFileFilter("", &log.Logger, WithConfig(nil))
-
-		assert.True(t, fileFilter.enableIgnoreRuleMetacharacterFix,
-			"a rejected option must not change the FileFilter")
+		assert.Contains(t, filtered, nodeModulesFile,
+			"without a config the fix defaults to disabled, reproducing the legacy behavior")
 	})
 }
 

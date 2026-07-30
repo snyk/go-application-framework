@@ -32,12 +32,12 @@ const (
 var defaultInvalidRules = []string{}
 
 type FileFilter struct {
-	path                             string
-	defaultRules                     []string
-	logger                           *zerolog.Logger
-	max_threads                      int64
-	dotSnykSections                  []DotSnykExcludeSectionName
-	enableIgnoreRuleMetacharacterFix bool
+	path            string
+	defaultRules    []string
+	logger          *zerolog.Logger
+	max_threads     int64
+	dotSnykSections []DotSnykExcludeSectionName
+	config          configtypes.Configuration
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -102,14 +102,24 @@ func WithConfig(config configtypes.Configuration) FileFilterOption {
 			return fmt.Errorf("config must not be nil")
 		}
 
-		filter.enableIgnoreRuleMetacharacterFix = config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+		filter.config = config
 		return nil
 	}
 }
 
+// fakeConfig is a configtypes.Configuration that only answers GetBool. Embedding the interface
+// keeps the stub to the methods the FileFilter actually uses; anything else panics.
+type fakeConfig struct {
+	configtypes.Configuration
+	flags map[string]bool
+}
+
+// GetBool returns false by default if a value is not set
+func (f *fakeConfig) GetBool(key string) bool { return f.flags[key] }
+
 // NewFileFilter creates a FileFilter rooted at path. Feature-flag-gated behavior defaults to
-// enabled, preserving the behavior of callers that predate the flags; pass WithConfig to let the
-// configuration decide instead.
+// disabled (the legacy behavior) until WithConfig is supplied to let the configuration decide
+// instead.
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
 		path:            path,
@@ -117,12 +127,8 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
+		config:          &fakeConfig{},
 	}
-
-	// TODO: Temporary. This keeps the metacharacter fix enabled for callers
-	// of this constructor (e.g. Preview CLI), so they keep the behavior they already rely on today.
-	// Remove once all such callers have migrated to the preconfigured file_filter
-	filter.enableIgnoreRuleMetacharacterFix = true
 
 	for _, option := range options {
 		err := option(filter)
@@ -234,7 +240,8 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), fw.enableIgnoreRuleMetacharacterFix)
+			enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
 			globs = append(globs, parsedRules...)
 		}
 	}
@@ -271,6 +278,8 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	}
 
 	var globs []string
+	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+
 	for _, rule := range allRules {
 		isExpired, err := rule.IsExpired()
 
@@ -289,7 +298,7 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 			continue
 		}
 
-		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules, fw.enableIgnoreRuleMetacharacterFix)...)
+		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules, enableMetacharacterFix)...)
 	}
 	return globs
 }
