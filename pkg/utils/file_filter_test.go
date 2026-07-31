@@ -11,7 +11,18 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+// newTestConfig builds an in-memory configuration with the given boolean feature flags preset.
+func newTestConfig(flags map[string]bool) configuration.Configuration {
+	config := configuration.NewWithOpts()
+	for key, value := range flags {
+		config.Set(key, value)
+	}
+	return config
+}
 
 type fileFilterTestCase struct {
 	// the name of the test case. Will be used as the test name in t.Run()
@@ -36,7 +47,7 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 		tempFile2 := filepath.Join(tempDir, "test2.ts")
 		createFileInPath(t, tempFile2, []byte{})
 
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualFiles := fileFilter.GetAllFiles()
 		expectedFiles := []string{tempFile1, tempFile2}
 
@@ -49,7 +60,7 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 	})
 
 	t.Run("handles empty path", func(t *testing.T) {
-		fileFilter := newFileFilterInternal("", &log.Logger)
+		fileFilter := NewFileFilter("", &log.Logger)
 		actualFiles := fileFilter.GetAllFiles()
 
 		var actualFilesChanLen int
@@ -70,7 +81,7 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 
 	t.Run("includes default rules", func(t *testing.T) {
 		// create fileFilter
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules([]string{})
 		assert.NoError(t, err)
 
@@ -84,7 +95,7 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 
 		// create fileFilter
 		ruleFiles := []string{".gitignore"}
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
@@ -111,7 +122,7 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 
 		// create fileFilter
 		ruleFiles := []string{".gitignore"}
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
@@ -156,7 +167,7 @@ exclude:
 
 		// create fileFilter
 		ruleFiles := []string{".snyk"}
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
@@ -196,7 +207,7 @@ exclude:
 
 		// create fileFilter
 		ruleFiles := []string{".snyk"}
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
@@ -283,7 +294,7 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
 			ignoreFile := filepath.Join(tempDir, ".snyk")
 			createFileInPath(t, ignoreFile, []byte(snykContent))
 
-			fileFilter := newFileFilterInternal(tempDir, &log.Logger, test.options...)
+			fileFilter := NewFileFilter(tempDir, &log.Logger, test.options...)
 			actualRules, err := fileFilter.GetRules([]string{".snyk"})
 			assert.NoError(t, err)
 
@@ -301,7 +312,7 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
 		ignoreFile := filepath.Join(tempDir, ".snyk")
 		createFileInPath(t, ignoreFile, []byte(snykContent))
 
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules([]string{".snyk"})
 		assert.NoError(t, err)
 
@@ -360,7 +371,7 @@ func TestFileFilter_GetRules_dotSnykMalformedSection(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fileFilter := newFileFilterInternal(tempDir, &log.Logger, test.options...)
+			fileFilter := NewFileFilter(tempDir, &log.Logger, test.options...)
 			actualRules, err := fileFilter.GetRules([]string{".snyk"})
 			assert.NoError(t, err)
 
@@ -377,7 +388,7 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupTestFileSystem(t, testCase)
 
-			fileFilter := newFileFilterInternal(testCase.repoPath, &log.Logger)
+			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger)
 
 			files := fileFilter.GetAllFiles()
 
@@ -441,8 +452,8 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 			createFileInPath(t, appFile, []byte("x"))
 			createFileInPath(t, gitignore, []byte("node_modules\n"))
 
-			fileFilter := newFileFilterInternal(base, &log.Logger)
-			fileFilter.enableIgnoreRuleMetacharacterFix = true
+			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+			fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules([]string{".gitignore"})
 			assert.NoError(t, err)
 
@@ -898,8 +909,8 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			fileFilter := newFileFilterInternal(root, &log.Logger)
-			fileFilter.enableIgnoreRuleMetacharacterFix = true
+			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
 
@@ -932,10 +943,9 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 
 	// buildTree creates the standard node_modules/app.js/.gitignore tree under base and returns
 	// the FileFilter rooted at scanRoot (which may be a UNC-style alias of base).
-	assertFiltered := func(t *testing.T, scanRoot string) {
+	assertFiltered := func(t *testing.T, scanRoot string, options ...FileFilterOption) {
 		t.Helper()
-		fileFilter := newFileFilterInternal(scanRoot, &log.Logger)
-		fileFilter.enableIgnoreRuleMetacharacterFix = true
+		fileFilter := NewFileFilter(scanRoot, &log.Logger, options...)
 		globs, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -1003,7 +1013,8 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 		if _, err := os.Stat(unc); err != nil {
 			t.Skip("admin share (C$) not accessible; cannot exercise genuine UNC")
 		}
-		assertFiltered(t, unc)
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		assertFiltered(t, unc, WithConfig(config))
 	})
 }
 
@@ -1031,7 +1042,7 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		fileFilter := newFileFilterInternal(rootDir, &log.Logger, WithThreadNumber(runtime.NumCPU()))
+		fileFilter := NewFileFilter(rootDir, &log.Logger, WithThreadNumber(runtime.NumCPU()))
 
 		b.StartTimer()
 		globs, err := fileFilter.GetRules(ruleFiles)
@@ -1476,11 +1487,7 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 	}
 }
 
-// TestFileFilter_MetacharacterFixToggle is the end-to-end regression net for the feature-flag
-// gate around the special-character-path fix (CLI-1648): with the option left at its default
-// (false / legacy behavior) a ".gitignore" rule for a directory containing regex metacharacters
-// must reproduce the old behavior (the directory is NOT excluded), while explicitly enabling
-// enableIgnoreRuleMetacharacterFix must apply the fix (the directory IS excluded).
+// CLI-1648: .gitignore filtering on paths with regex metacharacters follows the metacharacter-fix feature flag.
 func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 	setup := func(t *testing.T) (base, nodeModulesFile, appFile string) {
 		t.Helper()
@@ -1505,9 +1512,10 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 		return filtered
 	}
 
-	t.Run("fix disabled (default) reproduces the legacy behavior", func(t *testing.T) {
+	t.Run("flag off reproduces the legacy behavior", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := newFileFilterInternal(base, &log.Logger)
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false})
+		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
@@ -1515,25 +1523,34 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 			"legacy behavior: node_modules is NOT excluded when the base path has metacharacters")
 	})
 
-	t.Run("fix disabled explicitly behaves the same as the default", func(t *testing.T) {
+	t.Run("flag unset behaves like the flag being off", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := newFileFilterInternal(base, &log.Logger)
-		fileFilter.enableIgnoreRuleMetacharacterFix = false
+		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(newTestConfig(nil)))
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
 		assert.Contains(t, filtered, nodeModulesFile, "legacy behavior reproduced")
 	})
 
-	t.Run("fix enabled excludes node_modules correctly", func(t *testing.T) {
+	t.Run("flag on excludes node_modules correctly", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := newFileFilterInternal(base, &log.Logger)
-		fileFilter.enableIgnoreRuleMetacharacterFix = true
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
 		assert.NotContains(t, filtered, nodeModulesFile,
-			"fix enabled: node_modules must be excluded even though the base path has metacharacters")
+			"flag on: node_modules must be excluded even though the base path has metacharacters")
+	})
+
+	t.Run("no config keeps the fix disabled", func(t *testing.T) {
+		base, nodeModulesFile, appFile := setup(t)
+		fileFilter := NewFileFilter(base, &log.Logger)
+
+		filtered := filterFiles(t, fileFilter)
+		assert.Contains(t, filtered, appFile, "app.js should be scanned")
+		assert.Contains(t, filtered, nodeModulesFile,
+			"without a config the fix defaults to disabled, reproducing the legacy behavior")
 	})
 }
 
@@ -1559,7 +1576,7 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/"))
 
 		// Test file filtering
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		rules, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -1604,7 +1621,7 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/*"))
 
 		// Test file filtering
-		fileFilter := newFileFilterInternal(tempDir, &log.Logger)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		rules, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
