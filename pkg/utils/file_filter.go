@@ -120,6 +120,11 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 	return filter
 }
 
+func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configuration.Configuration, options ...FileFilterOption) *FileFilter {
+	allOptions := append([]FileFilterOption{WithConfig(config)}, options...)
+	return NewFileFilter(path, logger, allOptions...)
+}
+
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
