@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/format/index"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
@@ -1696,4 +1699,240 @@ func TestDotSnykExclude_isExpired(t *testing.T) {
 			assert.Equal(t, test.expected, isExpired)
 		})
 	}
+}
+
+// initGitRepoWithTrackedFiles initializes a git repository at root and adds trackedPaths (relative
+// to root) to its index. Entries are written directly rather than via Worktree.Add so that a file
+// already matching a .gitignore rule still becomes tracked.
+func initGitRepoWithTrackedFiles(tb testing.TB, root string, trackedPaths []string) {
+	tb.Helper()
+	repo, err := git.PlainInit(root, false)
+	assert.NoError(tb, err)
+
+	idx, err := repo.Storer.Index()
+	assert.NoError(tb, err)
+
+	for _, trackedPath := range trackedPaths {
+		idx.Entries = append(idx.Entries, &index.Entry{Name: trackedPath, Mode: filemode.Regular})
+	}
+	assert.NoError(tb, repo.Storer.SetIndex(idx))
+}
+
+func TestFileFilter_GetRules_gitignoreRespectsTrackedFiles(t *testing.T) {
+	// config.log is tracked and untracked.log is not, while both match the .gitignore rule "*.log"
+	setup := func(t *testing.T) (root, trackedLog, untrackedLog, appFile string) {
+		t.Helper()
+		root = t.TempDir()
+		trackedLog = filepath.Join(root, "config.log")
+		untrackedLog = filepath.Join(root, "untracked.log")
+		appFile = filepath.Join(root, "app.js")
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, trackedLog, []byte("x"))
+		createFileInPath(t, untrackedLog, []byte("x"))
+		createFileInPath(t, appFile, []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{".gitignore", "config.log", "app.js"})
+		return root, trackedLog, untrackedLog, appFile
+	}
+
+	// the metacharacter fix is on so the rules go through the current parser, not the legacy one
+	newFilter := func(root string, respectTrackedFiles bool) *FileFilter {
+		return NewFileFilter(root, &log.Logger, WithConfig(newTestConfig(map[string]bool{
+			FF_FILE_FILTER_METACHARACTER_FIX:   true,
+			FF_GITIGNORE_RESPECT_TRACKED_FILES: respectTrackedFiles,
+		})))
+	}
+
+	filterFiles := func(t *testing.T, fileFilter *FileFilter, ruleFiles []string) []string {
+		t.Helper()
+		rules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		var filtered []string
+		for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules) {
+			filtered = append(filtered, f)
+		}
+		return filtered
+	}
+
+	t.Run("flag off keeps the previous behavior", func(t *testing.T) {
+		root, trackedLog, untrackedLog, appFile := setup(t)
+
+		filtered := filterFiles(t, newFilter(root, false), []string{".gitignore"})
+
+		assert.Contains(t, filtered, appFile)
+		assert.NotContains(t, filtered, trackedLog, "previous behavior: a tracked file matching .gitignore is excluded")
+		assert.NotContains(t, filtered, untrackedLog)
+	})
+
+	t.Run("flag on keeps tracked files and still excludes untracked ones", func(t *testing.T) {
+		root, trackedLog, untrackedLog, appFile := setup(t)
+
+		filtered := filterFiles(t, newFilter(root, true), []string{".gitignore"})
+
+		assert.Contains(t, filtered, trackedLog, "git does not ignore tracked files, so it must still be scanned")
+		assert.Contains(t, filtered, appFile)
+		assert.NotContains(t, filtered, untrackedLog, "an untracked file matching .gitignore must stay excluded")
+	})
+
+	t.Run("the returned rules are the same whether the flag is on or off", func(t *testing.T) {
+		root, _, _, _ := setup(t)
+
+		off, err := newFilter(root, false).GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+		on, err := newFilter(root, true).GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		assert.Equal(t, off, on, "tracked files are kept by the filter, not by altering the rules")
+	})
+
+	t.Run("only the ignored tracked files are recorded", func(t *testing.T) {
+		root, trackedLog, untrackedLog, appFile := setup(t)
+
+		fileFilter := newFilter(root, true)
+		_, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		assert.Equal(t, map[string]bool{"config.log": true}, fileFilter.trackedFilesToKeep,
+			"app.js is tracked but no .gitignore rule excludes it, so it needs no exception")
+		assert.True(t, fileFilter.isTrackedFileToKeep(trackedLog))
+		assert.False(t, fileFilter.isTrackedFileToKeep(untrackedLog))
+		assert.False(t, fileFilter.isTrackedFileToKeep(appFile))
+	})
+
+	t.Run("an exclusion from another source still applies to a tracked file", func(t *testing.T) {
+		root, trackedLog, _, appFile := setup(t)
+		createFileInPath(t, filepath.Join(root, ".snyk"), []byte("exclude:\n  global:\n    - config.log\n"))
+
+		filtered := filterFiles(t, newFilter(root, true), []string{".gitignore", ".snyk"})
+
+		assert.Contains(t, filtered, appFile)
+		assert.NotContains(t, filtered, trackedLog,
+			".snyk is Snyk's own exclusion, so being tracked by git must not override it")
+	})
+
+	t.Run("outside a git repository the previous behavior is kept", func(t *testing.T) {
+		root := t.TempDir()
+		trackedLog := filepath.Join(root, "config.log")
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, trackedLog, []byte("x"))
+		// deliberately no git repository here
+
+		fileFilter := newFilter(root, true)
+		filtered := filterFiles(t, fileFilter, []string{".gitignore"})
+
+		assert.NotContains(t, filtered, trackedLog, "without a git index there is nothing to keep")
+		assert.Empty(t, fileFilter.trackedFilesToKeep)
+	})
+
+	t.Run("without .gitignore rules nothing is un-ignored", func(t *testing.T) {
+		root := t.TempDir()
+		trackedLog := filepath.Join(root, "config.log")
+		createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("*.log\n"))
+		createFileInPath(t, trackedLog, []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{"config.log"})
+
+		fileFilter := newFilter(root, true)
+		filtered := filterFiles(t, fileFilter, []string{".dcignore"})
+
+		assert.NotContains(t, filtered, trackedLog, ".dcignore is not git, so tracking does not keep it")
+		assert.Empty(t, fileFilter.trackedFilesToKeep)
+	})
+
+	t.Run("a tracked file in a subdirectory is kept", func(t *testing.T) {
+		root := t.TempDir()
+		trackedLog := filepath.Join(root, "src", "nested", "config.log")
+		untrackedLog := filepath.Join(root, "src", "nested", "other.log")
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, trackedLog, []byte("x"))
+		createFileInPath(t, untrackedLog, []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{"src/nested/config.log"})
+
+		fileFilter := newFilter(root, true)
+		filtered := filterFiles(t, fileFilter, []string{".gitignore"})
+
+		assert.Contains(t, filtered, trackedLog)
+		assert.NotContains(t, filtered, untrackedLog)
+		assert.Equal(t, map[string]bool{"src/nested/config.log": true}, fileFilter.trackedFilesToKeep,
+			"keys stay forward-slashed on every platform, matching how they are looked up")
+	})
+
+	t.Run("tracked files outside the scanned directory are left alone", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		scanRoot := filepath.Join(repoRoot, "src")
+		insideLog := filepath.Join(scanRoot, "inside.log")
+		createFileInPath(t, filepath.Join(scanRoot, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, insideLog, []byte("x"))
+		createFileInPath(t, filepath.Join(repoRoot, "outside.log"), []byte("x"))
+		initGitRepoWithTrackedFiles(t, repoRoot, []string{"src/inside.log", "outside.log"})
+
+		fileFilter := newFilter(scanRoot, true)
+		filtered := filterFiles(t, fileFilter, []string{".gitignore"})
+
+		assert.Contains(t, filtered, insideLog, "a tracked file inside the scanned directory is kept")
+		assert.Equal(t, map[string]bool{"inside.log": true}, fileFilter.trackedFilesToKeep,
+			"a tracked file outside the scanned directory is irrelevant")
+	})
+
+	t.Run("flag unset behaves like the flag being off", func(t *testing.T) {
+		root, trackedLog, _, _ := setup(t)
+
+		fileFilter := NewFileFilter(root, &log.Logger, WithConfig(newTestConfig(nil)))
+
+		filtered := filterFiles(t, fileFilter, []string{".gitignore"})
+		assert.NotContains(t, filtered, trackedLog)
+		assert.Empty(t, fileFilter.trackedFilesToKeep)
+	})
+
+	t.Run("no config keeps the previous behavior", func(t *testing.T) {
+		root, trackedLog, _, _ := setup(t)
+
+		fileFilter := NewFileFilter(root, &log.Logger)
+
+		filtered := filterFiles(t, fileFilter, []string{".gitignore"})
+		assert.NotContains(t, filtered, trackedLog,
+			"without a config the behavior defaults to disabled, reproducing the previous behavior")
+		assert.Empty(t, fileFilter.trackedFilesToKeep)
+	})
+}
+
+func TestFileFilter_readGitTrackedPaths(t *testing.T) {
+	newFilter := func(root string) *FileFilter {
+		return NewFileFilter(root, &log.Logger, WithConfig(newTestConfig(map[string]bool{
+			FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+		})))
+	}
+
+	t.Run("reads the tracked files inside the scan root", func(t *testing.T) {
+		root := t.TempDir()
+		initGitRepoWithTrackedFiles(t, root, []string{"app.js", "src/nested/config.log"})
+
+		assert.ElementsMatch(t, []string{"app.js", "src/nested/config.log"}, newFilter(root).readGitTrackedPaths())
+	})
+
+	t.Run("reads nothing outside a git repository", func(t *testing.T) {
+		assert.Empty(t, newFilter(t.TempDir()).readGitTrackedPaths())
+	})
+
+	t.Run("reads nothing from a bare repository", func(t *testing.T) {
+		root := t.TempDir()
+		_, err := git.PlainInit(root, true)
+		assert.NoError(t, err)
+
+		assert.Empty(t, newFilter(root).readGitTrackedPaths())
+	})
+
+	t.Run("reads nothing when the git index is corrupt", func(t *testing.T) {
+		root := t.TempDir()
+		initGitRepoWithTrackedFiles(t, root, []string{"app.js"})
+		createFileInPath(t, filepath.Join(root, ".git", "index"), []byte("not a git index"))
+
+		assert.Empty(t, newFilter(root).readGitTrackedPaths())
+	})
+
+	t.Run("reads nothing when the repository cannot be opened", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".git"), []byte("gitdir: \x00 not a path\n"))
+
+		assert.Empty(t, newFilter(root).readGitTrackedPaths())
+	})
 }

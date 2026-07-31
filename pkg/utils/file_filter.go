@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -36,6 +38,8 @@ type FileFilter struct {
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
+	// git-tracked files a .gitignore rule would exclude, relative to path. Set by GetRules.
+	trackedFilesToKeep map[string]bool
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -166,7 +170,11 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append(fw.defaultRules, globs...), nil
+	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
+		fw.trackedFilesToKeep = fw.findTrackedFilesToKeep(globs)
+	}
+
+	return slices.Concat(fw.defaultRules, globs.inParseOrder), nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
@@ -190,7 +198,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			go func(f string) {
 				defer availableThreads.Release(1)
 				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				if !globPatternMatcher.MatchesPath(f) || fw.isTrackedFileToKeep(f) {
 					filteredFilesCh <- f
 				}
 			}(file)
@@ -207,31 +215,149 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
-func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
+func (fw *FileFilter) buildGlobs(ignoreFiles []string) (parsedGlobs, error) {
 	if len(ignoreFiles) == 0 {
-		return nil, nil
+		return parsedGlobs{}, nil
 	}
 
 	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
 
-	var globs = make([]string, 0)
+	var gitignoreGlobs, otherGlobs, globsInParseOrder []string
 	for _, ignoreFile := range ignoreFiles {
 		var content []byte
 		content, err := os.ReadFile(ignoreFile)
 		if err != nil {
-			return nil, err
+			return parsedGlobs{}, err
 		}
 
-		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
-			globs = append(globs, parsedRules...)
-		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
-			globs = append(globs, parsedRules...)
+		dir := filepath.Dir(ignoreFile)
+		fileName := filepath.Base(ignoreFile)
+
+		var parsedRules []string
+		if fileName == ".snyk" { // .snyk files are yaml files and should be parsed differently
+			parsedRules = fw.parseDotSnykFile(content, dir, enableMetacharacterFix)
+		} else {
+			parsedRules = parseIgnoreFile(content, dir, enableMetacharacterFix)
+		}
+
+		globsInParseOrder = append(globsInParseOrder, parsedRules...)
+		if fileName == ".gitignore" {
+			gitignoreGlobs = append(gitignoreGlobs, parsedRules...)
+		} else {
+			otherGlobs = append(otherGlobs, parsedRules...)
 		}
 	}
 
-	return globs, nil
+	return parsedGlobs{inParseOrder: globsInParseOrder, gitignore: gitignoreGlobs, other: otherGlobs}, nil
+}
+
+// isTrackedFileToKeep reports whether filePath is a git-tracked file that a .gitignore rule
+// excludes, and so must be kept anyway.
+func (fw *FileFilter) isTrackedFileToKeep(filePath string) bool {
+	if len(fw.trackedFilesToKeep) == 0 {
+		return false
+	}
+
+	relToScanRoot, err := filepath.Rel(fw.path, filePath)
+	if err != nil {
+		return false
+	}
+
+	return fw.trackedFilesToKeep[filepath.ToSlash(relToScanRoot)]
+}
+
+// findTrackedFilesToKeep returns the git-tracked files that a .gitignore rule excludes but no
+// other ignore source does, keyed by path relative to fw.path.
+func (fw *FileFilter) findTrackedFilesToKeep(parsed parsedGlobs) map[string]bool {
+	if len(parsed.gitignore) == 0 {
+		return nil
+	}
+
+	start := time.Now()
+	trackedPaths := fw.readGitTrackedPaths()
+	if len(trackedPaths) == 0 {
+		return nil
+	}
+
+	gitignoreMatcher := gitignore.CompileIgnoreLines(parsed.gitignore...)
+	otherMatcher := gitignore.CompileIgnoreLines(slices.Concat(fw.defaultRules, parsed.other)...)
+
+	trackedFilesToKeep := make(map[string]bool)
+	for _, trackedPath := range trackedPaths {
+		candidate := filepath.Join(fw.path, filepath.FromSlash(trackedPath))
+
+		// exclusions from other sources are Snyk's own, so being tracked by git does not undo them
+		if !gitignoreMatcher.MatchesPath(candidate) || otherMatcher.MatchesPath(candidate) {
+			continue
+		}
+
+		trackedFilesToKeep[trackedPath] = true
+	}
+
+	fw.logger.Debug().
+		Int("trackedFilesInIndex", len(trackedPaths)).
+		Int("trackedFilesToKeep", len(trackedFilesToKeep)).
+		Dur("duration", time.Since(start)).
+		Msg("checked the git index for tracked files matching .gitignore rules")
+
+	if len(trackedFilesToKeep) > 0 {
+		fw.logger.Warn().
+			Strs("trackedFilesToKeep", SortedMapKeys(trackedFilesToKeep)).
+			Msg("some git-tracked files match a .gitignore rule and will still be scanned, because git does not ignore tracked files")
+	}
+
+	return trackedFilesToKeep
+}
+
+// readGitTrackedPaths returns every file in the git index that lies inside fw.path, relative to fw.path
+func (fw *FileFilter) readGitTrackedPaths() (paths []string) {
+	absScanRoot, err := filepath.Abs(fw.path)
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not resolve the absolute scan path")
+		return nil
+	}
+
+	repo, err := git.PlainOpenWithOptions(absScanRoot, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		if errors.Is(err, git.ErrRepositoryNotExists) {
+			fw.logger.Debug().Msg("not a git repository")
+			return nil
+		}
+		fw.logger.Warn().Err(err).Msg("could not open the git repository")
+		return nil
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not read the git worktree")
+		return nil
+	}
+
+	index, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not read the git index")
+		return nil
+	}
+
+	// go-git resolves symlinks in the repo root (e.g. macOS's /var -> /private/var), so match that
+	scanRoot := absScanRoot
+	if resolved, resolveErr := filepath.EvalSymlinks(absScanRoot); resolveErr == nil {
+		scanRoot = resolved
+	}
+
+	repoRoot := worktree.Filesystem.Root()
+	upwards := ".." + string(filepath.Separator)
+	for _, entry := range index.Entries {
+		entryPath := filepath.Join(repoRoot, filepath.FromSlash(entry.Name))
+
+		relToScanRoot, relErr := filepath.Rel(scanRoot, entryPath)
+		if relErr != nil || relToScanRoot == ".." || strings.HasPrefix(relToScanRoot, upwards) {
+			continue // outside the directory being scanned
+		}
+		paths = append(paths, filepath.ToSlash(relToScanRoot))
+	}
+
+	return paths
 }
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
@@ -589,4 +715,10 @@ func parseIgnoreRuleToGlobsLegacy(rule string, filePath string) (globs []string)
 		}
 	}
 	return globs
+}
+
+type parsedGlobs struct {
+	inParseOrder []string
+	gitignore    []string
+	other        []string
 }
