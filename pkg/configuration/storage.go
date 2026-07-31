@@ -10,12 +10,18 @@ import (
 
 	"github.com/gofrs/flock"
 
-	"github.com/snyk/go-application-framework/internal/utils"
-	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
+	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
-// Storage is an alias of configtypes.Storage, to avoid an import cycle.
-type Storage = configtypes.Storage
+//go:generate go tool github.com/golang/mock/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
+
+// Storage persists configuration values that outlive a single process run.
+type Storage interface {
+	Set(key string, value any) error
+	Refresh(config Configuration, key string) error
+	Lock(ctx context.Context, retryDelay time.Duration) error
+	Unlock() error
+}
 
 type EmptyStorage struct{}
 
@@ -96,7 +102,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	// Check if path to file exists
-	err := os.MkdirAll(filepath.Dir(s.path), utils.FILEPERM_755)
+	err := os.MkdirAll(filepath.Dir(s.path), fileperms.FILEPERM_755)
 	if err != nil {
 		return err
 	}
@@ -128,7 +134,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(s.path, configJson, utils.FILEPERM_666)
+	err = os.WriteFile(s.path, configJson, fileperms.FILEPERM_666)
 
 	return err
 }

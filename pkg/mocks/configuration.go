@@ -10,7 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	configtypes "github.com/snyk/go-application-framework/pkg/configuration/configtypes"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	pflag "github.com/spf13/pflag"
 )
 
@@ -50,7 +50,7 @@ func (mr *MockConfigurationMockRecorder) AddAlternativeKeys(key, altKeys interfa
 }
 
 // AddDefaultValue mocks base method.
-func (m *MockConfiguration) AddDefaultValue(key string, defaultValue configtypes.DefaultValueFunction) {
+func (m *MockConfiguration) AddDefaultValue(key string, defaultValue configuration.DefaultValueFunction) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddDefaultValue", key, defaultValue)
 }
@@ -128,10 +128,10 @@ func (mr *MockConfigurationMockRecorder) ClearCache() *gomock.Call {
 }
 
 // Clone mocks base method.
-func (m *MockConfiguration) Clone() configtypes.Configuration {
+func (m *MockConfiguration) Clone() configuration.Configuration {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Clone")
-	ret0, _ := ret[0].(configtypes.Configuration)
+	ret0, _ := ret[0].(configuration.Configuration)
 	return ret0
 }
 
@@ -298,10 +298,10 @@ func (mr *MockConfigurationMockRecorder) GetInt(key interface{}) *gomock.Call {
 }
 
 // GetKeyType mocks base method.
-func (m *MockConfiguration) GetKeyType(key string) configtypes.KeyType {
+func (m *MockConfiguration) GetKeyType(key string) configuration.KeyType {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetKeyType", key)
-	ret0, _ := ret[0].(configtypes.KeyType)
+	ret0, _ := ret[0].(configuration.KeyType)
 	return ret0
 }
 
@@ -312,10 +312,10 @@ func (mr *MockConfigurationMockRecorder) GetKeyType(key interface{}) *gomock.Cal
 }
 
 // GetStorage mocks base method.
-func (m *MockConfiguration) GetStorage() configtypes.Storage {
+func (m *MockConfiguration) GetStorage() configuration.Storage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStorage")
-	ret0, _ := ret[0].(configtypes.Storage)
+	ret0, _ := ret[0].(configuration.Storage)
 	return ret0
 }
 
@@ -494,7 +494,7 @@ func (mr *MockConfigurationMockRecorder) SetFiles(files ...interface{}) *gomock.
 }
 
 // SetStorage mocks base method.
-func (m *MockConfiguration) SetStorage(storage configtypes.Storage) {
+func (m *MockConfiguration) SetStorage(storage configuration.Storage) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetStorage", storage)
 }

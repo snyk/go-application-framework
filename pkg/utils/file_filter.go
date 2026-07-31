@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 // Feature flags gating FileFilter behavior. They live here, next to the behavior they gate.
@@ -36,7 +36,9 @@ type FileFilter struct {
 	logger          *zerolog.Logger
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
-	config          configtypes.Configuration
+	// config resolves feature-flag-gated behavior and may be nil when WithConfig was not
+	// supplied to NewFileFilter, in which case that behavior defaults to disabled.
+	config configuration.Configuration
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -95,26 +97,12 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 // WithConfig supplies the loaded configuration that the FileFilter resolves its
 // feature-flag-gated behavior from. The flag values are read when the option is applied, so
 // config must already be loaded.
-func WithConfig(config configtypes.Configuration) FileFilterOption {
+func WithConfig(config configuration.Configuration) FileFilterOption {
 	return func(filter *FileFilter) error {
-		if config == nil {
-			return fmt.Errorf("config must not be nil")
-		}
-
 		filter.config = config
 		return nil
 	}
 }
-
-// fakeConfig is a configtypes.Configuration that only answers GetBool. Embedding the interface
-// keeps the stub to the methods the FileFilter actually uses; anything else panics.
-type fakeConfig struct {
-	configtypes.Configuration
-	flags map[string]bool
-}
-
-// GetBool returns false by default if a value is not set
-func (f *fakeConfig) GetBool(key string) bool { return f.flags[key] }
 
 // NewFileFilter creates a FileFilter rooted at path. Feature-flag-gated behavior defaults to
 // disabled (the legacy behavior) until WithConfig is supplied to let the configuration decide
@@ -126,7 +114,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
-		config:          &fakeConfig{},
+		config:          nil,
 	}
 
 	for _, option := range options {
@@ -239,7 +227,10 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+			var enableMetacharacterFix bool
+			if fw.config != nil {
+				enableMetacharacterFix = fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+			}
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
 			globs = append(globs, parsedRules...)
 		}
@@ -277,7 +268,10 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	}
 
 	var globs []string
-	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	var enableMetacharacterFix bool
+	if fw.config != nil {
+		enableMetacharacterFix = fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	}
 
 	for _, rule := range allRules {
 		isExpired, err := rule.IsExpired()

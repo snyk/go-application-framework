@@ -11,7 +11,19 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+// newTestConfig builds an in-memory configuration.Configuration with the given boolean flags
+// preset, for tests that need FileFilter to resolve feature-flag-gated behavior.
+func newTestConfig(flags map[string]bool) configuration.Configuration {
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	for key, value := range flags {
+		config.Set(key, value)
+	}
+	return config
+}
 
 type fileFilterTestCase struct {
 	// the name of the test case. Will be used as the test name in t.Run()
@@ -441,7 +453,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 			createFileInPath(t, appFile, []byte("x"))
 			createFileInPath(t, gitignore, []byte("node_modules\n"))
 
-			config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
+			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 			fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules([]string{".gitignore"})
 			assert.NoError(t, err)
@@ -898,7 +910,7 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
+			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
@@ -932,9 +944,9 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 
 	// buildTree creates the standard node_modules/app.js/.gitignore tree under base and returns
 	// the FileFilter rooted at scanRoot (which may be a UNC-style alias of base).
-	assertFiltered := func(t *testing.T, scanRoot string) {
+	assertFiltered := func(t *testing.T, scanRoot string, options ...FileFilterOption) {
 		t.Helper()
-		fileFilter := NewFileFilter(scanRoot, &log.Logger)
+		fileFilter := NewFileFilter(scanRoot, &log.Logger, options...)
 		globs, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -1002,7 +1014,8 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 		if _, err := os.Stat(unc); err != nil {
 			t.Skip("admin share (C$) not accessible; cannot exercise genuine UNC")
 		}
-		assertFiltered(t, unc)
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		assertFiltered(t, unc, WithConfig(config))
 	})
 }
 
@@ -1506,7 +1519,7 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 
 	t.Run("flag off reproduces the legacy behavior", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false}}
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false})
 		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 
 		filtered := filterFiles(t, fileFilter)
@@ -1517,7 +1530,7 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 
 	t.Run("flag unset behaves like the flag being off", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(&fakeConfig{}))
+		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(newTestConfig(nil)))
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
@@ -1526,7 +1539,7 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 
 	t.Run("flag on excludes node_modules correctly", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		config := &fakeConfig{flags: map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true}}
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 		fileFilter := NewFileFilter(base, &log.Logger, WithConfig(config))
 
 		filtered := filterFiles(t, fileFilter)
