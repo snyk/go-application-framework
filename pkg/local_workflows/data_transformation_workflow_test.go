@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -310,4 +312,49 @@ func Test_DataTransformation_with_V1Fingerprints(t *testing.T) {
 		}
 		assert.True(t, found, "Scheme not found in fingerprint: "+scheme)
 	}
+}
+
+func Test_TransformSarifToUFM_with_real_data(t *testing.T) {
+	sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
+	summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
+
+	result, err := TransformSarifToUFM(sarifBytes, summaryBytes)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	ctx := context.Background()
+	findings, complete, err := result.Findings(ctx)
+	assert.NoError(t, err)
+	assert.True(t, complete)
+	assert.Len(t, findings, 278)
+
+	assert.Equal(t, testapi.TestExecutionStatesFinished, result.GetExecutionState())
+
+	effectiveSummary := result.GetEffectiveSummary()
+	assert.NotNil(t, effectiveSummary)
+	countBy := *effectiveSummary.CountBy
+	assert.Equal(t, uint32(1), countBy["severity"]["critical"])
+	assert.Equal(t, uint32(3), countBy["severity"]["high"])
+	assert.Equal(t, uint32(1), countBy["severity"]["medium"])
+	assert.Equal(t, uint32(0), countBy["severity"]["low"])
+
+	rawSummary := result.GetRawSummary()
+	assert.NotNil(t, rawSummary)
+	rawCountBy := *rawSummary.CountBy
+	assert.Equal(t, uint32(1), rawCountBy["severity"]["critical"])
+	assert.Equal(t, uint32(10), rawCountBy["severity"]["high"])
+	assert.Equal(t, uint32(5), rawCountBy["severity"]["medium"])
+	assert.Equal(t, uint32(2), rawCountBy["severity"]["low"])
+}
+
+func Test_TransformSarifToUFM_invalid_sarif(t *testing.T) {
+	summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
+	_, err := TransformSarifToUFM([]byte("not valid json"), summaryBytes)
+	assert.Error(t, err)
+}
+
+func Test_TransformSarifToUFM_invalid_summary(t *testing.T) {
+	sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
+	_, err := TransformSarifToUFM(sarifBytes, []byte("not valid json"))
+	assert.Error(t, err)
 }
