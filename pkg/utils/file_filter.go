@@ -92,10 +92,11 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 }
 
 // WithConfig supplies the loaded configuration; feature flag values are read when the option is applied;
-// if config is nil no changes will be applied.
+// if config is nil the default config will be applied
 func WithConfig(config configuration.Configuration) FileFilterOption {
 	return func(filter *FileFilter) error {
 		if config == nil {
+			filter.config = configuration.NewWithOpts()
 			return nil
 		}
 		filter.config = config
@@ -111,8 +112,9 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
-		config:          configuration.NewWithOpts(),
 	}
+
+	options = append([]FileFilterOption{WithConfig(nil)}, options...)
 
 	for _, option := range options {
 		err := option(filter)
