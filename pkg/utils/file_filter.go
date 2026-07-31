@@ -181,6 +181,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return nil, err
 	}
 
+	fw.trackedFilesToKeep = nil
 	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 		fw.trackedFilesToKeep = fw.findTrackedFilesToKeep(globs)
 	}
@@ -356,16 +357,26 @@ func (fw *FileFilter) readGitTrackedPaths() (paths []string) {
 		scanRoot = resolved
 	}
 
-	repoRoot := worktree.Filesystem.Root()
-	upwards := ".." + string(filepath.Separator)
-	for _, entry := range index.Entries {
-		entryPath := filepath.Join(repoRoot, filepath.FromSlash(entry.Name))
+	relScanRoot, err := filepath.Rel(worktree.Filesystem.Root(), scanRoot)
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not locate the scan path inside the git repository")
+		return nil
+	}
 
-		relToScanRoot, relErr := filepath.Rel(scanRoot, entryPath)
-		if relErr != nil || relToScanRoot == ".." || strings.HasPrefix(relToScanRoot, upwards) {
+	scanRootPrefix := ""
+	if relScanRoot != "." {
+		if strings.HasPrefix(relScanRoot, "..") {
+			fw.logger.Debug().Msg("the scan path lies outside the git repository")
+			return nil
+		}
+		scanRootPrefix = filepath.ToSlash(relScanRoot) + "/"
+	}
+
+	for _, entry := range index.Entries {
+		if !strings.HasPrefix(entry.Name, scanRootPrefix) {
 			continue // outside the directory being scanned
 		}
-		paths = append(paths, filepath.ToSlash(relToScanRoot))
+		paths = append(paths, strings.TrimPrefix(entry.Name, scanRootPrefix))
 	}
 
 	return paths

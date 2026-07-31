@@ -1936,3 +1936,41 @@ func TestFileFilter_readGitTrackedPaths(t *testing.T) {
 		assert.Empty(t, newFilter(root).readGitTrackedPaths())
 	})
 }
+
+// TestFileFilter_GetRules_trackedFilesClearedWhenFlagOff covers reusing one FileFilter across
+// GetRules calls: turning the flag off must restore the previous exclusion behavior rather than
+// leaving the tracked files recorded by an earlier call in place.
+func TestFileFilter_GetRules_trackedFilesClearedWhenFlagOff(t *testing.T) {
+	root := t.TempDir()
+	trackedLog := filepath.Join(root, "config.log")
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+	createFileInPath(t, trackedLog, []byte("x"))
+	initGitRepoWithTrackedFiles(t, root, []string{"config.log"})
+
+	config := newTestConfig(map[string]bool{
+		FF_FILE_FILTER_METACHARACTER_FIX:   true,
+		FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+	})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+	filterFiles := func(t *testing.T) []string {
+		t.Helper()
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		var filtered []string
+		for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules) {
+			filtered = append(filtered, f)
+		}
+		return filtered
+	}
+
+	assert.Contains(t, filterFiles(t), trackedLog)
+	assert.NotEmpty(t, fileFilter.trackedFilesToKeep)
+
+	config.Set(FF_GITIGNORE_RESPECT_TRACKED_FILES, false)
+
+	assert.NotContains(t, filterFiles(t), trackedLog,
+		"turning the flag off must restore the previous exclusion behavior")
+	assert.Empty(t, fileFilter.trackedFilesToKeep)
+}
