@@ -91,9 +91,13 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
-// WithConfig supplies the loaded configuration; feature flag values are read when the option is applied.
+// WithConfig supplies the loaded configuration; feature flag values are read when the option is applied;
+// if config is nil no changes will be applied.
 func WithConfig(config configuration.Configuration) FileFilterOption {
 	return func(filter *FileFilter) error {
+		if config == nil {
+			return nil
+		}
 		filter.config = config
 		return nil
 	}
