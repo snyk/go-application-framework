@@ -27,13 +27,14 @@ import (
 )
 
 const (
-	// CONFIG_KEY_ALLOWED_HOST_REGEXP is superseded by CONFIG_KEY_ALLOWED_HOSTS
-	// / IsValidSnykHost — no code within this module reads it anymore, so
-	// setting this env var no longer has any effect here. It's exported
-	// public API, though, so other repos may still reference it directly;
-	// it's kept for now so any such references keep compiling while we
-	// confirm they've migrated off it, and will be removed in a follow-up
-	// once that's verified.
+	// CONFIG_KEY_ALLOWED_HOST_REGEXP — no code within this module reads it
+	// anymore, so setting this env var no longer has any effect here. It's
+	// exported public API, though, so other repos may still reference it
+	// directly; it's kept for now so any such references keep compiling
+	// while we confirm they've migrated off it, and will be removed in a
+	// follow-up once that's verified.
+	//
+	// Deprecated: use CONFIG_KEY_ALLOWED_HOSTS with IsValidSnykHost instead.
 	//nolint:gosec // not a token value, but a configuration key
 	CONFIG_KEY_ALLOWED_HOST_REGEXP = "INTERNAL_OAUTH_ALLOWED_HOSTS"
 	// CONFIG_KEY_ALLOWED_HOSTS holds the allowlist of registrable domains

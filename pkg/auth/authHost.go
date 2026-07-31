@@ -28,12 +28,14 @@ func redirectAuthHost(instance string) (string, error) {
 	return canonicalizedInstanceUrl.Host, nil
 }
 
-// IsValidAuthHost is superseded by IsValidSnykHost — no code within this
-// module calls it anymore; OAuth callback host validation goes exclusively
-// through IsValidSnykHost. It's exported public API, though, so other repos
-// may still call it directly; it's kept for now so any such callers keep
-// compiling while we confirm they've migrated off it, and will be removed in
-// a follow-up once that's verified.
+// IsValidAuthHost — no code within this module calls it anymore; OAuth
+// callback host validation goes exclusively through IsValidSnykHost. It's
+// exported public API, though, so other repos may still call it directly;
+// it's kept for now so any such callers keep compiling while we confirm
+// they've migrated off it, and will be removed in a follow-up once that's
+// verified.
+//
+// Deprecated: use IsValidSnykHost instead.
 func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
 	isValidHost, err := utils.MatchesRegex(instance, redirectAuthHostRE)
 	if err != nil {
