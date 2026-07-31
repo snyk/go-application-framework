@@ -138,6 +138,66 @@ func TestListContributors_SortedByEmail(t *testing.T) {
 	assert.Equal(t, "zed@example.com", authors[1].Email)
 }
 
+func initGitRepoWithAuthorAndCommitter(
+	t *testing.T,
+	authorEmail string,
+	authorWhen time.Time,
+	committerWhen time.Time,
+) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+
+	filePath := filepath.Join(dir, "README.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("hello"), 0o600))
+
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+
+	_, err = wt.Commit("test commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: authorEmail,
+			When:  authorWhen,
+		},
+		Committer: &object.Signature{
+			Name:  "Test User",
+			Email: authorEmail,
+			When:  committerWhen,
+		},
+		AllowEmptyCommits: true,
+	})
+	require.NoError(t, err)
+
+	return dir
+}
+
+func TestListContributors_FiltersByAuthorDateNotCommitterDate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	repoPath := initGitRepoWithAuthorAndCommitter(
+		t,
+		"legacy@example.com",
+		now.AddDate(0, 0, -200),
+		now.AddDate(0, 0, -1),
+	)
+
+	authors, err := ListContributors(
+		repoPath,
+		now.AddDate(0, 0, -90),
+		now,
+		500,
+	)
+	require.NoError(t, err)
+	assert.Empty(t, authors)
+}
+
 func TestListContributors_RespectsMaxCommits(t *testing.T) {
 	t.Parallel()
 

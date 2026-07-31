@@ -66,3 +66,29 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 	close(blockPost)
 	slow.Wait()
 }
+
+func TestDefaultEmitter_WaitWithTimeout_WaitsForLaterEmit(t *testing.T) {
+	blockPost := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-blockPost
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{EntityID: "project-blocked"},
+		},
+	})
+
+	time.Sleep(50 * time.Millisecond)
+
+	ok := contributorbilling.WaitWithTimeout(50 * time.Millisecond)
+	assert.False(t, ok, "wait should not complete while blocked POST is in flight")
+
+	close(blockPost)
+	assert.True(t, contributorbilling.WaitWithTimeout(2*time.Second))
+}

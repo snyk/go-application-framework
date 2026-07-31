@@ -24,7 +24,7 @@ client, err := entitlements_service.NewIngestClient(httpClient, "https://api.sny
 resp, err := client.CreateContributingDevs(ctx, orgID, authHeader, request)
 ```
 
-`ingestURL` must be the API host root (e.g. `https://api.snyk.io`).
+`ingestURL` must include scheme and host; an optional path prefix is preserved when passed directly to `NewIngestClient`.
 
 ## Updating the spec
 

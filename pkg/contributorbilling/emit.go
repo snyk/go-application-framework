@@ -13,6 +13,7 @@ import (
 )
 
 // EmitContributorBilling fires an async POST to entitlements-service ingest on the package default Emitter.
+// Prefer NewEmitter() when the host process may run multiple workflows or billing scopes concurrently.
 // It returns immediately and never surfaces an error that should fail the caller's command.
 // Short-lived hosts (e.g. the CLI) must call Wait or WaitWithTimeout before process exit.
 func EmitContributorBilling(ctx context.Context, opts EmitOptions) {
@@ -29,7 +30,9 @@ func cloneItems(items []BillingItem) []BillingItem {
 		cloned[i] = BillingItem{
 			EntityID:   item.EntityID,
 			EntityType: item.EntityType,
-			RepoPath:   item.RepoPath,
+		}
+		if item.RepoPath != "" {
+			cloned[i].RepoPath = resolveRepoPath(item.RepoPath)
 		}
 		if len(item.Contributors) > 0 {
 			cloned[i].Contributors = append([]Contributor(nil), item.Contributors...)
@@ -39,9 +42,9 @@ func cloneItems(items []BillingItem) []BillingItem {
 }
 
 func (opts EmitOptions) withDefaults() EmitOptions {
-	if opts.RepoPath == "" {
-		opts.RepoPath = "."
-	}
+	opts.ScopeID = strings.TrimSpace(opts.ScopeID)
+	opts.Capability = strings.TrimSpace(opts.Capability)
+	opts.RepoPath = resolveRepoPath(opts.RepoPath)
 	if opts.Timeout <= 0 {
 		opts.Timeout = DefaultTimeout
 	}
@@ -81,14 +84,10 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 }
 
 func validateRequiredFields(opts EmitOptions) SkipReason {
-	capability := strings.TrimSpace(opts.Capability)
-	if capability == "" {
-		return SkipReasonMissingCapability
-	}
-	if !isKnownCapability(capability) {
+	if opts.Capability != "" && !isKnownCapability(opts.Capability) {
 		return SkipReasonInvalidCapability
 	}
-	if strings.TrimSpace(opts.ScopeID) == "" {
+	if opts.ScopeID == "" {
 		return SkipReasonMissingScopeID
 	}
 	return ""

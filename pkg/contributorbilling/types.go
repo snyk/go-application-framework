@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // Contributor holds one git author email and their most recent commit in the collection window.
@@ -29,9 +32,16 @@ type EmitOptions struct {
 	HTTPClient *http.Client
 	IngestURL  string
 	AuthHeader string
+	// Capability is an optional caller-side telemetry label (e.g. oss, code, iac).
+	// It is not sent on the HTTP payload.
 	Capability string
 	ScopeID    string
 	Items      []BillingItem
+
+	// Configuration and Engine optionally supply IngestURL, AuthHeader, and HTTPClient
+	// via ApplyFromConfiguration when those fields are unset.
+	Configuration configuration.Configuration
+	Engine        workflow.Engine
 
 	// RepoPath is the default git root when CollectContributors fills empty item slices.
 	RepoPath            string

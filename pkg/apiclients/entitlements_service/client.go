@@ -25,7 +25,8 @@ type IngestClient struct {
 }
 
 // NewIngestClient creates a client for the ingest endpoint at ingestURL.
-// ingestURL must be the API host root (e.g. https://api.snyk.io).
+// ingestURL must include scheme and host; an optional path prefix is preserved
+// (e.g. https://api.snyk.io or https://gateway.example.com/v1).
 func NewIngestClient(httpClient *http.Client, ingestURL string) (*IngestClient, error) {
 	server, err := ingestServerURL(ingestURL)
 	if err != nil {
@@ -90,8 +91,6 @@ func ingestServerURL(ingestURL string) (string, error) {
 		return "", fmt.Errorf("ingest URL must include scheme and host")
 	}
 
-	parsed.Path = ""
-	parsed.RawPath = ""
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 

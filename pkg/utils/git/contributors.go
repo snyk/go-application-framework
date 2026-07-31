@@ -44,9 +44,7 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Au
 	}
 
 	iter, err := repo.Log(&git.LogOptions{
-		From:  head.Hash(),
-		Since: &since,
-		Until: &until,
+		From: head.Hash(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read log: %w", err)
@@ -64,9 +62,15 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Au
 			return nil, fmt.Errorf("read commit: %w", err)
 		}
 
-		email := commit.Author.Email
 		when := commit.Author.When
+		if when.Before(since) {
+			break
+		}
+		if when.After(until) {
+			continue
+		}
 
+		email := commit.Author.Email
 		if prev, ok := authors[email]; ok && when.Before(prev) {
 			continue
 		}

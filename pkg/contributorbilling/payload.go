@@ -1,7 +1,6 @@
 package contributorbilling
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -43,9 +42,4 @@ func contributorsEntityID(item BillingItem) string {
 	}
 
 	return fmt.Sprintf("%s:%s", entityType, item.EntityID)
-}
-
-func marshalIngestRequest(item BillingItem, logger *zerolog.Logger) ([]byte, error) {
-	request := buildIngestRequest(item, logger)
-	return json.Marshal(request)
 }

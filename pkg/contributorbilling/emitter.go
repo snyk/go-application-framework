@@ -24,6 +24,7 @@ func NewEmitter() *Emitter {
 // before process exit.
 func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) {
 	opts = opts.withDefaults()
+	ApplyFromConfiguration(&opts, opts.Configuration, opts.Engine)
 	opts.Items = cloneItems(opts.Items)
 
 	e.pending.add()
@@ -49,6 +50,8 @@ func (e *Emitter) WaitWithTimeout(d time.Duration) bool {
 	return e.pending.waitWithTimeout(d)
 }
 
+// defaultEmitter backs the package-level helpers. Prefer NewEmitter() for hosts that may
+// run multiple workflows or billing scopes in one process (CLI, IDE, MCP).
 var defaultEmitter = NewEmitter()
 
 type inFlightTracker struct {
@@ -86,12 +89,17 @@ func (t *inFlightTracker) snapshot() (count int, zeroCh <-chan struct{}) {
 }
 
 func (t *inFlightTracker) wait() {
-	count, ch := t.snapshot()
-	if count == 0 {
-		return
-	}
+	for {
+		count, ch := t.snapshot()
+		if count == 0 {
+			return
+		}
+		if ch == nil {
+			continue
+		}
 
-	<-ch
+		<-ch
+	}
 }
 
 func (t *inFlightTracker) waitWithTimeout(d time.Duration) bool {
@@ -100,18 +108,29 @@ func (t *inFlightTracker) waitWithTimeout(d time.Duration) bool {
 		return true
 	}
 
-	count, ch := t.snapshot()
-	if count == 0 {
-		return true
-	}
+	deadline := time.Now().Add(d)
+	for {
+		count, ch := t.snapshot()
+		if count == 0 {
+			return true
+		}
 
-	timer := time.NewTimer(d)
-	defer timer.Stop()
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return false
+		}
+		if ch == nil {
+			continue
+		}
 
-	select {
-	case <-ch:
-		return true
-	case <-timer.C:
-		return false
+		timer := time.NewTimer(remaining)
+		select {
+		case <-ch:
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
+			return false
+		}
 	}
 }

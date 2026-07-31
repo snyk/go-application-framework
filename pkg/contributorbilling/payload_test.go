@@ -30,7 +30,7 @@ func TestMarshalIngestPayload_MatchesGoldenFixture(t *testing.T) {
 		Contributors: contributors,
 	}
 
-	body, err := marshalIngestRequest(item, nil)
+	body, err := json.Marshal(buildIngestRequest(item, nil))
 	require.NoError(t, err)
 
 	goldenPath := filepath.Join("testdata", "golden_ingest_payload.json")
@@ -55,7 +55,7 @@ func TestMarshalIngestPayload_SkipsZeroLatestCommitDate(t *testing.T) {
 		},
 	}
 
-	body, err := marshalIngestRequest(item, nil)
+	body, err := json.Marshal(buildIngestRequest(item, nil))
 	require.NoError(t, err)
 
 	var got map[string]interface{}
@@ -116,7 +116,8 @@ func TestCloneItems(t *testing.T) {
 
 	assert.Equal(t, "project-a", cloned[0].EntityID)
 	assert.Equal(t, EntityTypeTarget, cloned[0].EntityType)
-	assert.Equal(t, "repo-a", cloned[0].RepoPath)
+	assert.True(t, filepath.IsAbs(cloned[0].RepoPath))
+	assert.Contains(t, cloned[0].RepoPath, "repo-a")
 	assert.Equal(t, "dev@example.com", cloned[0].Contributors[0].Email)
 }
 
@@ -162,10 +163,10 @@ func TestFilterItems(t *testing.T) {
 func TestValidateRequiredFields(t *testing.T) {
 	t.Parallel()
 
-	t.Run("missing capability", func(t *testing.T) {
+	t.Run("empty capability is allowed", func(t *testing.T) {
 		t.Parallel()
 		reason := validateRequiredFields(EmitOptions{ScopeID: "org"})
-		assert.Equal(t, SkipReasonMissingCapability, reason)
+		assert.Empty(t, reason)
 	})
 
 	t.Run("invalid capability", func(t *testing.T) {

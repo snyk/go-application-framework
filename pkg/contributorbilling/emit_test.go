@@ -196,7 +196,7 @@ func TestEmitContributorBilling_SkipsMissingEntityID(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestEmitContributorBilling_SkipsMissingCapability(t *testing.T) {
+func TestEmitContributorBilling_AllowsEmptyCapability(t *testing.T) {
 	t.Parallel()
 
 	called := false
@@ -220,9 +220,8 @@ func TestEmitContributorBilling_SkipsMissingCapability(t *testing.T) {
 	})
 
 	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
-	assert.Equal(t, contributorbilling.SkipReasonMissingCapability, result.SkipReason)
-	assert.False(t, called)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.True(t, called)
 }
 
 func TestEmitContributorBilling_SkipsInvalidCapability(t *testing.T) {
@@ -866,4 +865,48 @@ func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
 	assert.Equal(t, 1, result.ItemsEmitted)
 	assert.Equal(t, 1, result.ItemsFailed)
 	assert.Equal(t, 2, int(requestCount.Load()))
+}
+
+func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *testing.T) {
+	t.Parallel()
+
+	repoPath := initGitRepo(t, commitSpec{
+		email: "dev@example.com",
+		when:  time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC),
+	})
+	otherDir := t.TempDir()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	require.NoError(t, os.Chdir(repoPath))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient:          server.Client(),
+		IngestURL:           server.URL,
+		ScopeID:             "11111111-1111-1111-1111-111111111111",
+		RepoPath:            ".",
+		CollectContributors: true,
+		Items: []contributorbilling.BillingItem{
+			{EntityID: "22222222-2222-2222-2222-222222222222"},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	require.NoError(t, os.Chdir(otherDir))
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.NoError(t, result.ContributorCollectionErr)
 }

@@ -1,32 +1,31 @@
 # Contributor Billing
 
-Fire-and-forget client for posting CLI Active Contributor billing data to
-entitlements-service after successful in-scope commands.
+Fire-and-forget client for posting Active Contributor billing data to
+entitlements-service after successful in-scope CLI commands.
 
 ## Purpose
 
 After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`),
-extensions call `EmitContributorBilling` with the org scope, entity ID(s), and optional git
-contributor snapshot. The entitlements-service ingest endpoint produces Kafka billing events.
+callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
+billing events.
 
 This package is **Part 1** of CLI delivery. Wiring into extension repos is handled in separate
 tickets.
 
 ## Entry point
 
-Use the package default for single-host CLI wiring, or create an `Emitter` when a host needs
-isolated in-flight tracking (tests, multiple billing scopes in one process):
+**Prefer `NewEmitter()`** for hosts that may run multiple workflows or billing scopes in one process
+(CLI, IDE, MCP). The package-level helpers use a shared default emitter and are convenient for
+simple single-scope hosts only.
 
 ```go
 emitter := contributorbilling.NewEmitter()
-defer emitter.WaitWithTimeout(contributorbilling.DefaultTimeout)
+defer emitter.WaitWithTimeout(contributorbilling.WaitBudget(len(items), contributorbilling.DefaultTimeout))
 
-emitter.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
-    HTTPClient: client,
-    IngestURL:  apiURL,
-    AuthHeader: "token " + token,
-    Capability: contributorbilling.CapabilityOSS, // oss | code | iac — caller-side gating only
-    ScopeID:    orgID,
+opts := contributorbilling.EmitOptions{
+    Configuration: config,
+    Engine:        engine,
+    ScopeID:       orgID,
     Items: []contributorbilling.BillingItem{
         {EntityID: projectID}, // EntityType defaults to project → contributors_entity_id project:<uuid>
     },
@@ -37,33 +36,39 @@ emitter.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
     OnResult: func(result contributorbilling.Result) {
         // emitted | skipped | failed telemetry
     },
-})
+}
+emitter.EmitContributorBilling(ctx, opts)
 ```
 
-Package-level helpers delegate to a shared default `Emitter`:
+`ApplyFromConfiguration` fills unset `HTTPClient`, `IngestURL`, and `AuthHeader` from GAF
+`configuration.Configuration` and `workflow.Engine` (API URL + auth header). Callers can still
+override any field explicitly.
 
-```go
-contributorbilling.EmitContributorBilling(ctx, opts)
-```
+Optional `Capability` (`oss`, `code`, `iac`) is a caller-side telemetry label only; it is not sent
+on the HTTP payload and may be omitted.
 
 `EmitContributorBilling` is fire-and-forget: it returns immediately and never surfaces an error
 that should change the caller command exit code. The POST runs in a background goroutine detached
-from parent context cancellation (bounded by `Timeout`).
+from parent context cancellation (bounded per item by `Timeout`).
 
 ## Process lifecycle
 
-Short-lived hosts such as the CLI must wait for in-flight emits before exit, or the POST may be
-terminated when the process ends:
+Short-lived hosts must wait for in-flight emits before exit, or the POST may be terminated when the
+process ends:
 
 ```go
-defer contributorbilling.WaitWithTimeout(contributorbilling.DefaultTimeout)
+emitter := contributorbilling.NewEmitter()
+defer emitter.WaitWithTimeout(contributorbilling.WaitBudget(len(items), timeout))
 
-contributorbilling.EmitContributorBilling(ctx, opts)
+emitter.EmitContributorBilling(ctx, opts)
 ```
 
 `Wait` blocks until all in-flight goroutines finish. `WaitWithTimeout` returns false if the deadline
-elapses first. Skipped emits (empty items, missing fields) still complete synchronously inside the
-goroutine and are included in the wait count.
+elapses first. Each `BillingItem` is a separate sequential POST with its own `Timeout` budget, so
+use `WaitBudget(itemCount, timeout)` rather than `DefaultTimeout` alone for multi-item emits.
+
+Repo paths passed as `EmitOptions.RepoPath` or `BillingItem.RepoPath` are resolved to absolute
+paths at emit time so later working-directory changes cannot scan the wrong git root.
 
 ## Ingest contract
 
@@ -97,7 +102,7 @@ Content-Type: application/vnd.api+json
 - Expected success response: **201 Created**
 - `ScopeID` is the org UUID path parameter
 - `BillingItem.EntityID` is the entity UUID; `BillingItem.EntityType` defaults to `project` (`project`, `target`, or `revision`)
-- `Capability` is validated client-side for telemetry/gating; it is not sent on the HTTP payload
+- `IngestURL` may include an optional path prefix (preserved by the ingest client)
 
 See `testdata/golden_ingest_payload.json` for a golden fixture.
 
@@ -105,7 +110,7 @@ See `testdata/golden_ingest_payload.json` for a golden fixture.
 
 When `CollectContributors` is true, the package runs git log for items with empty `Contributors`:
 
-- Window: last **90 days** (`ContributingDeveloperPeriodDays`)
+- Window: last **90 days** (`ContributingDeveloperPeriodDays`) by **author** timestamp
 - Max commits scanned: **500** (`MaxCommitsInGitLog`), walking **newest commits from HEAD** only — if the window contains more than 500 commits, older in-window commits are not scanned
 - Per email: keep the **most recent** commit timestamp
 - Sorted by email for stable JSON
@@ -113,13 +118,8 @@ When `CollectContributors` is true, the package runs git log for items with empt
 - `EmitOptions.RepoPath` is the default git root; set `BillingItem.RepoPath` to override per entity when one emit spans multiple directories
 - Git collection failures are surfaced on `Result.ContributorCollectionErr` while the POST still proceeds with empty contributors for affected items
 
-Semantics align with:
-
-- `snyk/cli` → `src/lib/monitor/dev-count-analysis.ts` (`getContributors`)
-- `cli-extension-iac` → `internal/git/contributors.go` (`ListContributors`)
-- Git log collection uses `pkg/utils/git.ListContributors`
-
-Callers that need contributor data without emitting should use `pkg/utils/git` directly.
+Git log collection uses `pkg/utils/git.ListContributors`. Callers that need contributor data
+without emitting should use `pkg/utils/git` directly.
 
 ## Analytics policy
 
@@ -139,8 +139,7 @@ apply here.
 |---------|--------|------|
 | `skipped` | `empty_items` | No items provided |
 | `skipped` | `missing_entity_id` | All items missing `EntityID` |
-| `skipped` | `missing_capability` | `Capability` is empty |
-| `skipped` | `invalid_capability` | `Capability` is not one of `oss`, `code`, or `iac` |
+| `skipped` | `invalid_capability` | Non-empty `Capability` is not one of `oss`, `code`, or `iac` |
 | `skipped` | `missing_scope_id` | `ScopeID` is empty |
 | `failed` | `missing_ingest_url` | `IngestURL` is empty |
 | `failed` | `request_error` | HTTP request could not be constructed |
@@ -154,14 +153,13 @@ Each item gets its own ingest POST and its own `Timeout` budget.
 
 ## Future call sites (out of scope for this package)
 
-| Repo | When | Capability | Entity ID source |
-|------|------|------------|------------------|
-| cliv2 + legacy TS | Monitor / IaC share success | `oss` / `iac` | capture middleware project IDs → `project:<uuid>` |
-| cli-extension-os-flows | Dragonfly monitor success | `oss` | monitor response project public ID |
-| cli-extension-iac | ShareResultsRegistry (Path B) | `iac` | share response project public ID |
-| code-client-go | Native `--report` success | `code` | `ResultMetaData.TargetId` as `target:<uuid>` |
+| Repo | When | Entity ID source |
+|------|------|------------------|
+| cliv2 + legacy TS | Monitor / IaC `--report` (TS path) success | capture middleware project IDs → `project:<uuid>` |
+| cli-extension-os-flows | Dragonfly monitor success | monitor response project public ID |
+| code-client-go | Native `--report` success | `ResultMetaData.TargetId` as `target:<uuid>` |
 
-Not in scope: IaC Path C (cloud upload), SCLE Code `--report`, container/docker monitor.
+Not in scope: IaC native extension changes (legacy cliv2 capture only for v1), SCLE Code `--report`, container/docker monitor.
 
 ## Out of scope
 
