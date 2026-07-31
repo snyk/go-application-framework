@@ -23,29 +23,96 @@
 							{{- $tags := buildRuleTags $issue }}
 							{{- $cvssScore := getRuleCVSSScore $issue }}
 							{{- $problemID := $issue.GetProblemID }}
+							{{- $codeRule := getSnykCodeRuleFromIssue $issue }}
 							{
 								"id": {{ getQuotedString $problemID }},
+								{{- if $codeRule }}
+								"name": {{ getQuotedString $codeRule.Name }},
+								{{- end }}
 								"shortDescription": {
 									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
 								},
+								{{- if not $codeRule }}
 								{{- with buildRuleFullDescription $issue }}
 								"fullDescription": {
 									"text": {{ getQuotedString . }}
 								},
 								{{- end }}
+								{{- end }}
+								{{- if $codeRule }}
+								"defaultConfiguration": {
+									"level": {{ getQuotedString (severityToSarifLevel (printf "%s" $codeRule.DefaultConfiguration.Severity)) }}
+								},
+								{{- end }}
 								"help": {
+									{{- if $codeRule }}
+									"markdown": {{ getQuotedString (derefStr $codeRule.Help.Markdown) }},
+									"text": {{ getQuotedString (derefStr $codeRule.Help.Text) }}
+									{{- else }}
 									"text": "",
 									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $issue.GetFindingType) }}
+									{{- end }}
 								},
 								"properties": {
 									"tags": [
+										{{- if $codeRule }}
+										{{- $origTags := $codeRule.Properties.Tags }}
+										{{- $origTagsSize := sub (len $origTags) 1 }}
+										{{- range $tagIndex, $tag := $origTags }}
+										{{ getQuotedString $tag }}{{if lt $tagIndex $origTagsSize}},{{end}}
+										{{- end }}
+										{{- else }}
 										{{- $tagsSize := sub (len $tags) 1 }}
 										{{- range $tagIndex, $tag := $tags }}
 										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 										{{- end }}
-									]{{if ge $cvssScore 0.0}},
+										{{- end }}
+									]
+									{{- if $codeRule }},
+									"categories": [
+										{{- $categoriesSize := sub (len $codeRule.Properties.Categories) 1 }}
+										{{- range $catIndex, $category := $codeRule.Properties.Categories }}
+										{{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
+										{{- end }}
+									],
+									"exampleCommitFixes": [
+										{{- $examplesSize := sub (len $codeRule.Properties.ExampleCommitFixes) 1 }}
+										{{- range $exampleIndex, $example := $codeRule.Properties.ExampleCommitFixes }}
+										{
+
+											"commitURL": "{{ $example.CommitUrl }}",
+											"lines": [
+												{{- $lineSize := sub (len $example.Lines) 1 }}
+												{{- range $lineIndex, $line := $example.Lines }}
+												{
+													"line": {{ getQuotedString $line.Line -}},
+													"lineNumber": {{ $line.LineNumber }},
+													"lineChange": "{{ $line.LineChange }}"
+												}{{if lt $lineIndex $lineSize}},{{end}}
+												{{- end }}
+											]
+										}{{if lt $exampleIndex $examplesSize}},{{end}}
+										{{- end }}
+									],
+									"exampleCommitDescriptions": [
+										{{- $examplesSize := sub (len $codeRule.Properties.ExampleCommitDescriptions) 1 }}
+										{{- range $exampleIndex, $example := $codeRule.Properties.ExampleCommitDescriptions }}
+										"{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
+										{{- end }}
+									],
+									"precision": "{{ $codeRule.Properties.Precision }}",
+									"repoDatasetSize": {{ $codeRule.Properties.RepoDatasetSize }},
+									"cwe": [
+										{{- $cweSize := sub (len $codeRule.Properties.Cwe) 1 }}
+										{{- range $cweIndex, $cwe := $codeRule.Properties.Cwe }}
+										"{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
+										{{- end }}
+									]
+									{{- else }}
+									{{- if ge $cvssScore 0.0}},
 									"cvssv3_baseScore": {{ $cvssScore }},
 									"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
+									{{- end }}
 								}
 							}{{if lt $index $rulesSize}},{{end}}
 							{{- end }}
@@ -68,11 +135,38 @@
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{{- $problemID := $issue.GetProblemID }}
 				{{- $fingerPrintID := $issue.GetID }}
+				{{- $findingExtra := getFindingExtraFromIssue $issue $result }}
+				{{- $policyMods := getPolicyModificationsFromIssue $issue }}
+				{{- $execFlows := getExecutionFlowsFromIssue $issue }}
 				{
 					"ruleId": {{ getQuotedString $problemID }},
-					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
+					{{- if $findingExtra }}
+					"ruleIndex": {{ $findingExtra.RuleIndex }},
+					{{- end }}
+					"level": {{ getQuotedString (severityToSarifLevel $issue.GetEffectiveSeverity) }},
 					"message": {
+						{{- if and $findingExtra $findingExtra.MessageText }}
+						"text": {{ getQuotedString $findingExtra.MessageText }},
+						"markdown": {{ getQuotedString $findingExtra.MessageMarkdown }},
+						"arguments": [
+							{{- if $findingExtra.Arguments }}
+							{{- $argSize := sub (len $findingExtra.Arguments) 1 }}
+							{{- range $argIndex, $arg := $findingExtra.Arguments }}
+							{{ getQuotedString $arg }}{{if lt $argIndex $argSize}},{{end}}
+							{{- end }}
+							{{- end }}
+						]
+						{{- else }}
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}
+						{{- if and $findingExtra $findingExtra.Arguments }},
+						"arguments": [
+							{{- $argSize := sub (len $findingExtra.Arguments) 1 }}
+							{{- range $argIndex, $arg := $findingExtra.Arguments }}
+							{{ getQuotedString $arg }}{{if lt $argIndex $argSize}},{{end}}
+							{{- end }}
+						]
+						{{- end }}
+						{{- end }}
 					},
 					"locations": [
 						{{- range $locIndex, $location := $locations }}
@@ -80,18 +174,24 @@
 						{{- $physicalLoc := $location.PhysicalLocation }}
 						{{- if $location }}
 						{
+							{{- if $findingExtra }}
+							"id": {{ $locIndex }},
+							{{- end }}
 							{{- if $physicalLoc }}
 							"physicalLocation": {
 								"artifactLocation": {
 									"uri": {{ getQuotedString $physicalLoc.ArtifactLocation.URI }}
+									{{- if $findingExtra }},
+									"uriBaseId": "%SRCROOT%"
+									{{- end }}
 								},
 								"region": {
-									"startLine": {{ $physicalLoc.Region.StartLine }}{{if $physicalLoc.Region.StartColumn}},{{end}}
-									{{- if $physicalLoc.Region.StartColumn }}
-									"startColumn": {{ $physicalLoc.Region.StartColumn }}{{if $physicalLoc.Region.EndLine}},{{end}}
-									{{- end }}
+									"startLine": {{ $physicalLoc.Region.StartLine }}{{if $physicalLoc.Region.EndLine}},{{end}}
 									{{- if $physicalLoc.Region.EndLine }}
-									"endLine": {{ $physicalLoc.Region.EndLine }}{{if $physicalLoc.Region.EndColumn}},{{end}}
+									"endLine": {{ $physicalLoc.Region.EndLine }}{{if $physicalLoc.Region.StartColumn}},{{end}}
+									{{- end }}
+									{{- if $physicalLoc.Region.StartColumn }}
+									"startColumn": {{ $physicalLoc.Region.StartColumn }}{{if $physicalLoc.Region.EndColumn}},{{end}}
 									{{- end }}
 									{{- if $physicalLoc.Region.EndColumn }}
 									"endColumn": {{ $physicalLoc.Region.EndColumn }}
@@ -116,8 +216,7 @@
 					]
 					{{- if and (ne (printf "%s" $issue.GetFindingType) "sca") (ne (printf "%s" $issue.GetFindingType) "license") }},
 					"fingerprints": {
-						"identity": {{ getQuotedString $fingerPrintID }},
-						"snyk/asset/finding/v1": {{ getQuotedString $fingerPrintID }}
+						{{ fingerprintsJSON $findingExtra $fingerPrintID }}
 					}
 					{{- end }}
 					{{- if $fix }},
@@ -155,6 +254,46 @@
 					{{- if $ignoreDetails }},
 					"suppressions": [
 						{
+							{{- if and $findingExtra $findingExtra.Suppression }}
+							{{- $suppExtra := $findingExtra.Suppression }}
+							{{- if $suppExtra.GUID }}
+							"guid": {{ getQuotedString $suppExtra.GUID }},
+							{{- end }}
+							{{- $status := printf "%s" $ignoreDetails.GetStatus }}
+							{{- if eq $status "ignored" }}
+							"status": "accepted"
+							{{- else if eq $status "pending_ignore_approval" }}
+							"status": "underReview"
+							{{- else if eq $status "other" }}
+							"status": "rejected"
+							{{- else }}
+							"status": "accepted"
+							{{- end }},
+							{{- $justification := $ignoreDetails.GetJustification }}
+							{{- if $justification }}
+							"justification": {{ getQuotedString $justification }},
+							{{- end }}
+							"kind": "external"
+							{{- if or $suppExtra.Category $suppExtra.Expiration $suppExtra.IgnoredOn $suppExtra.IgnoredBy }},
+							"properties": {
+								{{- if $suppExtra.Category }}
+								"category": {{ getQuotedString $suppExtra.Category }}{{if or $suppExtra.Expiration $suppExtra.IgnoredOn $suppExtra.IgnoredBy}},{{end}}
+								{{- end }}
+								{{- if $suppExtra.Expiration }}
+								"expiration": {{ getQuotedString $suppExtra.Expiration }}{{if or $suppExtra.IgnoredOn $suppExtra.IgnoredBy}},{{end}}
+								{{- end }}
+								{{- if $suppExtra.IgnoredOn }}
+								"ignoredOn": {{ getQuotedString $suppExtra.IgnoredOn }}{{if $suppExtra.IgnoredBy}},{{end}}
+								{{- end }}
+								{{- if $suppExtra.IgnoredBy }}
+								"ignoredBy": {
+									"name": {{ getQuotedString $suppExtra.IgnoredBy }},
+									"email": {{ getQuotedString $suppExtra.Email }}
+								}
+								{{- end }}
+							}
+							{{- end }}
+							{{- else }}
 							{{- $policyID := $ignoreDetails.GetPolicyID }}
 							{{- if $policyID }}
 							"guid": {{ getQuotedString $policyID }},
@@ -201,39 +340,130 @@
 								{{- end }}
 							}
 							{{- end }}
+							{{- end }}
 						}
 					]
+					{{- end }}
+					{{- if $execFlows }},
+					"codeFlows": [
+						{{- $cfSize := sub (len $execFlows) 1 }}
+						{{- range $cfIndex, $flow := $execFlows }}
+						{
+							"threadFlows": [
+								{
+									"locations": [
+									{{- $locSize := sub (len $flow.Flow) 1 }}
+									{{- range $locIndex, $loc := $flow.Flow }}
+									{
+										"location": {
+											"id": {{ $locIndex }},
+											"physicalLocation": {
+												"artifactLocation": {
+												  "uri": {{ getQuotedString $loc.FilePath }},
+												  "uriBaseId": "%SRCROOT%"
+												},
+												"region": {
+												  "startLine": {{ $loc.FromLine }}
+												  {{- if $loc.ToLine }},
+												  "endLine": {{ $loc.ToLine }}
+												  {{- end }}
+												  {{- if $loc.FromColumn }},
+												  "startColumn": {{ $loc.FromColumn }}
+												  {{- end }}
+												  {{- if $loc.ToColumn }},
+												  "endColumn": {{ $loc.ToColumn }}
+												  {{- end }}
+												}
+											}
+										}
+									}{{if lt $locIndex $locSize}},{{end}}
+									{{- end }}
+									]
+								}
+							]
+						}{{if lt $cfIndex $cfSize}},{{end}}
+						{{- end }}
+					]
+					{{- end }}
+					{{- $riskScore := $issue.GetRiskScore }}
+					{{- if $findingExtra }},
+					"properties": {
+						"isAutofixable": {{ $findingExtra.IsAutofixable }},
+						{{- if or $findingExtra.PolicyOriginalLevel $findingExtra.PolicySeverity $findingExtra.PolicyOriginalSeverity }}
+						"snykPolicy/v1": {
+							{{- if $findingExtra.PolicyOriginalLevel }}
+							"originalLevel": {{ getQuotedString $findingExtra.PolicyOriginalLevel }}{{if or $findingExtra.PolicySeverity $findingExtra.PolicyOriginalSeverity}},{{end}}
+							{{- end }}
+							{{- if $findingExtra.PolicySeverity }}
+							"severity": {{ getQuotedString $findingExtra.PolicySeverity }}{{if $findingExtra.PolicyOriginalSeverity}},{{end}}
+							{{- end }}
+							{{- if $findingExtra.PolicyOriginalSeverity }}
+							"originalSeverity": {{ getQuotedString $findingExtra.PolicyOriginalSeverity }}
+							{{- end }}
+						},
+						{{- end }}
+						"priorityScore": {{ $riskScore }},
+						"priorityScoreFactors": [
+						{{- if $findingExtra.PriorityScoreFactors }}
+						{{- $factorSize := sub (len $findingExtra.PriorityScoreFactors) 1 }}
+						{{- range $fIdx, $factor := $findingExtra.PriorityScoreFactors }}
+							  {
+								"label": {{ $factor.Label }},
+								"type": {{ getQuotedString $factor.Type }}
+							  }{{if lt $fIdx $factorSize}},{{end}}
+						{{- end }}
+						{{- end }}
+						]
+					}
+					{{- else if or $policyMods (gt (int $riskScore) 0) }},
+					"properties": {
+						{{- if $policyMods }}
+						"snykPolicy/v1": {
+							{{- range $pmod := $policyMods }}
+							"reason": {{ getQuotedString $pmod.Reason }}
+							{{- end }}
+						}{{if gt (int $riskScore) 0}},{{end}}
+						{{- end }}
+						{{- if gt (int $riskScore) 0 }}
+						"priorityScore": {{ $riskScore }}
+						{{- end }}
+					}
 					{{- end }}
 				}{{if lt $index $issuesSize}},{{end}}
 				{{- end }}
 			],
-				{{- /* TODO: Add properties section for SAST (coverage) and upload results
+				{{- $coverage := getCoverageFromTestResult $result }}
+				{{- $reportURL := index $metadata "report-url" }}
+				{{- if or $coverage $reportURL }}
 				"properties": {
+					{{- if $coverage }}
 					"coverage": [
-						{{- $coverageSize := sub (len $result.Summary.Coverage) 1 }}
-						{{- range $coverageIndex, $coverage := $result.Summary.Coverage }}
+						{{- $coverageSlice := $coverage }}
+						{{- $covSize := sub (len $coverageSlice) 1 }}
+						{{- range $covIndex, $cov := $coverageSlice }}
 						{
-							"files": {{ $coverage.Files }},
-							"isSupported": {{ $coverage.IsSupported }},
-							"lang": "{{ $coverage.Lang }}",
-							"type": "{{ $coverage.Type }}"
-						}{{if lt $coverageIndex $coverageSize}},{{end}}
+							"files": {{ $cov.Files }},
+							"isSupported": {{ $cov.IsSupported }},
+							"lang": {{ getQuotedString $cov.Lang }},
+							"type": {{ getQuotedString $cov.Type }}
+						}{{if lt $covIndex $covSize}},{{end}}
 						{{- end }}
 					]
-					{{- if .Links.report }},
+					{{- end }}
+					{{- if and $coverage $reportURL }},{{end}}
+					{{- if $reportURL }}
+					{{- $projectId := index $metadata "projectid" }}
+					{{- $snapshotId := index $metadata "snapshotid" }}
 					"uploadResult": {
-						"projectId": "{{ .Links.projectid }}",
-						"snapshotId": "{{ .Links.snapshotid }}",
-						"reportUrl": "{{ .Links.report }}"
+						{{- if $projectId }}
+						"projectId": {{ getQuotedString (printf "%s" $projectId) }},
+						{{- end }}
+						{{- if $snapshotId }}
+						"snapshotId": {{ getQuotedString (printf "%s" $snapshotId) }},
+						{{- end }}
+						"reportUrl": {{ getQuotedString (printf "%s" $reportURL) }}
 					}
 					{{- end }}
-				},
-				*/ -}}
-				{{- with index $metadata "report-url" }}
-				"properties": {
-					"uploadResult": {
-						"reportUrl": {{ getQuotedString (printf "%s" .) }}
-					}
 				},
 				{{- end }}
 				"automationDetails": {

@@ -658,6 +658,8 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCweProblem(&problem)
 		case "secret":
 			b.processSecretsRuleProblem(&problem)
+		case "snyk_code_rule":
+			b.processSnykCodeRuleProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -782,6 +784,22 @@ func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
 	}
 
 	b.ruleShortDescription = secretsProblem.ShortDescription
+}
+
+// processSnykCodeRuleProblem extracts data from a Snyk Code rule problem
+func (b *issueBuilder) processSnykCodeRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" && b.problemID == "" {
+		b.problemID = id
+	}
+
+	codeRuleProblem, err := problem.AsSnykCodeRuleProblem()
+	if err != nil {
+		return
+	}
+
+	if b.ruleShortDescription == "" && codeRuleProblem.ShortDescription.Text != nil {
+		b.ruleShortDescription = *codeRuleProblem.ShortDescription.Text
+	}
 }
 
 // determineFallbackID sets ID from finding key or ID if not already set
