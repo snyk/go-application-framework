@@ -15,10 +15,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-// newTestConfig builds an in-memory configuration.Configuration with the given boolean flags
-// preset, for tests that need FileFilter to resolve feature-flag-gated behavior.
+// newTestConfig builds an in-memory configuration with the given boolean feature flags preset.
 func newTestConfig(flags map[string]bool) configuration.Configuration {
-	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	config := configuration.NewWithOpts()
 	for key, value := range flags {
 		config.Set(key, value)
 	}
@@ -1488,11 +1487,7 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 	}
 }
 
-// TestFileFilter_MetacharacterFixToggle is the end-to-end regression net for the feature-flag
-// gate around the special-character-path fix (CLI-1648). A ".gitignore" rule for a directory whose
-// path contains regex metacharacters must reproduce the old behavior (the directory is NOT
-// excluded) when the flag is off, and apply the fix (the directory IS excluded) when it is on or
-// when no config was supplied at all.
+// CLI-1648: .gitignore filtering on paths with regex metacharacters follows the metacharacter-fix feature flag.
 func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 	setup := func(t *testing.T) (base, nodeModulesFile, appFile string) {
 		t.Helper()

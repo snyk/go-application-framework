@@ -13,12 +13,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
-// TestInvocationContextImpl_GetFileFilter asserts that the FileFilter handed to workflows is wired
-// to the loaded configuration, so its feature-flag-gated behavior reflects the flags of the current
-// invocation rather than a default.
+// TestInvocationContextImpl_GetFileFilter asserts GetFileFilter uses the invocation's configuration.
 func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 	// A .gitignore rule for a directory whose path contains regex metacharacters is only honored
-	// when the metacharacter-fix flag is enabled, which makes it a usable probe for whether a
+	// when the metacharacter-fix feature flag is enabled, which makes it a usable probe for whether a
 	// config reached the FileFilter.
 	setup := func(t *testing.T) (base string, nodeModulesFile string) {
 		t.Helper()

@@ -377,8 +377,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
-		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:   "snykFileFilterMetacharacterFix",
-		pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES: "snykGitIgnoreTrackedFiles",
+		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:   "clientFileFilterGitignore_MetaCharFix",
+		pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES: "clientFileFilterGitignore_TrackedFilesRollout",
 	})
 }
 

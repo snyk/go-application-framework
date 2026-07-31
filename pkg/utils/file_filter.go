@@ -21,7 +21,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-// Feature flags gating FileFilter behavior. They live here, next to the behavior they gate.
 const (
 	FF_FILE_FILTER_METACHARACTER_FIX   string = "internal_snyk_file_filter_metacharacter_fix_enabled"   // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
 	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled" // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
@@ -36,9 +35,7 @@ type FileFilter struct {
 	logger          *zerolog.Logger
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
-	// config resolves feature-flag-gated behavior and may be nil when WithConfig was not
-	// supplied to NewFileFilter, in which case that behavior defaults to disabled.
-	config configuration.Configuration
+	config          configuration.Configuration
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -94,9 +91,7 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
-// WithConfig supplies the loaded configuration that the FileFilter resolves its
-// feature-flag-gated behavior from. The flag values are read when the option is applied, so
-// config must already be loaded.
+// WithConfig supplies the loaded configuration; feature flag values are read when the option is applied.
 func WithConfig(config configuration.Configuration) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.config = config
@@ -104,9 +99,7 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 	}
 }
 
-// NewFileFilter creates a FileFilter rooted at path. Feature-flag-gated behavior defaults to
-// disabled (the legacy behavior) until WithConfig is supplied to let the configuration decide
-// instead.
+// NewFileFilter creates a FileFilter rooted at path. Without WithConfig, feature flags default to disabled (legacy).
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
 		path:            path,
@@ -114,7 +107,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
-		config:          nil,
+		config:          configuration.NewWithOpts(),
 	}
 
 	for _, option := range options {
@@ -215,6 +208,12 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
 func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
+	if len(ignoreFiles) == 0 {
+		return nil, nil
+	}
+
+	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
 		var content []byte
@@ -224,13 +223,9 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 		}
 
 		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
+			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			var enableMetacharacterFix bool
-			if fw.config != nil {
-				enableMetacharacterFix = fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
-			}
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
 			globs = append(globs, parsedRules...)
 		}
@@ -240,7 +235,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 }
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
-func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
+func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string, enableMetacharacterFix bool) []string {
 	var rules DotSnykRule
 	err := yaml.Unmarshal(content, &rules)
 	if err != nil {
@@ -268,10 +263,6 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	}
 
 	var globs []string
-	var enableMetacharacterFix bool
-	if fw.config != nil {
-		enableMetacharacterFix = fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
-	}
 
 	for _, rule := range allRules {
 		isExpired, err := rule.IsExpired()

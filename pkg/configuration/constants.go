@@ -94,6 +94,4 @@ const (
 	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 	// Feature flag to enable native implementation for code, used in code-client-go's code workflow
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
-
-	// Feature flags gating utils.FileFilter behavior live in pkg/utils/file_filter.go.
 )
