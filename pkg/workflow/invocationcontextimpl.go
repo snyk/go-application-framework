@@ -117,6 +117,6 @@ func (ici *invocationContextImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 // GetFileFilter returns a utils.FileFilter rooted at path, wired to this invocation's configuration and logger.
 func (ici *invocationContextImpl) GetFileFilter(path string, options ...utils.FileFilterOption) *utils.FileFilter {
 	config := ici.Configuration
-	defaults := []utils.FileFilterOption{utils.WithConfig(config), utils.WithThreadNumber(config.GetInt(configuration.MAX_THREADS))}
+	defaults := []utils.FileFilterOption{utils.WithConfig(config)}
 	return utils.NewFileFilter(path, ici.GetEnhancedLogger(), append(defaults, options...)...)
 }
