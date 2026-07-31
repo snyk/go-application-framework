@@ -56,6 +56,7 @@ func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
 		}
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
 	rsp, err := client.Get(server.URL)
 	require.NoError(t, err)
@@ -82,6 +83,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 		}
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
 	rsp, err := client.Get(server.URL)
 	require.NoError(t, err)
@@ -119,6 +121,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config.Set(configuration.INTEGRATION_NAME, integrationName)
 	config.Set(configuration.INTEGRATION_VERSION, integrationVersion)
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
@@ -146,6 +149,7 @@ func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, "https://www.example.com/not/the/server/URL")
 	rsp, err := client.Get(server.URL)
 	require.NoError(t, err)
