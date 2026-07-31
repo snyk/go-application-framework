@@ -57,8 +57,10 @@ func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
 	})
 	server := httptest.NewServer(handler)
 	config.Set(configuration.API_URL, server.URL)
-	_, err := client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
@@ -81,8 +83,10 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	})
 	server := httptest.NewServer(handler)
 	config.Set(configuration.API_URL, server.URL)
-	_, err := client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
@@ -119,8 +123,10 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 
-	_, err = client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
@@ -506,7 +512,10 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 			return expectedErr // overrides the previous error
 		})
 		client := network.GetHttpClient()
-		_, err := client.Get(server.URL)
+		res, err := client.Get(server.URL)
+		if res != nil {
+			res.Body.Close()
+		}
 		assert.ErrorAs(t, err, &expectedErr)
 	})
 
@@ -527,7 +536,10 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 			return expectedErr // overrides the previous error
 		})
 		client := network.GetUnauthorizedHttpClient()
-		_, err := client.Get(server.URL)
+		res, err := client.Get(server.URL)
+		if res != nil {
+			res.Body.Close()
+		}
 		assert.ErrorAs(t, err, &expectedErr)
 	})
 }
