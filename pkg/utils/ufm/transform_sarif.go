@@ -239,8 +239,9 @@ func mapSnykCodeRuleProblem(res sarif.Result, rules []sarif.Rule) *testapi.Probl
 	rule := rules[res.RuleIndex]
 
 	codeRule := testapi.SnykCodeRuleProblem{
-		Id:   rule.ID,
-		Name: rule.Name,
+		Id:     rule.ID,
+		Name:   rule.Name,
+		Source: testapi.SnykCodeRule,
 		DefaultConfiguration: testapi.SnykcoderuleConfiguration{
 			Severity: testapi.Severity(sarif_utils.SarifLevelToSeverity(rule.DefaultConfiguration.Level)),
 		},
