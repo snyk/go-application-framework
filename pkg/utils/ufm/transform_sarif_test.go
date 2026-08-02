@@ -229,6 +229,36 @@ func TestTransformToUFMFromSarif_SeverityMapping(t *testing.T) {
 	assert.Equal(t, testapi.Severity("medium"), findings[1].Attributes.Rating.Severity)
 }
 
+func TestTransformToUFMFromSarif_SeverityThreshold(t *testing.T) {
+	t.Run("filters findings below threshold", func(t *testing.T) {
+		result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary(), WithSeverityThreshold("high"))
+		require.NoError(t, err)
+
+		findings, _, err := result.Findings(context.Background())
+		require.NoError(t, err)
+		assert.Len(t, findings, 1)
+		assert.Equal(t, testapi.Severity("high"), findings[0].Attributes.Rating.Severity)
+	})
+
+	t.Run("keeps all findings when no threshold", func(t *testing.T) {
+		result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
+		require.NoError(t, err)
+
+		findings, _, err := result.Findings(context.Background())
+		require.NoError(t, err)
+		assert.Len(t, findings, 2)
+	})
+
+	t.Run("filters all findings when threshold above all", func(t *testing.T) {
+		result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary(), WithSeverityThreshold("critical"))
+		require.NoError(t, err)
+
+		findings, _, err := result.Findings(context.Background())
+		require.NoError(t, err)
+		assert.Len(t, findings, 0)
+	})
+}
+
 func TestTransformToUFMFromSarif_EffectiveSummary(t *testing.T) {
 	result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
 	require.NoError(t, err)

@@ -2,20 +2,39 @@ package ufm
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 
+	findings_utils "github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
-func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (testapi.TestResult, error) {
-	findings, extras, err := mapUFMFindings(sarifDoc)
+type TransformOption func(*transformConfig)
+
+type transformConfig struct {
+	severityThreshold string
+}
+
+func WithSeverityThreshold(threshold string) TransformOption {
+	return func(c *transformConfig) {
+		c.severityThreshold = threshold
+	}
+}
+
+func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary, opts ...TransformOption) (testapi.TestResult, error) {
+	cfg := &transformConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	findings, extras, err := mapUFMFindings(sarifDoc, cfg.severityThreshold)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map findings: %w", err)
 	}
@@ -68,7 +87,7 @@ type FindingExtra struct {
 	PolicyOriginalSeverity string                `json:"policyOriginalSeverity,omitempty"`
 }
 
-func mapUFMFindings(sarifDoc *sarif.SarifDocument) ([]testapi.FindingData, map[string]interface{}, error) {
+func mapUFMFindings(sarifDoc *sarif.SarifDocument, severityThreshold string) ([]testapi.FindingData, map[string]interface{}, error) {
 	if len(sarifDoc.Runs) == 0 {
 		return []testapi.FindingData{}, nil, nil
 	}
@@ -77,7 +96,13 @@ func mapUFMFindings(sarifDoc *sarif.SarifDocument) ([]testapi.FindingData, map[s
 	rules := sarifDoc.Runs[0].Tool.Driver.Rules
 	perFinding := make(map[string]interface{})
 
+	allowed := findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, severityThreshold)
+
 	for _, res := range sarifDoc.Runs[0].Results {
+		if !slices.Contains(allowed, sarif_utils.SarifLevelToSeverity(res.Level)) {
+			continue
+		}
+
 		finding, err := mapUFMFinding(res, rules)
 		if err != nil {
 			return nil, nil, err
