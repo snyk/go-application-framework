@@ -670,6 +670,69 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 	assert.Equal(t, "collected@example.com", collected["email"])
 }
 
+func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
+	t.Parallel()
+
+	older := time.Date(2026, 1, 10, 8, 0, 0, 0, time.UTC)
+	newer := time.Date(2026, 1, 20, 8, 0, 0, 0, time.UTC)
+	otherWhen := time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC)
+
+	var gotBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(body, &gotBody))
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityOSS,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{
+				EntityID: "project-deduped",
+				Contributors: []contributorbilling.Contributor{
+					{Email: "alice@example.com", LatestCommitDate: older},
+					{Email: "alice@example.com", LatestCommitDate: newer},
+					{Email: "Alice@example.com", LatestCommitDate: otherWhen},
+					{Email: "bob@example.com", LatestCommitDate: older},
+				},
+			},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+
+	attributes := ingestAttributes(gotBody)
+	require.NotNil(t, attributes)
+	contributors, ok := attributes["contributors"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, contributors, 3)
+
+	byEmail := make(map[string]string)
+	for _, raw := range contributors {
+		contributor, ok := raw.(map[string]interface{})
+		require.True(t, ok)
+		email, ok := contributor["email"].(string)
+		require.True(t, ok)
+		commitDate, ok := contributor["commit_date"].(string)
+		require.True(t, ok)
+		byEmail[email] = commitDate
+	}
+
+	assert.Equal(t, newer.Format(time.RFC3339), byEmail["alice@example.com"])
+	assert.Equal(t, otherWhen.Format(time.RFC3339), byEmail["Alice@example.com"])
+	assert.Equal(t, older.Format(time.RFC3339), byEmail["bob@example.com"])
+}
+
 func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T) {
 	t.Parallel()
 

@@ -113,6 +113,7 @@ When `CollectContributors` is true, the package runs git log for items with empt
 - Window: last **90 days** (`ContributingDeveloperPeriodDays`) by **author** timestamp
 - Max commits scanned: **500** (`MaxCommitsInGitLog`), walking **newest commits from HEAD** only — if the window contains more than 500 commits, older in-window commits are not scanned
 - Per email: keep the **most recent** commit timestamp
+- Before each emit POST, contributors are deduplicated again by **exact email** (case-sensitive, as git returns), keeping the latest commit date
 - Sorted by email for stable JSON
 - Non-git or empty repo: empty contributors, no error
 - `EmitOptions.RepoPath` is the default git root; set `BillingItem.RepoPath` to override per entity when one emit spans multiple directories

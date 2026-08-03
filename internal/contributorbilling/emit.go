@@ -76,6 +76,8 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		collectionErr = fillContributors(items, opts.RepoPath, time.Now(), opts.Logger)
 	}
 
+	dedupeContributorsForItems(items)
+
 	result := postIngest(parent, opts, items)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
