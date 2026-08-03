@@ -75,14 +75,12 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
-// TODO: These metric keys are not read anywhere yet; actual recording is coming in a follow-up PR [CLI-1740].
-//
-//nolint:unused // plumbing for a follow-up PR that wires these into recordMetricLazy/recordBoolMetricLazy call sites [CLI-1740]
 const (
-	metricFileFilterPrefix           = "file-filter"
-	metricFileFilterDurationMs       = "durationMs"
-	metricFileFilterFileCount        = "fileCount"
-	metricFileFilterMetacharacterFix = "metacharacterFix"
+	metricFileFilterPrefix              = "file-filter"
+	metricFileFilterDurationMs          = "durationMs"
+	metricFileFilterFileCount           = "fileCount"
+	metricFileFilterMetacharacterFix    = "metacharacterFix"
+	metricFileFilterRespectTrackedFiles = "respectTrackedFiles"
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -132,21 +130,18 @@ func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
 func (fw *FileFilter) recordMetricLazy(key string, getMetric func() int) {
 	if fw.metricsRecorder != nil {
 		fw.metricsRecorder.AddExtensionIntegerValue(fw.metricKey(key), getMetric())
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
 func (fw *FileFilter) recordBoolMetricLazy(key string, getMetric func() bool) {
 	if fw.metricsRecorder != nil {
 		fw.metricsRecorder.AddExtensionBoolValue(fw.metricKey(key), getMetric())
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
 func (fw *FileFilter) metricKey(key string) string {
 	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, fw.metricScopeID, key)
 }
@@ -249,6 +244,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
+		start := time.Now()
+		var resolvedFileCount atomic.Int64
 
 		defer close(filteredFilesCh)
 
@@ -263,6 +260,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 				// filesToFilter that do not match the glob pattern are filtered
 				if !isFileExcluded(f) {
 					filteredFilesCh <- f
+					resolvedFileCount.Add(1)
 				}
 			}(file)
 		}
@@ -272,6 +270,13 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		if err != nil {
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
+
+		fw.recordMetricLazy(metricFileFilterDurationMs, func() int {
+			return int(time.Since(start).Milliseconds())
+		})
+		fw.recordMetricLazy(metricFileFilterFileCount, func() int {
+			return int(resolvedFileCount.Load())
+		})
 	}()
 
 	return filteredFilesCh
@@ -284,7 +289,14 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	}
 
 	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	fw.recordBoolMetricLazy(metricFileFilterMetacharacterFix, func() bool {
+		return enableMetacharacterFix
+	})
+
 	respectGitIgnoreTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+	fw.recordBoolMetricLazy(metricFileFilterRespectTrackedFiles, func() bool {
+		return respectGitIgnoreTrackedFiles
+	})
 
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
