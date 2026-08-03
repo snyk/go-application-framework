@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	gitignoreformat "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -25,12 +26,13 @@ import (
 var defaultInvalidRules = []string{}
 
 type FileFilter struct {
-	path                             string
-	defaultRules                     []string
-	logger                           *zerolog.Logger
-	max_threads                      int64
-	dotSnykSections                  []DotSnykExcludeSectionName
-	enableIgnoreRuleMetacharacterFix bool
+	path                                 string
+	defaultRules                         []string
+	logger                               *zerolog.Logger
+	max_threads                          int64
+	dotSnykSections                      []DotSnykExcludeSectionName
+	enableIgnoreRuleMetacharacterFix     bool
+	skipIgnoreFilesInExcludedDirectories bool
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -86,6 +88,15 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
+// WithSkipIgnoreFilesInExcludedDirectories prevents ignore files below an excluded directory from
+// contributing rules, matching Git's traversal behavior.
+func WithSkipIgnoreFilesInExcludedDirectories(enabled bool) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.skipIgnoreFilesInExcludedDirectories = enabled
+		return nil
+	}
+}
+
 // Deprecated: Use NewFileFilterFromConfig instead.
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := newFileFilterInternal(path, logger, options...)
@@ -128,6 +139,7 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config feature
 		return filter
 	}
 	filter.enableIgnoreRuleMetacharacterFix = config.GetBool(featureflags.FileFilterMetacharacterFix)
+	filter.skipIgnoreFilesInExcludedDirectories = config.GetBool(featureflags.FileFilterRespectParentExclusionFix)
 	return filter
 }
 
@@ -158,6 +170,10 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
+	if fw.skipIgnoreFilesInExcludedDirectories {
+		return fw.getRulesFromReachableDirectories(ruleFiles)
+	}
+
 	files := fw.GetAllFiles()
 
 	// iterate filesToFilter channel and find ignore filesToFilter
@@ -178,6 +194,84 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	}
 
 	return append(fw.defaultRules, globs...), nil
+}
+
+func (fw *FileFilter) getRulesFromReachableDirectories(ruleFiles []string) ([]string, error) {
+	globs := slices.Clone(fw.defaultRules)
+	patterns := make([]gitignoreformat.Pattern, 0, len(fw.defaultRules))
+	for _, rule := range fw.defaultRules {
+		patterns = append(patterns, gitignoreformat.ParsePattern(rule, nil))
+	}
+
+	if err := fw.collectRulesFromDirectory(fw.path, ruleFiles, patterns, &globs); err != nil {
+		return nil, err
+	}
+	return globs, nil
+}
+
+func (fw *FileFilter) collectRulesFromDirectory(dir string, ruleFiles []string, inheritedPatterns []gitignoreformat.Pattern, globs *[]string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fw.logger.Error().Msgf("read dir failed: %v", err)
+		return nil
+	}
+
+	patterns := inheritedPatterns
+	domain := relativePathParts(fw.path, dir)
+	for _, entry := range entries {
+		if entry.IsDir() || !slices.Contains(ruleFiles, entry.Name()) {
+			continue
+		}
+
+		rules, err := fw.readIgnoreRules(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return err
+		}
+
+		invalidRules := []string{"."}
+		if entry.Name() == ".snyk" {
+			invalidRules = defaultInvalidRules
+		}
+		for _, rule := range rules {
+			*globs = append(*globs, parseIgnoreRuleToGlobs(rule, dir, invalidRules, fw.enableIgnoreRuleMetacharacterFix)...)
+			patterns = append(patterns, gitignoreformat.ParsePattern(rule, domain))
+		}
+	}
+
+	matcher := gitignoreformat.NewMatcher(patterns)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		child := filepath.Join(dir, entry.Name())
+		if matcher.Match(relativePathParts(fw.path, child), true) {
+			continue
+		}
+		if err := fw.collectRulesFromDirectory(child, ruleFiles, patterns, globs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (fw *FileFilter) readIgnoreRules(ignoreFile string) ([]string, error) {
+	content, err := os.ReadFile(ignoreFile)
+	if err != nil {
+		return nil, err
+	}
+	if filepath.Base(ignoreFile) == ".snyk" {
+		return fw.parseDotSnykRules(content), nil
+	}
+	return parseIgnoreFileRules(content), nil
+}
+
+func relativePathParts(root string, target string) []string {
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == "." {
+		return nil
+	}
+	return strings.Split(filepath.ToSlash(relative), "/")
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
@@ -241,6 +335,14 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
 func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
+	var globs []string
+	for _, rule := range fw.parseDotSnykRules(content) {
+		globs = append(globs, parseIgnoreRuleToGlobs(rule, filePath, defaultInvalidRules, fw.enableIgnoreRuleMetacharacterFix)...)
+	}
+	return globs
+}
+
+func (fw *FileFilter) parseDotSnykRules(content []byte) []string {
 	var rules DotSnykRule
 	err := yaml.Unmarshal(content, &rules)
 	if err != nil {
@@ -267,7 +369,7 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 		allRules = append(allRules, sectionRules...)
 	}
 
-	var globs []string
+	var paths []string
 	for _, rule := range allRules {
 		isExpired, err := rule.IsExpired()
 
@@ -286,9 +388,9 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 			continue
 		}
 
-		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules, fw.enableIgnoreRuleMetacharacterFix)...)
+		paths = append(paths, rule.Path)
 	}
-	return globs
+	return paths
 }
 
 type dotSnykExclude struct {
@@ -394,19 +496,23 @@ func parseExpireTime(expiresStr string) (time.Time, error) {
 // parseIgnoreFile builds a list of glob patterns from a given .gitignore style file.
 func parseIgnoreFile(content []byte, filePath string, enableMetacharacterFix bool) []string {
 	var ignores []string
-	lines := strings.Split(string(content), "\n")
-
-	// Invalid .gitignore style patterns
 	invalidRules := []string{"."}
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
-			continue
-		}
-		globs := parseIgnoreRuleToGlobs(line, filePath, invalidRules, enableMetacharacterFix)
+	for _, rule := range parseIgnoreFileRules(content) {
+		globs := parseIgnoreRuleToGlobs(rule, filePath, invalidRules, enableMetacharacterFix)
 		ignores = append(ignores, globs...)
 	}
 	return ignores
+}
+
+func parseIgnoreFileRules(content []byte) []string {
+	var rules []string
+	for line := range strings.SplitSeq(string(content), "\n") {
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" || strings.TrimSpace(line) == "." {
+			continue
+		}
+		rules = append(rules, line)
+	}
+	return rules
 }
 
 // ruleRegexMetaChars are regex metacharacters that gitignore treats as literal, so they must be
