@@ -44,7 +44,6 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metricsRecorder metrics.Recorder
-	metricScopeID   string
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -75,14 +74,13 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
-// TODO: These metric keys are not read anywhere yet; actual recording is coming in a follow-up PR [CLI-1740].
-//
-//nolint:unused // plumbing for a follow-up PR that wires these into recordMetricLazy/recordBoolMetricLazy call sites [CLI-1740]
 const (
-	metricFileFilterPrefix           = "file-filter"
-	metricFileFilterDurationMs       = "durationMs"
-	metricFileFilterFileCount        = "fileCount"
-	metricFileFilterMetacharacterFix = "metacharacterFix"
+	metricFileFilterPrefix                = "file-filter"
+	metricFileFilterDurationMs            = "durationMs"
+	metricFileFilterFileCount             = "fileCount"
+	metricFileFilterMetacharacterFix      = "metacharacterFix"
+	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"
+	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount"
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -132,23 +130,22 @@ func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
-func (fw *FileFilter) recordMetricLazy(key string, getMetric func() int) {
+func (fw *FileFilter) recordMetricLazy(scopeID, key string, getMetric func() int) {
 	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionIntegerValue(fw.metricKey(key), getMetric())
+		fw.metricsRecorder.AddExtensionIntegerValue(metricKey(scopeID, key), getMetric())
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
-func (fw *FileFilter) recordBoolMetricLazy(key string, getMetric func() bool) {
+func (fw *FileFilter) recordBoolMetricLazy(scopeID, key string, getMetric func() bool) {
 	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionBoolValue(fw.metricKey(key), getMetric())
+		fw.metricsRecorder.AddExtensionBoolValue(metricKey(scopeID, key), getMetric())
 	}
 }
 
-//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
-func (fw *FileFilter) metricKey(key string) string {
-	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, fw.metricScopeID, key)
+// metricKey namespaces a metric under the scope of the filter run that recorded it, so that
+// repeated runs do not overwrite each other in a recorder that keeps only the last value per key.
+func metricKey(scopeID, key string) string {
+	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, scopeID, key)
 }
 
 func newFileFilterMetricScopeID() string {
@@ -163,7 +160,6 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
-		metricScopeID:   newFileFilterMetricScopeID(),
 	}
 
 	options = append([]FileFilterOption{WithConfig(nil)}, options...)
@@ -234,11 +230,16 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
+	// Each run reports under its own scope, so that concurrent or repeated runs of this FileFilter
+	// neither race on shared state nor overwrite each other's values in the recorder.
+	runScopeID := newFileFilterMetricScopeID()
+
 	var filteredFilesCh = make(chan string)
 
 	var isFileExcluded func(string) bool
+	var trackedFilesKeptCount atomic.Int64
 	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-		isFileExcluded = fw.trackedFileExclusionPredicate(globs)
+		isFileExcluded = fw.trackedFileExclusionPredicate(globs, &trackedFilesKeptCount)
 	} else {
 		globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 		isFileExcluded = func(filePath string) bool {
@@ -249,6 +250,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
+		start := time.Now()
+		var resolvedFileCount atomic.Int64
 
 		defer close(filteredFilesCh)
 
@@ -263,6 +266,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 				// filesToFilter that do not match the glob pattern are filtered
 				if !isFileExcluded(f) {
 					filteredFilesCh <- f
+					resolvedFileCount.Add(1)
 				}
 			}(file)
 		}
@@ -272,6 +276,22 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		if err != nil {
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
+
+		fw.recordBoolMetricLazy(runScopeID, metricFileFilterMetacharacterFix, func() bool {
+			return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+		})
+		fw.recordBoolMetricLazy(runScopeID, metricFileFilterRespectTrackedFiles, func() bool {
+			return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+		})
+		fw.recordMetricLazy(runScopeID, metricFileFilterDurationMs, func() int {
+			return int(time.Since(start).Milliseconds())
+		})
+		fw.recordMetricLazy(runScopeID, metricFileFilterFileCount, func() int {
+			return int(resolvedFileCount.Load())
+		})
+		fw.recordMetricLazy(runScopeID, metricFileFilterTrackedFilesKeptCount, func() int {
+			return int(trackedFilesKeptCount.Load())
+		})
 	}()
 
 	return filteredFilesCh
@@ -311,7 +331,12 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	return globs, nil
 }
 
-func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
+// trackedFileExclusionPredicate builds the exclusion predicate used when
+// FF_GITIGNORE_RESPECT_TRACKED_FILES is enabled. keptCount is incremented for every file that a
+// .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
+// exempted from the .gitignore rule and not excluded by any other rule (e.g. a .snyk or
+// .dcignore rule).
+func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *atomic.Int64) func(string) bool {
 	gitignoreGlobs := make([]string, 0)
 	allGlobs := make([]string, 0, len(globs))
 
@@ -377,7 +402,11 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		}
 
 		if trackedFilesToPreserve[filepath.ToSlash(relativePath)] {
-			return otherMatcher.MatchesPath(normalizedPath)
+			excluded := otherMatcher.MatchesPath(normalizedPath)
+			if !excluded {
+				keptCount.Add(1)
+			}
+			return excluded
 		}
 
 		return allMatcher.MatchesPath(normalizedPath)

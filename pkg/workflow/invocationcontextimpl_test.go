@@ -3,12 +3,14 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -72,5 +74,32 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 
 		assert.Contains(t, filteredFiles(t, fileFilter), nodeModulesFile,
 			"the option passed by the caller must win over the invocation's configuration")
+	})
+
+	// The FileFilter records into the invocation's Analytics, so the metrics have to show up in its instrumentation.
+	t.Run("reports filter metrics through the analytics of the invocation", func(t *testing.T) {
+		base, _ := setup(t)
+		invocationAnalytics := analytics.New()
+		ictx := &invocationContextImpl{
+			Configuration: configuration.NewWithOpts(),
+			logger:        &zerolog.Logger{},
+			Analytics:     invocationAnalytics,
+		}
+
+		fileFilter := ictx.GetFileFilter(base)
+		filteredFiles(t, fileFilter)
+
+		obj, err := analytics.GetV2InstrumentationObject(invocationAnalytics.GetInstrumentation())
+		require.NoError(t, err)
+
+		var recorded []string
+		for key := range *obj.Data.Attributes.Interaction.Extension {
+			// keys are scoped per filter run: file-filter.<scopeID>.<metric>
+			parts := strings.Split(key, ".")
+			if len(parts) == 3 && parts[0] == "file-filter" {
+				recorded = append(recorded, parts[2])
+			}
+		}
+		assert.ElementsMatch(t, []string{"durationMs", "fileCount", "metacharacterFix", "respectTrackedFiles", "trackedFilesKeptCount"}, recorded)
 	})
 }
