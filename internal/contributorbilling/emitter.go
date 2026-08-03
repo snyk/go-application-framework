@@ -54,6 +54,11 @@ func (e *Emitter) WaitWithTimeout(d time.Duration) bool {
 // run multiple workflows or billing scopes in one process (CLI, IDE, MCP).
 var defaultEmitter = NewEmitter()
 
+// BillingEmitter returns the package default Emitter for hosts that share one billing scope.
+func BillingEmitter() *Emitter {
+	return defaultEmitter
+}
+
 type inFlightTracker struct {
 	mu     sync.Mutex
 	count  int

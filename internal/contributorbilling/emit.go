@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
+	entitlements_service "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service"
 )
 
 // EmitContributorBilling fires an async POST to entitlements-service ingest on the package default Emitter.

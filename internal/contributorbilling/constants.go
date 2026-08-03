@@ -1,7 +1,7 @@
 package contributorbilling
 
 import (
-	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
+	entitlements_service "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service"
 	"time"
 )
 

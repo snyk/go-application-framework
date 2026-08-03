@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
+	entitlements_service "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service"
 )
 
 func TestNewIngestClient(t *testing.T) {

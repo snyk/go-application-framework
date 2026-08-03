@@ -6,7 +6,7 @@ entitlements-service.
 ## Intent
 
 Provide typed API-level interactions with the Contributing Devs ingest endpoint
-instead of hand-rolled HTTP in consumers such as `pkg/contributorbilling`.
+instead of hand-rolled HTTP in consumers such as `internal/contributorbilling`.
 
 ## Directory contents
 
@@ -15,7 +15,7 @@ instead of hand-rolled HTTP in consumers such as `pkg/contributorbilling`.
 - `2026-07-29/spec.config.yaml`: oapi-codegen configuration.
 - `2026-07-29/gen.go`: `go:generate` entry point.
 - `2026-07-29/entitlements_service.go`: Generated models and client.
-- `client.go`: Thin wrapper used by `pkg/contributorbilling`.
+- `client.go`: Thin wrapper used by `internal/contributorbilling`.
 
 ## Usage
 

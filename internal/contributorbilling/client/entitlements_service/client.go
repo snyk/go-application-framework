@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
+	v20260729 "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service/2026-07-29"
 )
 
 // DefaultIngestAPIVersion matches the entitlements-service Contributing Devs Ingest API version.

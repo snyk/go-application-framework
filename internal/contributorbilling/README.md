@@ -9,8 +9,8 @@ After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code
 callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
 billing events.
 
-This package is **Part 1** of CLI delivery. Wiring into extension repos is handled in separate
-tickets.
+This package lives under `internal/contributorbilling/` (not public GAF API). CLI hosts use the thin
+`pkg/clibilling` facade for shared emit/wait at command teardown; capture middleware is IANDT-238.
 
 ## Entry point
 

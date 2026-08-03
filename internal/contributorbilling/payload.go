@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
+	v20260729 "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service/2026-07-29"
 )
 
 func buildIngestRequest(item BillingItem, logger *zerolog.Logger) v20260729.CreateContributingDevsApplicationVndAPIPlusJSONRequestBody {

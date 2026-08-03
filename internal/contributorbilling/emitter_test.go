@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/contributorbilling"
+	"github.com/snyk/go-application-framework/internal/contributorbilling"
 )
 
 func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
