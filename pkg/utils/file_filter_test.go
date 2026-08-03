@@ -470,6 +470,7 @@ type ignoreRuleScenario struct {
 	// excluded/kept list slash-separated paths that must / must not be filtered out.
 	excluded []string
 	kept     []string
+	options  []FileFilterOption
 	// windowsOnly skips the scenario on non-Windows platforms.
 	windowsOnly bool
 	// skipOnWindows skips the scenario on Windows, for paths that contain characters Windows
@@ -879,6 +880,154 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			excluded:  []string{"node_modules/lib/index.js"},
 			kept:      []string{"app.js"},
 		},
+
+		{
+			name:    "gitignore in excluded dir cannot re-include its files",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":                  "node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"node_modules/pkg/other.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/pkg/index.js", "node_modules/pkg/other.js"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name:    "dcignore in excluded dir cannot re-include its files",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".dcignore":                  "node_modules\n",
+				"node_modules/pkg/.dcignore": "!index.js\n",
+				"node_modules/pkg/index.js":  "x",
+				"src/index.js":               "x",
+			},
+			ruleFiles: []string{".dcignore"},
+			excluded:  []string{"node_modules/pkg/index.js"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name:    "gitignore in dir excluded by dot snyk cannot re-include its files",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".snyk":                       "exclude:\n  code:\n    - node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".snyk", ".gitignore"},
+			excluded:  []string{"node_modules/pkg/index.js"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name:    "ignore file several levels below an excluded dir is skipped",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":             "build/\n",
+				"build/a/b/c/.gitignore": "!deep.js\n",
+				"build/a/b/c/deep.js":    "x",
+				"src/deep.js":            "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"build/a/b/c/deep.js"},
+			kept:      []string{"src/deep.js"},
+		},
+		{
+			name:    "negation in a reachable nested ignore file still applies",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":         "*.log\n",
+				"logs/.gitignore":    "!keep.log\n",
+				"logs/keep.log":      "x",
+				"logs/drop.log":      "x",
+				"app.log":            "x",
+				"src/application.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"logs/drop.log", "app.log"},
+			kept:      []string{"logs/keep.log", "src/application.js"},
+		},
+		{
+			name:    "negation in a nested ignore file wins over a root rule regardless of name order",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":         "*.log\n",
+				".cache/.gitignore":  "!keep.log\n",
+				".cache/keep.log":    "x",
+				".cache/drop.log":    "x",
+				"src/application.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{".cache/drop.log"},
+			kept:      []string{".cache/keep.log", "src/application.js"},
+		},
+
+		// TODO: some more cases to fix from manual/automated testing
+		{
+			name:    "trailing globstar does not exclude its parent directory",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":         "foo/**\n",
+				"foo/.gitignore":     "!keep.txt\n",
+				"foo/keep.txt":       "x",
+				"src/application.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			kept:      []string{"foo/keep.txt", "src/application.js"},
+		},
+		{
+			name:    "question mark wildcard excludes the matched directory",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":         "vendor?\n",
+				"vendor1/.gitignore": "secret.env\n",
+				"vendor1/secret.env": "x",
+				"src/index.js":       "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"vendor1/secret.env"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name:    "CRLF parent rule excludes the matched directory",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(true)},
+			files: map[string]string{
+				".gitignore":                  "node_modules\r\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/pkg/index.js"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name: "legacy default still lets an excluded dir's ignore file re-include files",
+			files: map[string]string{
+				".gitignore":                  "node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"node_modules/pkg/other.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/pkg/other.js"},
+			kept:      []string{"node_modules/pkg/index.js", "src/index.js"},
+		},
+		{
+			name:    "legacy default is unchanged when the option is explicitly disabled",
+			options: []FileFilterOption{WithSkipIgnoreFilesInExcludedDirectories(false)},
+			files: map[string]string{
+				".gitignore":                  "node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			kept:      []string{"node_modules/pkg/index.js", "src/index.js"},
+		},
 	}
 
 	for _, tc := range scenarios {
@@ -898,7 +1047,7 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			fileFilter := newFileFilterInternal(root, &log.Logger)
+			fileFilter := newFileFilterInternal(root, &log.Logger, tc.options...)
 			fileFilter.enableIgnoreRuleMetacharacterFix = true
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
