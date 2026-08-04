@@ -774,7 +774,7 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 
 // processSecretsRuleProblem extracts data from a secrets rule problem
 func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
-	if id := problem.GetID(); id != "" {
+	if id := problem.GetID(); id != "" && b.problemID == "" {
 		b.problemID = id
 	}
 

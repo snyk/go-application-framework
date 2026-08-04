@@ -39,7 +39,8 @@ func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_sc
 		return nil, fmt.Errorf("failed to map findings: %w", err)
 	}
 
-	effectiveSummary := buildEffectiveSummary(testSummary)
+	allowed := findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, cfg.severityThreshold)
+	effectiveSummary := buildEffectiveSummary(testSummary, allowed)
 	rawSummary := buildRawSummary(testSummary)
 	suppressedSummary := buildSuppressedSummary(testSummary)
 
@@ -214,6 +215,10 @@ func generateFindingID(res sarif.Result) uuid.UUID {
 	}
 
 	seed := res.RuleID + res.Fingerprints.Num0 + res.Fingerprints.Num1
+	if res.Fingerprints.Num0 == "" && res.Fingerprints.Num1 == "" && len(res.Locations) > 0 {
+		loc := res.Locations[0].PhysicalLocation
+		seed += loc.ArtifactLocation.URI + fmt.Sprintf(":%d", loc.Region.StartLine)
+	}
 	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(seed))
 }
 
@@ -439,7 +444,7 @@ func mapUFMSuppression(res sarif.Result) *testapi.Suppression {
 	return ufmSuppression
 }
 
-func buildEffectiveSummary(testSummary *json_schemas.TestSummary) *testapi.FindingSummary {
+func buildEffectiveSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
 	if testSummary == nil {
 		return nil
 	}
@@ -449,6 +454,9 @@ func buildEffectiveSummary(testSummary *json_schemas.TestSummary) *testapi.Findi
 	var total uint32
 
 	for _, result := range testSummary.Results {
+		if len(allowedSeverities) > 0 && !slices.Contains(allowedSeverities, result.Severity) {
+			continue
+		}
 		severityCounts[result.Severity] = uint32(result.Open)
 		total += uint32(result.Open)
 	}
