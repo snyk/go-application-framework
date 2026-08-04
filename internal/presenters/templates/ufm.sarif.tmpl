@@ -80,14 +80,14 @@
 										{{- range $exampleIndex, $example := $codeRule.Properties.ExampleCommitFixes }}
 										{
 
-											"commitURL": "{{ $example.CommitUrl }}",
+											"commitURL": {{ getQuotedString $example.CommitUrl }},
 											"lines": [
 												{{- $lineSize := sub (len $example.Lines) 1 }}
 												{{- range $lineIndex, $line := $example.Lines }}
 												{
 													"line": {{ getQuotedString $line.Line -}},
 													"lineNumber": {{ $line.LineNumber }},
-													"lineChange": "{{ $line.LineChange }}"
+													"lineChange": {{ getQuotedString $line.LineChange }}
 												}{{if lt $lineIndex $lineSize}},{{end}}
 												{{- end }}
 											]
@@ -97,15 +97,15 @@
 									"exampleCommitDescriptions": [
 										{{- $examplesSize := sub (len $codeRule.Properties.ExampleCommitDescriptions) 1 }}
 										{{- range $exampleIndex, $example := $codeRule.Properties.ExampleCommitDescriptions }}
-										"{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
+										{{ getQuotedString $example }}{{if lt $exampleIndex $examplesSize}},{{end}}
 										{{- end }}
 									],
-									"precision": "{{ $codeRule.Properties.Precision }}",
+									"precision": {{ getQuotedString $codeRule.Properties.Precision }},
 									"repoDatasetSize": {{ $codeRule.Properties.RepoDatasetSize }},
 									"cwe": [
 										{{- $cweSize := sub (len $codeRule.Properties.Cwe) 1 }}
 										{{- range $cweIndex, $cwe := $codeRule.Properties.Cwe }}
-										"{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
+										{{ getQuotedString $cwe }}{{if lt $cweIndex $cweSize}},{{end}}
 										{{- end }}
 									]
 									{{- else }}

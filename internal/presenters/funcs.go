@@ -323,19 +323,90 @@ func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult
 			continue
 		}
 		if m, isMap := extra.(map[string]interface{}); isMap {
-			b, err := json.Marshal(m)
-			if err != nil {
-				return nil
-			}
-			var fe findingExtraLocal
-			if err := json.Unmarshal(b, &fe); err != nil {
-				return nil
-			}
-			return fe
+			return findingExtraFromMap(m)
 		}
 		return extra
 	}
 	return nil
+}
+
+func findingExtraFromMap(m map[string]interface{}) findingExtraLocal {
+	fe := findingExtraLocal{}
+	if v, ok := m["fingerprints"].(map[string]interface{}); ok {
+		fe.Fingerprints = make(map[string]string, len(v))
+		for k, val := range v {
+			fe.Fingerprints[k] = fmt.Sprintf("%v", val)
+		}
+	}
+	if v, ok := m["isAutofixable"].(bool); ok {
+		fe.IsAutofixable = v
+	}
+	if v, ok := m["arguments"].([]interface{}); ok {
+		fe.Arguments = make([]string, len(v))
+		for i, a := range v {
+			fe.Arguments[i] = fmt.Sprintf("%v", a)
+		}
+	}
+	if v, ok := m["messageText"].(string); ok {
+		fe.MessageText = v
+	}
+	if v, ok := m["messageMarkdown"].(string); ok {
+		fe.MessageMarkdown = v
+	}
+	if v, ok := m["ruleIndex"].(float64); ok {
+		fe.RuleIndex = int(v)
+	}
+	if v, ok := m["policyOriginalLevel"].(string); ok {
+		fe.PolicyOriginalLevel = v
+	}
+	if v, ok := m["policySeverity"].(string); ok {
+		fe.PolicySeverity = v
+	}
+	if v, ok := m["policyOriginalSeverity"].(string); ok {
+		fe.PolicyOriginalSeverity = v
+	}
+	if v, ok := m["suppression"].(map[string]interface{}); ok {
+		fe.Suppression = suppressionExtraFromMap(v)
+	}
+	if v, ok := m["priorityScoreFactors"].([]interface{}); ok {
+		fe.PriorityScoreFactors = make([]priorityScoreFactorLocal, 0, len(v))
+		for _, item := range v {
+			if fm, ok := item.(map[string]interface{}); ok {
+				factor := priorityScoreFactorLocal{}
+				if label, ok := fm["label"].(bool); ok {
+					factor.Label = label
+				}
+				if typ, ok := fm["type"].(string); ok {
+					factor.Type = typ
+				}
+				fe.PriorityScoreFactors = append(fe.PriorityScoreFactors, factor)
+			}
+		}
+	}
+	return fe
+}
+
+func suppressionExtraFromMap(m map[string]interface{}) *suppressionExtraLocal {
+	s := &suppressionExtraLocal{}
+	if v, ok := m["guid"].(string); ok {
+		s.GUID = v
+	}
+	if v, ok := m["category"].(string); ok {
+		s.Category = v
+	}
+	if v, ok := m["ignoredBy"].(string); ok {
+		s.IgnoredBy = v
+	}
+	if v, ok := m["email"].(string); ok {
+		s.Email = v
+	}
+	if v, ok := m["expiration"].(string); ok {
+		s.Expiration = v
+	}
+	if v, ok := m["ignoredOn"].(string); ok {
+		s.IgnoredOn = v
+	}
+	return s
 }
 
 type coverageLocal struct {

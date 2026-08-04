@@ -238,6 +238,13 @@ func TestTransformToUFMFromSarif_SeverityThreshold(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, findings, 1)
 		assert.Equal(t, testapi.Severity("high"), findings[0].Attributes.Rating.Severity)
+
+		summary := result.GetEffectiveSummary()
+		require.NotNil(t, summary)
+		assert.Equal(t, uint32(1), summary.Count)
+		assert.Equal(t, uint32(1), (*summary.CountBy)["severity"]["high"])
+		_, hasMedium := (*summary.CountBy)["severity"]["medium"]
+		assert.False(t, hasMedium)
 	})
 
 	t.Run("keeps all findings when no threshold", func(t *testing.T) {
@@ -394,6 +401,23 @@ func TestTransformToUFMFromSarif_FindingID(t *testing.T) {
 	assert.Equal(t, "879770c4-b25a-44cd-bba1-1869aa0a3fa7", findings[0].Id.String())
 
 	assert.NotNil(t, findings[1].Id)
+}
+
+func TestTransformToUFMFromSarif_FindingID_NoFingerprints_UsesLocation(t *testing.T) {
+	sarifDoc := testSarifDoc()
+	sarifDoc.Runs[0].Results[0].Fingerprints = sarif.Fingerprints{}
+	sarifDoc.Runs[0].Results[1].Fingerprints = sarif.Fingerprints{}
+	sarifDoc.Runs[0].Results[0].RuleID = "same/Rule"
+	sarifDoc.Runs[0].Results[1].RuleID = "same/Rule"
+
+	result, err := TransformToUFMFromSarif(sarifDoc, testSummary())
+	require.NoError(t, err)
+
+	findings, _, err := result.Findings(context.Background())
+	require.NoError(t, err)
+	require.Len(t, findings, 2)
+	assert.NotEqual(t, findings[0].Id.String(), findings[1].Id.String(),
+		"findings with same rule but different locations must have distinct IDs")
 }
 
 func TestTransformToUFMFromSarif_KeyFallback(t *testing.T) {
