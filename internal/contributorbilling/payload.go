@@ -1,7 +1,6 @@
 package contributorbilling
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -29,17 +28,21 @@ func buildIngestRequest(item BillingItem, logger *zerolog.Logger) v20260729.Crea
 	request := v20260729.CreateContributingDevsApplicationVndAPIPlusJSONRequestBody{}
 	request.Data.Type = v20260729.ContributingDevs
 	request.Data.Attributes = v20260729.ContributingDevsIngestAttributes{
-		ContributorsEntityId: contributorsEntityID(item),
-		Contributors:         contributors,
+		ContributorsEntityType: v20260729.ContributingDevsIngestAttributesContributorsEntityType(contributorsEntityType(item)),
+		ContributorsEntityId:   contributorsEntityID(item),
+		Contributors:           contributors,
 	}
 	return request
 }
 
-func contributorsEntityID(item BillingItem) string {
+func contributorsEntityType(item BillingItem) string {
 	entityType := strings.TrimSpace(item.EntityType)
 	if entityType == "" {
-		entityType = EntityTypeProject
+		return EntityTypeProject
 	}
+	return entityType
+}
 
-	return fmt.Sprintf("%s:%s", entityType, item.EntityID)
+func contributorsEntityID(item BillingItem) string {
+	return strings.TrimSpace(item.EntityID)
 }

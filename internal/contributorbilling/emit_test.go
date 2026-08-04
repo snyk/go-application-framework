@@ -104,7 +104,8 @@ func TestEmitContributorBilling_Success(t *testing.T) {
 
 	attributes := ingestAttributes(gotBody)
 	require.NotNil(t, attributes)
-	assert.Equal(t, "project:project-1", attributes["contributors_entity_id"])
+	assert.Equal(t, "project-1", attributes["contributors_entity_id"])
+	assert.Equal(t, "project", attributes["contributors_entity_type"])
 }
 
 func TestEmitContributorBilling_MultipleItems(t *testing.T) {
@@ -315,7 +316,7 @@ func TestEmitContributorBilling_FiltersInvalidEntityIDs(t *testing.T) {
 
 	attributes := ingestAttributes(gotBody)
 	require.NotNil(t, attributes)
-	assert.Equal(t, "project:project-a", attributes["contributors_entity_id"])
+	assert.Equal(t, "project-a", attributes["contributors_entity_id"])
 }
 
 func TestEmitContributorBilling_MissingIngestURL(t *testing.T) {
@@ -438,7 +439,7 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 
 	attributes := ingestAttributes(gotBody)
 	require.NotNil(t, attributes)
-	assert.Equal(t, "project:original-project", attributes["contributors_entity_id"])
+	assert.Equal(t, "original-project", attributes["contributors_entity_id"])
 }
 
 func TestEmitContributorBilling_HTTPFailure(t *testing.T) {
@@ -658,14 +659,14 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 		byEntity[entityID] = itemContributors
 	}
 
-	require.Len(t, byEntity["project:project-prefilled"], 1)
-	prefilled, ok := byEntity["project:project-prefilled"][0].(map[string]interface{})
+	require.Len(t, byEntity["project-prefilled"], 1)
+	prefilled, ok := byEntity["project-prefilled"][0].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "prefilled@example.com", prefilled["email"])
 	assert.Equal(t, prefilledWhen.Format(time.RFC3339), prefilled["commit_date"])
 
-	require.Len(t, byEntity["project:project-collected"], 1)
-	collected, ok := byEntity["project:project-collected"][0].(map[string]interface{})
+	require.Len(t, byEntity["project-collected"], 1)
+	collected, ok := byEntity["project-collected"][0].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "collected@example.com", collected["email"])
 }
@@ -792,8 +793,8 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 		byEntity[entityID] = email
 	}
 
-	assert.Equal(t, "default@example.com", byEntity["project:project-default"])
-	assert.Equal(t, "item@example.com", byEntity["project:project-item"])
+	assert.Equal(t, "default@example.com", byEntity["project-default"])
+	assert.Equal(t, "item@example.com", byEntity["project-item"])
 }
 
 func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
@@ -848,7 +849,7 @@ func TestEmitContributorBilling_MultiItemContinuesAfterFailure(t *testing.T) {
 
 		entityID, ok := attributes["contributors_entity_id"].(string)
 		require.True(t, ok)
-		if entityID == "project:project-fail" {
+		if entityID == "project-fail" {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -898,7 +899,7 @@ func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
 
 		entityID, ok := attributes["contributors_entity_id"].(string)
 		require.True(t, ok)
-		if entityID == "project:slow" {
+		if entityID == "slow" {
 			time.Sleep(200 * time.Millisecond)
 		}
 

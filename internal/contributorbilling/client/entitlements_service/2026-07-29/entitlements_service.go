@@ -18,6 +18,13 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ContributingDevsIngestAttributesContributorsEntityType.
+const (
+	Project  ContributingDevsIngestAttributesContributorsEntityType = "project"
+	Revision ContributingDevsIngestAttributesContributorsEntityType = "revision"
+	Target   ContributingDevsIngestAttributesContributorsEntityType = "target"
+)
+
 // Defines values for CreateContributingDevsRequestBodyDataType.
 const (
 	ContributingDevs CreateContributingDevsRequestBodyDataType = "contributing_devs"
@@ -25,9 +32,13 @@ const (
 
 // ContributingDevsIngestAttributes defines model for ContributingDevsIngestAttributes.
 type ContributingDevsIngestAttributes struct {
-	Contributors         []Contributor `json:"contributors"`
-	ContributorsEntityId string        `json:"contributors_entity_id"`
+	Contributors           []Contributor                                          `json:"contributors"`
+	ContributorsEntityId   string                                                 `json:"contributors_entity_id"`
+	ContributorsEntityType ContributingDevsIngestAttributesContributorsEntityType `json:"contributors_entity_type"`
 }
+
+// ContributingDevsIngestAttributesContributorsEntityType defines model for ContributingDevsIngestAttributes.ContributorsEntityType.
+type ContributingDevsIngestAttributesContributorsEntityType string
 
 // Contributor defines model for Contributor.
 type Contributor struct {

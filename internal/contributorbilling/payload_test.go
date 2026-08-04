@@ -75,19 +75,28 @@ func TestMarshalIngestPayload_SkipsZeroLatestCommitDate(t *testing.T) {
 	assert.Equal(t, "2026-01-15T12:00:00Z", contributor["commit_date"])
 }
 
-func TestContributorsEntityID_DefaultsToProject(t *testing.T) {
+func TestContributorsEntityType_DefaultsToProject(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "project:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", contributorsEntityID(BillingItem{
+	assert.Equal(t, EntityTypeProject, contributorsEntityType(BillingItem{
 		EntityID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
 	}))
 }
 
-func TestContributorsEntityID_UsesExplicitEntityType(t *testing.T) {
+func TestContributorsEntityType_UsesExplicitEntityType(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "target:cccccccc-cccc-4ccc-8ccc-cccccccccccc", contributorsEntityID(BillingItem{
+	assert.Equal(t, EntityTypeTarget, contributorsEntityType(BillingItem{
 		EntityID:   "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+		EntityType: EntityTypeTarget,
+	}))
+}
+
+func TestContributorsEntityID_ReturnsBareUUID(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "dddddddd-dddd-4ddd-8ddd-dddddddddddd", contributorsEntityID(BillingItem{
+		EntityID:   "  dddddddd-dddd-4ddd-8ddd-dddddddddddd  ",
 		EntityType: EntityTypeTarget,
 	}))
 }

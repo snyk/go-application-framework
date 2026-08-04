@@ -9,8 +9,9 @@ After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code
 callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
 billing events.
 
-This package lives under `internal/contributorbilling/` (not public GAF API). CLI hosts use the thin
-`pkg/clibilling` facade for shared emit/wait at command teardown; capture middleware is IANDT-238.
+This package lives under `internal/contributorbilling/` (not public GAF API). Capture middleware and
+command lifecycle are IANDT-238 / IANDT-240; cliv2 uses a temporary thin facade until Peter's
+end-of-invocation hook lands.
 
 ## Entry point
 
@@ -27,7 +28,7 @@ opts := contributorbilling.EmitOptions{
     Engine:        engine,
     ScopeID:       orgID,
     Items: []contributorbilling.BillingItem{
-        {EntityID: projectID}, // EntityType defaults to project → contributors_entity_id project:<uuid>
+        {EntityID: projectID}, // EntityType defaults to project
     },
     RepoPath:            ".",
     CollectContributors: true,
@@ -87,7 +88,8 @@ Content-Type: application/vnd.api+json
   "data": {
     "type": "contributing_devs",
     "attributes": {
-      "contributors_entity_id": "project:<project-uuid>",
+      "contributors_entity_type": "project",
+      "contributors_entity_id": "<project-uuid>",
       "contributors": [
         {
           "email": "dev@example.com",
@@ -156,9 +158,9 @@ Each item gets its own ingest POST and its own `Timeout` budget.
 
 | Repo | When | Entity ID source |
 |------|------|------------------|
-| cliv2 + legacy TS | Monitor / IaC `--report` (TS path) success | capture middleware project IDs → `project:<uuid>` |
+| cliv2 + legacy TS | Monitor / IaC `--report` (TS path) success | capture middleware project UUIDs |
 | cli-extension-os-flows | Dragonfly monitor success | monitor response project public ID |
-| code-client-go | Native `--report` success | `ResultMetaData.TargetId` as `target:<uuid>` |
+| code-client-go | Native `--report` success | `ResultMetaData.TargetId` as target entity |
 
 Not in scope: IaC native extension changes (legacy cliv2 capture only for v1), SCLE Code `--report`, container/docker monitor.
 

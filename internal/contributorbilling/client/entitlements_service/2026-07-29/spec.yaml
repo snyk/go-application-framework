@@ -69,9 +69,16 @@ components:
     ContributingDevsIngestAttributes:
       type: object
       required:
+        - contributors_entity_type
         - contributors_entity_id
         - contributors
       properties:
+        contributors_entity_type:
+          type: string
+          enum:
+            - project
+            - target
+            - revision
         contributors_entity_id:
           type: string
         contributors:
