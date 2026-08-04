@@ -291,7 +291,8 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 			return value, nil
 		}
 
-		if conf.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+		if conf.GetBool(configuration.PREVIEW_FEATURES_ENABLED) ||
+			conf.GetBool(configuration.NETWORK_REQUEST_RETRIES_ENABLED) {
 			return multipleAttempts, nil
 		}
 		return singleAttempt, nil
