@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	gitindex "github.com/go-git/go-git/v5/plumbing/format/index"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -25,6 +27,14 @@ const (
 	FF_FILE_FILTER_METACHARACTER_FIX   string = "internal_snyk_file_filter_metacharacter_fix_enabled"   // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
 	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled" // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
 )
+
+// GitignoreGlobPrefix tags a glob returned by GetRules as sourced from a .gitignore file, so the
+// rule list carries its own provenance and git's exclusions can be told apart from other rules. The
+// leading "#" makes the line a comment to gitignore.CompileIgnoreLines, so the tag is inert for any
+// matcher that does not look for it.
+//
+// Tags are only emitted while FF_GITIGNORE_RESPECT_TRACKED_FILES is enabled.
+const GitignoreGlobPrefix = "#gitignore:"
 
 // by default, all rules are valid
 var defaultInvalidRules = []string{}
@@ -183,14 +193,15 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
+	globs = slices.Clone(globs)
 
-	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
 
 		defer close(filteredFilesCh)
+
+		isExcluded := fw.newFileExclusionCheck(globs)
 
 		// iterate the filesToFilter channel
 		for file := range filesCh {
@@ -201,7 +212,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			go func(f string) {
 				defer availableThreads.Release(1)
 				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				if !isExcluded(f) {
 					filteredFilesCh <- f
 				}
 			}(file)
@@ -217,6 +228,112 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	return filteredFilesCh
 }
 
+// newFileExclusionCheck keeps non-.gitignore exclusions final and applies .gitignore only to untracked files.
+func (fw *FileFilter) newFileExclusionCheck(globs []string) func(filePath string) bool {
+	nonGitignoreMatcher := gitignore.CompileIgnoreLines(globs...)
+
+	var gitignoreRules []string
+	for _, glob := range globs {
+		if rule, tagged := strings.CutPrefix(glob, GitignoreGlobPrefix); tagged {
+			gitignoreRules = append(gitignoreRules, rule)
+		}
+	}
+
+	if len(gitignoreRules) == 0 {
+		return nonGitignoreMatcher.MatchesPath
+	}
+
+	gitignoreMatcher := gitignore.CompileIgnoreLines(gitignoreRules...)
+	trackedFilesToKeep := fw.findTrackedFilesToKeep(gitignoreMatcher, nonGitignoreMatcher)
+
+	return func(filePath string) bool {
+		if nonGitignoreMatcher.MatchesPath(filePath) {
+			return true
+		}
+
+		return gitignoreMatcher.MatchesPath(filePath) &&
+			!fw.isTrackedFileToKeep(filePath, trackedFilesToKeep)
+	}
+}
+
+// findTrackedFilesToKeep returns tracked files excluded only by .gitignore.
+func (fw *FileFilter) findTrackedFilesToKeep(gitignoreMatcher, nonGitignoreMatcher *gitignore.GitIgnore) map[string]struct{} {
+	index, scanRootPrefix, ok := fw.openGitIndex()
+	if !ok {
+		return nil
+	}
+
+	trackedFilesToKeep := map[string]struct{}{}
+	for _, entry := range index.Entries {
+		relPath, inScanRoot := strings.CutPrefix(entry.Name, scanRootPrefix)
+		if !inScanRoot {
+			continue
+		}
+
+		filePath := filepath.Join(fw.path, filepath.FromSlash(relPath))
+		if gitignoreMatcher.MatchesPath(filePath) && !nonGitignoreMatcher.MatchesPath(filePath) {
+			trackedFilesToKeep[relPath] = struct{}{}
+		}
+	}
+
+	return trackedFilesToKeep
+}
+
+func (fw *FileFilter) isTrackedFileToKeep(filePath string, trackedFilesToKeep map[string]struct{}) bool {
+	relPath, err := filepath.Rel(fw.path, filepath.FromSlash(filePath))
+	if err != nil {
+		return false
+	}
+
+	_, keep := trackedFilesToKeep[filepath.ToSlash(relPath)]
+	return keep
+}
+
+// openGitIndex returns no index when Git metadata is unavailable, preserving legacy filtering.
+func (fw *FileFilter) openGitIndex() (index *gitindex.Index, scanRootPrefix string, ok bool) {
+	absScanRoot, err := filepath.Abs(fw.path)
+	if err != nil {
+		return nil, "", false
+	}
+
+	repo, err := git.PlainOpenWithOptions(absScanRoot, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return nil, "", false
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, "", false
+	}
+
+	index, err = repo.Storer.Index()
+	if err != nil {
+		return nil, "", false
+	}
+
+	// go-git resolves symlinks in the repository root (e.g. macOS's /var -> /private/var), so the
+	// scan root has to be resolved the same way before the two can be compared
+	scanRoot := absScanRoot
+	if resolved, resolveErr := filepath.EvalSymlinks(absScanRoot); resolveErr == nil {
+		scanRoot = resolved
+	}
+
+	relScanRoot, err := filepath.Rel(worktree.Filesystem.Root(), scanRoot)
+	if err != nil {
+		return nil, "", false
+	}
+
+	if relScanRoot == "." {
+		return index, "", true
+	}
+
+	if relScanRoot == ".." || strings.HasPrefix(relScanRoot, ".."+string(filepath.Separator)) {
+		return nil, "", false
+	}
+
+	return index, filepath.ToSlash(relScanRoot) + "/", true
+}
+
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
 func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	if len(ignoreFiles) == 0 {
@@ -224,6 +341,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	}
 
 	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	tagGitignoreGlobs := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
 
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
@@ -238,6 +356,11 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
+			if tagGitignoreGlobs && filepath.Base(ignoreFile) == ".gitignore" {
+				for i, rule := range parsedRules {
+					parsedRules[i] = GitignoreGlobPrefix + rule
+				}
+			}
 			globs = append(globs, parsedRules...)
 		}
 	}
