@@ -2,7 +2,10 @@ module github.com/snyk/go-application-framework
 
 go 1.26
 
-retract v1.0.0 // Accidental release: GAF intentionally stays on major version 0
+retract (
+	v1.0.1 // Retraction marker: use v0.x versions
+	v1.0.0 // Accidental release: GAF intentionally stays on major version 0
+)
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
