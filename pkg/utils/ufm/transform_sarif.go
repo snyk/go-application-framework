@@ -100,7 +100,8 @@ func mapUFMFindings(sarifDoc *sarif.SarifDocument, severityThreshold string) ([]
 	allowed := findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, severityThreshold)
 
 	for _, res := range sarifDoc.Runs[0].Results {
-		if !slices.Contains(allowed, sarif_utils.SarifLevelToSeverity(res.Level)) {
+		severity := sarif_utils.SarifLevelToSeverity(res.Level)
+		if severityThreshold != "" && !slices.Contains(allowed, severity) {
 			continue
 		}
 
@@ -375,8 +376,7 @@ func mapUFMPolicyModifications(res sarif.Result) *[]testapi.PolicyModification {
 		return nil
 	}
 	policy := res.Properties.Policy
-	originalSeverity := sarif_utils.SarifLevelToSeverity(policy.OriginalLevel)
-	var prior interface{} = testapi.Severity(originalSeverity)
+	var prior interface{} = testapi.Severity(policy.OriginalSeverity)
 
 	return &[]testapi.PolicyModification{
 		{
