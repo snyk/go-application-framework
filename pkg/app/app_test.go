@@ -10,15 +10,18 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
 
@@ -30,9 +33,33 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+// networkRequestRetryAfterSecondsKey mirrors middleware's unexported
+// configurationKeyRetryAfter. Tests that actually exercise a retry must set
+// this to a small value or the backoff will sleep for real seconds.
+const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
+
+// newSequencedStatusServer returns a test server whose responses follow
+// statusSequence in order; once exhausted, the last status repeats. It also
+// returns a pointer to the observed request count.
+func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
+	t.Helper()
+	var count int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		idx := int(atomic.AddInt32(&count, 1)) - 1
+		status := statusSequence[len(statusSequence)-1]
+		if idx < len(statusSequence) {
+			status = statusSequence[idx]
+		}
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+	return server, &count
+}
 
 func createOAuthTokenWithAudience(t *testing.T, audience string) string {
 	t.Helper()
@@ -1056,11 +1083,18 @@ func Test_config_compareCachedAndUncachedConfig(t *testing.T) {
 	}
 }
 
+// boolPtr is a small helper so table-test rows can express "explicitly set to
+// this bool" vs. "key absent" (nil) for the retriesEnabled column.
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 	tests := []struct {
 		name           string
 		existingValue  interface{}
 		previewEnabled bool
+		retriesEnabled *bool // nil = key absent
 		expected       int
 	}{
 		{
@@ -1105,12 +1139,100 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			previewEnabled: false,
 			expected:       1,
 		},
+		// IDE-1890-UNIT-001 precedence matrix (existing attempts / preview / opt-in / expected)
+		{
+			name:           "nil, not preview, opt-in absent, return 1",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: nil,
+			expected:       1,
+		},
+		{
+			name:           "nil, not preview, opt-in true, return 3",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "nil, not preview, opt-in false, return 1",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(false),
+			expected:       1,
+		},
+		{
+			name:           "nil, preview, opt-in true, return 3",
+			existingValue:  nil,
+			previewEnabled: true,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=5, not preview, opt-in true, return 5",
+			existingValue:  5,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       5,
+		},
+		{
+			name:           "existing value=5, preview, opt-in true, return 5",
+			existingValue:  5,
+			previewEnabled: true,
+			retriesEnabled: boolPtr(true),
+			expected:       5,
+		},
+		{
+			name:           "existing value=1, not preview, opt-in true, return 1",
+			existingValue:  1,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       1,
+		},
+		{
+			name:           "existing value=-1, not preview, opt-in true, return 3",
+			existingValue:  -1,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=0, not preview, opt-in true, return 3",
+			existingValue:  0,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=-1 string, not preview, opt-in true, return 3",
+			existingValue:  "-1",
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=MaxInt64, not preview, opt-in true, return 3",
+			existingValue:  math.MaxInt64,
+			previewEnabled: false,
+			retriesEnabled: boolPtr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=\"3\" string, not preview, opt-in absent, return 3",
+			existingValue:  "3",
+			previewEnabled: false,
+			retriesEnabled: nil,
+			expected:       3,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.PREVIEW_FEATURES_ENABLED, tt.previewEnabled)
+			if tt.retriesEnabled != nil {
+				config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, *tt.retriesEnabled)
+			}
 			defaultFunction := defaultMaxNetworkRequestAttempts()
 
 			result, err := defaultFunction(config, tt.existingValue)
@@ -1119,4 +1241,183 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// Test_NetworkRetryOptIn_TransientFailureRecovers is IDE-1890-ACC-001: an
+// application that opts in to resilient network retries (with preview
+// features off) survives a single transient upstream failure.
+func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
+// Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt is IDE-1890-ACC-002: an
+// application that has not opted in behaves exactly as it does today
+// (regression guard).
+func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+// Test_NetworkRetryOptIn_PreviewFeaturesUnaffected is IDE-1890-ACC-003:
+// preview-feature users keep the resilience they already have, independent of
+// the new opt-in (regression guard).
+func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
+// Test_NetworkRetryOptIn_ExplicitAttemptCountWins is IDE-1890-ACC-004: an
+// explicitly configured attempt count always wins over the opt-in.
+func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+// Test_NetworkRetryOptIn_NonRetryableResponseNotRetried is IDE-1890-ACC-005:
+// opting in does not cause requests to be retried that should not be.
+func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusNotFound})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+// Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit is IDE-1890-ACC-006: an
+// opted-in application still gives up rather than retrying forever.
+func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
+}
+
+// Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts is
+// IDE-1890-INT-001: real-wiring test. It exercises the composition root
+// (initConfiguration's AddDefaultValue registration for
+// middleware.ConfigurationKeyRequestAttempts) together with the real
+// defaultMaxNetworkRequestAttempts default-value function. It must go RED if
+// either the app.go:381 AddDefaultValue registration line, or the opt-in
+// condition inside defaultMaxNetworkRequestAttempts, is removed.
+func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+// Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent is
+// IDE-1890-INT-002: an untouched engine config yields today's default of 1.
+func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	assert.Equal(t, 1, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+// Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone is
+// IDE-1890-INT-003: GAF clones config for cross-workflow invocation; the
+// opt-in must survive that clone.
+func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	cloned := config.Clone()
+
+	assert.Equal(t, 3, cloned.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+// Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue is
+// IDE-1890-INT-004: the opt-in can come from an environment variable or
+// configuration file, i.e. as the string "true" rather than a boolean.
+func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, "true")
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }

@@ -65,14 +65,20 @@ const (
 
 	FLAG_EXPERIMENTAL        string = "experimental"                      // FLAG_EXPERIMENTAL (boolean) returns if experimental features shall be enabled or not, workflows should register this value as a flag to indicate that they might change before being GAed
 	PREVIEW_FEATURES_ENABLED string = "internal_preview_features_enabled" // PREVIEW_FEATURES_ENABLED (boolean) indicates if preview features shall be enabled, this can be used to limit features to the preview version only
-	FLAG_INCLUDE_IGNORES     string = "include-ignores"                   // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
-	FLAG_SEVERITY_THRESHOLD  string = "severity-threshold"                // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
-	FLAG_REMOTE_REPO_URL     string = "remote-repo-url"                   // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
-	INPUT_DIRECTORY          string = "targetDirectory"                   // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
-	CUSTOM_CONFIG_FILES      string = "internal_custom_config_files"
-	WORKFLOW_USE_STDIO       string = "internal_wflstdio"
-	RAW_CMD_ARGS             string = "internal_raw_cmd_args"
-	UNKNOWN_ARGS             string = "internal_unknown_arguments" // UNKNOWN_ARGS ([]string) arguments unknown to the current application but maybe relevant for delegated application calls
+	// NETWORK_REQUEST_RETRIES_ENABLED (boolean) opts the application in to the framework's
+	// resilient network-retry policy. When true, the default value of
+	// middleware.ConfigurationKeyRequestAttempts becomes the multi-attempt default instead of a
+	// single attempt, without requiring PREVIEW_FEATURES_ENABLED. An explicitly configured
+	// attempts count always takes precedence over this switch.
+	NETWORK_REQUEST_RETRIES_ENABLED string = "internal_network_request_retries_enabled"
+	FLAG_INCLUDE_IGNORES            string = "include-ignores"    // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
+	FLAG_SEVERITY_THRESHOLD         string = "severity-threshold" // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
+	FLAG_REMOTE_REPO_URL            string = "remote-repo-url"    // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
+	INPUT_DIRECTORY                 string = "targetDirectory"    // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
+	CUSTOM_CONFIG_FILES             string = "internal_custom_config_files"
+	WORKFLOW_USE_STDIO              string = "internal_wflstdio"
+	RAW_CMD_ARGS                    string = "internal_raw_cmd_args"
+	UNKNOWN_ARGS                    string = "internal_unknown_arguments" // UNKNOWN_ARGS ([]string) arguments unknown to the current application but maybe relevant for delegated application calls
 
 	// ---------
 	// subprocess environment
