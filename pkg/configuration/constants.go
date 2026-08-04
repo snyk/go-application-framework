@@ -69,7 +69,9 @@ const (
 	// resilient network-retry policy. When true, the default value of
 	// middleware.ConfigurationKeyRequestAttempts becomes the multi-attempt default instead of a
 	// single attempt, without requiring PREVIEW_FEATURES_ENABLED. An explicitly configured
-	// attempts count always takes precedence over this switch.
+	// attempts count always takes precedence over this switch. This flag (or
+	// PREVIEW_FEATURES_ENABLED) also enables retrying transient transport-level errors
+	// (connection resets, network timeouts) on replayable requests.
 	NETWORK_REQUEST_RETRIES_ENABLED string = "internal_network_request_retries_enabled"
 	FLAG_INCLUDE_IGNORES            string = "include-ignores"    // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
 	FLAG_SEVERITY_THRESHOLD         string = "severity-threshold" // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
