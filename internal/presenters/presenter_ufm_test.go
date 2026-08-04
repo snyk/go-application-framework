@@ -203,7 +203,9 @@ func normalizeResultProperties(run map[string]interface{}) {
 			}
 		}
 
-		// Strip standalone priorityScore (newly rendered after toInt uint16 fix)
+		// Golden fixtures predate priorityScore rendering; strip to avoid
+		// noise in structural comparisons. priorityScore correctness is
+		// covered by TestTransformToUFMFromSarif_RiskScore.
 		delete(props, "priorityScore")
 
 		if len(props) == 0 {
