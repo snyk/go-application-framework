@@ -46,9 +46,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// networkRequestRetryAfterSecondsKey: tests that exercise a retry must set
-// this small, or backoff sleeps for real seconds. Mirrors middleware's
-// unexported configurationKeyRetryAfter.
+// tests that exercise a retry must set this small, or backoff sleeps for real
+// seconds. Mirrors middleware's unexported configurationKeyRetryAfter.
 const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
 
 func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
@@ -66,8 +65,6 @@ func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Ser
 	return server, &count
 }
 
-// resettingServerLog records the raw body bytes read from each connection
-// accepted by newResettingServer, in acceptance order.
 type resettingServerLog struct {
 	mu     sync.Mutex
 	bodies [][]byte
@@ -87,9 +84,8 @@ func (l *resettingServerLog) Bodies() [][]byte {
 	return out
 }
 
-// newResettingServer reads each connection through to the end of the request
-// so a reset is deterministically a read-side reset on a fully-written
-// request rather than a write race with the client.
+// reads each connection to completion so the reset is deterministically
+// read-side, not a write race with the client.
 func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, connCount *int32, log *resettingServerLog) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1227,7 +1223,6 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			previewEnabled: false,
 			expected:       1,
 		},
-		// precedence matrix (existing attempts / preview / opt-in / expected)
 		{
 			name:           "nil, not preview, opt-in absent, return 1",
 			existingValue:  nil,
