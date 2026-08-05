@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -97,6 +98,13 @@ func drainAndClose(body io.ReadCloser) {
 	}
 	_, _ = io.Copy(io.Discard, body) //nolint:errcheck // best-effort drain for connection reuse
 	_ = body.Close()
+}
+
+// isJSONResponse reports whether the response Content-Type is JSON, including
+// JSON:API media types (e.g. application/vnd.api+json).
+func isJSONResponse(response *http.Response) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	return mimeType == "application/json" || strings.HasSuffix(mimeType, "+json")
 }
 
 type RetryMiddlewareOption func(*RetryMiddleware)
@@ -219,6 +227,27 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				MaxAttempts: *cachedMaxRetries,
 				Err:         retryError,
 			}
+		}
+
+		if transportRetryEnabled && isRetryableRequest(&localRequest) && isJSONResponse(response) {
+			bodyBytes, readErr := io.ReadAll(response.Body)
+			if readErr != nil {
+				// unlike getErrorList, this read error must surface so a truncated
+				// body becomes a real retry/failure instead of a silent empty result
+				drainAndClose(response.Body)
+				retryErr := &RetryAttemptError{
+					StatusCode:  response.StatusCode,
+					Attempt:     actualAttempts,
+					MaxAttempts: *cachedMaxRetries,
+					Err:         readErr,
+				}
+				if actualAttempts >= *cachedMaxRetries {
+					return response, backoff.Permanent(retryErr)
+				}
+				return response, retryErr
+			}
+			_ = response.Body.Close()
+			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
 
 		return response, nil
