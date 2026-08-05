@@ -436,16 +436,26 @@ func normalizeFixes(t *testing.T, expectedSarif, actualSarif map[string]interfac
 		return
 	}
 
-	// Build a map of expected fixes by ruleId for quick lookup
-	expectedFixesByRuleID := buildExpectedFixesMap(expectedRuns)
+	// Multi-project SARIF reuses ruleIds across runs; scope fixes per run.
+	expectedFixesByRunRule := buildExpectedFixesMap(expectedRuns)
 
 	// Process actual runs and filter fixes
-	filterActualFixesByExpected(t, actualRuns, expectedFixesByRuleID)
+	filterActualFixesByExpected(t, actualRuns, expectedFixesByRunRule)
 }
 
-// buildExpectedFixesMap builds a map of expected fixes by ruleId for quick lookup.
+func runFixesKey(run map[string]interface{}, ruleID string) string {
+	runID := ""
+	if automationDetails, ok := run["automationDetails"].(map[string]interface{}); ok {
+		if id, ok := automationDetails["id"].(string); ok {
+			runID = id
+		}
+	}
+	return runID + "|" + ruleID
+}
+
+// buildExpectedFixesMap builds a map of expected fixes keyed by run automation id + ruleId.
 func buildExpectedFixesMap(expectedRuns []interface{}) map[string][]interface{} {
-	expectedFixesByRuleID := make(map[string][]interface{})
+	expectedFixesByRunRule := make(map[string][]interface{})
 	for _, runInterface := range expectedRuns {
 		run, ok := runInterface.(map[string]interface{})
 		if !ok {
@@ -466,15 +476,15 @@ func buildExpectedFixesMap(expectedRuns []interface{}) map[string][]interface{} 
 			}
 			fixes, ok := result["fixes"].([]interface{})
 			if ok && len(fixes) > 0 {
-				expectedFixesByRuleID[ruleID] = fixes
+				expectedFixesByRunRule[runFixesKey(run, ruleID)] = fixes
 			}
 		}
 	}
-	return expectedFixesByRuleID
+	return expectedFixesByRunRule
 }
 
 // filterActualFixesByExpected filters actual runs' fixes to only include those present in expected.
-func filterActualFixesByExpected(t *testing.T, actualRuns []interface{}, expectedFixesByRuleID map[string][]interface{}) {
+func filterActualFixesByExpected(t *testing.T, actualRuns []interface{}, expectedFixesByRunRule map[string][]interface{}) {
 	t.Helper()
 
 	for _, runInterface := range actualRuns {
@@ -486,12 +496,12 @@ func filterActualFixesByExpected(t *testing.T, actualRuns []interface{}, expecte
 		if !ok {
 			continue
 		}
-		processResultFixes(t, results, expectedFixesByRuleID)
+		processResultFixes(t, run, results, expectedFixesByRunRule)
 	}
 }
 
 // processResultFixes processes each result's fixes and filters them based on expected fixes.
-func processResultFixes(t *testing.T, results []interface{}, expectedFixesByRuleID map[string][]interface{}) {
+func processResultFixes(t *testing.T, run map[string]interface{}, results []interface{}, expectedFixesByRunRule map[string][]interface{}) {
 	t.Helper()
 
 	for _, resultInterface := range results {
@@ -508,7 +518,7 @@ func processResultFixes(t *testing.T, results []interface{}, expectedFixesByRule
 			continue
 		}
 
-		expectedFixes, hasExpectedFixes := expectedFixesByRuleID[ruleID]
+		expectedFixes, hasExpectedFixes := expectedFixesByRunRule[runFixesKey(run, ruleID)]
 		if !hasExpectedFixes {
 			// No expected fixes for this rule, remove all fixes from actual
 			delete(result, "fixes")
@@ -634,6 +644,18 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			expectedSarifPath:  "testdata/ufm/webgoat.ignore.sarif.json",
 			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
 			ignoreSuppressions: false,
+		},
+		{
+			name:               "snyk_goof",
+			expectedSarifPath:  "testdata/ufm/snyk_goof.sarif.json",
+			testResultPath:     "testdata/ufm/snyk_goof.testresult.json",
+			ignoreSuppressions: true,
+		},
+		{
+			name:               "python_pip_app_jarvis2",
+			expectedSarifPath:  "testdata/ufm/python_pip_app_jarvis2.sarif.json",
+			testResultPath:     "testdata/ufm/python_pip_app_jarvis2.testresult.json",
+			ignoreSuppressions: true,
 		},
 		{
 			name:               "multiproject",
@@ -1250,6 +1272,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			severityThreshold: "medium",
 		},
 		{
+			name:              "python_pip_app_jarvis2",
+			expectedPath:      "testdata/ufm/python_pip_app_jarvis2.human.readable",
+			testResultPath:    "testdata/ufm/python_pip_app_jarvis2.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
 			name:              "secrets",
 			expectedPath:      "testdata/ufm/secrets.human.readable",
 			testResultPath:    "testdata/ufm/secrets.testresult.json",
@@ -1275,6 +1304,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			expectedPath:      "testdata/ufm/secrets.with-report.human.readable",
 			testResultPath:    "testdata/ufm/secrets.with-report.testresult.json",
 			includeIgnores:    true,
+			severityThreshold: "",
+		},
+		{
+			name:              "reachability",
+			expectedPath:      "testdata/ufm/reachability.human.readable",
+			testResultPath:    "testdata/ufm/reachability.testresult.json",
+			includeIgnores:    false,
 			severityThreshold: "",
 		},
 	}
