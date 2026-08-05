@@ -1520,7 +1520,7 @@ func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
 	}
 }
 
-func Test_TransportRetry_OptIn_PostNotRetried(t *testing.T) {
+func Test_TransportRetry_OptIn_PostRetried(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
 	config := configuration.NewWithOpts()
@@ -1531,6 +1531,24 @@ func Test_TransportRetry_OptIn_PostNotRetried(t *testing.T) {
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
 	resp, err := client.Post(baseURL, "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+}
+
+func Test_TransportRetry_OptIn_MonitorPathNotRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Post(baseURL+"/v1/monitor/npm", "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
 	if err == nil {
 		defer resp.Body.Close()
 	}

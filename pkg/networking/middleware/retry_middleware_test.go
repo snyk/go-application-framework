@@ -1534,11 +1534,11 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 	tests := []struct {
 		name    string
 		method  string
-		headers map[string]string
+		path    string
 		retried bool
 	}{
-		{"POST not retried", http.MethodPost, nil, false},
-		{"POST with Idempotency-Key retried", http.MethodPost, map[string]string{"Idempotency-Key": "abc"}, true},
+		{"plain POST retried", http.MethodPost, "/", true},
+		{"monitor path not retried", http.MethodPost, "/v1/monitor/npm", false},
 	}
 
 	for _, tt := range tests {
@@ -1560,10 +1560,7 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 			config.Set(configurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
-			req := httptest.NewRequest(tt.method, "/", nil)
-			for k, v := range tt.headers {
-				req.Header.Set(k, v)
-			}
+			req := httptest.NewRequest(tt.method, tt.path, nil)
 
 			resp, err := sut.RoundTrip(req)
 

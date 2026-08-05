@@ -60,19 +60,16 @@ func Test_isRetryableTransportError(t *testing.T) {
 	}
 }
 
-func Test_isReplayableRequest(t *testing.T) {
+func Test_isRetryableRequest(t *testing.T) {
 	getBody := func() (io.ReadCloser, error) { return http.NoBody, nil }
 
-	newReq := func(method string, body io.Reader, hasGetBody bool, headers map[string]string) *http.Request {
-		req, err := http.NewRequest(method, "http://example.com", body)
+	newReq := func(method, path string, body io.Reader, hasGetBody bool) *http.Request {
+		req, err := http.NewRequest(method, "http://example.com"+path, body)
 		require.NoError(t, err)
 		if hasGetBody {
 			req.GetBody = getBody
 		} else {
 			req.GetBody = nil
-		}
-		for k, v := range headers {
-			req.Header.Set(k, v)
 		}
 		return req
 	}
@@ -82,35 +79,17 @@ func Test_isReplayableRequest(t *testing.T) {
 		req  *http.Request
 		want bool
 	}{
-		{"GET nil body", newReq(http.MethodGet, nil, false, nil), true},
-		{"empty method", newReq("", nil, false, nil), true},
-		{"HEAD", newReq(http.MethodHead, nil, false, nil), true},
-		{"OPTIONS", newReq(http.MethodOptions, nil, false, nil), true},
-		{"TRACE", newReq(http.MethodTrace, nil, false, nil), true},
-		{"POST no body", newReq(http.MethodPost, nil, false, nil), false},
-		{"PUT with body and GetBody", newReq(http.MethodPut, bytes.NewReader([]byte("x")), true, nil), false},
-		{"DELETE", newReq(http.MethodDelete, nil, false, nil), false},
-		{"lowercase get", newReq("get", nil, false, nil), false},
-		{
-			"POST with body, GetBody, Idempotency-Key",
-			newReq(http.MethodPost, bytes.NewReader([]byte("x")), true, map[string]string{"Idempotency-Key": "abc"}),
-			true,
-		},
-		{
-			"POST with X-Idempotency-Key",
-			newReq(http.MethodPost, bytes.NewReader([]byte("x")), true, map[string]string{"X-Idempotency-Key": "abc"}),
-			true,
-		},
-		{
-			"Idempotency-Key present but empty",
-			newReq(http.MethodPost, bytes.NewReader([]byte("x")), true, map[string]string{"Idempotency-Key": ""}),
-			true,
-		},
-		{"GET with body, GetBody nil", newReq(http.MethodGet, bytes.NewReader([]byte("x")), false, nil), false},
+		{"GET retried", newReq(http.MethodGet, "/", nil, false), true},
+		{"POST retried", newReq(http.MethodPost, "/", nil, false), true},
+		{"monitor path not retried", newReq(http.MethodPost, "/v1/monitor/npm", nil, false), false},
+		{"monitor path with graph suffix not retried", newReq(http.MethodPost, "/v1/monitor/npm/graph", nil, false), false},
+		{"path merely containing monitor substring retried", newReq(http.MethodPost, "/v1/monitoring/npm", nil, false), true},
+		{"body without GetBody not retried", newReq(http.MethodPost, "/", bytes.NewReader([]byte("x")), false), false},
+		{"body with GetBody retried", newReq(http.MethodPost, "/", bytes.NewReader([]byte("x")), true), true},
 		{
 			"GET with http.NoBody",
 			func() *http.Request {
-				req := newReq(http.MethodGet, nil, false, nil)
+				req := newReq(http.MethodGet, "/", nil, false)
 				req.Body = http.NoBody
 				return req
 			}(),
@@ -120,7 +99,7 @@ func Test_isReplayableRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isReplayableRequest(tt.req))
+			assert.Equal(t, tt.want, isRetryableRequest(tt.req))
 		})
 	}
 }
