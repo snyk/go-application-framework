@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -134,8 +135,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		retryAfterSeconds = tmp
 	}
 
-	transportRetryEnabled := rm.config.GetBool(configuration.PREVIEW_FEATURES_ENABLED) ||
-		rm.config.GetBool(configuration.NETWORK_REQUEST_RETRIES_ENABLED)
+	transportRetryEnabled := utils.NetworkRetriesEnabled(rm.config)
 
 	body, getBody, cleanup, err := ensureGetBodyExists(req)
 	if err != nil {
@@ -189,6 +189,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				isRetryableTransportError(rtErr) &&
 				isRetryableRequest(&localRequest) {
 				rm.logger.Warn().Err(rtErr).Msgf("Retrying request after transient transport error (attempt %d/%d)", actualAttempts, attemptLimit)
+				if response != nil {
+					drainAndClose(response.Body)
+				}
 				return response, rtErr
 			}
 			return response, backoff.Permanent(rtErr)

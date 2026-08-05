@@ -1707,3 +1707,72 @@ func Test_RetryMiddleware_TransportError_PreviewFeaturesOnlyActivatesRetry(t *te
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, 2, attemptCount)
 }
+
+func Test_RetryMiddleware_TransportError_ResponseBodyClosedBeforeRetry(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+	var bodyClosed bool
+	var mu sync.Mutex
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			trackingBody := &trackingReadCloser{
+				ReadCloser: io.NopCloser(bytes.NewReader([]byte("partial"))),
+				onClose: func() {
+					mu.Lock()
+					bodyClosed = true
+					mu.Unlock()
+				},
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: trackingBody, Request: req}, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, 2, attemptCount)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.True(t, bodyClosed, "response body returned alongside a transport error must be closed before the retry")
+}
+
+func Test_RetryMiddleware_TransportError_NilResponseDoesNotPanic(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	require.NotPanics(t, func() {
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	assert.Equal(t, 2, attemptCount)
+}
