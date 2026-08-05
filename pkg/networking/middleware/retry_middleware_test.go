@@ -1424,8 +1424,6 @@ func setupRetryMiddleware(
 	return NewRetryMiddleware(config, logger, rt, WithErrorHandler(errorHandler)), &attemptCount
 }
 
-// connResetErr is a synthetic transport error mirroring what net/http's
-// transport returns for a real TCP RST.
 func connResetErr() error {
 	return &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
 }
@@ -1482,7 +1480,6 @@ func Test_RetryMiddleware_TransportError_NotRetriedWhenOptInAbsent(t *testing.T)
 	assert.ErrorIs(t, err, syscall.ECONNRESET)
 }
 
-// fakeTimeoutError avoids depending on a real network timeout.
 type fakeTimeoutError struct{}
 
 func (fakeTimeoutError) Error() string   { return "fake timeout" }
