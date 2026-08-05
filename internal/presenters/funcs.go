@@ -3,6 +3,7 @@ package presenters
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	htmlTemplate "html/template"
 	"maps"
@@ -248,6 +249,268 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
+func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
+	var flows []testapi.ExecutionFlowEvidence
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, ev := range finding.Attributes.Evidence {
+			discriminator, err := ev.Discriminator()
+			if err != nil || discriminator != "execution_flow" {
+				continue
+			}
+			execFlow, err := ev.AsExecutionFlowEvidence()
+			if err == nil {
+				flows = append(flows, execFlow)
+			}
+		}
+	}
+	return flows
+}
+
+func getPolicyModificationsFromIssue(issue testapi.Issue) []testapi.PolicyModification {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes != nil && finding.Attributes.PolicyModifications != nil && len(*finding.Attributes.PolicyModifications) > 0 {
+			return *finding.Attributes.PolicyModifications
+		}
+	}
+	return nil
+}
+
+// findingExtraLocal mirrors the JSON shape of ufm.FindingExtra for deserialization
+// when metadata arrives as map[string]interface{} (e.g. after JSON round-trip).
+// Cannot import pkg/utils/ufm directly due to an import cycle.
+type findingExtraLocal struct {
+	Fingerprints           map[string]string          `json:"fingerprints,omitempty"`
+	IsAutofixable          bool                       `json:"isAutofixable,omitempty"`
+	Arguments              []string                   `json:"arguments,omitempty"`
+	Suppression            *suppressionExtraLocal     `json:"suppression,omitempty"`
+	MessageText            string                     `json:"messageText,omitempty"`
+	MessageMarkdown        string                     `json:"messageMarkdown,omitempty"`
+	RuleIndex              int                        `json:"ruleIndex"`
+	PriorityScoreFactors   []priorityScoreFactorLocal `json:"priorityScoreFactors,omitempty"`
+	PolicyOriginalLevel    string                     `json:"policyOriginalLevel,omitempty"`
+	PolicySeverity         string                     `json:"policySeverity,omitempty"`
+	PolicyOriginalSeverity string                     `json:"policyOriginalSeverity,omitempty"`
+}
+
+type suppressionExtraLocal struct {
+	GUID       string `json:"guid,omitempty"`
+	Category   string `json:"category,omitempty"`
+	IgnoredBy  string `json:"ignoredBy,omitempty"`
+	Email      string `json:"email,omitempty"`
+	Expiration string `json:"expiration,omitempty"`
+	IgnoredOn  string `json:"ignoredOn,omitempty"`
+}
+
+type priorityScoreFactorLocal struct {
+	Label bool   `json:"label"`
+	Type  string `json:"type"`
+}
+
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) interface{} {
+	extras, ok := testResult.GetMetadataValue("finding-extras").(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for _, finding := range issue.GetFindings() {
+		if finding.Id == nil {
+			continue
+		}
+		extra, found := extras[finding.Id.String()]
+		if !found {
+			continue
+		}
+		if m, isMap := extra.(map[string]interface{}); isMap {
+			return findingExtraFromMap(m)
+		}
+		return extra
+	}
+	return nil
+}
+
+func findingExtraFromMap(m map[string]interface{}) findingExtraLocal {
+	fe := findingExtraLocal{}
+	if v, ok := m["fingerprints"].(map[string]interface{}); ok {
+		fe.Fingerprints = make(map[string]string, len(v))
+		for k, val := range v {
+			fe.Fingerprints[k] = fmt.Sprintf("%v", val)
+		}
+	}
+	if v, ok := m["isAutofixable"].(bool); ok {
+		fe.IsAutofixable = v
+	}
+	if v, ok := m["arguments"].([]interface{}); ok {
+		fe.Arguments = make([]string, len(v))
+		for i, a := range v {
+			fe.Arguments[i] = fmt.Sprintf("%v", a)
+		}
+	}
+	if v, ok := m["messageText"].(string); ok {
+		fe.MessageText = v
+	}
+	if v, ok := m["messageMarkdown"].(string); ok {
+		fe.MessageMarkdown = v
+	}
+	if v, ok := m["ruleIndex"].(float64); ok {
+		fe.RuleIndex = int(v)
+	}
+	if v, ok := m["policyOriginalLevel"].(string); ok {
+		fe.PolicyOriginalLevel = v
+	}
+	if v, ok := m["policySeverity"].(string); ok {
+		fe.PolicySeverity = v
+	}
+	if v, ok := m["policyOriginalSeverity"].(string); ok {
+		fe.PolicyOriginalSeverity = v
+	}
+	if v, ok := m["suppression"].(map[string]interface{}); ok {
+		fe.Suppression = suppressionExtraFromMap(v)
+	}
+	if v, ok := m["priorityScoreFactors"].([]interface{}); ok {
+		fe.PriorityScoreFactors = make([]priorityScoreFactorLocal, 0, len(v))
+		for _, item := range v {
+			if fm, ok := item.(map[string]interface{}); ok {
+				factor := priorityScoreFactorLocal{}
+				if label, ok := fm["label"].(bool); ok {
+					factor.Label = label
+				}
+				if typ, ok := fm["type"].(string); ok {
+					factor.Type = typ
+				}
+				fe.PriorityScoreFactors = append(fe.PriorityScoreFactors, factor)
+			}
+		}
+	}
+	return fe
+}
+
+func suppressionExtraFromMap(m map[string]interface{}) *suppressionExtraLocal {
+	s := &suppressionExtraLocal{}
+	if v, ok := m["guid"].(string); ok {
+		s.GUID = v
+	}
+	if v, ok := m["category"].(string); ok {
+		s.Category = v
+	}
+	if v, ok := m["ignoredBy"].(string); ok {
+		s.IgnoredBy = v
+	}
+	if v, ok := m["email"].(string); ok {
+		s.Email = v
+	}
+	if v, ok := m["expiration"].(string); ok {
+		s.Expiration = v
+	}
+	if v, ok := m["ignoredOn"].(string); ok {
+		s.IgnoredOn = v
+	}
+	return s
+}
+
+type coverageLocal struct {
+	Files       int    `json:"files"`
+	IsSupported bool   `json:"isSupported"`
+	Lang        string `json:"lang"`
+	Type        string `json:"type"`
+}
+
+func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
+	raw := testResult.GetMetadataValue("coverage")
+	if raw == nil {
+		return nil
+	}
+
+	if arr, ok := raw.([]interface{}); ok {
+		b, err := json.Marshal(arr)
+		if err != nil {
+			return nil
+		}
+		var covs []coverageLocal
+		if err := json.Unmarshal(b, &covs); err != nil {
+			return nil
+		}
+		return covs
+	}
+
+	return raw
+}
+
+func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, p := range finding.Attributes.Problems {
+			disc, err := p.Discriminator()
+			if err != nil || disc != "snyk_code_rule" {
+				continue
+			}
+			rule, err := p.AsSnykCodeRuleProblem()
+			if err == nil {
+				return &rule
+			}
+		}
+	}
+	return nil
+}
+
+func fingerprintsJSON(extra interface{}, fallbackID string) string {
+	var fps map[string]string
+	if extra != nil {
+		switch e := extra.(type) {
+		case map[string]interface{}:
+			if raw, ok := e["fingerprints"]; ok {
+				if m, ok := raw.(map[string]interface{}); ok {
+					fps = make(map[string]string, len(m))
+					for k, v := range m {
+						fps[k] = fmt.Sprintf("%v", v)
+					}
+				}
+			}
+		default:
+			v := reflect.ValueOf(extra)
+			if v.Kind() == reflect.Struct {
+				f := v.FieldByName("Fingerprints")
+				if f.IsValid() && !f.IsNil() {
+					if m, ok := f.Interface().(map[string]string); ok {
+						fps = m
+					}
+				}
+			}
+		}
+	}
+
+	if len(fps) == 0 {
+		fps = map[string]string{
+			"identity":              fallbackID,
+			"snyk/asset/finding/v1": fallbackID,
+		}
+	}
+
+	pairs := make([]string, 0, len(fps))
+	for k, v := range fps {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(k), strconv.Quote(v)))
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, ",\n\t\t\t\t\t\t")
+}
+
+func derefStr(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return ""
+		}
+		return fmt.Sprintf("%v", rv.Elem().Interface())
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
@@ -275,6 +538,14 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildLocationsFromIssue"] = sarif.BuildLocations
 	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
+	// UFM data access helpers
+	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
+	fnMap["getPolicyModificationsFromIssue"] = getPolicyModificationsFromIssue
+	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
+	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
+	fnMap["fingerprintsJSON"] = fingerprintsJSON
+	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
+	fnMap["derefStr"] = derefStr
 	return fnMap
 }
 
@@ -300,6 +571,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["isPendingFinding"] = isPendingFinding
 	fnMap["isIgnoredFinding"] = isIgnoredFinding
 	fnMap["hasSuppression"] = hasSuppression
+	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	return fnMap
 }
 
@@ -475,12 +747,15 @@ func toInt(v interface{}) int {
 		return val
 	case int64:
 		return int(val)
+	case uint16:
+		return int(val)
+	case uint32:
+		return int(val)
 	case float64:
 		return int(val)
 	case float32:
 		return int(val)
 	case string:
-		// Try to parse string as int
 		if i, err := strconv.Atoi(val); err == nil {
 			return i
 		}

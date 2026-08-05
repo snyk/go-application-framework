@@ -9,7 +9,7 @@ import (
 
 type FindingsFilterFunc func(local_models.FindingResource) bool
 
-func filterSeverityASC(original []string, severityMinLevel string) []string {
+func FilterSeverityASC(original []string, severityMinLevel string) []string {
 	if severityMinLevel == "" {
 		return original
 	}
@@ -24,7 +24,7 @@ func filterSeverityASC(original []string, severityMinLevel string) []string {
 }
 
 func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string) FindingsFilterFunc {
-	allowed_severities := filterSeverityASC(severityOrder, severityThreshold)
+	allowed_severities := FilterSeverityASC(severityOrder, severityThreshold)
 	return func(finding local_models.FindingResource) bool {
 		return utils.Contains(allowed_severities, string(finding.Attributes.Rating.Severity.Value))
 	}
