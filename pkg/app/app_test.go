@@ -46,14 +46,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// networkRequestRetryAfterSecondsKey mirrors middleware's unexported
-// configurationKeyRetryAfter. Tests that actually exercise a retry must set
-// this to a small value or the backoff will sleep for real seconds.
+// networkRequestRetryAfterSecondsKey: tests that exercise a retry must set
+// this small, or backoff sleeps for real seconds. Mirrors middleware's
+// unexported configurationKeyRetryAfter.
 const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
 
-// newSequencedStatusServer returns a test server whose responses follow
-// statusSequence in order; once exhausted, the last status repeats. It also
-// returns a pointer to the observed request count.
 func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
 	t.Helper()
 	var count int32
@@ -82,8 +79,6 @@ func (l *resettingServerLog) add(body []byte) {
 	l.bodies = append(l.bodies, body)
 }
 
-// Bodies returns a copy of the raw body bytes read so far, one entry per
-// accepted connection, in acceptance order.
 func (l *resettingServerLog) Bodies() [][]byte {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -92,15 +87,9 @@ func (l *resettingServerLog) Bodies() [][]byte {
 	return out
 }
 
-// newResettingServer returns a raw TCP listener (plain HTTP, no TLS) that
-// simulates a connection reset (RST) on the first resetsBeforeSuccess
-// connections, then serves a 200 OK on every connection after that. Each
-// connection is read through to the end of headers (and body, per
-// Content-Length) before it is either reset or answered, so a reset is
-// deterministically a read-side reset on a fully-written request rather than
-// a write race with the client. It returns the base URL, a pointer to the
-// number of accepted connections, and a log of the raw body bytes read per
-// connection.
+// newResettingServer reads each connection through to the end of the request
+// so a reset is deterministically a read-side reset on a fully-written
+// request rather than a write race with the client.
 func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, connCount *int32, log *resettingServerLog) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -124,9 +113,6 @@ func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, 
 	return "http://" + listener.Addr().String(), &count, log
 }
 
-// serveResettingConnection reads a single HTTP request off conn (headers,
-// then body per Content-Length), records the body, and then either resets
-// the connection (idx <= resetsBeforeSuccess) or answers 200 OK.
 func serveResettingConnection(conn net.Conn, idx int, resetsBeforeSuccess int, log *resettingServerLog) {
 	defer conn.Close()
 
@@ -1241,7 +1227,7 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			previewEnabled: false,
 			expected:       1,
 		},
-		// IDE-1890-UNIT-001 precedence matrix (existing attempts / preview / opt-in / expected)
+		// precedence matrix (existing attempts / preview / opt-in / expected)
 		{
 			name:           "nil, not preview, opt-in absent, return 1",
 			existingValue:  nil,
@@ -1345,9 +1331,6 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 	}
 }
 
-// Test_NetworkRetryOptIn_TransientFailureRecovers is IDE-1890-ACC-001: an
-// application that opts in to resilient network retries (with preview
-// features off) survives a single transient upstream failure.
 func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1366,9 +1349,6 @@ func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
-// Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt is IDE-1890-ACC-002: an
-// application that has not opted in behaves exactly as it does today
-// (regression guard).
 func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1386,9 +1366,6 @@ func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_PreviewFeaturesUnaffected is IDE-1890-ACC-003:
-// preview-feature users keep the resilience they already have, independent of
-// the new opt-in (regression guard).
 func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1407,8 +1384,6 @@ func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
-// Test_NetworkRetryOptIn_ExplicitAttemptCountWins is IDE-1890-ACC-004: an
-// explicitly configured attempt count always wins over the opt-in.
 func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1428,8 +1403,6 @@ func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_NonRetryableResponseNotRetried is IDE-1890-ACC-005:
-// opting in does not cause requests to be retried that should not be.
 func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusNotFound})
 
@@ -1448,8 +1421,6 @@ func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit is IDE-1890-ACC-006: an
-// opted-in application still gives up rather than retrying forever.
 func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable})
 
@@ -1468,13 +1439,6 @@ func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts is
-// IDE-1890-INT-001: real-wiring test. It exercises the composition root
-// (initConfiguration's AddDefaultValue registration for
-// middleware.ConfigurationKeyRequestAttempts) together with the real
-// defaultMaxNetworkRequestAttempts default-value function. It must go RED if
-// either the app.go:381 AddDefaultValue registration line, or the opt-in
-// condition inside defaultMaxNetworkRequestAttempts, is removed.
 func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
@@ -1485,8 +1449,6 @@ func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing
 	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent is
-// IDE-1890-INT-002: an untouched engine config yields today's default of 1.
 func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *testing.T) {
 	config := configuration.NewWithOpts()
 
@@ -1496,9 +1458,6 @@ func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *test
 	assert.Equal(t, 1, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone is
-// IDE-1890-INT-003: GAF clones config for cross-workflow invocation; the
-// opt-in must survive that clone.
 func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
@@ -1511,9 +1470,6 @@ func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) 
 	assert.Equal(t, 3, cloned.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue is
-// IDE-1890-INT-004: the opt-in can come from an environment variable or
-// configuration file, i.e. as the string "true" rather than a boolean.
 func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, "true")
@@ -1524,11 +1480,6 @@ func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
 	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_TransportRetry_OptIn_ConnectionResetRecovers is IDE-2419-ACC-001: an
-// opted-in application recovers from a connection reset on the first
-// attempt. Real-wiring test: exercises the composition root
-// (networking.go -> RetryMiddleware) end to end via a real TCP socket. Must
-// go RED if the opt-in read or the gated retry branch is removed.
 func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
@@ -1547,10 +1498,6 @@ func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
 }
 
-// Test_TransportRetry_OptIn_RetriedRequestSentInFull is IDE-2419-ACC-002: a
-// replayable request (POST carrying an Idempotency-Key) that is retried
-// after a connection reset arrives at the server with its original content
-// intact on the successful attempt.
 func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
 	expectedBody := []byte(`{"hello":"world"}`)
 	baseURL, _, log := newResettingServer(t, 1)
@@ -1573,12 +1520,11 @@ func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	bodies := log.Bodies()
 	require.NotEmpty(t, bodies)
-	assert.Equal(t, expectedBody, bodies[len(bodies)-1])
+	for i, body := range bodies {
+		assert.Equal(t, expectedBody, body, "attempt %d", i+1)
+	}
 }
 
-// Test_TransportRetry_OptIn_PostNotRetried is IDE-2419-ACC-003: a POST
-// without an idempotency key is never retried after a connection reset, even
-// when opted in - the duplicate-write guarantee.
 func Test_TransportRetry_OptIn_PostNotRetried(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
@@ -1597,10 +1543,6 @@ func Test_TransportRetry_OptIn_PostNotRetried(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
 }
 
-// Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately is
-// IDE-2419-ACC-004: a consumer that has not opted in sees byte-identical
-// behavior to today - a connection reset fails immediately (regression
-// guard).
 func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
@@ -1618,14 +1560,6 @@ func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T
 	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
 }
 
-// Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetRecovers is
-// IDE-2419-ACC-005. Approved deviation from the plan's recommended Option A1:
-// the user confirmed Decision A2 - PREVIEW_FEATURES_ENABLED alone (without
-// NETWORK_REQUEST_RETRIES_ENABLED) also activates transport-error retry,
-// mirroring the existing OR condition already used by
-// defaultMaxNetworkRequestAttempts for the attempt-count default. The plan's
-// original ACC-005 (Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetNotRetried)
-// pinned Option A1 and has been inverted accordingly.
 func Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetRecovers(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
@@ -1644,10 +1578,6 @@ func Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetRecovers(t *testing.
 	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
 }
 
-// Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried is
-// IDE-2419-ACC-006: today's CLI self-enable path (an explicit attempt count,
-// ADR-1 Change 1) does not by itself activate transport-error retry
-// (regression guard).
 func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 2)
 
@@ -1666,10 +1596,6 @@ func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *t
 	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
 }
 
-// Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit is
-// IDE-2419-ACC-007: an opted-in application still gives up after the retry
-// budget is exhausted, surfacing the original transport error rather than a
-// RetryAttemptError.
 func Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, math.MaxInt32) // reset on every connection
 
@@ -1691,9 +1617,6 @@ func Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit(t *testing.
 	assert.Equal(t, int32(3), atomic.LoadInt32(connCount))
 }
 
-// Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff is
-// IDE-2419-ACC-008: an explicit single-attempt override still disables
-// transport-error retry even when opted in (escape hatch preserved).
 func Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff(t *testing.T) {
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
