@@ -17,8 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test_isRetryableTransportError is IDE-2419-UNIT-001: the error axis of the
-// two-axis allow-list in isolation.
 func Test_isRetryableTransportError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -62,9 +60,6 @@ func Test_isRetryableTransportError(t *testing.T) {
 	}
 }
 
-// Test_isReplayableRequest is IDE-2419-UNIT-002: the request axis of the
-// two-axis allow-list in isolation, mirroring net/http.Transport's own
-// isReplayable.
 func Test_isReplayableRequest(t *testing.T) {
 	getBody := func() (io.ReadCloser, error) { return http.NoBody, nil }
 

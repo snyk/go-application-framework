@@ -66,12 +66,9 @@ const (
 	FLAG_EXPERIMENTAL        string = "experimental"                      // FLAG_EXPERIMENTAL (boolean) returns if experimental features shall be enabled or not, workflows should register this value as a flag to indicate that they might change before being GAed
 	PREVIEW_FEATURES_ENABLED string = "internal_preview_features_enabled" // PREVIEW_FEATURES_ENABLED (boolean) indicates if preview features shall be enabled, this can be used to limit features to the preview version only
 	// NETWORK_REQUEST_RETRIES_ENABLED (boolean) opts the application in to the framework's
-	// resilient network-retry policy. When true, the default value of
-	// middleware.ConfigurationKeyRequestAttempts becomes the multi-attempt default instead of a
-	// single attempt, without requiring PREVIEW_FEATURES_ENABLED. An explicitly configured
-	// attempts count always takes precedence over this switch. This flag (or
-	// PREVIEW_FEATURES_ENABLED) also enables retrying transient transport-level errors
-	// (connection resets, network timeouts) on replayable requests.
+	// resilient network-retry policy (multi-attempt default instead of a single attempt),
+	// without requiring PREVIEW_FEATURES_ENABLED (which has the same effect). An explicitly
+	// configured attempts count always wins over this switch.
 	NETWORK_REQUEST_RETRIES_ENABLED string = "internal_network_request_retries_enabled"
 	FLAG_INCLUDE_IGNORES            string = "include-ignores"    // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
 	FLAG_SEVERITY_THRESHOLD         string = "severity-threshold" // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
