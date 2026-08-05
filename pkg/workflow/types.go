@@ -23,6 +23,24 @@ type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
 
+// PostInvokeContext provides read access to the result of a top-level Invoke call.
+type PostInvokeContext interface {
+	GetWorkflowIdentifier() Identifier
+	GetError() error
+}
+
+// PostInvokeHook is called once per top-level Invoke call, after the workflow callback returns
+// (including when the workflow is not found). Hooks fire in registration order. Nested invocations
+// (sub-workflow calls within an invocation chain) do not trigger hooks.
+//
+// The engine parameter passed to the hook is scoped so that any Invoke calls from within the hook
+// are treated as nested and will not re-trigger hooks. WARNING: this recursion guard is
+// convention-based — hooks must use the provided engine parameter for invocations. A hook that
+// captures and calls the original *EngineImpl directly will bypass the guard.
+//
+// Hooks run synchronously and inline — implementations should avoid blocking or expensive work.
+type PostInvokeHook func(ctx context.Context, engine Engine, hctx PostInvokeContext)
+
 // interfaces
 
 // Data is an interface that wraps the methods that are used to manage data that is passed between workflows.
@@ -113,4 +131,6 @@ type Engine interface {
 	SetUserInterface(ui ui.UserInterface)
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
 	SetRuntimeInfo(ri runtimeinfo.RuntimeInfo)
+
+	AddPostInvokeHook(hook PostInvokeHook) error
 }

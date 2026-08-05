@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -62,6 +63,77 @@ func Test_EngineWrapper_Invoke(t *testing.T) {
 	for i := range counter {
 		assert.Equal(t, float64(i), extension[fmt.Sprintf("test1::%d", i)])
 	}
+}
+
+func Test_EngineWrapper_HookRecursionGuard(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+
+	reportWfId := NewWorkflowIdentifier("report")
+	outerWfId := NewWorkflowIdentifier("outer")
+	noOpWorkflowOptions := ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+
+	reportCallCount := 0
+	_, err := engine.Register(reportWfId, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		reportCallCount++
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	_, err = engine.Register(outerWfId, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	hookCallCount := 0
+	err = engine.AddPostInvokeHook(func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		hookCallCount++
+		_, invokeErr := eng.Invoke(reportWfId)
+		assert.NoError(t, invokeErr)
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(outerWfId)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, hookCallCount, "hook should fire exactly once, not recursively")
+	assert.Equal(t, 1, reportCallCount, "report workflow should be invoked once from the hook")
+}
+
+func Test_EngineWrapper_NestedInvocationsSkipHooks(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+
+	outerWfId := NewWorkflowIdentifier("wrapper-outer")
+	innerWfId := NewWorkflowIdentifier("wrapper-inner")
+	noOpWorkflowOptions := ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+
+	_, err := engine.Register(innerWfId, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	_, err = engine.Register(outerWfId, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		// This goes through the engineWrapper, which prepends withNested()
+		return invocation.GetEngine().Invoke(innerWfId)
+	})
+	assert.NoError(t, err)
+
+	var hookedIDs []string
+	err = engine.AddPostInvokeHook(func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		hookedIDs = append(hookedIDs, hctx.GetWorkflowIdentifier().String())
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(outerWfId)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, len(hookedIDs), "only the top-level invocation should trigger the hook")
+	assert.Equal(t, outerWfId.String(), hookedIDs[0])
 }
 
 func Test_EngineWrapper_Accessors(t *testing.T) {

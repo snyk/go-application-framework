@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -33,6 +34,7 @@ type EngineImpl struct {
 
 	mu                sync.RWMutex
 	invocationCounter int
+	postInvokeHooks   []PostInvokeHook
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -42,6 +44,7 @@ type engineRuntimeConfig struct {
 	input   []Data
 	ic      analytics.InstrumentationCollector
 	ctxFunc func() context.Context
+	nested  bool
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -70,6 +73,25 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 			e.ctxFunc = func() context.Context { return ctx }
 		}
 	}
+}
+
+func withNested() EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.nested = true
+	}
+}
+
+type postInvokeContextImpl struct {
+	workflowID Identifier
+	err        error
+}
+
+func (p *postInvokeContextImpl) GetWorkflowIdentifier() Identifier {
+	return p.workflowID
+}
+
+func (p *postInvokeContextImpl) GetError() error {
+	return p.err
 }
 
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
@@ -174,7 +196,9 @@ func (e *EngineImpl) Init() error {
 	}
 
 	if err == nil {
+		e.mu.Lock()
 		e.initialized = true
+		e.mu.Unlock()
 	}
 
 	return err
@@ -283,10 +307,25 @@ func (e *EngineImpl) Invoke(
 ) ([]Data, error) {
 	var output []Data
 	var err error
+	var callbackPanic any
 
-	if !e.initialized {
+	e.mu.RLock()
+	initialized := e.initialized
+	e.mu.RUnlock()
+	if !initialized {
 		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
+
+	// Parse options once upfront.
+	options := engineRuntimeConfig{
+		ctxFunc: context.Background,
+		input:   []Data{},
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	hookCtx := options.ctxFunc()
 
 	workflow, ok := e.GetWorkflow(id)
 	if ok {
@@ -295,15 +334,9 @@ func (e *EngineImpl) Invoke(
 			e.mu.Lock()
 			e.invocationCounter++
 
-			// create default options
-			options := engineRuntimeConfig{
-				config: e.config.Clone(),
-				input:  []Data{},
-			}
-
-			// override default options based on optional parameters
-			for _, opt := range opts {
-				opt(&options)
+			// Apply defaults for options the caller didn't set.
+			if options.config == nil {
+				options.config = e.config.Clone()
 			}
 
 			// prepare logger
@@ -335,16 +368,60 @@ func (e *EngineImpl) Invoke(
 			// create a context object for the invocation
 			invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
-			// invoke workflow through its callback
+			// invoke workflow through its callback, recovering panics so hooks can observe them
 			localLogger.Printf("Workflow Start")
-			output, err = callback(invocationCtx, options.input)
+			func() {
+				defer func() {
+					callbackPanic = recover()
+				}()
+				output, err = callback(invocationCtx, options.input)
+			}()
 			localLogger.Printf("Workflow End")
+
+			if callbackPanic != nil {
+				err = fmt.Errorf("workflow callback panicked: %v", callbackPanic)
+			}
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)
 	}
 
+	if !options.nested {
+		e.firePostInvokeHooks(hookCtx, id, err)
+	}
+
+	if callbackPanic != nil {
+		panic(callbackPanic)
+	}
+
 	return output, err
+}
+
+func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeErr error) {
+	e.mu.RLock()
+	if len(e.postInvokeHooks) == 0 {
+		e.mu.RUnlock()
+		return
+	}
+	hooks := make([]PostInvokeHook, len(e.postInvokeHooks))
+	copy(hooks, e.postInvokeHooks)
+	e.mu.RUnlock()
+
+	hctx := &postInvokeContextImpl{
+		workflowID: id,
+		err:        invokeErr,
+	}
+	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }}
+	for _, hook := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					e.GetLogger().Error().Msgf("post-invoke hook panicked: %v\n%s", r, debug.Stack())
+				}
+			}()
+			hook(ctx, hookEngine, hctx)
+		}()
+	}
 }
 
 // GetAnalytics returns the analytics object.
@@ -365,6 +442,22 @@ func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 // AddExtensionInitializer adds an extension initializer to the engine.
 func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 	e.extensionInitializer = append(e.extensionInitializer, initializer)
+}
+
+// AddPostInvokeHook registers a hook that fires after each top-level Invoke completes.
+// Hooks fire in registration order and are skipped for nested (sub-workflow) invocations.
+// Hooks must be registered before or during Init; calls after Init return an error.
+func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.initialized {
+		return fmt.Errorf("AddPostInvokeHook called after Init")
+	}
+	if hook == nil {
+		return nil
+	}
+	e.postInvokeHooks = append(e.postInvokeHooks, hook)
+	return nil
 }
 
 // GetConfiguration returns the configuration object.

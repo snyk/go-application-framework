@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
@@ -1119,4 +1121,29 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func Test_WithPostInvokeHooks(t *testing.T) {
+	hookCalled := false
+	hook := func(ctx context.Context, eng workflow.Engine, hctx workflow.PostInvokeContext) {
+		hookCalled = true
+	}
+
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewInMemory()),
+		WithPostInvokeHooks(hook),
+	)
+
+	wfId := workflow.NewWorkflowIdentifier("hook-app-test")
+	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+	assert.True(t, hookCalled, "hook registered via WithPostInvokeHooks should fire")
 }
