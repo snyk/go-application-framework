@@ -187,7 +187,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			if transportRetryEnabled &&
 				actualAttempts < attemptLimit &&
 				isRetryableTransportError(rtErr) &&
-				isReplayableRequest(&localRequest) {
+				isRetryableRequest(&localRequest) {
 				rm.logger.Warn().Err(rtErr).Msgf("Retrying request after transient transport error (attempt %d/%d)", actualAttempts, attemptLimit)
 				return response, rtErr
 			}

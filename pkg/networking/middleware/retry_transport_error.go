@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"syscall"
 )
 
@@ -33,18 +34,20 @@ func isRetryableTransportError(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
-// isReplayableRequest mirrors net/http.Transport's own isReplayable.
-func isReplayableRequest(req *http.Request) bool {
+func isRetryableRequest(req *http.Request) bool {
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
 		return false
 	}
-	switch req.Method {
-	case "", http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return true
+	return !isMonitorPath(req.URL.Path)
+}
+
+// isMonitorPath excludes the monitor endpoint from retries: it creates a
+// snapshot resource, so a retried duplicate would be a real side effect.
+func isMonitorPath(path string) bool {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "monitor" {
+			return true
+		}
 	}
-	if _, ok := req.Header["Idempotency-Key"]; ok {
-		return true
-	}
-	_, ok := req.Header["X-Idempotency-Key"]
-	return ok
+	return false
 }
