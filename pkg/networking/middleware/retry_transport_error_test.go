@@ -15,6 +15,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Test_isRetryableTransportError(t *testing.T) {
@@ -97,9 +99,26 @@ func Test_isRetryableRequest(t *testing.T) {
 		},
 	}
 
+	config := configuration.NewWithOpts()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isRetryableRequest(tt.req))
+			assert.Equal(t, tt.want, isRetryableRequest(tt.req, config))
 		})
 	}
+}
+
+func Test_isRetryableRequest_ConfiguredDenylist(t *testing.T) {
+	newReq := func(method, path string) *http.Request {
+		req, err := http.NewRequest(method, "http://example.com"+path, nil)
+		require.NoError(t, err)
+		req.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
+		return req
+	}
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS, []string{"custom"})
+
+	assert.False(t, isRetryableRequest(newReq(http.MethodGet, "/v1/custom/npm"), config), "consumer-configured segment must be excluded")
+	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitor/npm"), config), "a consumer-supplied deny-list replaces, not merges with, the default")
+	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitoring/npm"), config), "segment-exact matching still applies to a configured deny-list")
 }

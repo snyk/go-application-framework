@@ -379,6 +379,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
+	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS, configuration.StandardDefaultValueFunction([]string{"monitor"}))
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{

@@ -195,7 +195,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			if transportRetryEnabled &&
 				actualAttempts < attemptLimit &&
 				isRetryableTransportError(rtErr) &&
-				isRetryableRequest(&localRequest) {
+				isRetryableRequest(&localRequest, rm.config) {
 				rm.logger.Warn().Err(rtErr).Msgf("Retrying request after transient transport error (attempt %d/%d)", actualAttempts, attemptLimit)
 				if response != nil {
 					drainAndClose(response.Body)
@@ -229,7 +229,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 		}
 
-		if transportRetryEnabled && isRetryableRequest(&localRequest) && isJSONResponse(response) {
+		if transportRetryEnabled && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
 			bodyBytes, readErr := io.ReadAll(response.Body)
 			if readErr != nil {
 				// unlike getErrorList, this read error must surface so a truncated
