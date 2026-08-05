@@ -134,6 +134,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		retryAfterSeconds = tmp
 	}
 
+	transportRetryEnabled := rm.config.GetBool(configuration.PREVIEW_FEATURES_ENABLED) ||
+		rm.config.GetBool(configuration.NETWORK_REQUEST_RETRIES_ENABLED)
+
 	body, getBody, cleanup, err := ensureGetBodyExists(req)
 	if err != nil {
 		return nil, err
@@ -177,6 +180,17 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// errors from the next round tripper cannot be retried
 		if rtErr != nil {
+			attemptLimit := maxAttempts
+			if cachedMaxRetries != nil {
+				attemptLimit = *cachedMaxRetries
+			}
+			if transportRetryEnabled &&
+				actualAttempts < attemptLimit &&
+				isRetryableTransportError(rtErr) &&
+				isReplayableRequest(&localRequest) {
+				rm.logger.Warn().Err(rtErr).Msgf("Retrying request after transient transport error (attempt %d/%d)", actualAttempts, attemptLimit)
+				return response, rtErr
+			}
 			return response, backoff.Permanent(rtErr)
 		}
 

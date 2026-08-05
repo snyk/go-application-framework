@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1420,4 +1422,291 @@ func setupRetryMiddleware(
 	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
 	config.Set(configurationKeyRetryAfter, 1)
 	return NewRetryMiddleware(config, logger, rt, WithErrorHandler(errorHandler)), &attemptCount
+}
+
+func connResetErr() error {
+	return &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
+}
+
+func Test_RetryMiddleware_TransportError_ConnResetRetriedWhenOptedIn(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.TraceLevel)
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount <= 2 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 3, attemptCount)
+	assert.Contains(t, buf.String(), `"level":"warn"`, "transport-error retry must be logged at warn level")
+}
+
+func Test_RetryMiddleware_TransportError_NotRetriedWhenOptInAbsent(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attemptCount)
+	assert.ErrorIs(t, err, syscall.ECONNRESET)
+}
+
+type fakeTimeoutError struct{}
+
+func (fakeTimeoutError) Error() string   { return "fake timeout" }
+func (fakeTimeoutError) Timeout() bool   { return true }
+func (fakeTimeoutError) Temporary() bool { return true }
+
+func Test_RetryMiddleware_TransportError_ErrorAxis(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		retried bool
+	}{
+		{"net timeout retried", fakeTimeoutError{}, true},
+		{"dns not found not retried", &net.DNSError{IsNotFound: true}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			attemptCount := 0
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if attemptCount == 1 {
+					return nil, tt.err
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			if tt.retried {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				assert.Equal(t, 2, attemptCount)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, 1, attemptCount)
+			}
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
+	tests := []struct {
+		name    string
+		method  string
+		headers map[string]string
+		retried bool
+	}{
+		{"POST not retried", http.MethodPost, nil, false},
+		{"POST with Idempotency-Key retried", http.MethodPost, map[string]string{"Idempotency-Key": "abc"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attemptCount := 0
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if attemptCount == 1 {
+					return nil, connResetErr()
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			logger := zerolog.Nop()
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			req := httptest.NewRequest(tt.method, "/", nil)
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+
+			resp, err := sut.RoundTrip(req)
+
+			if tt.retried {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				assert.Equal(t, 2, attemptCount)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, 1, attemptCount)
+			}
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_ExhaustsAtMaxAttempts(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, 3, attemptCount)
+	assert.ErrorIs(t, err, syscall.ECONNRESET)
+}
+
+func Test_RetryMiddleware_TransportError_RetryCountHeaderSetOnRecovery(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "2", resp.Header.Get(retryCountHeaderKey))
+}
+
+func Test_RetryMiddleware_TransportError_SharesBudgetWith429Override(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return &http.Response{StatusCode: http.StatusTooManyRequests, Header: http.Header{}, Request: req}, nil
+		}
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 1) // 429 override bumps this to 3
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Equal(t, 3, attemptCount)
+}
+
+func Test_RetryMiddleware_TransportError_ContextCancelledMidFlightStopsImmediately(t *testing.T) {
+	logger := zerolog.Nop()
+	ctx, cancel := context.WithCancel(context.Background())
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		cancel() // simulate cancellation racing with the transport failure
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 5)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
+	require.NoError(t, reqErr)
+
+	_, err := sut.RoundTrip(req)
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attemptCount)
+}
+
+func Test_RetryMiddleware_TransportError_PreviewFeaturesOnlyActivatesRetry(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 2, attemptCount)
 }
