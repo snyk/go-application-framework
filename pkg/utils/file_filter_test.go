@@ -2067,3 +2067,105 @@ func TestFileFilter_openGitIndex(t *testing.T) {
 		})
 	})
 }
+
+// BenchmarkFileFilterEndToEnd measures rule discovery, both filesystem walks, index processing,
+// concurrent filtering, and output consumption. Its rule matches none of the generated files, so
+// both flag states emit the same output and the delta isolates feature overhead.
+func BenchmarkFileFilterEndToEnd(b *testing.B) {
+	const filesPerFolder = 100
+	for _, fileCount := range []int{1_000, 10_000, 100_000} {
+		b.Run(fmt.Sprintf("files=%d", fileCount), func(b *testing.B) {
+			rootDir := b.TempDir()
+			folderCount := fileCount / filesPerFolder
+			err := generateFilesAndFolders(rootDir, filesPerFolder, folderCount)
+			require.NoError(b, err)
+
+			createFileInPath(b, filepath.Join(rootDir, ".gitignore"), []byte("*.log\n"))
+			ruleFiles := []string{".gitignore"}
+
+			trackedPaths := make([]string, 0, fileCount)
+			for i := 1; i <= folderCount; i++ {
+				for j := 1; j <= filesPerFolder; j++ {
+					trackedPaths = append(trackedPaths, fmt.Sprintf("folder_%d/file_%d.txt", i, j))
+				}
+			}
+			initGitRepoWithTrackedFiles(b, rootDir, trackedPaths)
+
+			for _, enabled := range []bool{false, true} {
+				b.Run(fmt.Sprintf("feature=%t", enabled), func(b *testing.B) {
+					expectedFiles := fileCount + 1
+
+					b.ReportAllocs()
+					b.ResetTimer()
+					for b.Loop() {
+						fileFilter := newTrackedFilesFilter(rootDir, enabled)
+						globs, err := fileFilter.GetRules(ruleFiles)
+						if err != nil {
+							b.Fatal(err)
+						}
+
+						actualFiles := 0
+						for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+							actualFiles++
+						}
+						if actualFiles != expectedFiles {
+							b.Fatalf("filtered %d files, want %d", actualFiles, expectedFiles)
+						}
+					}
+					b.ReportMetric(float64(fileCount), "generated_files/op")
+					b.ReportMetric(float64(expectedFiles), "output_files/op")
+				})
+			}
+		})
+	}
+}
+
+const benchmarkLogFileInterval = 20
+
+// BenchmarkFileFilterBuildExclusionCheck isolates matcher construction and tracked-file discovery.
+// Repository and rule creation happen before timing; every twentieth index entry matches *.log.
+func BenchmarkFileFilterBuildExclusionCheck(b *testing.B) {
+	for _, indexSize := range []int{10_000, 100_000, 500_000} {
+		for _, enabled := range []bool{false, true} {
+			name := fmt.Sprintf("index=%d/flag=%t", indexSize, enabled)
+			b.Run(name, func(b *testing.B) {
+				root := b.TempDir()
+				createFileInPath(b, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+				trackedPaths := benchmarkTrackedPaths(indexSize)
+				initGitRepoWithTrackedFiles(b, root, trackedPaths)
+
+				fileFilter := newTrackedFilesFilter(root, enabled)
+				rules, err := fileFilter.GetRules([]string{".gitignore"})
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				check := fileFilter.newFileExclusionCheck(rules)
+				trackedLog := filepath.Join(root, filepath.FromSlash(trackedPaths[0]))
+				expectedExcluded := !enabled
+				if excluded := check(trackedLog); excluded != expectedExcluded {
+					b.Fatalf("tracked .log exclusion = %t, want %t", excluded, expectedExcluded)
+				}
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for b.Loop() {
+					timedCheck := fileFilter.newFileExclusionCheck(rules)
+					runtime.KeepAlive(timedCheck)
+				}
+			})
+		}
+	}
+}
+
+func benchmarkTrackedPaths(count int) []string {
+	paths := make([]string, count)
+	for i := range count {
+		if i%benchmarkLogFileInterval == 0 {
+			paths[i] = fmt.Sprintf("src/pkg%d/debug%d.log", i%500, i)
+		} else {
+			paths[i] = fmt.Sprintf("src/pkg%d/file%d.go", i%500, i)
+		}
+	}
+	return paths
+}
