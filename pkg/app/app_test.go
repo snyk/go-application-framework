@@ -1,19 +1,26 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,14 +46,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// networkRequestRetryAfterSecondsKey mirrors middleware's unexported
-// configurationKeyRetryAfter. Tests that actually exercise a retry must set
-// this to a small value or the backoff will sleep for real seconds.
+// tests that exercise a retry must set this small, or backoff sleeps for real
+// seconds. Mirrors middleware's unexported configurationKeyRetryAfter.
 const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
 
-// newSequencedStatusServer returns a test server whose responses follow
-// statusSequence in order; once exhausted, the last status repeats. It also
-// returns a pointer to the observed request count.
 func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
 	t.Helper()
 	var count int32
@@ -60,6 +63,92 @@ func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Ser
 	}))
 	t.Cleanup(server.Close)
 	return server, &count
+}
+
+type resettingServerLog struct {
+	mu     sync.Mutex
+	bodies [][]byte
+}
+
+func (l *resettingServerLog) add(body []byte) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.bodies = append(l.bodies, body)
+}
+
+func (l *resettingServerLog) Bodies() [][]byte {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([][]byte, len(l.bodies))
+	copy(out, l.bodies)
+	return out
+}
+
+// reads each connection to completion so the reset is deterministically
+// read-side, not a write race with the client.
+func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, connCount *int32, log *resettingServerLog) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	var count int32
+	log = &resettingServerLog{}
+
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			idx := int(atomic.AddInt32(&count, 1))
+			go serveResettingConnection(conn, idx, resetsBeforeSuccess, log)
+		}
+	}()
+	t.Cleanup(func() { _ = listener.Close() })
+
+	return "http://" + listener.Addr().String(), &count, log
+}
+
+func serveResettingConnection(conn net.Conn, idx int, resetsBeforeSuccess int, log *resettingServerLog) {
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+	contentLength := 0
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		trimmed := strings.TrimRight(line, "\r\n")
+		if trimmed == "" {
+			break
+		}
+		if name, value, found := strings.Cut(trimmed, ":"); found && strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+			parsed, convErr := strconv.Atoi(strings.TrimSpace(value))
+			if convErr == nil {
+				contentLength = parsed
+			}
+		}
+	}
+
+	body := make([]byte, contentLength)
+	if contentLength > 0 {
+		if _, err := io.ReadFull(reader, body); err != nil {
+			return
+		}
+	}
+	log.add(body)
+
+	if idx <= resetsBeforeSuccess {
+		// SetLinger(0) makes the following Close() emit a real RST instead of
+		// a graceful FIN, simulating a transient connection reset.
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetLinger(0) //nolint:errcheck // best-effort RST simulation on a test-only raw socket
+		}
+		return
+	}
+
+	_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")) //nolint:errcheck // best-effort write on a test-only raw socket
 }
 
 func createOAuthTokenWithAudience(t *testing.T, audience string) string {
@@ -1134,7 +1223,6 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			previewEnabled: false,
 			expected:       1,
 		},
-		// IDE-1890-UNIT-001 precedence matrix (existing attempts / preview / opt-in / expected)
 		{
 			name:           "nil, not preview, opt-in absent, return 1",
 			existingValue:  nil,
@@ -1238,9 +1326,6 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 	}
 }
 
-// Test_NetworkRetryOptIn_TransientFailureRecovers is IDE-1890-ACC-001: an
-// application that opts in to resilient network retries (with preview
-// features off) survives a single transient upstream failure.
 func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1259,9 +1344,6 @@ func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
-// Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt is IDE-1890-ACC-002: an
-// application that has not opted in behaves exactly as it does today
-// (regression guard).
 func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1279,9 +1361,6 @@ func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_PreviewFeaturesUnaffected is IDE-1890-ACC-003:
-// preview-feature users keep the resilience they already have, independent of
-// the new opt-in (regression guard).
 func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1300,8 +1379,6 @@ func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
-// Test_NetworkRetryOptIn_ExplicitAttemptCountWins is IDE-1890-ACC-004: an
-// explicitly configured attempt count always wins over the opt-in.
 func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1321,8 +1398,6 @@ func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_NonRetryableResponseNotRetried is IDE-1890-ACC-005:
-// opting in does not cause requests to be retried that should not be.
 func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusNotFound})
 
@@ -1341,8 +1416,6 @@ func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
 }
 
-// Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit is IDE-1890-ACC-006: an
-// opted-in application still gives up rather than retrying forever.
 func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable})
 
@@ -1361,13 +1434,6 @@ func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts is
-// IDE-1890-INT-001: real-wiring test. It exercises the composition root
-// (initConfiguration's AddDefaultValue registration for
-// middleware.ConfigurationKeyRequestAttempts) together with the real
-// defaultMaxNetworkRequestAttempts default-value function. It must go RED if
-// either the app.go:381 AddDefaultValue registration line, or the opt-in
-// condition inside defaultMaxNetworkRequestAttempts, is removed.
 func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
@@ -1378,8 +1444,6 @@ func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing
 	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent is
-// IDE-1890-INT-002: an untouched engine config yields today's default of 1.
 func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *testing.T) {
 	config := configuration.NewWithOpts()
 
@@ -1389,9 +1453,6 @@ func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *test
 	assert.Equal(t, 1, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone is
-// IDE-1890-INT-003: GAF clones config for cross-workflow invocation; the
-// opt-in must survive that clone.
 func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
@@ -1404,9 +1465,6 @@ func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) 
 	assert.Equal(t, 3, cloned.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-// Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue is
-// IDE-1890-INT-004: the opt-in can come from an environment variable or
-// configuration file, i.e. as the string "true" rather than a boolean.
 func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, "true")
@@ -1415,4 +1473,160 @@ func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
 	assert.NotNil(t, engine)
 
 	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+}
+
+func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
+	expectedBody := []byte(`{"hello":"world"}`)
+	baseURL, _, log := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, baseURL, bytes.NewReader(expectedBody))
+	require.NoError(t, err)
+	req.Header.Set("Idempotency-Key", "test-key")
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	bodies := log.Bodies()
+	require.NotEmpty(t, bodies)
+	for i, body := range bodies {
+		assert.Equal(t, expectedBody, body, "attempt %d", i+1)
+	}
+}
+
+func Test_TransportRetry_OptIn_PostNotRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Post(baseURL, "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetRecovers(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+}
+
+func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 2)
+
+	config := configuration.NewWithOpts()
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, math.MaxInt32) // reset on every connection
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+
+	var retryAttemptErr *middleware.RetryAttemptError
+	assert.False(t, errors.As(err, &retryAttemptErr), "exhaustion must surface the original transport error, not a RetryAttemptError")
+	assert.Equal(t, int32(3), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
 }
