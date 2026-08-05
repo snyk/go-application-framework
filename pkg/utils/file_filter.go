@@ -40,7 +40,7 @@ type FileFilter struct {
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
-	metrics         metrics.Recorder
+	metricsRecorder metrics.Recorder
 	metricScopeID   string
 }
 
@@ -79,7 +79,7 @@ const (
 	metricFileFilterPrefix           = "file-filter"
 	metricFileFilterDurationMs       = "durationMs"
 	metricFileFilterFileCount        = "fileCount"
-	metricFileFilterMetacharacterFix = "metacharacter-fix"
+	metricFileFilterMetacharacterFix = "metacharacterFix"
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -124,22 +124,22 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 // Callers must pass a pkg/analytics.Analytics implementation here; it satisfies this interface.
 func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	return func(filter *FileFilter) error {
-		filter.metrics = recorder
+		filter.metricsRecorder = recorder
 		return nil
 	}
 }
 
 //nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
 func (fw *FileFilter) recordMetricLazy(key string, getMetric func() int) {
-	if fw.metrics != nil {
-		fw.metrics.AddExtensionIntegerValue(fw.metricKey(key), getMetric())
+	if fw.metricsRecorder != nil {
+		fw.metricsRecorder.AddExtensionIntegerValue(fw.metricKey(key), getMetric())
 	}
 }
 
 //nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
 func (fw *FileFilter) recordBoolMetricLazy(key string, getMetric func() bool) {
-	if fw.metrics != nil {
-		fw.metrics.AddExtensionBoolValue(fw.metricKey(key), getMetric())
+	if fw.metricsRecorder != nil {
+		fw.metricsRecorder.AddExtensionBoolValue(fw.metricKey(key), getMetric())
 	}
 }
 
