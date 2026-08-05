@@ -21,6 +21,57 @@ import (
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// MockPostInvokeContext is a mock of PostInvokeContext interface.
+type MockPostInvokeContext struct {
+	ctrl     *gomock.Controller
+	recorder *MockPostInvokeContextMockRecorder
+}
+
+// MockPostInvokeContextMockRecorder is the mock recorder for MockPostInvokeContext.
+type MockPostInvokeContextMockRecorder struct {
+	mock *MockPostInvokeContext
+}
+
+// NewMockPostInvokeContext creates a new mock instance.
+func NewMockPostInvokeContext(ctrl *gomock.Controller) *MockPostInvokeContext {
+	mock := &MockPostInvokeContext{ctrl: ctrl}
+	mock.recorder = &MockPostInvokeContextMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPostInvokeContext) EXPECT() *MockPostInvokeContextMockRecorder {
+	return m.recorder
+}
+
+// GetError mocks base method.
+func (m *MockPostInvokeContext) GetError() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetError")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetError indicates an expected call of GetError.
+func (mr *MockPostInvokeContextMockRecorder) GetError() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetError", reflect.TypeOf((*MockPostInvokeContext)(nil).GetError))
+}
+
+// GetWorkflowIdentifier mocks base method.
+func (m *MockPostInvokeContext) GetWorkflowIdentifier() workflow.Identifier {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkflowIdentifier")
+	ret0, _ := ret[0].(workflow.Identifier)
+	return ret0
+}
+
+// GetWorkflowIdentifier indicates an expected call of GetWorkflowIdentifier.
+func (mr *MockPostInvokeContextMockRecorder) GetWorkflowIdentifier() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkflowIdentifier", reflect.TypeOf((*MockPostInvokeContext)(nil).GetWorkflowIdentifier))
+}
+
 // MockData is a mock of Data interface.
 type MockData struct {
 	ctrl     *gomock.Controller
@@ -659,6 +710,20 @@ func (m *MockEngine) AddExtensionInitializer(initializer workflow.ExtensionInit)
 func (mr *MockEngineMockRecorder) AddExtensionInitializer(initializer interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExtensionInitializer", reflect.TypeOf((*MockEngine)(nil).AddExtensionInitializer), initializer)
+}
+
+// AddPostInvokeHook mocks base method.
+func (m *MockEngine) AddPostInvokeHook(hook workflow.PostInvokeHook) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPostInvokeHook", hook)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddPostInvokeHook indicates an expected call of AddPostInvokeHook.
+func (mr *MockEngineMockRecorder) AddPostInvokeHook(hook interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostInvokeHook", reflect.TypeOf((*MockEngine)(nil).AddPostInvokeHook), hook)
 }
 
 // GetAnalytics mocks base method.
