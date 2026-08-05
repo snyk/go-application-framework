@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -20,6 +21,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
+	"github.com/snyk/go-application-framework/internal/metrics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -39,6 +41,8 @@ const GitignoreGlobPrefix = "#gitignore:"
 // by default, all rules are valid
 var defaultInvalidRules = []string{}
 
+var nextFileFilterMetricScopeID atomic.Uint64
+
 type FileFilter struct {
 	path            string
 	defaultRules    []string
@@ -46,6 +50,8 @@ type FileFilter struct {
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
+	metricsRecorder metrics.Recorder
+	metricScopeID   string
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -75,6 +81,16 @@ func (s DotSnykExcludeSectionName) String() string {
 type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
+
+// TODO: These metric keys are not read anywhere yet; actual recording is coming in a follow-up PR [CLI-1740].
+//
+//nolint:unused // plumbing for a follow-up PR that wires these into recordMetricLazy/recordBoolMetricLazy call sites [CLI-1740]
+const (
+	metricFileFilterPrefix           = "file-filter"
+	metricFileFilterDurationMs       = "durationMs"
+	metricFileFilterFileCount        = "fileCount"
+	metricFileFilterMetacharacterFix = "metacharacterFix"
+)
 
 type FileFilterOption func(*FileFilter) error
 
@@ -114,6 +130,38 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 	}
 }
 
+// WithMetrics supplies a recorder for file-filter analytics values.
+// Callers must pass a pkg/analytics.Analytics implementation here; it satisfies this interface.
+func WithMetrics(recorder metrics.Recorder) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.metricsRecorder = recorder
+		return nil
+	}
+}
+
+//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
+func (fw *FileFilter) recordMetricLazy(key string, getMetric func() int) {
+	if fw.metricsRecorder != nil {
+		fw.metricsRecorder.AddExtensionIntegerValue(fw.metricKey(key), getMetric())
+	}
+}
+
+//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
+func (fw *FileFilter) recordBoolMetricLazy(key string, getMetric func() bool) {
+	if fw.metricsRecorder != nil {
+		fw.metricsRecorder.AddExtensionBoolValue(fw.metricKey(key), getMetric())
+	}
+}
+
+//nolint:unused // plumbing for a follow-up PR that adds the call sites [CLI-1740]
+func (fw *FileFilter) metricKey(key string) string {
+	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, fw.metricScopeID, key)
+}
+
+func newFileFilterMetricScopeID() string {
+	return fmt.Sprintf("%d", nextFileFilterMetricScopeID.Add(1))
+}
+
 // NewFileFilter creates a FileFilter rooted at path. Without WithConfig, feature flags default to disabled (legacy).
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
@@ -122,6 +170,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
+		metricScopeID:   newFileFilterMetricScopeID(),
 	}
 
 	options = append([]FileFilterOption{WithConfig(nil)}, options...)
