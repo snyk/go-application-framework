@@ -1742,10 +1742,8 @@ func filterFilesWith(tb testing.TB, fileFilter *FileFilter, ruleFiles []string) 
 	return filtered
 }
 
-// TestFileFilter_gitignoreRespectsTrackedFiles is the behavioral matrix over the flag, whether git
-// tracks the file, and which source excludes it. With the flag off every rule shares one ordered
-// matcher, so whichever ignore file GetRules read last wins; with it on Snyk's own exclusions are a
-// final veto and the .gitignore rules only reach files git does not track.
+// TestFileFilter_gitignoreRespectsTrackedFiles covers legacy ordering for untracked files and
+// source-specific overrides for tracked files.
 func TestFileFilter_gitignoreRespectsTrackedFiles(t *testing.T) {
 	const scanned, excluded = true, false
 	const dotSnykExcludesTarget = "exclude:\n  global:\n    - config.log\n"
@@ -1763,14 +1761,6 @@ func TestFileFilter_gitignoreRespectsTrackedFiles(t *testing.T) {
 			ignoreFiles: map[string]string{".gitignore": "*.log\n"},
 			tracked:     true,
 			want:        excluded,
-		}, {
-			name:        "flag off lets a .gitignore negation override .dcignore",
-			ignoreFiles: map[string]string{".gitignore": "*.log\n!config.log\n", ".dcignore": "config.log\n"},
-			tracked:     true,
-			// .dcignore sorts before .gitignore, so GetRules reads it first and the one ordered
-			// matcher lets the later negation win. The flag replaces that accident of file naming
-			// with a precedence someone actually chose.
-			want: scanned,
 		}, {
 			name:                "a tracked file is scanned",
 			ignoreFiles:         map[string]string{".gitignore": "*.log\n"},
@@ -1877,7 +1867,7 @@ func TestFileFilter_gitignoreRespectsTrackedFiles(t *testing.T) {
 		assert.NotContains(t, filtered, untrackedLog)
 	})
 
-	t.Run("the built-in .git default cannot be negated away", func(t *testing.T) {
+	t.Run("the built-in default keeps its previous ordering for an untracked file", func(t *testing.T) {
 		newRoot := func(t *testing.T) (root, gitInternalFile string) {
 			t.Helper()
 			root = t.TempDir()
@@ -1888,13 +1878,11 @@ func TestFileFilter_gitignoreRespectsTrackedFiles(t *testing.T) {
 			return root, gitInternalFile
 		}
 
-		rootOn, gitInternalFileOn := newRoot(t)
-		assert.NotContains(t, filterFilesWith(t, newTrackedFilesFilter(rootOn, true), []string{".gitignore"}),
-			gitInternalFileOn, "the built-in defaults are part of the veto")
-
-		rootOff, gitInternalFileOff := newRoot(t)
-		assert.Contains(t, filterFilesWith(t, newTrackedFilesFilter(rootOff, false), []string{".gitignore"}),
-			gitInternalFileOff, "previous behavior: the later negation beats the built-in default")
+		for _, enabled := range []bool{false, true} {
+			root, gitInternalFile := newRoot(t)
+			assert.Contains(t, filterFilesWith(t, newTrackedFilesFilter(root, enabled), []string{".gitignore"}),
+				gitInternalFile, "the later .gitignore negation keeps winning for an untracked file")
+		}
 	})
 
 	t.Run("tagged rules preserve the feature decision if the config changes", func(t *testing.T) {
@@ -1974,6 +1962,39 @@ func TestFileFilter_gitignoreRespectsTrackedFiles(t *testing.T) {
 
 		assert.Contains(t, filtered, insideLog, "the index prefix has to be cut for entries to be found")
 	})
+}
+
+func TestFileFilter_crossSourceOrderingIsUnchangedForUntrackedFiles(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("feature=%t", enabled), func(t *testing.T) {
+			root := t.TempDir()
+			keptFile := filepath.Join(root, "gen", "keep.js")
+			excludedFile := filepath.Join(root, "gen", "drop.js")
+			createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("gen/*.js\n"))
+			createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("!gen/keep.js\n"))
+			createFileInPath(t, keptFile, []byte("x"))
+			createFileInPath(t, excludedFile, []byte("x"))
+			initGitRepoWithTrackedFiles(t, root, nil)
+
+			filtered := filterFilesWith(t, newTrackedFilesFilter(root, enabled), []string{".dcignore", ".gitignore"})
+
+			assert.Contains(t, filtered, keptFile)
+			assert.NotContains(t, filtered, excludedFile)
+		})
+	}
+}
+
+func TestFileFilter_crossSourceNegationDoesNotRescueTrackedFile(t *testing.T) {
+	root := t.TempDir()
+	trackedFile := filepath.Join(root, "gen", "keep.js")
+	createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("gen/*.js\n"))
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("!gen/keep.js\n"))
+	createFileInPath(t, trackedFile, []byte("x"))
+	initGitRepoWithTrackedFiles(t, root, []string{"gen/keep.js"})
+
+	filtered := filterFilesWith(t, newTrackedFilesFilter(root, true), []string{".dcignore", ".gitignore"})
+
+	assert.NotContains(t, filtered, trackedFile)
 }
 
 func TestFileFilter_GetRules_gitignoreGlobPrefix(t *testing.T) {
@@ -2122,9 +2143,9 @@ func BenchmarkFileFilterEndToEnd(b *testing.B) {
 
 const benchmarkLogFileInterval = 20
 
-// BenchmarkFileFilterBuildExclusionCheck isolates matcher construction and tracked-file discovery.
+// BenchmarkFileFilterBuildExclusionPredicate isolates matcher construction and tracked-file discovery.
 // Repository and rule creation happen before timing; every twentieth index entry matches *.log.
-func BenchmarkFileFilterBuildExclusionCheck(b *testing.B) {
+func BenchmarkFileFilterBuildExclusionPredicate(b *testing.B) {
 	for _, indexSize := range []int{10_000, 100_000, 500_000} {
 		for _, enabled := range []bool{false, true} {
 			name := fmt.Sprintf("index=%d/flag=%t", indexSize, enabled)
@@ -2140,18 +2161,18 @@ func BenchmarkFileFilterBuildExclusionCheck(b *testing.B) {
 					b.Fatal(err)
 				}
 
-				check := fileFilter.newFileExclusionCheck(rules)
+				isFileExcluded := fileFilter.newFileExclusionPredicate(rules)
 				trackedLog := filepath.Join(root, filepath.FromSlash(trackedPaths[0]))
 				expectedExcluded := !enabled
-				if excluded := check(trackedLog); excluded != expectedExcluded {
+				if excluded := isFileExcluded(trackedLog); excluded != expectedExcluded {
 					b.Fatalf("tracked .log exclusion = %t, want %t", excluded, expectedExcluded)
 				}
 
 				b.ReportAllocs()
 				b.ResetTimer()
 				for b.Loop() {
-					timedCheck := fileFilter.newFileExclusionCheck(rules)
-					runtime.KeepAlive(timedCheck)
+					timedIsFileExcluded := fileFilter.newFileExclusionPredicate(rules)
+					runtime.KeepAlive(timedIsFileExcluded)
 				}
 			})
 		}
