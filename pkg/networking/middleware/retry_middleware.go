@@ -107,6 +107,11 @@ func isJSONResponse(response *http.Response) bool {
 	return mimeType == "application/json" || strings.HasSuffix(mimeType, "+json")
 }
 
+// isSuccessResponse reports whether the status code is 2xx.
+func isSuccessResponse(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
+}
+
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -229,7 +234,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 		}
 
-		if transportRetryEnabled && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
+		if transportRetryEnabled && isSuccessResponse(response.StatusCode) && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
 			bodyBytes, readErr := io.ReadAll(response.Body)
 			if readErr != nil {
 				// unlike getErrorList, this read error must surface so a truncated

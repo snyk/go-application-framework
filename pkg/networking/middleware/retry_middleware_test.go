@@ -1961,6 +1961,36 @@ func Test_RetryMiddleware_MonitorPath_JSONBodyNeverBufferedOrRetried(t *testing.
 	assert.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "monitor response body must stream unbuffered, never swapped for a buffer")
 }
 
+func Test_RetryMiddleware_TruncatedJSONBody_NonSuccessStatusNeverBufferedOrRetried(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+	body := &readErrCloser{err: io.ErrUnexpectedEOF}
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		return &http.Response{StatusCode: http.StatusNotFound, Header: headers, Body: body, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, 1, attemptCount, "a truncated 4xx JSON body must never be buffered or retried")
+
+	_, readErr := io.ReadAll(resp.Body)
+	assert.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "non-2xx response body must stream unbuffered, never swapped for a buffer")
+}
+
 func Test_RetryMiddleware_NonJSONResponse_StreamsUnbuffered(t *testing.T) {
 	logger := zerolog.Nop()
 	attemptCount := 0
