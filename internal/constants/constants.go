@@ -20,3 +20,8 @@ const SNYK_DEFAULT_ALLOWED_HOST_REGEXP = `^(https?://)?api(\.(.+))?\.(snyk|snykg
 // SNYK_DEFAULT_ALLOWED_HOST_DOMAINS is the default allowlist of registrable
 // domains that an OAuth callback instance host is permitted to belong to.
 var SNYK_DEFAULT_ALLOWED_HOST_DOMAINS = []string{"snyk.io", "snykgov.io"}
+
+// DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS is the default deny-list of URL path segments
+// excluded from GAF's network retries, shared between the pkg/app default-value
+// registration and the pkg/networking/middleware fallback so the two cannot drift.
+var DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS = []string{"monitor"}

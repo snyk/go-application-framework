@@ -122,3 +122,14 @@ func Test_isRetryableRequest_ConfiguredDenylist(t *testing.T) {
 	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitor/npm"), config), "a consumer-supplied deny-list replaces, not merges with, the default")
 	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitoring/npm"), config), "segment-exact matching still applies to a configured deny-list")
 }
+
+func Test_isRetryableRequest_ExplicitEmptyDenylistExcludesNothing(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/monitor/npm", nil)
+	require.NoError(t, err)
+	req.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS, []string{})
+
+	assert.True(t, isRetryableRequest(req, config), "an explicit empty deny-list must exclude nothing, not fall back to the monitor default")
+}

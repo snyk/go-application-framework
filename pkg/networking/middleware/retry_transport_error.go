@@ -8,12 +8,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
-
-// defaultRetryExcludedPathSegments mirrors today's monitor-only exclusion,
-// used when the consumer has not configured NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS.
-var defaultRetryExcludedPathSegments = []string{"monitor"}
 
 // errWSAEConnReset is the Windows WSAECONNRESET error code (10054). Go's
 // syscall package does not map it onto syscall.ECONNRESET the way POSIX
@@ -48,12 +45,13 @@ func isRetryableRequest(req *http.Request, config configuration.Configuration) b
 }
 
 // retryExcludedPathSegments returns the configured deny-list, falling back to
-// defaultRetryExcludedPathSegments when unset.
+// constants.DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS when unset. IsSet (not len>0) so an
+// explicit empty override ("exclude nothing") is honored rather than treated as unset.
 func retryExcludedPathSegments(config configuration.Configuration) []string {
-	if segments := config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS); len(segments) > 0 {
-		return segments
+	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS) {
+		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS)
 	}
-	return defaultRetryExcludedPathSegments
+	return constants.DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS
 }
 
 // isExcludedPath excludes endpoints whose side effects make a retried
