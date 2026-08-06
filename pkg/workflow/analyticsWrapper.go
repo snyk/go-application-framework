@@ -43,6 +43,10 @@ func (a *analyticsWrapper) SetCommand(command string) {
 	a.wrappedAnalytics.SetCommand(command)
 }
 
+func (a *analyticsWrapper) GetCommand() string {
+	return a.wrappedAnalytics.GetCommand()
+}
+
 func (a *analyticsWrapper) SetOperatingSystem(os string) {
 	a.wrappedAnalytics.SetOperatingSystem(os)
 }

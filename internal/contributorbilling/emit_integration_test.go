@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,8 +15,6 @@ import (
 )
 
 func TestEmitContributorBilling_Integration_AppliesConfigurationAndPosts(t *testing.T) {
-	t.Parallel()
-
 	var gotAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -28,25 +25,32 @@ func TestEmitContributorBilling_Integration_AppliesConfigurationAndPosts(t *test
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, server.URL+"/v1")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "integration-token")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 
 	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(config))
 	emitter := contributorbilling.NewEmitter()
-	defer emitter.WaitWithTimeout(2 * time.Second)
+	wait := contributorbilling.WaitBudget(1, contributorbilling.DefaultTimeout)
+	defer emitter.WaitWithTimeout(wait)
 
-	resultCh := make(chan contributorbilling.Result, 1)
-	emitter.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+	opts := contributorbilling.EmitOptions{
 		Configuration: config,
 		Engine:        engine,
+		Capability:    contributorbilling.CapabilityOSS,
 		ScopeID:       "11111111-1111-1111-1111-111111111111",
 		Items: []contributorbilling.BillingItem{
 			{EntityID: "22222222-2222-2222-2222-222222222222"},
 		},
-		OnResult: func(result contributorbilling.Result) {
-			resultCh <- result
-		},
-	})
+	}
+	contributorbilling.ApplyFromConfiguration(&opts, config, engine)
+	opts.HTTPClient = server.Client()
 
-	require.True(t, emitter.WaitWithTimeout(2*time.Second))
+	resultCh := make(chan contributorbilling.Result, 1)
+	opts.OnResult = func(result contributorbilling.Result) {
+		resultCh <- result
+	}
+	emitter.EmitContributorBilling(context.Background(), opts)
+
+	require.True(t, emitter.WaitWithTimeout(wait))
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
