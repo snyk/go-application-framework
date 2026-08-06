@@ -1753,7 +1753,6 @@ func Test_RetryMiddleware_TransportError_ResponseBodyClosed(t *testing.T) {
 	}
 }
 
-// With the opt-in unset, this exit must stay byte-identical to pre-PR behavior: no drain here at all.
 func Test_RetryMiddleware_TransportError_TerminalBodyNotClosed_OptInOff(t *testing.T) {
 	logger := zerolog.Nop()
 	var bodyClosed bool
@@ -1809,7 +1808,6 @@ func Test_RetryMiddleware_TransportError_NilResponseDoesNotPanic(t *testing.T) {
 	assert.Equal(t, 2, attemptCount)
 }
 
-// readErrCloser simulates a transport reset mid-body, after headers were already flushed.
 type readErrCloser struct {
 	err    error
 	closed bool
@@ -1821,9 +1819,7 @@ func (r *readErrCloser) Close() error {
 	return nil
 }
 
-// truncatingJSONServer reproduces an SSL-inspecting proxy resetting the upstream HTTP/2
-// stream mid-body: the first request gets truncateAt bytes then a closed connection,
-// subsequent requests get the full body.
+// Reproduces an SSL-inspecting proxy resetting the upstream HTTP/2 stream mid-body.
 func truncatingJSONServer(t *testing.T, fullBody []byte, truncateAt int) (*httptest.Server, *int32) {
 	t.Helper()
 	var attempts int32
@@ -1872,8 +1868,7 @@ func Test_RetryMiddleware_Acceptance_TruncatedBodyRetriedToSuccess(t *testing.T)
 	assert.EqualValues(t, 2, atomic.LoadInt32(attempts))
 }
 
-// With the opt-in unset, a truncated body must surface exactly as it does today: RoundTrip
-// returns a nil error, and the truncation only becomes visible when the caller reads the body.
+// With the opt-in unset, RoundTrip returns a nil error despite the truncation.
 func Test_RetryMiddleware_Acceptance_TruncatedBody_OptInOff_MatchesTodayBehavior(t *testing.T) {
 	fullBody := []byte(`{"vulnerabilities":["CVE-1","CVE-2","CVE-3"]}`)
 	server, attempts := truncatingJSONServer(t, fullBody, 10)
@@ -2032,8 +2027,6 @@ func Test_RetryMiddleware_StatusCodeRetryDenied_OptInOff(t *testing.T) {
 	assert.Equal(t, 3, attemptCount, "with the opt-in unset, the allow-list has no effect and the status-code retry runs as it does today")
 }
 
-// Covers every reason JSON-body buffering must be skipped: an unlisted path, a non-2xx
-// status, or a non-JSON content type.
 func Test_RetryMiddleware_TruncatedJSONBody_NeverBufferedOrRetried(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -2111,9 +2104,7 @@ func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t
 	assert.EqualValues(t, 2, atomic.LoadInt32(&attempts))
 }
 
-// Test_RetryMiddleware_BodyCapBoundary proves the cap comparison reads cap+1 bytes rather
-// than cap: an over-cap body streams without buffering, while a body of exactly the cap
-// size is not over the limit and still takes the normal buffered path.
+// The cap comparison reads cap+1 bytes rather than cap, so a body of exactly the cap size still takes the buffered path.
 func Test_RetryMiddleware_BodyCapBoundary(t *testing.T) {
 	tests := []struct {
 		name         string
