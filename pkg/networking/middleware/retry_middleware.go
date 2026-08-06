@@ -129,8 +129,8 @@ func isSuccessResponse(statusCode int) bool {
 // recovery buffering is allowed to read into memory, falling back to
 // constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB when unset or non-positive.
 func responseBufferCapBytes(config configuration.Configuration) int {
-	if cap := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); cap > 0 {
-		return cap
+	if capBytes := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); capBytes > 0 {
+		return capBytes
 	}
 	return constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB
 }

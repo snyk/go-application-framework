@@ -2257,6 +2257,7 @@ func Test_RetryMiddleware_OverCapBody_StreamsWithoutBuffering(t *testing.T) {
 		},
 	}
 
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
 	customRTFn := func(req *http.Request) (*http.Response, error) {
 		attemptCount++
 		headers := http.Header{"Content-Type": []string{"application/json"}}
@@ -2300,6 +2301,7 @@ func Test_RetryMiddleware_ExactCapBody_StillBuffered(t *testing.T) {
 		},
 	}
 
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
 	customRTFn := func(req *http.Request) (*http.Response, error) {
 		headers := http.Header{"Content-Type": []string{"application/json"}}
 		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: trackingBody, Request: req}, nil
