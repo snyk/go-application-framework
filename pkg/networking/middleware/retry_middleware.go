@@ -207,6 +207,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				}
 				return response, rtErr
 			}
+			if response != nil {
+				drainAndClose(response.Body)
+			}
 			return response, backoff.Permanent(rtErr)
 		}
 
@@ -216,8 +219,11 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			cachedMaxRetries = &calculated
 		}
 
-		// depending on the response determine if we should retry
-		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
+		// depending on the response determine if we should retry; gating on
+		// isRetryableRequest only under the opt-in keeps flag-off behavior
+		// byte-identical to today, where this status-code path ignores the deny-list
+		statusCodeRetryDenied := transportRetryEnabled && !isRetryableRequest(&localRequest, rm.config)
+		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); !statusCodeRetryDenied && retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 
 			// When doing a retry, we need to drain and close the RESPONSE body, to ensure that the resources are freed
