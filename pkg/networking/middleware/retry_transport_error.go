@@ -12,9 +12,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-// errWSAEConnReset is the Windows WSAECONNRESET error code (10054). Go's
-// syscall package does not map it onto syscall.ECONNRESET the way POSIX
-// does, so it must be matched explicitly by numeric value.
+// Windows WSAECONNRESET (10054); Go's syscall package does not map it onto
+// syscall.ECONNRESET the way POSIX does, so it must be matched by numeric value.
 const errWSAEConnReset = syscall.Errno(10054)
 
 func isConnectionReset(err error) bool {
@@ -53,8 +52,7 @@ func isSafeMethod(method string) bool {
 	}
 }
 
-// IsSet (not len>0) so an explicit empty override is honored rather than treated as unset -
-// it means no unsafe-method path is retryable, the opposite of the old empty-deny-list meaning.
+// IsSet (not len>0) so an explicit empty override is honored rather than treated as unset.
 func retryAllowedPaths(config configuration.Configuration) []string {
 	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS) {
 		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS)
@@ -62,8 +60,7 @@ func retryAllowedPaths(config configuration.Configuration) []string {
 	return constants.DEFAULT_RETRY_ALLOWED_PATHS
 }
 
-// contiguous-segment matching avoids near-misses like /v1/test-dep-graph-something
-// matching an allow-list entry of test-dep-graph.
+// Contiguous-segment matching avoids near-misses like /v1/test-dep-graph-something.
 func isAllowedPath(path string, allowed []string) bool {
 	segments := strings.Split(path, "/")
 	for _, entry := range allowed {

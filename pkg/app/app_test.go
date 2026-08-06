@@ -46,8 +46,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// tests that exercise a retry must set this small, or backoff sleeps for real
-// seconds. Mirrors middleware's unexported configurationKeyRetryAfter.
+// Mirrors middleware's unexported configurationKeyRetryAfter; tests must set this small or backoff sleeps for real.
 const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
 
 func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
@@ -84,8 +83,7 @@ func (l *resettingServerLog) Bodies() [][]byte {
 	return out
 }
 
-// reads each connection to completion so the reset is deterministically
-// read-side, not a write race with the client.
+// Reads each connection to completion so the reset is deterministically read-side, not a write race.
 func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, connCount *int32, log *resettingServerLog) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -140,8 +138,7 @@ func serveResettingConnection(conn net.Conn, idx int, resetsBeforeSuccess int, l
 	log.add(body)
 
 	if idx <= resetsBeforeSuccess {
-		// SetLinger(0) makes the following Close() emit a real RST instead of
-		// a graceful FIN, simulating a transient connection reset.
+		// SetLinger(0) makes the following Close() emit a real RST instead of a graceful FIN.
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			_ = tcpConn.SetLinger(0) //nolint:errcheck // best-effort RST simulation on a test-only raw socket
 		}
@@ -1455,8 +1452,7 @@ func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
 }
 
-// newCLIStyleConfig mirrors the option set the real CLI wires up (cliv2/pkg/core/main.go),
-// since bare configuration.NewWithOpts() doesn't enable env var lookups at all.
+// Bare configuration.NewWithOpts() doesn't enable env var lookups at all.
 func newCLIStyleConfig() configuration.Configuration {
 	return configuration.NewWithOpts(
 		configuration.WithSupportedEnvVars("NODE_EXTRA_CA_CERTS"),

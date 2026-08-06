@@ -299,9 +299,8 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 	return callback
 }
 
-// defaultNetworkRequestRetryAllowedPaths normalizes a raw env-var CSV string into a
-// []string before GetStringSlice's type switch ever sees it, since GetStringSlice
-// otherwise wraps the whole string as a single unsplit entry.
+// GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
+// single unsplit entry, so it must be normalized into a []string first.
 func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue == nil {
