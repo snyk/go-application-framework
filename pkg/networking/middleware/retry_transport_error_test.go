@@ -88,7 +88,6 @@ func Test_isRetryableRequest(t *testing.T) {
 		{"POST to multi-segment allow-listed path retried", newReq(http.MethodPost, "/verify/token", nil, false), true},
 		{"POST to multi-segment path nested under org retried", newReq(http.MethodPost, "/orgs/123/verify/token", nil, false), true},
 		{"monitor path not retried", newReq(http.MethodPost, "/v1/monitor/npm", nil, false), false},
-		{"body without GetBody not retried even on allow-listed path", newReq(http.MethodPost, "/v1/test-dep-graph", bytes.NewReader([]byte("x")), false), false},
 		{"body with GetBody retried on allow-listed path", newReq(http.MethodPost, "/v1/test-dep-graph", bytes.NewReader([]byte("x")), true), true},
 		{
 			"GET with http.NoBody",

@@ -38,9 +38,6 @@ func isRetryableTransportError(err error) bool {
 }
 
 func isRetryableRequest(req *http.Request, config configuration.Configuration) bool {
-	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
-		return false
-	}
 	if isSafeMethod(req.Method) {
 		return true
 	}
