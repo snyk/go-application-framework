@@ -1,6 +1,6 @@
 module github.com/snyk/go-application-framework
 
-go 1.26
+go 1.26.2
 
 retract v1.0.0 // Accidental release: GAF intentionally stays on major version 0
 
@@ -15,7 +15,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/snyk/code-client-go v1.24.5
+	github.com/snyk/code-client-go v1.31.1
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -27,7 +27,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.2
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/gofrs/flock v0.12.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-isatty v0.0.20
