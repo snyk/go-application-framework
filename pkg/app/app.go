@@ -299,6 +299,30 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 	return callback
 }
 
+// defaultNetworkRequestRetryAllowedPaths normalizes a raw env-var CSV string into a
+// []string before GetStringSlice's type switch ever sees it, since GetStringSlice
+// otherwise wraps the whole string as a single unsplit entry.
+func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if existingValue == nil {
+			return constants.DEFAULT_RETRY_ALLOWED_PATHS, nil
+		}
+
+		if raw, ok := existingValue.(string); ok {
+			paths := []string{}
+			for _, part := range strings.Split(raw, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					paths = append(paths, trimmed)
+				}
+			}
+			return paths, nil
+		}
+
+		return existingValue, nil
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -379,7 +403,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
-	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, configuration.StandardDefaultValueFunction(constants.DEFAULT_RETRY_ALLOWED_PATHS))
+	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
