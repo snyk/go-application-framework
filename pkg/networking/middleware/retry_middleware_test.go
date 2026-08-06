@@ -26,6 +26,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -2202,6 +2203,108 @@ func Test_RetryMiddleware_NonJSONResponse_StreamsUnbuffered(t *testing.T) {
 
 	_, readErr := io.ReadAll(resp.Body)
 	assert.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "non-JSON response body must stream unbuffered")
+}
+
+// Test_RetryMiddleware_OverCapBody_StreamsWithoutBuffering pins the over-cap
+// fallback: a legitimate JSON body larger than the configured buffering cap
+// must still reach the caller intact, without the middleware eagerly reading
+// and closing the whole thing into memory.
+func Test_RetryMiddleware_OverCapBody_StreamsWithoutBuffering(t *testing.T) {
+	logger := zerolog.Nop()
+	fullBody := bytes.Repeat([]byte("a"), 20)
+	attemptCount := 0
+	var bodyClosedDuringRoundTrip bool
+	trackingBody := &trackingReadCloser{
+		ReadCloser: io.NopCloser(bytes.NewReader(fullBody)),
+		onClose: func() {
+			bodyClosedDuringRoundTrip = true
+		},
+	}
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: trackingBody, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 5)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, 1, attemptCount, "an over-cap but otherwise valid body must not trigger a spurious retry")
+	assert.False(t, bodyClosedDuringRoundTrip, "over-cap body must not be closed by RoundTrip; it becomes the tail of the returned stream")
+
+	gotBody, readErr := io.ReadAll(resp.Body)
+	require.NoError(t, readErr)
+	assert.Equal(t, fullBody, gotBody, "caller must still receive the complete body when it exceeds the cap")
+
+	_ = resp.Body.Close()
+	assert.True(t, bodyClosedDuringRoundTrip, "closing the returned stream must close the underlying original body")
+}
+
+// Test_RetryMiddleware_ExactCapBody_StillBuffered proves the cap comparison
+// reads cap+1 bytes rather than cap: a body of exactly the cap size is not
+// over the limit and must still take the normal buffered path.
+func Test_RetryMiddleware_ExactCapBody_StillBuffered(t *testing.T) {
+	logger := zerolog.Nop()
+	fullBody := bytes.Repeat([]byte("a"), 5)
+	var bodyClosedDuringRoundTrip bool
+	trackingBody := &trackingReadCloser{
+		ReadCloser: io.NopCloser(bytes.NewReader(fullBody)),
+		onClose: func() {
+			bodyClosedDuringRoundTrip = true
+		},
+	}
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: trackingBody, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, len(fullBody))
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, bodyClosedDuringRoundTrip, "a body exactly at the cap must take the buffered path, not the over-cap streaming path")
+
+	gotBody, readErr := io.ReadAll(resp.Body)
+	require.NoError(t, readErr)
+	assert.Equal(t, fullBody, gotBody)
+}
+
+func Test_responseBufferCapBytes(t *testing.T) {
+	t.Run("uses configured value when set", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 42)
+		assert.Equal(t, 42, responseBufferCapBytes(config))
+	})
+
+	t.Run("falls back to the default when unset", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
+	})
+
+	t.Run("falls back to the default when non-positive", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
+	})
 }
 
 func Test_isJSONResponse(t *testing.T) {

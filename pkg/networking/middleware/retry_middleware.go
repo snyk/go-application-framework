@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
@@ -90,6 +91,18 @@ func (b *noCloseSeekBody) RealClose() error {
 	return nil
 }
 
+// multiReadCloser reconstructs a full response body stream from bytes already
+// consumed (e.g. while probing an over-cap body) plus the remainder still
+// unread on the original body, closing the original on Close.
+type multiReadCloser struct {
+	io.Reader
+	closer io.Closer
+}
+
+func (m *multiReadCloser) Close() error {
+	return m.closer.Close()
+}
+
 // drainAndClose fully reads any remaining bytes from the body and then closes
 // it, enabling the underlying TCP connection to be reused by the transport.
 func drainAndClose(body io.ReadCloser) {
@@ -110,6 +123,16 @@ func isJSONResponse(response *http.Response) bool {
 // isSuccessResponse reports whether the status code is 2xx.
 func isSuccessResponse(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
+}
+
+// responseBufferCapBytes returns the maximum number of bytes the truncated-body
+// recovery buffering is allowed to read into memory, falling back to
+// constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB when unset or non-positive.
+func responseBufferCapBytes(config configuration.Configuration) int {
+	if cap := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); cap > 0 {
+		return cap
+	}
+	return constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB
 }
 
 type RetryMiddlewareOption func(*RetryMiddleware)
@@ -241,7 +264,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		if transportRetryEnabled && isSuccessResponse(response.StatusCode) && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
-			bodyBytes, readErr := io.ReadAll(response.Body)
+			bufferCap := responseBufferCapBytes(rm.config)
+			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, int64(bufferCap)+1))
 			if readErr != nil {
 				// unlike getErrorList, this read error must surface so a truncated
 				// body becomes a real retry/failure instead of a silent empty result
@@ -257,8 +281,14 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				}
 				return response, retryErr
 			}
-			_ = response.Body.Close()
-			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			if len(bodyBytes) > bufferCap {
+				// over the cap: keep streaming rather than lose truncation-recovery
+				// coverage for this one response by erroring or dropping bytes
+				response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
+			} else {
+				_ = response.Body.Close()
+				response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
 		}
 
 		return response, nil
