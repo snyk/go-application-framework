@@ -1967,6 +1967,42 @@ func Test_RetryMiddleware_TruncatedJSONBody_RetriedToSuccess(t *testing.T) {
 	assert.Equal(t, 2, attemptCount)
 }
 
+// Test_RetryMiddleware_TruncatedJSONBody_PreviewFeaturesOnlyActivatesRetry mirrors
+// Test_RetryMiddleware_TruncatedJSONBody_RetriedToSuccess but activates the retry
+// via PREVIEW_FEATURES_ENABLED alone, proving the truncated-body recovery path
+// (not just the transport-error path) responds to that flag too.
+func Test_RetryMiddleware_TruncatedJSONBody_PreviewFeaturesOnlyActivatesRetry(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+	successBody := []byte(`{"ok":true}`)
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		if attemptCount == 1 {
+			return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: &readErrCloser{err: io.ErrUnexpectedEOF}, Request: req}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: io.NopCloser(bytes.NewReader(successBody)), Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	gotBody, readErr := io.ReadAll(resp.Body)
+	require.NoError(t, readErr)
+	assert.Equal(t, successBody, gotBody)
+	assert.Equal(t, 2, attemptCount)
+}
+
 func Test_RetryMiddleware_TruncatedJSONBody_ExhaustedAttemptsYieldsErrorAndResponse(t *testing.T) {
 	logger := zerolog.Nop()
 	attemptCount := 0
