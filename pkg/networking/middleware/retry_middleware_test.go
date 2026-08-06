@@ -1538,7 +1538,8 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 		path    string
 		retried bool
 	}{
-		{"plain POST retried", http.MethodPost, "/", true},
+		{"plain POST not retried", http.MethodPost, "/", false},
+		{"POST to allow-listed path retried", http.MethodPost, "/v1/test-dep-graph", true},
 		{"monitor path not retried", http.MethodPost, "/v1/monitor/npm", false},
 	}
 
@@ -2019,6 +2020,99 @@ func Test_RetryMiddleware_MonitorPath_StatusCodeRetryDenied(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	assert.Equal(t, 1, attemptCount, "a status-code retry on the monitor path must be denied once opted in")
+}
+
+// Test_RetryMiddleware_TrackSastUsagePath_StatusCodeRetryDenied proves the allow-list
+// protects side-effecting POSTs beyond the old monitor-only deny-list: a usage-tracking
+// counter is not on the allow-list, so a status-code retry on it must be denied once
+// opted in, the same as monitor.
+func Test_RetryMiddleware_TrackSastUsagePath_StatusCodeRetryDenied(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/v1/track-sast-usage/cli", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, 1, attemptCount, "a status-code retry on a non-allow-listed side-effecting POST must be denied once opted in")
+}
+
+// Test_RetryMiddleware_TrackSastUsagePath_JSONBodyNeverBufferedOrRetried covers the
+// truncated-body trigger for the same non-allow-listed path.
+func Test_RetryMiddleware_TrackSastUsagePath_JSONBodyNeverBufferedOrRetried(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+	body := &readErrCloser{err: io.ErrUnexpectedEOF}
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: body, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/v1/track-sast-usage/cli", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, 1, attemptCount, "a non-allow-listed side-effecting POST must never be retried")
+
+	_, readErr := io.ReadAll(resp.Body)
+	assert.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "a non-allow-listed response body must stream unbuffered, never swapped for a buffer")
+}
+
+// Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers is the
+// customer's case: a query-shaped POST to an allow-listed endpoint that fails once and
+// recovers must be retried transparently once opted in.
+func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t *testing.T) {
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&attempts, 1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", nil)
+	require.NoError(t, err)
+
+	resp, err := sut.RoundTrip(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.EqualValues(t, 2, atomic.LoadInt32(&attempts))
 }
 
 func Test_RetryMiddleware_TruncatedJSONBody_NonSuccessStatusNeverBufferedOrRetried(t *testing.T) {

@@ -82,12 +82,14 @@ func Test_isRetryableRequest(t *testing.T) {
 		want bool
 	}{
 		{"GET retried", newReq(http.MethodGet, "/", nil, false), true},
-		{"POST retried", newReq(http.MethodPost, "/", nil, false), true},
+		{"plain POST not retried", newReq(http.MethodPost, "/", nil, false), false},
+		{"POST to allow-listed path retried", newReq(http.MethodPost, "/v1/test-dep-graph", nil, false), true},
+		{"POST to near-miss path not retried", newReq(http.MethodPost, "/v1/test-dep-graph-something", nil, false), false},
+		{"POST to multi-segment allow-listed path retried", newReq(http.MethodPost, "/verify/token", nil, false), true},
+		{"POST to multi-segment path nested under org retried", newReq(http.MethodPost, "/orgs/123/verify/token", nil, false), true},
 		{"monitor path not retried", newReq(http.MethodPost, "/v1/monitor/npm", nil, false), false},
-		{"monitor path with graph suffix not retried", newReq(http.MethodPost, "/v1/monitor/npm/graph", nil, false), false},
-		{"path merely containing monitor substring retried", newReq(http.MethodPost, "/v1/monitoring/npm", nil, false), true},
-		{"body without GetBody not retried", newReq(http.MethodPost, "/", bytes.NewReader([]byte("x")), false), false},
-		{"body with GetBody retried", newReq(http.MethodPost, "/", bytes.NewReader([]byte("x")), true), true},
+		{"body without GetBody not retried even on allow-listed path", newReq(http.MethodPost, "/v1/test-dep-graph", bytes.NewReader([]byte("x")), false), false},
+		{"body with GetBody retried on allow-listed path", newReq(http.MethodPost, "/v1/test-dep-graph", bytes.NewReader([]byte("x")), true), true},
 		{
 			"GET with http.NoBody",
 			func() *http.Request {
@@ -107,7 +109,7 @@ func Test_isRetryableRequest(t *testing.T) {
 	}
 }
 
-func Test_isRetryableRequest_ConfiguredDenylist(t *testing.T) {
+func Test_isRetryableRequest_ConfiguredAllowlistReplacesDefault(t *testing.T) {
 	newReq := func(method, path string) *http.Request {
 		req, err := http.NewRequest(method, "http://example.com"+path, nil)
 		require.NoError(t, err)
@@ -116,20 +118,23 @@ func Test_isRetryableRequest_ConfiguredDenylist(t *testing.T) {
 	}
 
 	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS, []string{"custom"})
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"custom"})
 
-	assert.False(t, isRetryableRequest(newReq(http.MethodGet, "/v1/custom/npm"), config), "consumer-configured segment must be excluded")
-	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitor/npm"), config), "a consumer-supplied deny-list replaces, not merges with, the default")
-	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/monitoring/npm"), config), "segment-exact matching still applies to a configured deny-list")
+	assert.True(t, isRetryableRequest(newReq(http.MethodPost, "/v1/custom/npm"), config), "consumer-configured segment must be allowed")
+	assert.False(t, isRetryableRequest(newReq(http.MethodPost, "/v1/test-dep-graph"), config), "a consumer-supplied allow-list replaces, not merges with, the default")
 }
 
-func Test_isRetryableRequest_ExplicitEmptyDenylistExcludesNothing(t *testing.T) {
-	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/monitor/npm", nil)
+func Test_isRetryableRequest_ExplicitEmptyAllowlistOnlyAllowsSafeMethods(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/test-dep-graph", nil)
 	require.NoError(t, err)
 	req.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
 
 	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS, []string{})
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{})
 
-	assert.True(t, isRetryableRequest(req, config), "an explicit empty deny-list must exclude nothing, not fall back to the monitor default")
+	assert.False(t, isRetryableRequest(req, config), "an explicit empty allow-list means no unsafe-method path is retryable, the opposite of the old empty-deny-list meaning")
+
+	getReq, err := http.NewRequest(http.MethodGet, "http://example.com/v1/test-dep-graph", nil)
+	require.NoError(t, err)
+	assert.True(t, isRetryableRequest(getReq, config), "safe methods retry regardless of the allow-list")
 }

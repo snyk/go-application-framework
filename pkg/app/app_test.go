@@ -1504,7 +1504,7 @@ func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
-	req, err := http.NewRequest(http.MethodPost, baseURL, bytes.NewReader(expectedBody))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/test-dep-graph", bytes.NewReader(expectedBody))
 	require.NoError(t, err)
 	req.Header.Set("Idempotency-Key", "test-key")
 
@@ -1530,7 +1530,7 @@ func Test_TransportRetry_OptIn_PostRetried(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
-	resp, err := client.Post(baseURL, "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
+	resp, err := client.Post(baseURL+"/v1/test-dep-graph", "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
