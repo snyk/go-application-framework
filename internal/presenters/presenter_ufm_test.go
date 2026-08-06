@@ -1381,3 +1381,82 @@ func Test_UfmPresenter_RegisterMimeType(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+// Test_UfmPresenter_Sarif_SuppressionProperties asserts the suppression property bag
+// directly. Test_UfmPresenter_Sarif cannot cover it: normalizeSuppressions either
+// deletes the "suppressions" key or drops the whole suppressed result, so the block is
+// invisible to that suite.
+func Test_UfmPresenter_Sarif_SuppressionProperties(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+
+	renderProperties := func(t *testing.T, testResultPath string) []map[string]interface{} {
+		t.Helper()
+
+		testResultBytes, err := os.ReadFile(testResultPath)
+		require.NoError(t, err)
+
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		require.NoError(t, err)
+
+		writer := &bytes.Buffer{}
+		presenter := presenters.NewUfmRenderer(testResult, configuration.NewWithOpts(), writer,
+			presenters.UfmWithRuntimeInfo(ri))
+		require.NoError(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+
+		// Guards the hand-chained commas in the suppression properties block: a stray or
+		// missing comma shows up here as invalid JSON rather than as a subtle diff.
+		var sarif map[string]interface{}
+		require.NoError(t, json.Unmarshal(writer.Bytes(), &sarif), "rendered SARIF is not valid JSON:\n%s", writer.String())
+		validateSarifData(t, writer.Bytes())
+
+		properties := []map[string]interface{}{}
+		for _, runAny := range sarif["runs"].([]interface{}) { //nolint:errcheck // test helper over validated SARIF
+			run := runAny.(map[string]interface{})                     //nolint:errcheck // test helper over validated SARIF
+			for _, resultAny := range run["results"].([]interface{}) { //nolint:errcheck // test helper over validated SARIF
+				result := resultAny.(map[string]interface{}) //nolint:errcheck // test helper over validated SARIF
+				suppressions, ok := result["suppressions"].([]interface{})
+				if !ok {
+					continue
+				}
+				for _, suppressionAny := range suppressions {
+					suppression := suppressionAny.(map[string]interface{}) //nolint:errcheck // test helper over validated SARIF
+					if props, ok := suppression["properties"].(map[string]interface{}); ok {
+						properties = append(properties, props)
+					}
+				}
+			}
+		}
+		return properties
+	}
+
+	t.Run("reviewed ignore emits reviewedOn and reviewedBy", func(t *testing.T) {
+		properties := renderProperties(t, "testdata/ufm/secrets.reviewed-ignore.testresult.json")
+		require.Len(t, properties, 1, "expected exactly one suppression carrying a property bag")
+		props := properties[0]
+
+		assert.Equal(t, "wont-fix", props["category"])
+		assert.Equal(t, "2026-02-05T15:38:05Z", props["ignoredOn"])
+		assert.Equal(t, "2027-09-09T00:00:00Z", props["expiration"])
+		assert.Equal(t, map[string]interface{}{
+			"name":  "Someone",
+			"email": "someone@snyk.io",
+		}, props["ignoredBy"])
+
+		assert.Equal(t, "2026-02-06T09:14:22Z", props["reviewedOn"])
+		assert.Equal(t, map[string]interface{}{
+			"name":  "Jane Reviewer",
+			"email": "jane.reviewer@snyk.io",
+		}, props["reviewedBy"])
+	})
+
+	// An unreviewed ignore must not gain empty reviewer keys.
+	t.Run("unreviewed ignore omits both reviewer properties", func(t *testing.T) {
+		properties := renderProperties(t, "testdata/ufm/secrets.testresult.json")
+		require.Len(t, properties, 1)
+		props := properties[0]
+
+		assert.Contains(t, props, "ignoredBy")
+		assert.NotContains(t, props, "reviewedOn")
+		assert.NotContains(t, props, "reviewedBy")
+	})
+}
