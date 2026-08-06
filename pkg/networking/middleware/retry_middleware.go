@@ -207,7 +207,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				}
 				return response, rtErr
 			}
-			if response != nil {
+			if response != nil && transportRetryEnabled {
 				drainAndClose(response.Body)
 			}
 			return response, backoff.Permanent(rtErr)

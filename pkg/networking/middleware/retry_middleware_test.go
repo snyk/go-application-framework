@@ -1781,6 +1781,36 @@ func Test_RetryMiddleware_TransportError_TerminalBodyClosed(t *testing.T) {
 	assert.True(t, bodyClosed, "response body returned alongside a terminal transport error must be closed")
 }
 
+// Test_RetryMiddleware_TransportError_TerminalBodyNotClosed_OptInOff pins the
+// flag-off constraint for the terminal transport-error exit: with the opt-in
+// unset, behavior must be byte-identical to before this PR, when no drain
+// happened here at all.
+func Test_RetryMiddleware_TransportError_TerminalBodyNotClosed_OptInOff(t *testing.T) {
+	logger := zerolog.Nop()
+	var bodyClosed bool
+	trackingBody := &trackingReadCloser{
+		ReadCloser: io.NopCloser(bytes.NewReader([]byte("partial"))),
+		onClose: func() {
+			bodyClosed = true
+		},
+	}
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: trackingBody, Request: req}, &net.DNSError{IsNotFound: true}
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.False(t, bodyClosed, "with the opt-in unset, the terminal transport-error body must not be drained/closed")
+}
+
 func Test_RetryMiddleware_TransportError_NilResponseDoesNotPanic(t *testing.T) {
 	logger := zerolog.Nop()
 	attemptCount := 0
