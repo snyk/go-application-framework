@@ -2,7 +2,6 @@ package analytics
 
 import (
 	"bytes"
-
 	"github.com/snyk/go-application-framework/pkg/logging"
 
 	//nolint:gosec // insecure sha1 used for legacy identifier
@@ -22,7 +21,6 @@ import (
 	"github.com/hashicorp/go-uuid"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/metrics"
 	utils2 "github.com/snyk/go-application-framework/internal/utils"
 )
 
@@ -34,6 +32,7 @@ type Analytics interface {
 	SetApiUrl(apiUrl string)
 	SetIntegration(name string, version string)
 	SetCommand(command string)
+	GetCommand() string
 	SetOperatingSystem(os string)
 	AddError(err error)
 	AddHeader(headerFunc func() http.Header)
@@ -46,9 +45,6 @@ type Analytics interface {
 	AddExtensionStringValue(key string, value string)
 	AddExtensionBoolValue(key string, value bool)
 }
-
-// Compile-time check that Analytics satisfies metrics.Recorder.
-var _ metrics.Recorder = (Analytics)(nil)
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
 type AnalyticsImpl struct {
@@ -155,6 +151,10 @@ func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 
 func (a *AnalyticsImpl) SetCommand(command string) {
 	a.command = command
+}
+
+func (a *AnalyticsImpl) GetCommand() string {
+	return a.command
 }
 
 func (a *AnalyticsImpl) SetOperatingSystem(os string) {

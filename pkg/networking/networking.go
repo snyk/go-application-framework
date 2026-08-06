@@ -70,6 +70,15 @@ type networkImpl struct {
 	errorHandler   networktypes.ErrorHandlerFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
+	activeCommand  func() string
+}
+
+// SetActiveCommandResolver wires the in-flight CLI command lookup used by contributor
+// capture middleware for lazy session open gating.
+func SetActiveCommandResolver(access NetworkAccess, fn func() string) {
+	if n, ok := access.(*networkImpl); ok {
+		n.activeCommand = fn
+	}
 }
 
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -199,6 +208,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
 		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
 	}
+	crt = middleware.NewContributorCaptureMiddleware(crt, n.config, n.logger, n.activeCommand)
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
 		encapsulatedRoundTripper: crt,
@@ -279,6 +289,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
+		activeCommand:  n.activeCommand,
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {

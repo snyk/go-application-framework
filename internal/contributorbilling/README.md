@@ -9,9 +9,8 @@ After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code
 callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
 billing events.
 
-This package lives under `internal/contributorbilling/` (not public GAF API). Capture middleware and
-command lifecycle are IANDT-238 / IANDT-240; cliv2 uses a temporary thin facade until Peter's
-end-of-invocation hook lands.
+This package lives under `internal/contributorbilling/` (not public GAF API). Capture middleware
+writes to an internal command-scoped session (IANDT-238); lifecycle and emit wiring are IANDT-240.
 
 ## Entry point
 
