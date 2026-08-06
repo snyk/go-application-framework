@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -23,6 +26,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -1420,4 +1424,786 @@ func setupRetryMiddleware(
 	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
 	config.Set(configurationKeyRetryAfter, 1)
 	return NewRetryMiddleware(config, logger, rt, WithErrorHandler(errorHandler)), &attemptCount
+}
+
+func connResetErr() error {
+	return &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
+}
+
+func Test_RetryMiddleware_TransportError_RetriedWhenOptedIn(t *testing.T) {
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger := zerolog.New(&buf).Level(zerolog.TraceLevel)
+			attemptCount := 0
+
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if attemptCount <= 2 {
+					return nil, connResetErr()
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, 3, attemptCount)
+			assert.Contains(t, buf.String(), `"level":"warn"`, "transport-error retry must be logged at warn level")
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_NotRetriedWhenOptInAbsent(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attemptCount)
+	assert.ErrorIs(t, err, syscall.ECONNRESET)
+}
+
+type fakeTimeoutError struct{}
+
+func (fakeTimeoutError) Error() string   { return "fake timeout" }
+func (fakeTimeoutError) Timeout() bool   { return true }
+func (fakeTimeoutError) Temporary() bool { return true }
+
+func Test_RetryMiddleware_TransportError_ErrorAxis(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		retried bool
+	}{
+		{"net timeout retried", fakeTimeoutError{}, true},
+		{"dns not found not retried", &net.DNSError{IsNotFound: true}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			attemptCount := 0
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if attemptCount == 1 {
+					return nil, tt.err
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			if tt.retried {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				assert.Equal(t, 2, attemptCount)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, 1, attemptCount)
+			}
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		retried bool
+	}{
+		{"plain POST not retried", http.MethodPost, "/", false},
+		{"POST to allow-listed path retried", http.MethodPost, "/v1/test-dep-graph", true},
+		{"monitor path not retried", http.MethodPost, "/v1/monitor/npm", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attemptCount := 0
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if attemptCount == 1 {
+					return nil, connResetErr()
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			logger := zerolog.Nop()
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+
+			resp, err := sut.RoundTrip(req)
+
+			if tt.retried {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				assert.Equal(t, 2, attemptCount)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, 1, attemptCount)
+			}
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_ExhaustsAtMaxAttempts(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, 3, attemptCount)
+	assert.ErrorIs(t, err, syscall.ECONNRESET)
+}
+
+func Test_RetryMiddleware_TransportError_RetryCountHeaderSetOnRecovery(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "2", resp.Header.Get(retryCountHeaderKey))
+}
+
+func Test_RetryMiddleware_TransportError_SharesBudgetWith429Override(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return &http.Response{StatusCode: http.StatusTooManyRequests, Header: http.Header{}, Request: req}, nil
+		}
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 1) // 429 override bumps this to 3
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.Equal(t, 3, attemptCount)
+}
+
+func Test_RetryMiddleware_TransportError_ContextCancelledMidFlightStopsImmediately(t *testing.T) {
+	logger := zerolog.Nop()
+	ctx, cancel := context.WithCancel(context.Background())
+	attemptCount := 0
+
+	//nolint:unparam // response is always nil: this fixture only simulates a transport-level failure
+	customRTFn := func(_ *http.Request) (*http.Response, error) {
+		attemptCount++
+		cancel() // simulate cancellation racing with the transport failure
+		return nil, connResetErr()
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 5)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
+	require.NoError(t, reqErr)
+
+	_, err := sut.RoundTrip(req)
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attemptCount)
+}
+
+func Test_RetryMiddleware_TransportError_ResponseBodyClosed(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"retryable error: body closed before retry", connResetErr()},
+		{"terminal error: body closed on exit", &net.DNSError{IsNotFound: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			retryable := isRetryableTransportError(tt.err)
+			attemptCount := 0
+			var bodyClosed bool
+			var mu sync.Mutex
+
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				if !retryable || attemptCount == 1 {
+					trackingBody := &trackingReadCloser{
+						ReadCloser: io.NopCloser(bytes.NewReader([]byte("partial"))),
+						onClose: func() {
+							mu.Lock()
+							bodyClosed = true
+							mu.Unlock()
+						},
+					}
+					return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: trackingBody, Request: req}, tt.err
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			if retryable {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, 2, attemptCount)
+			} else {
+				require.Error(t, err)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			assert.True(t, bodyClosed, "a response body returned alongside a transport error must be closed, whether the error is retried or terminal")
+		})
+	}
+}
+
+func Test_RetryMiddleware_TransportError_TerminalBodyNotClosed_OptInOff(t *testing.T) {
+	logger := zerolog.Nop()
+	var bodyClosed bool
+	trackingBody := &trackingReadCloser{
+		ReadCloser: io.NopCloser(bytes.NewReader([]byte("partial"))),
+		onClose: func() {
+			bodyClosed = true
+		},
+	}
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: trackingBody, Request: req}, &net.DNSError{IsNotFound: true}
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	assert.False(t, bodyClosed, "with the opt-in unset, the terminal transport-error body must not be drained/closed")
+}
+
+func Test_RetryMiddleware_TransportError_NilResponseDoesNotPanic(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount == 1 {
+			return nil, connResetErr()
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	require.NotPanics(t, func() {
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	assert.Equal(t, 2, attemptCount)
+}
+
+type readErrCloser struct {
+	err    error
+	closed bool
+}
+
+func (r *readErrCloser) Read(_ []byte) (int, error) { return 0, r.err }
+func (r *readErrCloser) Close() error {
+	r.closed = true
+	return nil
+}
+
+// Reproduces an SSL-inspecting proxy resetting the upstream HTTP/2 stream mid-body.
+func truncatingJSONServer(t *testing.T, fullBody []byte, truncateAt int) (*httptest.Server, *int32) {
+	t.Helper()
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&attempts, 1) == 1 {
+			hj, ok := w.(http.Hijacker)
+			require.True(t, ok)
+			conn, bufrw, err := hj.Hijack()
+			require.NoError(t, err)
+			defer conn.Close()
+			_, _ = fmt.Fprintf(bufrw, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n", len(fullBody))
+			_, _ = bufrw.Write(fullBody[:truncateAt]) //nolint:errcheck // test fixture, best-effort write to a hijacked connection
+			_ = bufrw.Flush()
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fullBody) //nolint:errcheck // test fixture, best-effort write to httptest response
+	}))
+	return server, &attempts
+}
+
+func Test_RetryMiddleware_Acceptance_TruncatedBodyRetriedToSuccess(t *testing.T) {
+	fullBody := []byte(`{"vulnerabilities":["CVE-1","CVE-2","CVE-3"]}`)
+	server, attempts := truncatingJSONServer(t, fullBody, 10)
+	defer server.Close()
+
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+
+	resp, err := sut.RoundTrip(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	gotBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, fullBody, gotBody, "caller must receive the complete body after the transparent retry")
+	assert.EqualValues(t, 2, atomic.LoadInt32(attempts))
+}
+
+// With the opt-in unset, RoundTrip returns a nil error despite the truncation.
+func Test_RetryMiddleware_Acceptance_TruncatedBody_OptInOff_MatchesTodayBehavior(t *testing.T) {
+	fullBody := []byte(`{"vulnerabilities":["CVE-1","CVE-2","CVE-3"]}`)
+	server, attempts := truncatingJSONServer(t, fullBody, 10)
+	defer server.Close()
+
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+
+	resp, err := sut.RoundTrip(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	gotBody, readErr := io.ReadAll(resp.Body)
+	require.Error(t, readErr)
+	assert.NotEqual(t, fullBody, gotBody)
+	assert.EqualValues(t, 1, atomic.LoadInt32(attempts), "opt-in off must never retry")
+}
+
+func Test_RetryMiddleware_TruncatedJSONBody_RetriedWhenOptedIn(t *testing.T) {
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			attemptCount := 0
+			successBody := []byte(`{"ok":true}`)
+
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				headers := http.Header{"Content-Type": []string{"application/json"}}
+				if attemptCount == 1 {
+					return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: &readErrCloser{err: io.ErrUnexpectedEOF}, Request: req}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: io.NopCloser(bytes.NewReader(successBody)), Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			gotBody, readErr := io.ReadAll(resp.Body)
+			require.NoError(t, readErr)
+			assert.Equal(t, successBody, gotBody)
+			assert.Equal(t, 2, attemptCount)
+		})
+	}
+}
+
+func Test_RetryMiddleware_TruncatedJSONBody_ExhaustedAttemptsYieldsErrorAndResponse(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{"Content-Type": []string{"application/json"}}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: &readErrCloser{err: io.ErrUnexpectedEOF}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Error(t, err)
+	require.NotNil(t, resp, "CLI's handleResponse dereferences resp.Header even on the terminal failure")
+	assert.Equal(t, 3, attemptCount)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	var retryErr *RetryAttemptError
+	assert.ErrorAs(t, err, &retryErr)
+}
+
+func Test_RetryMiddleware_StatusCodeRetryDenied(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"monitor path", "/v1/monitor/npm"},
+		{"track-sast-usage path", "/v1/track-sast-usage/cli"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			attemptCount := 0
+
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, tt.path, nil))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+			assert.Equal(t, 1, attemptCount, "a status-code retry on a non-allow-listed path must be denied once opted in")
+		})
+	}
+}
+
+func Test_RetryMiddleware_StatusCodeRetryDenied_OptInOff(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}, Request: req}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/v1/monitor/npm", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, 3, attemptCount, "with the opt-in unset, the allow-list has no effect and the status-code retry runs as it does today")
+}
+
+func Test_RetryMiddleware_TruncatedJSONBody_NeverBufferedOrRetried(t *testing.T) {
+	tests := []struct {
+		name        string
+		method      string
+		path        string
+		statusCode  int
+		contentType string
+	}{
+		{"monitor path not allow-listed", http.MethodPost, "/v1/monitor/npm", http.StatusOK, "application/json"},
+		{"track-sast-usage path not allow-listed", http.MethodPost, "/v1/track-sast-usage/cli", http.StatusOK, "application/json"},
+		{"non-2xx status", http.MethodGet, "/", http.StatusNotFound, "application/json"},
+		{"non-JSON content type", http.MethodGet, "/", http.StatusOK, "application/octet-stream"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			attemptCount := 0
+			body := &readErrCloser{err: io.ErrUnexpectedEOF}
+
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				headers := http.Header{"Content-Type": []string{tt.contentType}}
+				return &http.Response{StatusCode: tt.statusCode, Header: headers, Body: body, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(tt.method, tt.path, nil))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, tt.statusCode, resp.StatusCode)
+			assert.Equal(t, 1, attemptCount, "must never be retried")
+
+			_, readErr := io.ReadAll(resp.Body)
+			assert.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "response body must stream unbuffered, never swapped for a buffer")
+		})
+	}
+}
+
+func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t *testing.T) {
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&attempts, 1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", nil)
+	require.NoError(t, err)
+
+	resp, err := sut.RoundTrip(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.EqualValues(t, 2, atomic.LoadInt32(&attempts))
+}
+
+// The cap comparison reads cap+1 bytes rather than cap, so a body of exactly the cap size still takes the buffered path.
+func Test_RetryMiddleware_BodyCapBoundary(t *testing.T) {
+	tests := []struct {
+		name         string
+		bodySize     int
+		cap          int
+		wantBuffered bool
+	}{
+		{"over cap: streams without buffering", 20, 5, false},
+		{"exact cap: still buffered", 5, 5, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			fullBody := bytes.Repeat([]byte("a"), tt.bodySize)
+			attemptCount := 0
+			var bodyClosedDuringRoundTrip bool
+			trackingBody := &trackingReadCloser{
+				ReadCloser: io.NopCloser(bytes.NewReader(fullBody)),
+				onClose: func() {
+					bodyClosedDuringRoundTrip = true
+				},
+			}
+
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				headers := http.Header{"Content-Type": []string{"application/json"}}
+				return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: trackingBody, Request: req}, nil
+			}
+
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, tt.cap)
+
+			sut := NewRetryMiddleware(config, &logger, rt)
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, 1, attemptCount, "a body within or over the cap must not trigger a spurious retry")
+			assert.Equal(t, tt.wantBuffered, bodyClosedDuringRoundTrip, "buffered path closes the original body inline; over-cap keeps it open for streaming")
+
+			gotBody, readErr := io.ReadAll(resp.Body)
+			require.NoError(t, readErr)
+			assert.Equal(t, fullBody, gotBody, "caller must receive the complete body either way")
+
+			if !tt.wantBuffered {
+				_ = resp.Body.Close()
+				assert.True(t, bodyClosedDuringRoundTrip, "closing the returned stream must close the underlying original body")
+			}
+		})
+	}
+}
+
+func Test_responseBufferCapBytes(t *testing.T) {
+	t.Run("uses configured value when set", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 42)
+		assert.Equal(t, 42, responseBufferCapBytes(config))
+	})
+
+	t.Run("falls back to the default when unset", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
+	})
+
+	t.Run("falls back to the default when non-positive", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
+	})
+}
+
+func Test_isJSONResponse(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		want        bool
+	}{
+		{"application/json", "application/json", true},
+		{"application/json with charset", "application/json; charset=utf-8", true},
+		{"json api media type", "application/vnd.api+json", true},
+		{"text/plain", "text/plain", false},
+		{"octet-stream", "application/octet-stream", false},
+		{"missing header", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := http.Header{}
+			if tt.contentType != "" {
+				headers.Set("Content-Type", tt.contentType)
+			}
+			resp := &http.Response{Header: headers}
+			assert.Equal(t, tt.want, isJSONResponse(resp))
+		})
+	}
 }

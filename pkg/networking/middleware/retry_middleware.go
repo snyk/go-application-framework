@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -17,6 +18,8 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -88,6 +91,15 @@ func (b *noCloseSeekBody) RealClose() error {
 	return nil
 }
 
+type multiReadCloser struct {
+	io.Reader
+	closer io.Closer
+}
+
+func (m *multiReadCloser) Close() error {
+	return m.closer.Close()
+}
+
 // drainAndClose fully reads any remaining bytes from the body and then closes
 // it, enabling the underlying TCP connection to be reused by the transport.
 func drainAndClose(body io.ReadCloser) {
@@ -96,6 +108,22 @@ func drainAndClose(body io.ReadCloser) {
 	}
 	_, _ = io.Copy(io.Discard, body) //nolint:errcheck // best-effort drain for connection reuse
 	_ = body.Close()
+}
+
+func isJSONResponse(response *http.Response) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	return mimeType == "application/json" || strings.HasSuffix(mimeType, "+json")
+}
+
+func isSuccessResponse(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
+}
+
+func responseBufferCapBytes(config configuration.Configuration) int {
+	if capBytes := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); capBytes > 0 {
+		return capBytes
+	}
+	return constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB
 }
 
 type RetryMiddlewareOption func(*RetryMiddleware)
@@ -133,6 +161,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	if tmp := rm.config.GetInt(configurationKeyRetryAfter); tmp > 0 {
 		retryAfterSeconds = tmp
 	}
+
+	transportRetryEnabled := utils.NetworkRetriesEnabled(rm.config)
 
 	body, getBody, cleanup, err := ensureGetBodyExists(req)
 	if err != nil {
@@ -177,6 +207,23 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// errors from the next round tripper cannot be retried
 		if rtErr != nil {
+			attemptLimit := maxAttempts
+			if cachedMaxRetries != nil {
+				attemptLimit = *cachedMaxRetries
+			}
+			if transportRetryEnabled &&
+				actualAttempts < attemptLimit &&
+				isRetryableTransportError(rtErr) &&
+				isRetryableRequest(&localRequest, rm.config) {
+				rm.logger.Warn().Err(rtErr).Msgf("Retrying request after transient transport error (attempt %d/%d)", actualAttempts, attemptLimit)
+				if response != nil {
+					drainAndClose(response.Body)
+				}
+				return response, rtErr
+			}
+			if response != nil && transportRetryEnabled {
+				drainAndClose(response.Body)
+			}
 			return response, backoff.Permanent(rtErr)
 		}
 
@@ -186,8 +233,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			cachedMaxRetries = &calculated
 		}
 
-		// depending on the response determine if we should retry
-		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
+		// gated on the opt-in so flag-off behavior stays byte-identical to today
+		statusCodeRetryDenied := transportRetryEnabled && !isRetryableRequest(&localRequest, rm.config)
+		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); !statusCodeRetryDenied && retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 
 			// When doing a retry, we need to drain and close the RESPONSE body, to ensure that the resources are freed
@@ -201,6 +249,32 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				Attempt:     actualAttempts,
 				MaxAttempts: *cachedMaxRetries,
 				Err:         retryError,
+			}
+		}
+
+		if transportRetryEnabled && isSuccessResponse(response.StatusCode) && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
+			bufferCap := responseBufferCapBytes(rm.config)
+			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, int64(bufferCap)+1))
+			if readErr != nil {
+				// unlike getErrorList, this read error must surface as a retry/failure
+				drainAndClose(response.Body)
+				retryErr := &RetryAttemptError{
+					StatusCode:  response.StatusCode,
+					Attempt:     actualAttempts,
+					MaxAttempts: *cachedMaxRetries,
+					Err:         readErr,
+				}
+				if actualAttempts >= *cachedMaxRetries {
+					return response, backoff.Permanent(retryErr)
+				}
+				return response, retryErr
+			}
+			if len(bodyBytes) > bufferCap {
+				// over the cap: keep streaming rather than error or drop bytes
+				response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
+			} else {
+				_ = response.Body.Close()
+				response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 

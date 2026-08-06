@@ -291,10 +291,33 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 			return value, nil
 		}
 
-		if conf.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+		if utils.NetworkRetriesEnabled(conf) {
 			return multipleAttempts, nil
 		}
 		return singleAttempt, nil
+	}
+	return callback
+}
+
+// GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
+// single unsplit entry, so it must be normalized into a []string first.
+func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if existingValue == nil {
+			return constants.DEFAULT_RETRY_ALLOWED_PATHS, nil
+		}
+
+		if raw, ok := existingValue.(string); ok {
+			paths := []string{}
+			for _, part := range strings.Split(raw, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					paths = append(paths, trimmed)
+				}
+			}
+			return paths, nil
+		}
+
+		return existingValue, nil
 	}
 	return callback
 }
@@ -379,6 +402,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
+	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
