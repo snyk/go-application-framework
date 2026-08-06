@@ -690,7 +690,7 @@ func Test_PostInvokeHook_SkippedForNestedInvocations(t *testing.T) {
 	assert.Equal(t, outerWfId.String(), hookedWorkflowIDs[0])
 }
 
-func Test_PostInvokeHook_MultipleHooksFireInOrder(t *testing.T) {
+func Test_PostInvokeHook_MultipleHooksAllFire(t *testing.T) {
 	engine := NewWorkFlowEngine(configuration.NewInMemory())
 	wfId := NewWorkflowIdentifier("multi-hook")
 	flagset := pflag.NewFlagSet("mh", pflag.ContinueOnError)
@@ -700,15 +700,22 @@ func Test_PostInvokeHook_MultipleHooksFireInOrder(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	var order []int
+	var mu sync.Mutex
+	var fired []int
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		order = append(order, 1)
+		mu.Lock()
+		fired = append(fired, 1)
+		mu.Unlock()
 	})
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		order = append(order, 2)
+		mu.Lock()
+		fired = append(fired, 2)
+		mu.Unlock()
 	})
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		order = append(order, 3)
+		mu.Lock()
+		fired = append(fired, 3)
+		mu.Unlock()
 	})
 
 	err = engine.Init()
@@ -717,7 +724,7 @@ func Test_PostInvokeHook_MultipleHooksFireInOrder(t *testing.T) {
 	_, err = engine.Invoke(wfId)
 	assert.NoError(t, err)
 
-	assert.Equal(t, []int{1, 2, 3}, order)
+	assert.ElementsMatch(t, []int{1, 2, 3}, fired)
 }
 
 func Test_PostInvokeHook_ConcurrentTopLevelInvocations(t *testing.T) {
@@ -840,15 +847,20 @@ func Test_PostInvokeHook_PanicRecovery(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	var order []int
+	var mu sync.Mutex
+	var fired []int
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		order = append(order, 1)
+		mu.Lock()
+		fired = append(fired, 1)
+		mu.Unlock()
 	})
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
 		panic("hook blew up")
 	})
 	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		order = append(order, 3)
+		mu.Lock()
+		fired = append(fired, 3)
+		mu.Unlock()
 	})
 
 	err = engine.Init()
@@ -858,7 +870,7 @@ func Test_PostInvokeHook_PanicRecovery(t *testing.T) {
 		_, invokeErr := engine.Invoke(wfId)
 		assert.NoError(t, invokeErr)
 	})
-	assert.Equal(t, []int{1, 3}, order, "hooks before and after the panicking hook should still fire")
+	assert.ElementsMatch(t, []int{1, 3}, fired, "hooks before and after the panicking hook should still fire")
 }
 
 func Test_PostInvokeHook_FiresPerInvocation(t *testing.T) {
@@ -978,4 +990,68 @@ func Test_PostInvokeHook_FiresOnCallbackPanic(t *testing.T) {
 	}, "original panic must re-propagate after hooks fire")
 	assert.True(t, hookCalled, "hook must fire even when the callback panics")
 	assert.ErrorContains(t, hookErr, "callback blew up")
+}
+
+func Test_PostInvokeHook_PanicNilObserved(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	wfId := NewWorkflowIdentifier("panic-nil")
+	flagset := pflag.NewFlagSet("pn", pflag.ContinueOnError)
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		panic(any(nil)) //nolint:govet // intentional: verifying Go 1.21+ PanicNilError is observed by hooks
+	})
+	assert.NoError(t, err)
+
+	var hookErr error
+	hookCalled := false
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		hookCalled = true
+		hookErr = hctx.GetError()
+	})
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	assert.Panics(t, func() {
+		//nolint:errcheck // panic prevents return
+		engine.Invoke(wfId)
+	}, "panic(nil) must still propagate on Go 1.21+")
+	assert.True(t, hookCalled, "hook must fire for panic(nil)")
+	assert.NotNil(t, hookErr, "hook should observe error from panic(nil) via Go 1.21+ PanicNilError")
+}
+
+func Test_PostInvokeHook_Timeout(t *testing.T) {
+	original := postInvokeHookTimeout
+	postInvokeHookTimeout = 50 * time.Millisecond
+	defer func() { postInvokeHookTimeout = original }()
+
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	wfId := NewWorkflowIdentifier("timeout-test")
+	flagset := pflag.NewFlagSet("to", pflag.ContinueOnError)
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	var secondHookDone sync.WaitGroup
+	secondHookDone.Add(1)
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		<-ctx.Done()
+		time.Sleep(time.Second)
+	})
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		secondHookDone.Done()
+	})
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	start := time.Now()
+	_, err = engine.Invoke(wfId)
+	elapsed := time.Since(start)
+
+	secondHookDone.Wait()
+	assert.NoError(t, err)
+	assert.Less(t, elapsed, 2*time.Second, "invoke should not block on the hanging hook")
 }

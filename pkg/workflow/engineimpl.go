@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -308,6 +309,7 @@ func (e *EngineImpl) Invoke(
 	var output []Data
 	var err error
 	var callbackPanic any
+	var callbackPanicStack []byte
 
 	e.mu.RLock()
 	initialized := e.initialized
@@ -372,14 +374,22 @@ func (e *EngineImpl) Invoke(
 			localLogger.Printf("Workflow Start")
 			func() {
 				defer func() {
-					callbackPanic = recover()
+					if r := recover(); r != nil {
+						callbackPanic = r
+						callbackPanicStack = debug.Stack()
+					}
 				}()
 				output, err = callback(invocationCtx, options.input)
 			}()
 			localLogger.Printf("Workflow End")
 
 			if callbackPanic != nil {
-				err = fmt.Errorf("workflow callback panicked: %v", callbackPanic)
+				localLogger.Printf("Workflow callback panicked: %v\n%s", callbackPanic, callbackPanicStack)
+				if panicErr, ok := callbackPanic.(error); ok {
+					err = fmt.Errorf("workflow callback panicked: %w", panicErr)
+				} else {
+					err = fmt.Errorf("workflow callback panicked: %v", callbackPanic)
+				}
 			}
 		}
 	} else {
@@ -387,7 +397,7 @@ func (e *EngineImpl) Invoke(
 	}
 
 	if !options.nested {
-		e.firePostInvokeHooks(hookCtx, id, err)
+		e.firePostInvokeHooks(hookCtx, id, err, options.ic)
 	}
 
 	if callbackPanic != nil {
@@ -397,7 +407,9 @@ func (e *EngineImpl) Invoke(
 	return output, err
 }
 
-func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeErr error) {
+var postInvokeHookTimeout = 5 * time.Second
+
+func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeErr error, ic analytics.InstrumentationCollector) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
 		e.mu.RUnlock()
@@ -411,16 +423,35 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 		workflowID: id,
 		err:        invokeErr,
 	}
-	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }}
+	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
+
+	hookCtx, cancel := context.WithTimeout(ctx, postInvokeHookTimeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
 	for _, hook := range hooks {
-		func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					e.GetLogger().Error().Msgf("post-invoke hook panicked: %v\n%s", r, debug.Stack())
 				}
 			}()
-			hook(ctx, hookEngine, hctx)
+			hook(hookCtx, hookEngine, hctx)
 		}()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-hookCtx.Done():
+		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s", postInvokeHookTimeout)
 	}
 }
 
