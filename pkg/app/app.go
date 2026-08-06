@@ -436,10 +436,16 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
+
+	engine.AddPostInvokeHook(internalPostInvokeHook)
 	return engine
 }
 
 // Deprecated: Use CreateAppEngineWithOptions instead.
 func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	return CreateAppEngineWithOptions(WithLogger(logger))
+}
+
+func internalPostInvokeHook(_ context.Context, engine workflow.Engine, _ workflow.PostInvokeContext) {
+	engine.GetLogger().Print("PostInvokeHook")
 }
