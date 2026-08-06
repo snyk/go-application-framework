@@ -1326,6 +1326,33 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 	}
 }
 
+func Test_defaultNetworkRequestRetryAllowedPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		existingValue interface{}
+		expected      []string
+	}{
+		{"nil returns default", nil, constants.DEFAULT_RETRY_ALLOWED_PATHS},
+		{"csv string splits", "a,b", []string{"a", "b"}},
+		{"csv string trims whitespace", "a, b", []string{"a", "b"}},
+		{"empty string yields empty slice", "", []string{}},
+		{"non-empty slice passes through unchanged", []string{"x"}, []string{"x"}},
+		{"empty slice passes through unchanged", []string{}, []string{}},
+	}
+
+	config := configuration.NewWithOpts()
+	defaultFunction := defaultNetworkRequestRetryAllowedPaths()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := defaultFunction(config, tt.existingValue)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
@@ -1432,6 +1459,138 @@ func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
+}
+
+// newCLIStyleConfig mirrors the option set the real CLI wires up (cliv2/pkg/core/main.go),
+// since bare configuration.NewWithOpts() doesn't enable env var lookups at all.
+func newCLIStyleConfig() configuration.Configuration {
+	return configuration.NewWithOpts(
+		configuration.WithSupportedEnvVars("NODE_EXTRA_CA_CERTS"),
+		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_", "test_"),
+		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
+	)
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_MultiEntryList(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"first entry", "/v1/test-dep-graph"},
+		{"second entry", "/v1/verify/token"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := newCLIStyleConfig()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(networkRequestRetryAfterSecondsKey, 1)
+			t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph,verify/token")
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+tt.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_WhitespaceTrimmed(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := newCLIStyleConfig()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph, verify/token")
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/verify/token", bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_SingleEntry(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := newCLIStyleConfig()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph")
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T) {
+	t.Run("retries default path", func(t *testing.T) {
+		server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+		config := newCLIStyleConfig()
+		config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+		config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", bytes.NewReader([]byte(`{}`)))
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+	})
+
+	t.Run("does not retry arbitrary unsafe path", func(t *testing.T) {
+		server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+		config := newCLIStyleConfig()
+		config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+		config.Set(networkRequestRetryAfterSecondsKey, 1)
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/monitor/npm", bytes.NewReader([]byte(`{}`)))
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+		assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+	})
 }
 
 func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
