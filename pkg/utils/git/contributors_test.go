@@ -1,0 +1,223 @@
+package git
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+type commitSpec struct {
+	email string
+	when  time.Time
+}
+
+func initGitRepo(t *testing.T, commits ...commitSpec) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+
+	filePath := filepath.Join(dir, "README.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("hello"), 0o600))
+
+	for _, commit := range commits {
+		_, err = wt.Add("README.md")
+		require.NoError(t, err)
+
+		_, err = wt.Commit("test commit", &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "Test User",
+				Email: commit.email,
+				When:  commit.when,
+			},
+			AllowEmptyCommits: true,
+		})
+		require.NoError(t, err)
+	}
+
+	return dir
+}
+
+func initEmptyGitRepo(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	_, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+	return dir
+}
+
+func TestListContributors_KeepsMostRecentCommitPerEmail(t *testing.T) {
+	t.Parallel()
+
+	repoPath := initGitRepo(t,
+		commitSpec{email: "alice@example.com", when: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)},
+		commitSpec{email: "alice@example.com", when: time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC)},
+		commitSpec{email: "bob@example.com", when: time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)},
+	)
+
+	since := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+
+	authors, err := ListContributors(repoPath, since, until, 500)
+	require.NoError(t, err)
+	require.Len(t, authors, 2)
+
+	assert.Equal(t, "alice@example.com", authors[0].Email)
+	assert.Equal(t, time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), authors[0].LatestCommitDate.UTC())
+	assert.Equal(t, "bob@example.com", authors[1].Email)
+}
+
+func TestListContributors_NonGitRepoReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	authors, err := ListContributors(dir, time.Now().AddDate(0, 0, -90), time.Now(), 500)
+	require.NoError(t, err)
+	assert.Empty(t, authors)
+}
+
+func TestListContributors_EmptyRepoReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	repoPath := initEmptyGitRepo(t)
+	authors, err := ListContributors(
+		repoPath,
+		time.Now().AddDate(0, 0, -90),
+		time.Now(),
+		500,
+	)
+	require.NoError(t, err)
+	assert.Empty(t, authors)
+}
+
+func TestListContributors_MaxCommitsZeroReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	repoPath := initGitRepo(t,
+		commitSpec{email: "dev@example.com", when: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)},
+	)
+
+	authors, err := ListContributors(
+		repoPath,
+		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		0,
+	)
+	require.NoError(t, err)
+	assert.Empty(t, authors)
+}
+
+func TestListContributors_SortedByEmail(t *testing.T) {
+	t.Parallel()
+
+	repoPath := initGitRepo(t,
+		commitSpec{email: "zed@example.com", when: time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC)},
+		commitSpec{email: "amy@example.com", when: time.Date(2026, 1, 11, 10, 0, 0, 0, time.UTC)},
+	)
+
+	authors, err := ListContributors(
+		repoPath,
+		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		500,
+	)
+	require.NoError(t, err)
+	require.Len(t, authors, 2)
+	assert.Equal(t, "amy@example.com", authors[0].Email)
+	assert.Equal(t, "zed@example.com", authors[1].Email)
+}
+
+func initGitRepoWithAuthorAndCommitter(
+	t *testing.T,
+	authorEmail string,
+	authorWhen time.Time,
+	committerWhen time.Time,
+) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+
+	filePath := filepath.Join(dir, "README.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("hello"), 0o600))
+
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+
+	_, err = wt.Commit("test commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: authorEmail,
+			When:  authorWhen,
+		},
+		Committer: &object.Signature{
+			Name:  "Test User",
+			Email: authorEmail,
+			When:  committerWhen,
+		},
+		AllowEmptyCommits: true,
+	})
+	require.NoError(t, err)
+
+	return dir
+}
+
+func TestListContributors_FiltersByAuthorDateNotCommitterDate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	repoPath := initGitRepoWithAuthorAndCommitter(
+		t,
+		"legacy@example.com",
+		now.AddDate(0, 0, -200),
+		now.AddDate(0, 0, -1),
+	)
+
+	authors, err := ListContributors(
+		repoPath,
+		now.AddDate(0, 0, -90),
+		now,
+		500,
+	)
+	require.NoError(t, err)
+	assert.Empty(t, authors)
+}
+
+func TestListContributors_RespectsMaxCommits(t *testing.T) {
+	t.Parallel()
+
+	commits := make([]commitSpec, 0, 10)
+	for i := range 10 {
+		commits = append(commits, commitSpec{
+			email: "dev@example.com",
+			when:  time.Date(2026, 1, 1, 0, 0, i, 0, time.UTC),
+		})
+	}
+
+	repoPath := initGitRepo(t, commits...)
+
+	authors, err := ListContributors(
+		repoPath,
+		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		3,
+	)
+	require.NoError(t, err)
+	require.Len(t, authors, 1)
+	assert.Equal(t, time.Date(2026, 1, 1, 0, 0, 9, 0, time.UTC), authors[0].LatestCommitDate.UTC())
+}
