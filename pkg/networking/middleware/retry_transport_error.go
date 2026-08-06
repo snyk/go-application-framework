@@ -53,10 +53,8 @@ func isSafeMethod(method string) bool {
 	}
 }
 
-// retryAllowedPaths returns the configured allow-list, falling back to
-// constants.DEFAULT_RETRY_ALLOWED_PATHS when unset. IsSet (not len>0) so an explicit
-// empty override is honored rather than treated as unset - it means no unsafe-method
-// path is retryable, the opposite of the old empty-deny-list meaning.
+// IsSet (not len>0) so an explicit empty override is honored rather than treated as unset -
+// it means no unsafe-method path is retryable, the opposite of the old empty-deny-list meaning.
 func retryAllowedPaths(config configuration.Configuration) []string {
 	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS) {
 		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS)
@@ -64,9 +62,8 @@ func retryAllowedPaths(config configuration.Configuration) []string {
 	return constants.DEFAULT_RETRY_ALLOWED_PATHS
 }
 
-// isAllowedPath matches on contiguous path segments so a near-miss like
-// /v1/test-dep-graph-something does not match an allow-list entry of test-dep-graph, and
-// a multi-segment entry like verify/token matches only when those segments are adjacent.
+// contiguous-segment matching avoids near-misses like /v1/test-dep-graph-something
+// matching an allow-list entry of test-dep-graph.
 func isAllowedPath(path string, allowed []string) bool {
 	segments := strings.Split(path, "/")
 	for _, entry := range allowed {
