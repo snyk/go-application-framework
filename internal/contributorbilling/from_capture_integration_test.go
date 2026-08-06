@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/contributorbilling"
 	"github.com/snyk/go-application-framework/internal/contributorbilling/capture"
 	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/clibilling"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
@@ -48,7 +49,7 @@ func TestCaptureMiddlewareToEmitFromCapture_integration(t *testing.T) {
 	t.Cleanup(func() { capture.ResetCommandSession() })
 
 	rt := middleware.NewContributorCaptureMiddleware(http.DefaultTransport, config, nil, func() string {
-		return engine.GetAnalytics().GetCommand()
+		return clibilling.ActiveCommand(engine)
 	})
 
 	req, err := http.NewRequest(http.MethodPut, registry.URL+"/v1/monitor/npm", http.NoBody)
