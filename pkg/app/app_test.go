@@ -42,7 +42,7 @@ import (
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-	"github.com/snyk/go-application-framework/pkg/utils"
+	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -1234,70 +1234,70 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			name:           "nil, not preview, opt-in true, return 3",
 			existingValue:  nil,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
 			name:           "nil, not preview, opt-in false, return 1",
 			existingValue:  nil,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(false),
+			retriesEnabled: pkg_utils.Ptr(false),
 			expected:       1,
 		},
 		{
 			name:           "nil, preview, opt-in true, return 3",
 			existingValue:  nil,
 			previewEnabled: true,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
 			name:           "existing value=5, not preview, opt-in true, return 5",
 			existingValue:  5,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       5,
 		},
 		{
 			name:           "existing value=5, preview, opt-in true, return 5",
 			existingValue:  5,
 			previewEnabled: true,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       5,
 		},
 		{
 			name:           "existing value=1, not preview, opt-in true, return 1",
 			existingValue:  1,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       1,
 		},
 		{
 			name:           "existing value=-1, not preview, opt-in true, return 3",
 			existingValue:  -1,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
 			name:           "existing value=0, not preview, opt-in true, return 3",
 			existingValue:  0,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
 			name:           "existing value=-1 string, not preview, opt-in true, return 3",
 			existingValue:  "-1",
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
 			name:           "existing value=MaxInt64, not preview, opt-in true, return 3",
 			existingValue:  math.MaxInt64,
 			previewEnabled: false,
-			retriesEnabled: utils.Ptr(true),
+			retriesEnabled: pkg_utils.Ptr(true),
 			expected:       3,
 		},
 		{
