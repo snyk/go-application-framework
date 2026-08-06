@@ -1354,21 +1354,33 @@ func Test_defaultNetworkRequestRetryAllowedPaths(t *testing.T) {
 }
 
 func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
-	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(networkRequestRetryAfterSecondsKey, 1)
 
-	resp, err := client.Get(server.URL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+			resp, err := client.Get(server.URL)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+		})
+	}
 }
 
 func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
@@ -1386,24 +1398,6 @@ func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
-}
-
-func Test_NetworkRetryOptIn_PreviewFeaturesUnaffected(t *testing.T) {
-	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
-
-	resp, err := client.Get(server.URL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
 func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
@@ -1471,13 +1465,16 @@ func newCLIStyleConfig() configuration.Configuration {
 	)
 }
 
-func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_MultiEntryList(t *testing.T) {
+func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
+		name   string
+		envVar string
+		path   string
 	}{
-		{"first entry", "/v1/test-dep-graph"},
-		{"second entry", "/v1/verify/token"},
+		{"multi-entry list, first entry", "test-dep-graph,verify/token", "/v1/test-dep-graph"},
+		{"multi-entry list, second entry", "test-dep-graph,verify/token", "/v1/verify/token"},
+		{"whitespace trimmed", "test-dep-graph, verify/token", "/v1/verify/token"},
+		{"single entry", "test-dep-graph", "/v1/test-dep-graph"},
 	}
 
 	for _, tt := range tests {
@@ -1487,7 +1484,7 @@ func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_MultiEntryList(t *testing.T) 
 			config := newCLIStyleConfig()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(networkRequestRetryAfterSecondsKey, 1)
-			t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph,verify/token")
+			t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", tt.envVar)
 
 			engine := CreateAppEngineWithOptions(WithConfiguration(config))
 			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1503,50 +1500,6 @@ func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_MultiEntryList(t *testing.T) 
 			assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 		})
 	}
-}
-
-func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_WhitespaceTrimmed(t *testing.T) {
-	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
-
-	config := newCLIStyleConfig()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
-	t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph, verify/token")
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
-
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/verify/token", bytes.NewReader([]byte(`{}`)))
-	require.NoError(t, err)
-
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
-}
-
-func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar_SingleEntry(t *testing.T) {
-	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
-
-	config := newCLIStyleConfig()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
-	t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "test-dep-graph")
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
-
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", bytes.NewReader([]byte(`{}`)))
-	require.NoError(t, err)
-
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
 func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T) {
@@ -1594,13 +1547,25 @@ func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T
 }
 
 func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
-	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	tests := []struct {
+		name  string
+		value interface{}
+	}{
+		{"bool value", true},
+		{"string value", "true"},
+	}
 
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	assert.NotNil(t, engine)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, tt.value)
 
-	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			assert.NotNil(t, engine)
+
+			assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+		})
+	}
 }
 
 func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *testing.T) {
@@ -1624,32 +1589,34 @@ func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) 
 	assert.Equal(t, 3, cloned.GetInt(middleware.ConfigurationKeyRequestAttempts))
 }
 
-func Test_initConfiguration_NetworkRetryOptIn_AcceptsStringValue(t *testing.T) {
-	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, "true")
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	assert.NotNil(t, engine)
-
-	assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
-}
-
 func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
-	baseURL, connCount, _ := newResettingServer(t, 1)
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseURL, connCount, _ := newResettingServer(t, 1)
 
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(networkRequestRetryAfterSecondsKey, 1)
 
-	resp, err := client.Get(baseURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+			resp, err := client.Get(baseURL)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+		})
+	}
 }
 
 func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
@@ -1730,24 +1697,6 @@ func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T
 	}
 	require.Error(t, err)
 	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
-}
-
-func Test_TransportRetry_PreviewFeaturesOnly_ConnectionResetRecovers(t *testing.T) {
-	baseURL, connCount, _ := newResettingServer(t, 1)
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
-
-	resp, err := client.Get(baseURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
 }
 
 func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *testing.T) {

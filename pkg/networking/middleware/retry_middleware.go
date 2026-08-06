@@ -91,9 +91,6 @@ func (b *noCloseSeekBody) RealClose() error {
 	return nil
 }
 
-// multiReadCloser reconstructs a full response body stream from bytes already
-// consumed (e.g. while probing an over-cap body) plus the remainder still
-// unread on the original body, closing the original on Close.
 type multiReadCloser struct {
 	io.Reader
 	closer io.Closer
@@ -113,21 +110,15 @@ func drainAndClose(body io.ReadCloser) {
 	_ = body.Close()
 }
 
-// isJSONResponse reports whether the response Content-Type is JSON, including
-// JSON:API media types (e.g. application/vnd.api+json).
 func isJSONResponse(response *http.Response) bool {
 	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
 	return mimeType == "application/json" || strings.HasSuffix(mimeType, "+json")
 }
 
-// isSuccessResponse reports whether the status code is 2xx.
 func isSuccessResponse(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
-// responseBufferCapBytes returns the maximum number of bytes the truncated-body
-// recovery buffering is allowed to read into memory, falling back to
-// constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB when unset or non-positive.
 func responseBufferCapBytes(config configuration.Configuration) int {
 	if capBytes := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); capBytes > 0 {
 		return capBytes
@@ -242,9 +233,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			cachedMaxRetries = &calculated
 		}
 
-		// depending on the response determine if we should retry; gating on
-		// isRetryableRequest only under the opt-in keeps flag-off behavior
-		// byte-identical to today, where this status-code path ignores the deny-list
+		// gated on the opt-in so flag-off behavior stays byte-identical to today
 		statusCodeRetryDenied := transportRetryEnabled && !isRetryableRequest(&localRequest, rm.config)
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); !statusCodeRetryDenied && retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
@@ -267,8 +256,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			bufferCap := responseBufferCapBytes(rm.config)
 			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, int64(bufferCap)+1))
 			if readErr != nil {
-				// unlike getErrorList, this read error must surface so a truncated
-				// body becomes a real retry/failure instead of a silent empty result
+				// unlike getErrorList, this read error must surface as a retry/failure
 				drainAndClose(response.Body)
 				retryErr := &RetryAttemptError{
 					StatusCode:  response.StatusCode,
@@ -282,8 +270,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				return response, retryErr
 			}
 			if len(bodyBytes) > bufferCap {
-				// over the cap: keep streaming rather than lose truncation-recovery
-				// coverage for this one response by erroring or dropping bytes
+				// over the cap: keep streaming rather than error or drop bytes
 				response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
 			} else {
 				_ = response.Body.Close()
