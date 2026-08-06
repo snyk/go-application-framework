@@ -437,7 +437,9 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	engine.AddExtensionInitializer(localworkflows.Init)
 
-	engine.AddPostInvokeHook(internalPostInvokeHook)
+	if err := engine.AddPostInvokeHook(internalPostInvokeHook); err != nil {
+		engine.GetLogger().Warn().Err(err).Msg("failed to register example post-invoke hook")
+	}
 	return engine
 }
 
