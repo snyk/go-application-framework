@@ -63,18 +63,18 @@ const (
 	// general workflow configuration
 	// ---------
 
-	FLAG_EXPERIMENTAL                            string = "experimental"                                          // FLAG_EXPERIMENTAL (boolean) returns if experimental features shall be enabled or not, workflows should register this value as a flag to indicate that they might change before being GAed
-	PREVIEW_FEATURES_ENABLED                     string = "internal_preview_features_enabled"                     // PREVIEW_FEATURES_ENABLED (boolean) indicates if preview features shall be enabled, this can be used to limit features to the preview version only
-	NETWORK_REQUEST_RETRIES_ENABLED              string = "internal_network_request_retries_enabled"              // NETWORK_REQUEST_RETRIES_ENABLED (boolean) opts in to the framework's resilient network-retry policy without requiring PREVIEW_FEATURES_ENABLED
-	NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS string = "internal_network_request_retry_excluded_path_segments" // NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS ([]string) URL path segments excluded from GAF's network retries; defaults to ["monitor"]
-	FLAG_INCLUDE_IGNORES                         string = "include-ignores"                                       // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
-	FLAG_SEVERITY_THRESHOLD                      string = "severity-threshold"                                    // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
-	FLAG_REMOTE_REPO_URL                         string = "remote-repo-url"                                       // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
-	INPUT_DIRECTORY                              string = "targetDirectory"                                       // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
-	CUSTOM_CONFIG_FILES                          string = "internal_custom_config_files"
-	WORKFLOW_USE_STDIO                           string = "internal_wflstdio"
-	RAW_CMD_ARGS                                 string = "internal_raw_cmd_args"
-	UNKNOWN_ARGS                                 string = "internal_unknown_arguments" // UNKNOWN_ARGS ([]string) arguments unknown to the current application but maybe relevant for delegated application calls
+	FLAG_EXPERIMENTAL                   string = "experimental"                                 // FLAG_EXPERIMENTAL (boolean) returns if experimental features shall be enabled or not, workflows should register this value as a flag to indicate that they might change before being GAed
+	PREVIEW_FEATURES_ENABLED            string = "internal_preview_features_enabled"            // PREVIEW_FEATURES_ENABLED (boolean) indicates if preview features shall be enabled, this can be used to limit features to the preview version only
+	NETWORK_REQUEST_RETRIES_ENABLED     string = "internal_network_request_retries_enabled"     // NETWORK_REQUEST_RETRIES_ENABLED (boolean) opts in to the framework's resilient network-retry policy without requiring PREVIEW_FEATURES_ENABLED
+	NETWORK_REQUEST_RETRY_ALLOWED_PATHS string = "internal_network_request_retry_allowed_paths" // NETWORK_REQUEST_RETRY_ALLOWED_PATHS ([]string) URL paths eligible for GAF's network retries on unsafe HTTP methods; safe methods always retry regardless of this list, an unsafe method retries only on a path match; defaults to ["test-dep-graph", "verify/token", "feature_flags/evaluation"]
+	FLAG_INCLUDE_IGNORES                string = "include-ignores"                              // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
+	FLAG_SEVERITY_THRESHOLD             string = "severity-threshold"                           // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
+	FLAG_REMOTE_REPO_URL                string = "remote-repo-url"                              // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
+	INPUT_DIRECTORY                     string = "targetDirectory"                              // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
+	CUSTOM_CONFIG_FILES                 string = "internal_custom_config_files"
+	WORKFLOW_USE_STDIO                  string = "internal_wflstdio"
+	RAW_CMD_ARGS                        string = "internal_raw_cmd_args"
+	UNKNOWN_ARGS                        string = "internal_unknown_arguments" // UNKNOWN_ARGS ([]string) arguments unknown to the current application but maybe relevant for delegated application calls
 
 	// ---------
 	// subprocess environment

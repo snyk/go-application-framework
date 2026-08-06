@@ -41,27 +41,59 @@ func isRetryableRequest(req *http.Request, config configuration.Configuration) b
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
 		return false
 	}
-	return !isExcludedPath(req.URL.Path, retryExcludedPathSegments(config))
-}
-
-// retryExcludedPathSegments returns the configured deny-list, falling back to
-// constants.DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS when unset. IsSet (not len>0) so an
-// explicit empty override ("exclude nothing") is honored rather than treated as unset.
-func retryExcludedPathSegments(config configuration.Configuration) []string {
-	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS) {
-		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_EXCLUDED_PATH_SEGMENTS)
+	if isSafeMethod(req.Method) {
+		return true
 	}
-	return constants.DEFAULT_RETRY_EXCLUDED_PATH_SEGMENTS
+	return isAllowedPath(req.URL.Path, retryAllowedPaths(config))
 }
 
-// isExcludedPath excludes endpoints whose side effects make a retried
-// duplicate unsafe (e.g. monitor, which creates a snapshot resource).
-func isExcludedPath(path string, denySegments []string) bool {
-	for _, segment := range strings.Split(path, "/") {
-		for _, denied := range denySegments {
-			if segment == denied {
-				return true
+func isSafeMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	default:
+		return false
+	}
+}
+
+// retryAllowedPaths returns the configured allow-list, falling back to
+// constants.DEFAULT_RETRY_ALLOWED_PATHS when unset. IsSet (not len>0) so an explicit
+// empty override is honored rather than treated as unset - it means no unsafe-method
+// path is retryable, the opposite of the old empty-deny-list meaning.
+func retryAllowedPaths(config configuration.Configuration) []string {
+	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS) {
+		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS)
+	}
+	return constants.DEFAULT_RETRY_ALLOWED_PATHS
+}
+
+// isAllowedPath matches on contiguous path segments so a near-miss like
+// /v1/test-dep-graph-something does not match an allow-list entry of test-dep-graph, and
+// a multi-segment entry like verify/token matches only when those segments are adjacent.
+func isAllowedPath(path string, allowed []string) bool {
+	segments := strings.Split(path, "/")
+	for _, entry := range allowed {
+		if containsContiguous(segments, strings.Split(entry, "/")) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsContiguous(segments, entry []string) bool {
+	if len(entry) == 0 || len(entry) > len(segments) {
+		return false
+	}
+	for start := 0; start+len(entry) <= len(segments); start++ {
+		match := true
+		for i, part := range entry {
+			if segments[start+i] != part {
+				match = false
+				break
 			}
+		}
+		if match {
+			return true
 		}
 	}
 	return false
