@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/metrics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -2129,4 +2130,79 @@ func filterGitTrackedFiles(t *testing.T, root string, ruleFiles []string, featur
 	}
 
 	return filteredFiles
+}
+
+func TestFileFilter_Metrics(t *testing.T) {
+	// newRepo creates a directory holding a .gitignore plus one file that survives filtering.
+	newRepo := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("ignored.txt\n"))
+		createFileInPath(t, filepath.Join(root, "ignored.txt"), []byte("x"))
+		createFileInPath(t, filepath.Join(root, "file.txt"), []byte("x"))
+		return root
+	}
+
+	filter := func(t *testing.T, fileFilter *FileFilter) {
+		t.Helper()
+		globs, err := fileFilter.GetRules([]string{".gitignore"})
+		require.NoError(t, err)
+		for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+		}
+	}
+
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("records filter metrics under instance-scoped keys, feature flags %t", enabled), func(t *testing.T) {
+			recorder := &metrics.RecorderFake{}
+			config := newTestConfig(map[string]bool{
+				FF_FILE_FILTER_METACHARACTER_FIX:   enabled,
+				FF_GITIGNORE_RESPECT_TRACKED_FILES: enabled,
+			})
+			fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+			filter(t, fileFilter)
+
+			assert.Equal(t, map[string]bool{
+				fileFilter.metricKey(metricFileFilterMetacharacterFix):    enabled,
+				fileFilter.metricKey(metricFileFilterRespectTrackedFiles): enabled,
+			}, recorder.BoolValues)
+			// .gitignore and file.txt pass the filter, ignored.txt does not
+			assert.Equal(t, 2, recorder.IntValues[fileFilter.metricKey(metricFileFilterFileCount)])
+			assert.Contains(t, recorder.IntValues, fileFilter.metricKey(metricFileFilterDurationMs))
+			assert.Len(t, recorder.IntValues, 2)
+		})
+	}
+
+	t.Run("keys of concurrently used FileFilters do not collide", func(t *testing.T) {
+		recorder := &metrics.RecorderFake{}
+		config := newTestConfig(nil)
+
+		for range 2 {
+			filter(t, NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder)))
+		}
+
+		assert.Len(t, recorder.IntValues, 4)
+		assert.Len(t, recorder.BoolValues, 4)
+	})
+
+	t.Run("without a recorder filtering is unaffected", func(t *testing.T) {
+		root := newRepo(t)
+
+		for _, fileFilter := range []*FileFilter{
+			NewFileFilter(root, &log.Logger),
+			NewFileFilter(root, &log.Logger, WithMetrics(nil)),
+		} {
+			globs, err := fileFilter.GetRules([]string{".gitignore"})
+			require.NoError(t, err)
+
+			var filteredFiles []string
+			for file := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+				filteredFiles = append(filteredFiles, file)
+			}
+			assert.ElementsMatch(t, []string{
+				filepath.Join(root, ".gitignore"),
+				filepath.Join(root, "file.txt"),
+			}, filteredFiles)
+		}
+	})
 }
