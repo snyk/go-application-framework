@@ -149,10 +149,13 @@ func TestDetectProxyConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear all proxy-related environment variables for test isolation
-			proxyEnvVars := []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"}
-			for _, key := range proxyEnvVars {
-				t.Setenv(key, "")
+			// Clear every variable the checker reads, so the host environment
+			// cannot leak into the result. Derived from envVarSpecs so that
+			// variables added there stay isolated.
+			for _, spec := range envVarSpecs {
+				for _, key := range spec.names {
+					t.Setenv(key, "")
+				}
 			}
 
 			// Set test environment
