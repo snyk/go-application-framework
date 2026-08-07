@@ -106,6 +106,26 @@ func (c *Capture) Snapshot() []Record {
 	return out
 }
 
+// HasRecords reports whether the bag contains at least one billing entity.
+func (c *Capture) HasRecords() bool {
+	if c == nil {
+		return false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.records) > 0
+}
+
+// FirstDedupedRecord returns the first deduplicated billing record, if any.
+func (c *Capture) FirstDedupedRecord() (Record, bool) {
+	deduped := c.DedupedRecords()
+	if len(deduped) == 0 {
+		return Record{}, false
+	}
+	return deduped[0], true
+}
+
 // DedupedRecords returns captured records deduplicated by capability, entity type, and entity ID,
 // preserving first-seen order.
 func (c *Capture) DedupedRecords() []Record {

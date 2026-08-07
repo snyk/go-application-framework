@@ -25,6 +25,23 @@ type FromCaptureOptions struct {
 	Timeout       time.Duration
 }
 
+// EmitFromCaptureFirstRecord posts contributor billing for the first deduplicated entity
+// captured during a CLI interaction. Fire-and-forget; callers must wait on the same Emitter.
+func EmitFromCaptureFirstRecord(ctx context.Context, bag *capture.Capture, opts FromCaptureOptions) {
+	if bag == nil {
+		return
+	}
+
+	record, ok := bag.FirstDedupedRecord()
+	if !ok {
+		return
+	}
+
+	single := capture.NewCapture()
+	single.Add(record)
+	EmitFromCapture(ctx, single, opts)
+}
+
 // EmitFromCapture posts contributor billing for deduplicated entities captured during
 // a CLI interaction. Fire-and-forget; callers must wait on the same Emitter before exit.
 func EmitFromCapture(ctx context.Context, bag *capture.Capture, opts FromCaptureOptions) {

@@ -27,6 +27,24 @@ func TestCapture_AddAndSnapshot(t *testing.T) {
 	assert.Equal(t, capture.CapabilityOSS, snapshot[0].Capability)
 }
 
+func TestCapture_FirstDedupedRecord(t *testing.T) {
+	t.Parallel()
+
+	bag := capture.NewCapture()
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityOSS,
+		EntityID:   "11111111-1111-4111-8111-111111111111",
+	})
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityOSS,
+		EntityID:   "22222222-2222-4222-8222-222222222222",
+	})
+
+	record, ok := bag.FirstDedupedRecord()
+	require.True(t, ok)
+	assert.Equal(t, "11111111-1111-4111-8111-111111111111", record.EntityID)
+}
+
 func TestCapture_DedupedRecords(t *testing.T) {
 	t.Parallel()
 
