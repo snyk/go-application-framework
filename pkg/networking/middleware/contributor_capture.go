@@ -81,8 +81,11 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 		return res, err
 	}
 
-	if bag != nil && m.captureEnabledForBillableHTTP() {
+	if bag != nil && m.captureEnabledForBillableHTTP() && !capture.IsSessionSealed() {
 		m.tryCapture(req, res, bag, hasCreateTestMeta, createTestMeta)
+		if bag.HasRecords() {
+			capture.SealAndNotifyFirstRecord()
+		}
 	}
 	return res, err
 }

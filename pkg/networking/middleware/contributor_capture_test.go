@@ -468,3 +468,41 @@ func TestContributorCaptureMiddleware_capturesNativeTestAPIFlow(t *testing.T) {
 	assert.Equal(t, capture.CapabilityOSS, records[0].Capability)
 	assert.Equal(t, projectID, records[0].EntityID)
 }
+
+func TestContributorCaptureMiddleware_sealsSessionAfterFirstCapture(t *testing.T) {
+	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(`{
+			"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+			"uri": "https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+		}`))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	capture.ResetCommandSession()
+	t.Cleanup(capture.ResetCommandSession)
+
+	notified := false
+	capture.RegisterFirstRecordHandler(func() {
+		notified = true
+	})
+
+	config := captureEnabledConfig(server.URL)
+	capture.EnsureCommandSession(".")
+
+	logger := zerolog.Nop()
+	rt := newContributorCaptureMiddleware(http.DefaultTransport, config, &logger)
+
+	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
+	require.NoError(t, err)
+
+	res, err := rt.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.True(t, notified)
+	assert.True(t, capture.IsSessionSealed())
+}
