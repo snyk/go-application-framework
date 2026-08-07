@@ -8,28 +8,24 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// ContributorBillingPostInvokeHook discards capture state when a billable top-level workflow
-// fails. Successful billable workflows keep the session open until FinishCommand runs at CLI
-// teardown so downstream filter/output invocations and the final exit code gate still apply.
+// ContributorBillingPostInvokeHook waits for contributor billing ingest started during capture.
 func ContributorBillingPostInvokeHook(ctx context.Context, engine workflow.Engine, hctx workflow.PostInvokeContext) {
-	_ = ctx
-
 	config := engine.GetConfiguration()
 	if config == nil || !captureEnabled(config) || !capture.IsBillableCommand(ActiveCommand(engine)) {
 		return
 	}
-	if shouldSkipPostInvokeFinalize(hctx.GetWorkflowIdentifier()) {
+	if shouldSkipPostInvokeWait(hctx.GetWorkflowIdentifier()) {
 		return
 	}
-	if hctx.GetError() != nil {
-		capture.CloseCommandSession()
-	}
+
+	WaitForPendingEmit(ctx, engine, config)
 }
 
-func shouldSkipPostInvokeFinalize(id workflow.Identifier) bool {
+func shouldSkipPostInvokeWait(id workflow.Identifier) bool {
 	switch id.String() {
 	case localworkflows.WORKFLOWID_FILTER_FINDINGS.String(),
-		localworkflows.WORKFLOWID_OUTPUT_WORKFLOW.String():
+		localworkflows.WORKFLOWID_OUTPUT_WORKFLOW.String(),
+		localworkflows.WORKFLOWID_REPORT_ANALYTICS.String():
 		return true
 	default:
 		return false

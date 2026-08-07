@@ -8,10 +8,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// FinishCommand closes the active capture session and emits captured billing on success.
-// Called from CLI teardown after all top-level invocations complete.
-func FinishCommand(ctx context.Context, engine workflow.Engine, config configuration.Configuration, success bool) bool {
-	return finalizeContributorBilling(ctx, engine, config, success)
+// FinishCommand waits for contributor billing ingest started during capture.
+// Deprecated: billing no longer finalizes at CLI teardown; the post-invoke hook waits instead.
+func FinishCommand(ctx context.Context, engine workflow.Engine, config configuration.Configuration, _ bool) bool {
+	return WaitForPendingEmit(ctx, engine, config)
 }
 
 func captureEnabled(config configuration.Configuration) bool {

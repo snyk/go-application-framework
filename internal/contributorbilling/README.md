@@ -10,27 +10,24 @@ callers emit contributor usage to the entitlements-service ingest endpoint, whic
 billing events.
 
 This package lives under `internal/contributorbilling/` (not public GAF API). Capture middleware
-writes to an internal command-scoped session (IANDT-238). cliv2 calls temporary `pkg/clibilling`
-Finish hook (IANDT-240) until Peter's end-of-invocation hook replaces it; emit wiring follows
-in a follow-up with that hook.
+writes to an internal command-scoped session (IANDT-238). `pkg/clibilling` (IANDT-240) emits on the
+first captured project ID and waits for ingest in the main post-invoke hook.
 
 ### CLI host wiring (IANDT-240)
 
 ```go
 engine := app.CreateAppEngineWithOptions(...)
-clibilling.EnableIfConfigured(engine)
+// clibilling.RegisterWithEngine is called from CreateAppEngineWithOptions.
 
 // cliv2 sets analytics command via normal instrumentation (not billing-specific).
 // Capture middleware lazily opens a session on the first billable HTTP request when
 // capture is enabled and clibilling.ActiveCommand(engine) is billable.
-
-// cliv2 tearDown:
-clibilling.FinishCommand(teardownCtx, engine, config, exitCode == 0)
+// The first captured project ID triggers an async ingest POST; the main post-invoke hook waits.
 ```
 
 When capture is enabled and the command is in scope, contributor capture middleware
-opens the session on the first matching product API call. `FinishCommand` closes the
-session and emits ingest POSTs on successful teardown.
+seals the session after the first project ID and starts ingest asynchronously. The main
+post-invoke hook waits for that emit to finish (skip `analytics.report`).
 
 ## Entry point
 

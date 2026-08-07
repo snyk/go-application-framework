@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/contributorbilling"
-	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func TestEmitContributorBilling_Integration_AppliesConfigurationAndPosts(t *testing.T) {
@@ -27,7 +27,9 @@ func TestEmitContributorBilling_Integration_AppliesConfigurationAndPosts(t *test
 	config.Set(configuration.AUTHENTICATION_TOKEN, "integration-token")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 
-	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(config))
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.SetConfiguration(config)
+	require.NoError(t, engine.Init())
 	emitter := contributorbilling.NewEmitter()
 	wait := contributorbilling.WaitBudget(1, contributorbilling.DefaultTimeout)
 	defer emitter.WaitWithTimeout(wait)

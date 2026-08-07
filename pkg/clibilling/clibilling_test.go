@@ -16,7 +16,11 @@ import (
 func resetCaptureSession(t *testing.T) {
 	t.Helper()
 	capture.ResetCommandSession()
-	t.Cleanup(capture.ResetCommandSession)
+	clibilling.ResetPendingEmitForTest()
+	t.Cleanup(func() {
+		capture.ResetCommandSession()
+		clibilling.ResetPendingEmitForTest()
+	})
 }
 
 func testEngine(t *testing.T, config configuration.Configuration, command string) workflow.Engine {
