@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -32,6 +33,8 @@ const (
 var defaultInvalidRules = []string{}
 
 var nextFileFilterMetricScopeID atomic.Uint64
+
+const gitIgnoreGlobPrefix = "#gitignore:"
 
 type FileFilter struct {
 	path            string
@@ -233,8 +236,16 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
-	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+	var isFileExcluded func(string) bool
+	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
+		isFileExcluded = fw.trackedFileExclusionPredicate(globs)
+	} else {
+		globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+		isFileExcluded = func(filePath string) bool {
+			return globPatternMatcher.MatchesPath(filePath)
+		}
+	}
+
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -250,7 +261,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			go func(f string) {
 				defer availableThreads.Release(1)
 				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				if !isFileExcluded(f) {
 					filteredFilesCh <- f
 				}
 			}(file)
@@ -273,6 +284,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	}
 
 	enableMetacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	respectGitIgnoreTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
 
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
@@ -287,11 +299,113 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), enableMetacharacterFix)
+			if filepath.Base(ignoreFile) == ".gitignore" && respectGitIgnoreTrackedFiles {
+				for i, rule := range parsedRules {
+					parsedRules[i] = gitIgnoreGlobPrefix + rule
+				}
+			}
 			globs = append(globs, parsedRules...)
 		}
 	}
 
 	return globs, nil
+}
+
+func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
+	gitignoreGlobs := make([]string, 0)
+	allGlobs := make([]string, 0, len(globs))
+
+	for _, glob := range globs {
+		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
+			gitignoreGlobs = append(gitignoreGlobs, gitignoreGlob)
+			allGlobs = append(allGlobs, gitignoreGlob)
+			continue
+		}
+
+		allGlobs = append(allGlobs, glob)
+	}
+
+	otherMatcher := gitignore.CompileIgnoreLines(globs...)
+
+	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
+	defaultPredicate := func(file string) bool {
+		return allMatcher.MatchesPath(filepath.ToSlash(file))
+	}
+
+	gitignoreMatcher := gitignore.CompileIgnoreLines(gitignoreGlobs...)
+
+	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+		return defaultPredicate
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
+		return defaultPredicate
+	}
+
+	gitIndex, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get git index: %v", err)
+		return defaultPredicate
+	}
+
+	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
+		return defaultPredicate
+	}
+
+	trackedFilesToPreserve := make(map[string]bool)
+
+	for _, entry := range gitIndex.Entries {
+		relativePath := filepath.ToSlash(filepath.Join(repoRoot, filepath.FromSlash(entry.Name)))
+		if gitignoreMatcher.MatchesPath(relativePath) {
+			trackedFilesToPreserve[entry.Name] = true
+		}
+	}
+
+	return func(file string) bool {
+		normalizedPath := filepath.ToSlash(file)
+		relativePath, err := filepath.Rel(repoRoot, file)
+		if err != nil {
+			return allMatcher.MatchesPath(normalizedPath)
+		}
+
+		if trackedFilesToPreserve[filepath.ToSlash(relativePath)] {
+			return otherMatcher.MatchesPath(normalizedPath)
+		}
+
+		return allMatcher.MatchesPath(normalizedPath)
+	}
+}
+
+func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
+	absoluteScanRoot, err := filepath.Abs(scanRoot)
+	if err != nil {
+		return "", err
+	}
+
+	resolvedScanRoot, err := filepath.EvalSymlinks(absoluteScanRoot)
+	if err != nil {
+		return "", err
+	}
+
+	resolvedWorktreeRoot, err := filepath.EvalSymlinks(worktreeRoot)
+	if err != nil {
+		return "", err
+	}
+
+	relativeRoot, err := filepath.Rel(resolvedScanRoot, resolvedWorktreeRoot)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Clean(filepath.Join(scanRoot, relativeRoot)), nil
 }
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
