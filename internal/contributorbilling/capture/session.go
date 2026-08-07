@@ -16,10 +16,10 @@ type FirstRecordHandler func()
 var commandSession session
 
 type session struct {
-	mu                sync.Mutex
-	capture           *Capture
-	repoPath          string
-	sealed            bool
+	mu                 sync.Mutex
+	capture            *Capture
+	repoPath           string
+	sealed             bool
 	firstRecordHandler FirstRecordHandler
 }
 
