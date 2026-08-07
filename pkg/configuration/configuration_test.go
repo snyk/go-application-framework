@@ -1178,6 +1178,65 @@ func Test_ReloadConfig(t *testing.T) {
 	cleanupConfigstore(t)
 }
 
+func Test_Configuration_doesNotLoadSnykJsonFromWorkingDirectory(t *testing.T) {
+	fakeHome := t.TempDir()
+	projectDir := t.TempDir()
+
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("USERPROFILE", fakeHome)
+
+	cwdConfig := filepath.Join(projectDir, "snyk.json")
+	err := os.WriteFile(cwdConfig, []byte(`{
+		"api": "local-dir-token",
+		"org": "dir-org",
+		"endpoint": "https://api.invalid/api"
+	}`), 0o600)
+	assert.NoError(t, err)
+
+	oldWd, err := os.Getwd()
+	assert.NoError(t, err)
+	assert.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() {
+		assert.NoError(t, os.Chdir(oldWd))
+	})
+
+	config := New()
+
+	assert.Empty(t, config.GetString("api"))
+	assert.Empty(t, config.GetString("org"))
+	assert.Empty(t, config.GetString("endpoint"))
+}
+
+func Test_Configuration_loadsSnykJsonFromConfigstoreNotWorkingDirectory(t *testing.T) {
+	fakeHome := t.TempDir()
+	projectDir := t.TempDir()
+
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("USERPROFILE", fakeHome)
+
+	configstoreDir := filepath.Join(fakeHome, ".config", "configstore")
+	assert.NoError(t, os.MkdirAll(configstoreDir, 0o700))
+	assert.NoError(t, os.WriteFile(filepath.Join(configstoreDir, "snyk.json"), []byte(`{
+		"api": "home-token",
+		"org": "my-org",
+		"endpoint": "https://api.example/api"
+	}`), 0o600))
+	assert.NoError(t, os.WriteFile(filepath.Join(projectDir, "snyk.json"), []byte(`{"api":"bad-token"}`), 0o600))
+
+	oldWd, err := os.Getwd()
+	assert.NoError(t, err)
+	assert.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() {
+		assert.NoError(t, os.Chdir(oldWd))
+	})
+
+	config := New()
+
+	assert.Equal(t, "home-token", config.GetString("api"))
+	assert.Equal(t, "my-org", config.GetString("org"))
+	assert.Equal(t, "https://api.example/api", config.GetString("endpoint"))
+}
+
 func Test_EmptyStorage(t *testing.T) {
 	s := &EmptyStorage{}
 	assert.NoError(t, s.Set("k", "v"))
