@@ -326,3 +326,42 @@ Local development against a consumer (e.g. the CLI) — add to the consumer's `g
 ```
 replace github.com/snyk/go-application-framework => ../../go-application-framework
 ```
+
+---
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for agents running in the Cursor Cloud Linux VM. The
+update script already runs `go mod download`, so the items below are setup context
+and gotchas rather than install steps to repeat.
+
+- **Pin the exact Go patch version.** `go.mod` declares a bare `go 1.26`. With
+  `GOTOOLCHAIN=auto` Go tries to fetch a non-existent `go1.26` toolchain from
+  `go.dev` — normally outside the egress allowlist — and fails. Keep
+  `GOTOOLCHAIN=go1.26.5` set (`go env -w GOTOOLCHAIN=go1.26.5`) so the toolchain
+  resolves through `proxy.golang.org`.
+- **`make tools` fetches golangci-lint from a host that is usually blocked.**
+  `Makefile:50` curls an install script from `golangci-lint.run`. Install the
+  pinned version (`OVERRIDE_GOCI_LINT_V`, currently `v2.10.1`) straight from the
+  module proxy into `.bin/`, which is where the Makefile looks for it:
+  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`.
+  GAF is the odd one out here — snyk-ls and code-client-go pull the same tool via
+  `raw.githubusercontent.com`, which is generally reachable.
+- **Standard commands** are in [Quick reference](#quick-reference); `make build`
+  and `make lint` pass cleanly.
+- **One test is network-gated, not broken.** `pkg/networking.Test_GetHTTPClient`
+  performs a live `GET https://www.snyk.io`, which 301-redirects to the bare
+  `snyk.io` apex. It passes whenever that apex is reachable and only fails — with a
+  nil-dereference panic on the unchecked error path — when the egress is missing.
+  Treat it as an environment limitation. [PR #673](https://github.com/snyk/go-application-framework/pull/673)
+  replaces the live call with an `httptest` server, after which this caveat is
+  moot. The rest of `make test` is green.
+- **Probe egress instead of trusting a host list.** The allowlist changes between
+  runs, so treat any reachable/blocked list — including in older revisions of this
+  section — as stale. Matching is per hostname, and a bare entry is apex-exact
+  while `*.example.com` covers subdomains only; that asymmetry is exactly why the
+  `snyk.io` apex above can fail while `*.snyk.io` subdomains work. A block surfaces
+  as a TLS reset mid-handshake rather than a DNS failure, so check a host directly:
+  `timeout 12 openssl s_client -connect snyk.io:443 -servername snyk.io </dev/null`.
+  The hosts worth probing for this repo are `proxy.golang.org`, `github.com`,
+  `raw.githubusercontent.com`, `golangci-lint.run` and the `snyk.io` apex.
