@@ -712,20 +712,6 @@ func (mr *MockEngineMockRecorder) AddExtensionInitializer(initializer interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExtensionInitializer", reflect.TypeOf((*MockEngine)(nil).AddExtensionInitializer), initializer)
 }
 
-// AddPostInvokeHook mocks base method.
-func (m *MockEngine) AddPostInvokeHook(hook workflow.PostInvokeHook) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddPostInvokeHook", hook)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddPostInvokeHook indicates an expected call of AddPostInvokeHook.
-func (mr *MockEngineMockRecorder) AddPostInvokeHook(hook interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostInvokeHook", reflect.TypeOf((*MockEngine)(nil).AddPostInvokeHook), hook)
-}
-
 // GetAnalytics mocks base method.
 func (m *MockEngine) GetAnalytics() analytics.Analytics {
 	m.ctrl.T.Helper()

@@ -39,6 +39,16 @@ type EngineImpl struct {
 }
 
 var _ Engine = (*EngineImpl)(nil)
+var _ PostInvokeHookRegistrar = (*EngineImpl)(nil)
+
+// AddPostInvokeHook registers a hook on the given engine if it supports post-invoke hooks.
+// This is the preferred way to register hooks — it handles the type assertion internally.
+func AddPostInvokeHook(engine Engine, hook PostInvokeHook) error {
+	if registrar, ok := engine.(PostInvokeHookRegistrar); ok {
+		return registrar.AddPostInvokeHook(hook)
+	}
+	return fmt.Errorf("engine does not support post-invoke hooks")
+}
 
 type engineRuntimeConfig struct {
 	config  configuration.Configuration
