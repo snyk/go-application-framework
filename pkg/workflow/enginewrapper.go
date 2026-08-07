@@ -126,9 +126,3 @@ func (e *engineWrapper) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
 	e.WrappedEngine.SetRuntimeInfo(ri)
 }
 
-// AddPostInvokeHook delegates to the wrapped engine. Because wrappers are only created after
-// Init, this will always return an error — hooks must be registered before Init via the
-// concrete engine or the WithPostInvokeHooks app option.
-func (e *engineWrapper) AddPostInvokeHook(hook PostInvokeHook) error {
-	return e.WrappedEngine.AddPostInvokeHook(hook)
-}

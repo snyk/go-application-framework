@@ -135,6 +135,10 @@ type Engine interface {
 	SetUserInterface(ui ui.UserInterface)
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
 	SetRuntimeInfo(ri runtimeinfo.RuntimeInfo)
+}
 
+// PostInvokeHookRegistrar is implemented by engines that support post-invoke hooks.
+// Use the package-level AddPostInvokeHook helper instead of type-asserting manually.
+type PostInvokeHookRegistrar interface {
 	AddPostInvokeHook(hook PostInvokeHook) error
 }
