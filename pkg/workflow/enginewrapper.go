@@ -125,4 +125,3 @@ func (e *engineWrapper) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 func (e *engineWrapper) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
 	e.WrappedEngine.SetRuntimeInfo(ri)
 }
-
