@@ -49,3 +49,13 @@ func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) Opts {
 		engine.SetRuntimeInfo(ri)
 	}
 }
+
+func WithPostInvokeHooks(hooks ...workflow.PostInvokeHook) Opts {
+	return func(engine workflow.Engine) {
+		for _, h := range hooks {
+			if err := workflow.AddPostInvokeHook(engine, h); err != nil {
+				engine.GetLogger().Warn().Err(err).Msg("failed to add post-invoke hook")
+			}
+		}
+	}
+}
