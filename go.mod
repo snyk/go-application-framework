@@ -16,7 +16,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/snyk/code-client-go v1.31.1
-	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530
+	github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
@@ -35,11 +35,11 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
 	github.com/subosito/gotenv v1.6.0
-	golang.org/x/mod v0.36.0
-	golang.org/x/net v0.55.0
-	golang.org/x/sync v0.21.0
-	golang.org/x/term v0.44.0
-	golang.org/x/text v0.38.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/net v0.57.0
+	golang.org/x/sync v0.22.0
+	golang.org/x/term v0.45.0
+	golang.org/x/text v0.40.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -117,9 +117,9 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/tools v0.45.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

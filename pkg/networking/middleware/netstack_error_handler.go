@@ -56,9 +56,6 @@ func (ns *NetworkStackErrorHandlerMiddleware) categorizeNetworkError(err error, 
 	cause := snyk_errors.WithCause(err)
 
 	switch {
-	// Checking proxy connection errors first to prevent the more generic errors from obfuscating the proxy presence.
-	case ns.isProxyConnectionError(err):
-		err = cli.NewProxyConnectionError(detail, cause)
 	case ns.isDNSError(err):
 		err = cli.NewDNSResolutionError(detail, cause)
 	case ns.isTimeoutError(err):
@@ -196,16 +193,4 @@ func (ns *NetworkStackErrorHandlerMiddleware) isConnectionResetError(err error) 
 		strings.Contains(errStr, "connection reset") ||
 		strings.Contains(errStr, "forcibly closed") ||
 		strings.Contains(errStr, "connection was aborted")
-}
-
-func (ns *NetworkStackErrorHandlerMiddleware) isProxyConnectionError(err error) bool {
-	// net/http wraps a failed proxy hop as &net.OpError{Op: "proxyconnect", Net: "tcp", Err: err}.
-	var opErr *net.OpError
-	if errors.As(err, &opErr) && opErr.Op == "proxyconnect" {
-		return true
-	}
-
-	// A CONNECT rejected with 407 surfaces as a bare error carrying the status text.
-	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/407
-	return strings.Contains(strings.ToLower(err.Error()), "proxy authentication required")
 }
