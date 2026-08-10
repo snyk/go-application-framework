@@ -1,30 +1,23 @@
 package contributorbilling
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
+	entitlements_service "github.com/snyk/go-application-framework/internal/contributorbilling/client/entitlements_service"
 )
 
-// EmitContributorBilling fires an async POST to entitlements-service ingest.
-// It never returns an error that should fail the caller's command.
+// EmitContributorBilling fires an async POST to entitlements-service ingest on the package default Emitter.
+// Prefer NewEmitter() when the host process may run multiple workflows or billing scopes concurrently.
+// It returns immediately and never surfaces an error that should fail the caller's command.
+// Short-lived hosts (e.g. the CLI) must call Wait or WaitWithTimeout before process exit.
 func EmitContributorBilling(ctx context.Context, opts EmitOptions) {
-	opts = opts.withDefaults()
-	opts.Items = cloneItems(opts.Items)
-
-	go func(parent context.Context) {
-		result := emitContributorBilling(parent, opts)
-		if opts.OnResult != nil {
-			opts.OnResult(result)
-		}
-	}(ctx)
+	defaultEmitter.EmitContributorBilling(ctx, opts)
 }
 
 func cloneItems(items []BillingItem) []BillingItem {
@@ -35,8 +28,11 @@ func cloneItems(items []BillingItem) []BillingItem {
 	cloned := make([]BillingItem, len(items))
 	for i, item := range items {
 		cloned[i] = BillingItem{
-			ProjectID: item.ProjectID,
-			RepoPath:  item.RepoPath,
+			EntityID:   item.EntityID,
+			EntityType: item.EntityType,
+		}
+		if item.RepoPath != "" {
+			cloned[i].RepoPath = resolveRepoPath(item.RepoPath)
 		}
 		if len(item.Contributors) > 0 {
 			cloned[i].Contributors = append([]Contributor(nil), item.Contributors...)
@@ -46,9 +42,9 @@ func cloneItems(items []BillingItem) []BillingItem {
 }
 
 func (opts EmitOptions) withDefaults() EmitOptions {
-	if opts.RepoPath == "" {
-		opts.RepoPath = "."
-	}
+	opts.ScopeID = strings.TrimSpace(opts.ScopeID)
+	opts.Capability = strings.TrimSpace(opts.Capability)
+	opts.RepoPath = resolveRepoPath(opts.RepoPath)
 	if opts.Timeout <= 0 {
 		opts.Timeout = DefaultTimeout
 	}
@@ -60,11 +56,6 @@ func (opts EmitOptions) withDefaults() EmitOptions {
 }
 
 func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
-	if err := parent.Err(); err != nil {
-		opts.Logger.Debug().Err(err).Str("reason", string(FailReasonCanceled)).Msg("contributor billing: context canceled before emit")
-		return Result{Status: ResultStatusFailed, FailReason: FailReasonCanceled, Err: err}
-	}
-
 	items, skipReason := filterItems(opts.Items)
 	if len(items) == 0 {
 		logSkip(opts.Logger, skipReason)
@@ -85,13 +76,9 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		collectionErr = fillContributors(items, opts.RepoPath, time.Now(), opts.Logger)
 	}
 
-	body, err := marshalIngestPayload(opts.Capability, opts.ScopeID, items, opts.Logger)
-	if err != nil {
-		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to marshal ingest payload")
-		return Result{Status: ResultStatusFailed, FailReason: FailReasonMarshalError, Err: err}
-	}
+	dedupeContributorsForItems(items)
 
-	result := postIngest(parent, opts, body)
+	result := postIngest(parent, opts, items)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
 	}
@@ -99,13 +86,22 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 }
 
 func validateRequiredFields(opts EmitOptions) SkipReason {
-	if strings.TrimSpace(opts.Capability) == "" {
-		return SkipReasonMissingCapability
+	if opts.Capability != "" && !isKnownCapability(opts.Capability) {
+		return SkipReasonInvalidCapability
 	}
-	if strings.TrimSpace(opts.ScopeID) == "" {
+	if opts.ScopeID == "" {
 		return SkipReasonMissingScopeID
 	}
 	return ""
+}
+
+func isKnownCapability(capability string) bool {
+	switch capability {
+	case CapabilityOSS, CapabilityCode, CapabilityIaC:
+		return true
+	default:
+		return false
+	}
 }
 
 func fillContributors(items []BillingItem, defaultRepoPath string, now time.Time, logger *zerolog.Logger) error {
@@ -161,16 +157,16 @@ func filterItems(items []BillingItem) ([]BillingItem, SkipReason) {
 
 	filtered := make([]BillingItem, 0, len(items))
 	for _, item := range items {
-		projectID := strings.TrimSpace(item.ProjectID)
-		if projectID == "" {
+		entityID := strings.TrimSpace(item.EntityID)
+		if entityID == "" {
 			continue
 		}
-		item.ProjectID = projectID
+		item.EntityID = entityID
 		filtered = append(filtered, item)
 	}
 
 	if len(filtered) == 0 {
-		return nil, SkipReasonMissingProjectID
+		return nil, SkipReasonMissingEntityID
 	}
 
 	return filtered, ""
@@ -182,58 +178,97 @@ func missingIngestURLResult(logger *zerolog.Logger) Result {
 	return Result{Status: ResultStatusFailed, FailReason: FailReasonMissingIngestURL, Err: err}
 }
 
-func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
+func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) Result {
 	if strings.TrimSpace(opts.IngestURL) == "" {
 		return missingIngestURLResult(opts.Logger)
 	}
 
-	ctx, cancel := context.WithTimeout(parent, opts.Timeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opts.IngestURL, bytes.NewReader(body))
+	client, err := entitlements_service.NewIngestClient(opts.HTTPClient, opts.IngestURL)
 	if err != nil {
-		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create request")
+		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create ingest client")
 		return Result{Status: ResultStatusFailed, FailReason: FailReasonRequestError, Err: err}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	if opts.AuthHeader != "" {
-		req.Header.Set("Authorization", opts.AuthHeader)
+	baseCtx := context.WithoutCancel(parent)
+	var (
+		lastStatus    int
+		emitted       int
+		failed        int
+		failureResult *Result
+	)
+
+	for _, item := range items {
+		itemCtx, cancel := context.WithTimeout(baseCtx, opts.Timeout)
+		request := buildIngestRequest(item, opts.Logger)
+		result := postSingleIngest(itemCtx, client, opts, request)
+		cancel()
+
+		if result.Status == ResultStatusEmitted {
+			emitted++
+			lastStatus = result.HTTPStatus
+			continue
+		}
+
+		failed++
+		if failureResult == nil {
+			copied := result
+			failureResult = &copied
+		}
 	}
 
-	client := opts.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
+	if failed == 0 {
+		opts.Logger.Debug().Int("status", lastStatus).Int("items", len(items)).Msg("contributor billing: emitted")
+		return Result{
+			Status:       ResultStatusEmitted,
+			HTTPStatus:   lastStatus,
+			ItemsEmitted: emitted,
+		}
 	}
 
-	resp, err := client.Do(req)
+	opts.Logger.Debug().
+		Int("items_emitted", emitted).
+		Int("items_failed", failed).
+		Msg("contributor billing: ingest completed with failures")
+
+	aggregated := Result{
+		Status:       ResultStatusFailed,
+		ItemsEmitted: emitted,
+		ItemsFailed:  failed,
+	}
+	if failureResult != nil {
+		aggregated.FailReason = failureResult.FailReason
+		aggregated.HTTPStatus = failureResult.HTTPStatus
+		aggregated.Err = failureResult.Err
+	}
+	return aggregated
+}
+
+func postSingleIngest(
+	ctx context.Context,
+	client *entitlements_service.IngestClient,
+	opts EmitOptions,
+	request entitlements_service.IngestRequest,
+) Result {
+	resp, err := client.CreateContributingDevs(ctx, opts.ScopeID, opts.AuthHeader, request)
 	if err != nil {
 		failReason := FailReasonHTTPError
-		if errors.Is(err, context.Canceled) || errors.Is(parent.Err(), context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			failReason = FailReasonCanceled
-		} else if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			failReason = FailReasonTimeout
 		}
 		opts.Logger.Debug().Err(err).Str("reason", string(failReason)).Msg("contributor billing: POST failed")
 		return Result{Status: ResultStatusFailed, FailReason: failReason, Err: err}
 	}
-	defer resp.Body.Close()
 
-	if _, copyErr := io.Copy(io.Discard, resp.Body); copyErr != nil {
-		opts.Logger.Debug().Err(copyErr).Msg("contributor billing: failed to drain response body")
+	if resp.StatusCode() == http.StatusCreated {
+		return Result{Status: ResultStatusEmitted, HTTPStatus: resp.StatusCode()}
 	}
 
-	if resp.StatusCode == http.StatusAccepted {
-		opts.Logger.Debug().Int("status", resp.StatusCode).Msg("contributor billing: emitted")
-		return Result{Status: ResultStatusEmitted, HTTPStatus: resp.StatusCode}
-	}
-
-	err = fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
-	opts.Logger.Debug().Int("status", resp.StatusCode).Msg("contributor billing: unexpected HTTP status")
+	err = fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode())
+	opts.Logger.Debug().Int("status", resp.StatusCode()).Msg("contributor billing: unexpected HTTP status")
 	return Result{
 		Status:     ResultStatusFailed,
 		FailReason: FailReasonHTTPError,
-		HTTPStatus: resp.StatusCode,
+		HTTPStatus: resp.StatusCode(),
 		Err:        err,
 	}
 }

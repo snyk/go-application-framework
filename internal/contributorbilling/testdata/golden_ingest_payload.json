@@ -1,0 +1,19 @@
+{
+  "data": {
+    "type": "contributing_devs",
+    "attributes": {
+      "contributors_entity_type": "project",
+      "contributors_entity_id": "22222222-2222-2222-2222-222222222222",
+      "contributors": [
+        {
+          "email": "alice@example.com",
+          "commit_date": "2026-01-15T12:00:00Z"
+        },
+        {
+          "email": "bob@example.com",
+          "commit_date": "2026-01-10T08:30:00Z"
+        }
+      ]
+    }
+  }
+}

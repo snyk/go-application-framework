@@ -1,4 +1,4 @@
-package contributorbilling
+package git
 
 import (
 	"errors"
@@ -11,10 +11,16 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+// AuthorLatestCommit holds one git author email and their most recent commit in the scan window.
+type AuthorLatestCommit struct {
+	Email            string
+	LatestCommitDate time.Time
+}
+
 // ListContributors scans the git log and returns the most recent commit timestamp
 // per author email within [since, until], walking at most maxCommits from HEAD.
-// Non-git paths, empty repos, and maxCommits <= 0 return nil contributors without error.
-func ListContributors(path string, since, until time.Time, maxCommits int) ([]Contributor, error) {
+// Non-git paths, empty repos, and maxCommits <= 0 return nil results without error.
+func ListContributors(path string, since, until time.Time, maxCommits int) ([]AuthorLatestCommit, error) {
 	if maxCommits <= 0 {
 		return nil, nil
 	}
@@ -38,9 +44,7 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Co
 	}
 
 	iter, err := repo.Log(&git.LogOptions{
-		From:  head.Hash(),
-		Since: &since,
-		Until: &until,
+		From: head.Hash(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read log: %w", err)
@@ -58,9 +62,15 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Co
 			return nil, fmt.Errorf("read commit: %w", err)
 		}
 
-		email := commit.Author.Email
 		when := commit.Author.When
+		if when.Before(since) {
+			break
+		}
+		if when.After(until) {
+			continue
+		}
 
+		email := commit.Author.Email
 		if prev, ok := authors[email]; ok && when.Before(prev) {
 			continue
 		}
@@ -68,22 +78,17 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Co
 		authors[email] = when
 	}
 
-	contributors := make([]Contributor, 0, len(authors))
+	results := make([]AuthorLatestCommit, 0, len(authors))
 	for email, lastCommitDate := range authors {
-		contributors = append(contributors, Contributor{
+		results = append(results, AuthorLatestCommit{
 			Email:            email,
 			LatestCommitDate: lastCommitDate,
 		})
 	}
 
-	sort.Slice(contributors, func(i, j int) bool {
-		return contributors[i].Email < contributors[j].Email
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Email < results[j].Email
 	})
 
-	return contributors, nil
-}
-
-func collectContributors(repoPath string, now time.Time) ([]Contributor, error) {
-	since := now.AddDate(0, 0, -ContributingDeveloperPeriodDays)
-	return ListContributors(repoPath, since, now, MaxCommitsInGitLog)
+	return results, nil
 }
