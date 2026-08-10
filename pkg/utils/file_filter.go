@@ -75,12 +75,14 @@ type DotSnykRule struct {
 }
 
 const (
-	metricFileFilterPrefix                = "file-filter"
-	metricFileFilterDurationMs            = "durationMs"
-	metricFileFilterFileCount             = "fileCount"
-	metricFileFilterMetacharacterFix      = "metacharacterFix"
-	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"
-	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount"
+	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
+
+	metricFileFilterDurationMs            = "durationMs"            // elapsed time for GetFilteredFiles: exclusion-predicate build (incl. git index read) and filtering, including caller drain of the result channel
+	metricFileFilterSurvivingFileCount    = "survivingFileCount"    // number of files that passed exclusion in this filter run
+	metricFileFilterRulesBuildDurationMs  = "rulesBuildDurationMs"  // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
+	metricFileFilterMetacharacterFix      = "metacharacterFix"      // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
+	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"   // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
+	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount" // tracked files kept despite a matching .gitignore rule
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -206,6 +208,21 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
+	// Both feature flags change how rules are built (see buildGlobs), so the rules scope reports
+	// them alongside the build duration rather than relying on a GetFilteredFiles run that may
+	// never happen or may read a different flag value.
+	scopeID := newFileFilterMetricScopeID()
+	start := time.Now()
+	defer fw.recordMetricLazy(scopeID, metricFileFilterRulesBuildDurationMs, func() int {
+		return int(time.Since(start).Milliseconds())
+	})
+	fw.recordBoolMetricLazy(scopeID, metricFileFilterMetacharacterFix, func() bool {
+		return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	})
+	fw.recordBoolMetricLazy(scopeID, metricFileFilterRespectTrackedFiles, func() bool {
+		return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+	})
+
 	files := fw.GetAllFiles()
 
 	// iterate filesToFilter channel and find ignore filesToFilter
@@ -236,17 +253,6 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 	var filteredFilesCh = make(chan string)
 
-	var isFileExcluded func(string) bool
-	var trackedFilesKeptCount atomic.Int64
-	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-		isFileExcluded = fw.trackedFileExclusionPredicate(globs, &trackedFilesKeptCount)
-	} else {
-		globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
-		isFileExcluded = func(filePath string) bool {
-			return globPatternMatcher.MatchesPath(filePath)
-		}
-	}
-
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -254,6 +260,19 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		var resolvedFileCount atomic.Int64
 
 		defer close(filteredFilesCh)
+
+		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
+		// opens the repository and reads the git index, so it is timed alongside the filtering.
+		var isFileExcluded func(string) bool
+		var trackedFilesKeptCount atomic.Int64
+		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
+			isFileExcluded = fw.trackedFileExclusionPredicate(globs, &trackedFilesKeptCount)
+		} else {
+			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+			isFileExcluded = func(filePath string) bool {
+				return globPatternMatcher.MatchesPath(filePath)
+			}
+		}
 
 		// iterate the filesToFilter channel
 		for file := range filesCh {
@@ -286,7 +305,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		fw.recordMetricLazy(runScopeID, metricFileFilterDurationMs, func() int {
 			return int(time.Since(start).Milliseconds())
 		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterFileCount, func() int {
+		fw.recordMetricLazy(runScopeID, metricFileFilterSurvivingFileCount, func() int {
 			return int(resolvedFileCount.Load())
 		})
 		fw.recordMetricLazy(runScopeID, metricFileFilterTrackedFilesKeptCount, func() int {

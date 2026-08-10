@@ -2,12 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -2180,14 +2178,21 @@ func metricsByScope(t *testing.T, recorder *metrics.RecorderFake) map[string]fil
 	return runs
 }
 
-// singleFilterRun returns the metrics of the one run a recorder is expected to have seen.
-func singleFilterRun(t *testing.T, recorder *metrics.RecorderFake) filterRunMetrics {
+// singleRun returns the metrics of the one run a recorder is expected to have seen that recorded
+// the given metric. The metric picks the kind of run: metricFileFilterDurationMs is recorded by
+// GetFilteredFiles, metricFileFilterRulesBuildDurationMs by GetRules.
+func singleRun(t *testing.T, recorder *metrics.RecorderFake, metric string) filterRunMetrics {
 	t.Helper()
 
-	runs := metricsByScope(t, recorder)
-	require.Len(t, runs, 1)
+	var matched []filterRunMetrics
+	for _, run := range metricsByScope(t, recorder) {
+		if _, ok := run.ints[metric]; ok {
+			matched = append(matched, run)
+		}
+	}
+	require.Len(t, matched, 1, "expected exactly one run recording %q", metric)
 
-	return slices.Collect(maps.Values(runs))[0]
+	return matched[0]
 }
 
 func TestFileFilter_Metrics(t *testing.T) {
@@ -2220,17 +2225,25 @@ func TestFileFilter_Metrics(t *testing.T) {
 
 			runFileFilter(t, fileFilter, ".gitignore")
 
-			run := singleFilterRun(t, recorder)
+			run := singleRun(t, recorder, metricFileFilterDurationMs)
 			assert.Equal(t, map[string]bool{
 				metricFileFilterMetacharacterFix:    test.metacharacterFix,
 				metricFileFilterRespectTrackedFiles: test.respectTrackedFiles,
 			}, run.bools)
 			// .gitignore and file.txt pass the filter, ignored.txt does not
-			assert.Equal(t, 2, run.ints[metricFileFilterFileCount])
+			assert.Equal(t, 2, run.ints[metricFileFilterSurvivingFileCount])
 			assert.Contains(t, run.ints, metricFileFilterDurationMs)
 			// newRepo isn't a git repository, so no tracked file is ever exempted from a gitignore rule
 			assert.Equal(t, 0, run.ints[metricFileFilterTrackedFilesKeptCount])
 			assert.Len(t, run.ints, 3)
+
+			// Building the rules reports its duration and the flags it built them with, under a scope of its own.
+			rulesRun := singleRun(t, recorder, metricFileFilterRulesBuildDurationMs)
+			assert.Equal(t, map[string]bool{
+				metricFileFilterMetacharacterFix:    test.metacharacterFix,
+				metricFileFilterRespectTrackedFiles: test.respectTrackedFiles,
+			}, rulesRun.bools)
+			assert.Len(t, rulesRun.ints, 1)
 		})
 	}
 
@@ -2248,13 +2261,20 @@ func TestFileFilter_Metrics(t *testing.T) {
 		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
 		runFileFilter(t, NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder)), ".gitignore")
 
-		// two runs of one FileFilter plus one run of another, none of them overwriting the values of the others
+		// two GetFilteredFiles runs of one FileFilter, one GetRules, and one full runFileFilter
+		// (GetRules + GetFilteredFiles), each under its own scope
 		runs := metricsByScope(t, recorder)
-		assert.Len(t, runs, 3)
+		assert.Len(t, runs, 5)
+
+		filterRuns := 0
 		for scopeID, run := range runs {
-			assert.Equal(t, 2, run.ints[metricFileFilterFileCount], "scope %s", scopeID)
-			assert.True(t, run.bools[metricFileFilterMetacharacterFix], "scope %s", scopeID)
+			if count, ok := run.ints[metricFileFilterSurvivingFileCount]; ok {
+				filterRuns++
+				assert.Equal(t, 2, count, "scope %s", scopeID)
+				assert.True(t, run.bools[metricFileFilterMetacharacterFix], "scope %s", scopeID)
+			}
 		}
+		assert.Equal(t, 3, filterRuns)
 	})
 
 	t.Run("without a recorder filtering is unaffected", func(t *testing.T) {
@@ -2283,7 +2303,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 		assert.Equal(t, map[string]bool{
 			metricFileFilterMetacharacterFix:    true,
 			metricFileFilterRespectTrackedFiles: false,
-		}, singleFilterRun(t, recorder).bools)
+		}, singleRun(t, recorder, metricFileFilterDurationMs).bools)
 	})
 
 	// One FileFilter may be started from several goroutines at once: no run may race on shared
@@ -2373,7 +2393,8 @@ func TestFileFilter_Metrics_TrackedFilesKeptCount(t *testing.T) {
 
 			runFileFilter(t, fileFilter, test.ruleFiles...)
 
-			assert.Equal(t, test.expectedCount, singleFilterRun(t, recorder).ints[metricFileFilterTrackedFilesKeptCount])
+			run := singleRun(t, recorder, metricFileFilterDurationMs)
+			assert.Equal(t, test.expectedCount, run.ints[metricFileFilterTrackedFilesKeptCount])
 		})
 	}
 }

@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,14 +93,38 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 		obj, err := analytics.GetV2InstrumentationObject(invocationAnalytics.GetInstrumentation())
 		require.NoError(t, err)
 
-		var recorded []string
+		recorded := map[string][]string{}
 		for key := range *obj.Data.Attributes.Interaction.Extension {
 			// keys are scoped per filter run: file-filter.<scopeID>.<metric>
 			parts := strings.Split(key, ".")
 			if len(parts) == 3 && parts[0] == "file-filter" {
-				recorded = append(recorded, parts[2])
+				recorded[parts[1]] = append(recorded[parts[1]], parts[2])
 			}
 		}
-		assert.ElementsMatch(t, []string{"durationMs", "fileCount", "metacharacterFix", "respectTrackedFiles", "trackedFilesKeptCount"}, recorded)
+
+		// GetRules and GetFilteredFiles each report under a scope of their own; scope IDs are
+		// allocated inside the run, so the scopes are told apart by their duration metric.
+		require.Len(t, recorded, 2)
+		var rulesScope, filterScope []string
+		for _, metricNames := range recorded {
+			if slices.Contains(metricNames, "rulesBuildDurationMs") {
+				rulesScope = metricNames
+			} else {
+				filterScope = metricNames
+			}
+		}
+
+		assert.ElementsMatch(t, []string{
+			"rulesBuildDurationMs",
+			"metacharacterFix",
+			"respectTrackedFiles",
+		}, rulesScope)
+		assert.ElementsMatch(t, []string{
+			"durationMs",
+			"survivingFileCount",
+			"trackedFilesKeptCount",
+			"metacharacterFix",
+			"respectTrackedFiles",
+		}, filterScope)
 	})
 }
