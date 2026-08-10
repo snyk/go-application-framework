@@ -24,7 +24,7 @@ func NewEmitter() *Emitter {
 // before process exit.
 func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) {
 	opts = opts.withDefaults()
-	ApplyFromConfiguration(&opts, opts.Configuration, opts.Engine)
+	opts = ApplyFromConfiguration(opts, opts.Configuration, opts.Engine)
 	opts.Items = cloneItems(opts.Items)
 
 	e.pending.add()

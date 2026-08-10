@@ -35,7 +35,8 @@ func cloneItems(items []BillingItem) []BillingItem {
 			cloned[i].RepoPath = resolveRepoPath(item.RepoPath)
 		}
 		if len(item.Contributors) > 0 {
-			cloned[i].Contributors = append([]Contributor(nil), item.Contributors...)
+			cloned[i].Contributors = make([]Contributor, len(item.Contributors))
+			copy(cloned[i].Contributors, item.Contributors)
 		}
 	}
 	return cloned
@@ -179,10 +180,6 @@ func missingIngestURLResult(logger *zerolog.Logger) Result {
 }
 
 func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) Result {
-	if strings.TrimSpace(opts.IngestURL) == "" {
-		return missingIngestURLResult(opts.Logger)
-	}
-
 	client, err := entitlements_service.NewIngestClient(opts.HTTPClient, opts.IngestURL)
 	if err != nil {
 		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create ingest client")

@@ -886,11 +886,9 @@ func Test_PostInvokeHook_PanicNilObserved(t *testing.T) {
 }
 
 func Test_PostInvokeHook_Timeout(t *testing.T) {
-	original := postInvokeHookTimeout
-	postInvokeHookTimeout = 50 * time.Millisecond
-	defer func() { postInvokeHookTimeout = original }()
-
 	engine, wfId := setupHookTestEngine(t, "timeout-test", nil)
+	impl := engine.(*EngineImpl)
+	impl.postInvokeHookTimer = 50 * time.Millisecond
 
 	var secondHookDone sync.WaitGroup
 	secondHookDone.Add(1)

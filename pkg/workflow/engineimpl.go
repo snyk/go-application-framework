@@ -33,9 +33,10 @@ type EngineImpl struct {
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
-	mu                sync.RWMutex
-	invocationCounter int
-	postInvokeHooks   []PostInvokeHook
+	mu                   sync.RWMutex
+	invocationCounter    int
+	postInvokeHooks      []PostInvokeHook
+	postInvokeHookTimer  time.Duration
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -179,6 +180,7 @@ func NewDefaultWorkFlowEngine() Engine {
 		logger:               &zlog.Logger,
 		config:               configuration.New(),
 		ui:                   ui.DefaultUi(),
+		postInvokeHookTimer:  5 * time.Second,
 	}
 	return engine
 }
@@ -417,8 +419,6 @@ func (e *EngineImpl) Invoke(
 	return output, err
 }
 
-var postInvokeHookTimeout = 5 * time.Second
-
 func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeErr error, ic analytics.InstrumentationCollector) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
@@ -427,6 +427,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 	hooks := make([]PostInvokeHook, len(e.postInvokeHooks))
 	copy(hooks, e.postInvokeHooks)
+	hookTimeout := e.postInvokeHookTimer
 	e.mu.RUnlock()
 
 	hctx := &postInvokeContextImpl{
@@ -435,7 +436,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
 
-	hookCtx, cancel := context.WithTimeout(ctx, postInvokeHookTimeout)
+	hookCtx, cancel := context.WithTimeout(ctx, hookTimeout)
 	defer cancel()
 
 	var wg sync.WaitGroup
@@ -461,7 +462,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	select {
 	case <-done:
 	case <-hookCtx.Done():
-		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s", postInvokeHookTimeout)
+		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s", hookTimeout)
 	}
 }
 

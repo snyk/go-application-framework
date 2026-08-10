@@ -26,7 +26,7 @@ func TestApplyFromConfiguration_FillsUnsetNetworkFields(t *testing.T) {
 		Engine:        engine,
 	}
 
-	ApplyFromConfiguration(&opts, config, engine)
+	opts = ApplyFromConfiguration(opts, config, engine)
 
 	require.NotNil(t, opts.HTTPClient)
 	assert.Equal(t, "https://api.example.test", opts.IngestURL)
@@ -49,7 +49,7 @@ func TestApplyFromConfiguration_PreservesExplicitOverrides(t *testing.T) {
 		Engine:        engine,
 	}
 
-	ApplyFromConfiguration(&opts, config, engine)
+	opts = ApplyFromConfiguration(opts, config, engine)
 
 	assert.Same(t, explicitClient, opts.HTTPClient)
 	assert.Equal(t, "https://override.example.test/v1", opts.IngestURL)

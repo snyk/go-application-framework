@@ -8,20 +8,23 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// ApplyFromConfiguration fills unset network fields on opts from GAF configuration and engine.
-// Explicit HTTPClient, IngestURL, and AuthHeader values on opts are left unchanged.
-func ApplyFromConfiguration(opts *EmitOptions, config configuration.Configuration, engine workflow.Engine) {
-	if opts == nil {
-		return
-	}
-
+// ApplyFromConfiguration returns a copy of opts with unset network fields filled from configuration and engine.
+// Explicit HTTPClient, IngestURL, and AuthHeader values are left unchanged.
+func ApplyFromConfiguration(opts EmitOptions, config configuration.Configuration, engine workflow.Engine) EmitOptions {
 	if opts.HTTPClient == nil && engine != nil {
 		opts.HTTPClient = engine.GetNetworkAccess().GetHttpClient()
 	}
-	if strings.TrimSpace(opts.IngestURL) == "" && config != nil {
+	trimmedURL := strings.TrimSpace(opts.IngestURL)
+	if trimmedURL == "" && config != nil {
 		opts.IngestURL = config.GetString(configuration.API_URL)
+	} else if trimmedURL != opts.IngestURL {
+		opts.IngestURL = trimmedURL
 	}
-	if strings.TrimSpace(opts.AuthHeader) == "" && config != nil {
+	trimmedAuth := strings.TrimSpace(opts.AuthHeader)
+	if trimmedAuth == "" && config != nil {
 		opts.AuthHeader = auth.GetAuthHeader(config)
+	} else if trimmedAuth != opts.AuthHeader {
+		opts.AuthHeader = trimmedAuth
 	}
+	return opts
 }
