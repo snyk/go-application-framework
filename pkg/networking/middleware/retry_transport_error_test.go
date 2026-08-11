@@ -123,6 +123,25 @@ func Test_isRetryableRequest_ConfiguredAllowlistReplacesDefault(t *testing.T) {
 	assert.False(t, isRetryableRequest(newReq(http.MethodPost, "/v1/test-dep-graph"), config), "a consumer-supplied allow-list replaces, not merges with, the default")
 }
 
+func Test_isAllowedPath_BlankEntriesMatchNothing(t *testing.T) {
+	tests := []struct {
+		name    string
+		allowed []string
+		want    bool
+	}{
+		{"empty entry", []string{""}, false},
+		{"whitespace entry", []string{"  "}, false},
+		{"blank entry alongside a non-matching entry", []string{"", "verify/token"}, false},
+		{"blank entry alongside a matching entry", []string{"", "monitor"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isAllowedPath("/v1/monitor/npm", tt.allowed))
+		})
+	}
+}
+
 func Test_isRetryableRequest_ExplicitEmptyAllowlistOnlyAllowsSafeMethods(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/test-dep-graph", nil)
 	require.NoError(t, err)

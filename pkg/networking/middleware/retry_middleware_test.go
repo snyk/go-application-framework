@@ -1591,6 +1591,41 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 	}
 }
 
+func Test_RetryMiddleware_BlankAllowedPathEntryDoesNotAllowEveryPath(t *testing.T) {
+	for _, entry := range []string{"", " "} {
+		t.Run(fmt.Sprintf("entry %q", entry), func(t *testing.T) {
+			var attempts int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if atomic.AddInt32(&attempts, 1) == 1 {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			logger := zerolog.Nop()
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{entry})
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(ConfigurationKeyRetryAfter, 1)
+
+			sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+			req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/monitor/npm", bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := sut.RoundTrip(req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+			assert.EqualValues(t, 1, atomic.LoadInt32(&attempts))
+		})
+	}
+}
+
 func Test_RetryMiddleware_TransportError_ExhaustsAtMaxAttempts(t *testing.T) {
 	logger := zerolog.Nop()
 	attemptCount := 0

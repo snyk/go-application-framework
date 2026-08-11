@@ -61,9 +61,13 @@ func retryAllowedPaths(config configuration.Configuration) []string {
 }
 
 // Contiguous-segment matching avoids near-misses like /v1/test-dep-graph-something.
+// A blank entry would otherwise match the empty leading segment of every absolute path.
 func isAllowedPath(path string, allowed []string) bool {
 	segments := strings.Split(path, "/")
 	for _, entry := range allowed {
+		if strings.TrimSpace(entry) == "" {
+			continue
+		}
 		if containsContiguous(segments, strings.Split(entry, "/")) {
 			return true
 		}
