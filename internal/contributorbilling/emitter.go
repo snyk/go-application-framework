@@ -26,7 +26,7 @@ func NewEmitter() *Emitter {
 func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) {
 	opts = opts.withDefaults()
 	opts = ApplyFromConfiguration(opts, opts.Configuration, opts.Engine)
-	opts.Items = cloneItems(opts.Items)
+	opts.Item = cloneItem(opts.Item)
 
 	e.pending.add()
 	go func(parent context.Context) {
@@ -51,7 +51,9 @@ func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) 
 				if opts.OnResult != nil {
 					func() {
 						defer func() {
-							_ = recover()
+							if r := recover(); r != nil {
+								opts.Logger.Warn().Interface("panic", r).Msg("contributor billing: OnResult callback panicked")
+							}
 						}()
 						opts.OnResult(result)
 					}()
@@ -61,7 +63,14 @@ func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) 
 
 		result := emitContributorBilling(parent, opts)
 		if opts.OnResult != nil {
-			opts.OnResult(result)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						opts.Logger.Warn().Interface("panic", r).Msg("contributor billing: OnResult callback panicked")
+					}
+				}()
+				opts.OnResult(result)
+			}()
 		}
 	}(ctx)
 }
@@ -114,23 +123,19 @@ func (t *inFlightTracker) done() {
 	}
 }
 
-func (t *inFlightTracker) snapshot() (count int, zeroCh <-chan struct{}) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	return t.count, t.zeroCh
-}
-
 func (t *inFlightTracker) wait() {
 	for {
-		count, ch := t.snapshot()
-		if count == 0 {
+		t.mu.Lock()
+		if t.count == 0 {
+			t.mu.Unlock()
 			return
 		}
+		ch := t.zeroCh
+		t.mu.Unlock()
+
 		if ch == nil {
 			continue
 		}
-
 		<-ch
 	}
 }
@@ -143,10 +148,13 @@ func (t *inFlightTracker) waitWithTimeout(d time.Duration) bool {
 
 	deadline := time.Now().Add(d)
 	for {
-		count, ch := t.snapshot()
-		if count == 0 {
+		t.mu.Lock()
+		if t.count == 0 {
+			t.mu.Unlock()
 			return true
 		}
+		ch := t.zeroCh
+		t.mu.Unlock()
 
 		remaining := time.Until(deadline)
 		if remaining <= 0 {

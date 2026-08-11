@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -76,14 +75,12 @@ func TestEmitContributorBilling_Success(t *testing.T) {
 		AuthHeader: "token test-token",
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{
-				EntityID: "project-1",
-				Contributors: []contributorbilling.Contributor{
-					{
-						Email:            "dev@example.com",
-						LatestCommitDate: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC),
-					},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+			Contributors: []contributorbilling.Contributor{
+				{
+					Email:            "dev@example.com",
+					LatestCommitDate: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC),
 				},
 			},
 		},
@@ -108,37 +105,6 @@ func TestEmitContributorBilling_Success(t *testing.T) {
 	assert.Equal(t, "project", attributes["contributors_entity_type"])
 }
 
-func TestEmitContributorBilling_MultipleItems(t *testing.T) {
-	t.Parallel()
-
-	var requestCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
-		w.WriteHeader(http.StatusCreated)
-	}))
-	t.Cleanup(server.Close)
-
-	resultCh := make(chan contributorbilling.Result, 1)
-	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
-		HTTPClient: server.Client(),
-		IngestURL:  server.URL,
-		AuthHeader: "token test-token",
-		Capability: contributorbilling.CapabilityIaC,
-		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-a"},
-			{EntityID: "project-b"},
-		},
-		OnResult: func(result contributorbilling.Result) {
-			resultCh <- result
-		},
-	})
-
-	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
-	assert.Equal(t, 2, requestCount)
-}
-
 func TestEmitContributorBilling_SkipsEmptyItems(t *testing.T) {
 	t.Parallel()
 
@@ -155,7 +121,7 @@ func TestEmitContributorBilling_SkipsEmptyItems(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items:      nil,
+		Item:       contributorbilling.BillingItem{},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
 		},
@@ -163,7 +129,7 @@ func TestEmitContributorBilling_SkipsEmptyItems(t *testing.T) {
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
-	assert.Equal(t, contributorbilling.SkipReasonEmptyItems, result.SkipReason)
+	assert.Equal(t, contributorbilling.SkipReasonMissingEntityID, result.SkipReason)
 	assert.False(t, called)
 }
 
@@ -183,8 +149,8 @@ func TestEmitContributorBilling_SkipsMissingEntityID(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: ""},
+		Item: contributorbilling.BillingItem{
+			EntityID: "",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -212,8 +178,8 @@ func TestEmitContributorBilling_AllowsEmptyCapability(t *testing.T) {
 		HTTPClient: server.Client(),
 		IngestURL:  server.URL,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -241,8 +207,8 @@ func TestEmitContributorBilling_SkipsInvalidCapability(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: "osss",
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -270,8 +236,9 @@ func TestEmitContributorBilling_SkipsInvalidEntityType(t *testing.T) {
 		HTTPClient: server.Client(),
 		IngestURL:  server.URL,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1", EntityType: "invalid-type"},
+		Item: contributorbilling.BillingItem{
+			EntityID:   "project-1",
+			EntityType: "invalid-type",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -284,36 +251,7 @@ func TestEmitContributorBilling_SkipsInvalidEntityType(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
-	t.Parallel()
-
-	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusCreated)
-	}))
-	t.Cleanup(server.Close)
-
-	resultCh := make(chan contributorbilling.Result, 1)
-	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
-		HTTPClient: server.Client(),
-		IngestURL:  server.URL,
-		Capability: contributorbilling.CapabilityOSS,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
-		},
-		OnResult: func(result contributorbilling.Result) {
-			resultCh <- result
-		},
-	})
-
-	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
-	assert.Equal(t, contributorbilling.SkipReasonMissingScopeID, result.SkipReason)
-	assert.False(t, called)
-}
-
-func TestEmitContributorBilling_FiltersInvalidEntityIDs(t *testing.T) {
+func TestEmitContributorBilling_TrimsEntityTypeWhitespace(t *testing.T) {
 	t.Parallel()
 
 	var gotBody map[string]interface{}
@@ -331,9 +269,9 @@ func TestEmitContributorBilling_FiltersInvalidEntityIDs(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: ""},
-			{EntityID: "project-a"},
+		Item: contributorbilling.BillingItem{
+			EntityID:   "project-1",
+			EntityType: "  target  ",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -345,7 +283,36 @@ func TestEmitContributorBilling_FiltersInvalidEntityIDs(t *testing.T) {
 
 	attributes := ingestAttributes(gotBody)
 	require.NotNil(t, attributes)
-	assert.Equal(t, "project-a", attributes["contributors_entity_id"])
+	assert.Equal(t, "target", attributes["contributors_entity_type"])
+}
+
+func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityOSS,
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
+	assert.Equal(t, contributorbilling.SkipReasonMissingScopeID, result.SkipReason)
+	assert.False(t, called)
 }
 
 func TestEmitContributorBilling_MissingIngestURL(t *testing.T) {
@@ -355,8 +322,8 @@ func TestEmitContributorBilling_MissingIngestURL(t *testing.T) {
 	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -381,8 +348,8 @@ func TestEmitContributorBilling_MissingIngestURLSkipsCollection(t *testing.T) {
 		ScopeID:             "11111111-1111-1111-1111-111111111111",
 		RepoPath:            dir,
 		CollectContributors: true,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -414,8 +381,8 @@ func TestEmitContributorBilling_CompletesWhenParentContextAlreadyCanceled(t *tes
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -427,7 +394,7 @@ func TestEmitContributorBilling_CompletesWhenParentContextAlreadyCanceled(t *tes
 	assert.True(t, called)
 }
 
-func TestEmitContributorBilling_CopiesItems(t *testing.T) {
+func TestEmitContributorBilling_CopiesItem(t *testing.T) {
 	t.Parallel()
 
 	blockPost := make(chan struct{})
@@ -444,8 +411,8 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	items := []contributorbilling.BillingItem{
-		{EntityID: "original-project"},
+	item := contributorbilling.BillingItem{
+		EntityID: "original-project",
 	}
 
 	resultCh := make(chan contributorbilling.Result, 1)
@@ -454,13 +421,13 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items:      items,
+		Item:       item,
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
 		},
 	})
 
-	items[0].EntityID = "mutated-project"
+	item.EntityID = "mutated-project"
 	close(blockPost)
 
 	result := waitForResult(t, resultCh)
@@ -485,8 +452,8 @@ func TestEmitContributorBilling_HTTPFailure(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -518,8 +485,8 @@ func TestEmitContributorBilling_TimeoutDoesNotBlockCaller(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
 		Timeout:    20 * time.Millisecond,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -554,8 +521,8 @@ func TestEmitContributorBilling_CompletesDespiteCanceledContextDuringSlowPOST(t 
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -597,8 +564,8 @@ func TestEmitContributorBilling_CollectContributors(t *testing.T) {
 		RepoPath:            repoPath,
 		CollectContributors: true,
 		Logger:              &logger,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -639,14 +606,12 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 	)
 
 	prefilledWhen := time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC)
-	var bodies []map[string]interface{}
+	var gotBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
-		var parsed map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &parsed))
-		bodies = append(bodies, parsed)
+		require.NoError(t, json.Unmarshal(body, &gotBody))
 		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
@@ -659,14 +624,11 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 		ScopeID:             "11111111-1111-1111-1111-111111111111",
 		RepoPath:            repoPath,
 		CollectContributors: true,
-		Items: []contributorbilling.BillingItem{
-			{
-				EntityID: "project-prefilled",
-				Contributors: []contributorbilling.Contributor{
-					{Email: "prefilled@example.com", LatestCommitDate: prefilledWhen},
-				},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-prefilled",
+			Contributors: []contributorbilling.Contributor{
+				{Email: "prefilled@example.com", LatestCommitDate: prefilledWhen},
 			},
-			{EntityID: "project-collected"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -675,29 +637,17 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
-	require.Len(t, bodies, 2)
 
-	byEntity := make(map[string][]interface{})
-	for _, body := range bodies {
-		attributes := ingestAttributes(body)
-		require.NotNil(t, attributes)
-		entityID, ok := attributes["contributors_entity_id"].(string)
-		require.True(t, ok)
-		itemContributors, ok := attributes["contributors"].([]interface{})
-		require.True(t, ok)
-		byEntity[entityID] = itemContributors
-	}
+	attributes := ingestAttributes(gotBody)
+	require.NotNil(t, attributes)
+	contributors, ok := attributes["contributors"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, contributors, 1)
 
-	require.Len(t, byEntity["project-prefilled"], 1)
-	prefilled, ok := byEntity["project-prefilled"][0].(map[string]interface{})
+	prefilled, ok := contributors[0].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "prefilled@example.com", prefilled["email"])
 	assert.Equal(t, prefilledWhen.Format(time.RFC3339), prefilled["commit_date"])
-
-	require.Len(t, byEntity["project-collected"], 1)
-	collected, ok := byEntity["project-collected"][0].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "collected@example.com", collected["email"])
 }
 
 func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
@@ -722,15 +672,13 @@ func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{
-				EntityID: "project-deduped",
-				Contributors: []contributorbilling.Contributor{
-					{Email: "alice@example.com", LatestCommitDate: older},
-					{Email: "alice@example.com", LatestCommitDate: newer},
-					{Email: "Alice@example.com", LatestCommitDate: otherWhen},
-					{Email: "bob@example.com", LatestCommitDate: older},
-				},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-deduped",
+			Contributors: []contributorbilling.Contributor{
+				{Email: "alice@example.com", LatestCommitDate: older},
+				{Email: "alice@example.com", LatestCommitDate: newer},
+				{Email: "Alice@example.com", LatestCommitDate: otherWhen},
+				{Email: "bob@example.com", LatestCommitDate: older},
 			},
 		},
 		OnResult: func(result contributorbilling.Result) {
@@ -782,14 +730,12 @@ func TestEmitContributorBilling_PreservesContributorOrder(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{
-				EntityID: "project-ordered",
-				Contributors: []contributorbilling.Contributor{
-					{Email: "zebra@example.com", LatestCommitDate: when},
-					{Email: "alice@example.com", LatestCommitDate: when},
-					{Email: "bob@example.com", LatestCommitDate: when},
-				},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-ordered",
+			Contributors: []contributorbilling.Contributor{
+				{Email: "zebra@example.com", LatestCommitDate: when},
+				{Email: "alice@example.com", LatestCommitDate: when},
+				{Email: "bob@example.com", LatestCommitDate: when},
 			},
 		},
 		OnResult: func(result contributorbilling.Result) {
@@ -822,20 +768,18 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 	t.Parallel()
 
 	now := time.Now().UTC()
-	defaultWhen := now.AddDate(0, 0, -5)
 	itemWhen := now.AddDate(0, 0, -7)
 
-	defaultRepo := initGitRepo(t, commitSpec{email: "default@example.com", when: defaultWhen})
 	itemRepo := initGitRepo(t, commitSpec{email: "item@example.com", when: itemWhen})
 
-	var bodies []map[string]interface{}
+	var gotBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
 		var parsed map[string]interface{}
 		require.NoError(t, json.Unmarshal(body, &parsed))
-		bodies = append(bodies, parsed)
+		require.NoError(t, json.Unmarshal(body, &gotBody))
 		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
@@ -846,11 +790,10 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 		IngestURL:           server.URL,
 		Capability:          contributorbilling.CapabilityIaC,
 		ScopeID:             "11111111-1111-1111-1111-111111111111",
-		RepoPath:            defaultRepo,
 		CollectContributors: true,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-default"},
-			{EntityID: "project-item", RepoPath: itemRepo},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-item",
+			RepoPath: itemRepo,
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -859,26 +802,17 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
-	require.Len(t, bodies, 2)
 
-	byEntity := make(map[string]string)
-	for _, body := range bodies {
-		attributes := ingestAttributes(body)
-		require.NotNil(t, attributes)
-		entityID, ok := attributes["contributors_entity_id"].(string)
-		require.True(t, ok)
-		contributors, ok := attributes["contributors"].([]interface{})
-		require.True(t, ok)
-		require.Len(t, contributors, 1)
-		contributor, ok := contributors[0].(map[string]interface{})
-		require.True(t, ok)
-		email, ok := contributor["email"].(string)
-		require.True(t, ok)
-		byEntity[entityID] = email
-	}
-
-	assert.Equal(t, "default@example.com", byEntity["project-default"])
-	assert.Equal(t, "item@example.com", byEntity["project-item"])
+	attributes := ingestAttributes(gotBody)
+	require.NotNil(t, attributes)
+	contributors, ok := attributes["contributors"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, contributors, 1)
+	contributor, ok := contributors[0].(map[string]interface{})
+	require.True(t, ok)
+	email, ok := contributor["email"].(string)
+	require.True(t, ok)
+	assert.Equal(t, "item@example.com", email)
 }
 
 func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
@@ -902,8 +836,8 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 		ScopeID:             "11111111-1111-1111-1111-111111111111",
 		RepoPath:            dir,
 		CollectContributors: true,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -914,105 +848,6 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 	assert.True(t, called)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
 	require.Error(t, result.ContributorCollectionErr)
-}
-
-func TestEmitContributorBilling_MultiItemContinuesAfterFailure(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount.Add(1)
-
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-
-		var parsed map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &parsed))
-		attributes := ingestAttributes(parsed)
-		require.NotNil(t, attributes)
-
-		entityID, ok := attributes["contributors_entity_id"].(string)
-		require.True(t, ok)
-		if entityID == "project-fail" {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusCreated)
-	}))
-	t.Cleanup(server.Close)
-
-	resultCh := make(chan contributorbilling.Result, 1)
-	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
-		HTTPClient: server.Client(),
-		IngestURL:  server.URL,
-		Capability: contributorbilling.CapabilityIaC,
-		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-ok"},
-			{EntityID: "project-fail"},
-			{EntityID: "project-also-ok"},
-		},
-		OnResult: func(result contributorbilling.Result) {
-			resultCh <- result
-		},
-	})
-
-	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
-	assert.Equal(t, contributorbilling.FailReasonHTTPError, result.FailReason)
-	assert.Equal(t, 2, result.ItemsEmitted)
-	assert.Equal(t, 1, result.ItemsFailed)
-	assert.Equal(t, 3, int(requestCount.Load()))
-}
-
-func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount.Add(1)
-
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-
-		var parsed map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &parsed))
-		attributes := ingestAttributes(parsed)
-		require.NotNil(t, attributes)
-
-		entityID, ok := attributes["contributors_entity_id"].(string)
-		require.True(t, ok)
-		if entityID == "slow" {
-			time.Sleep(200 * time.Millisecond)
-		}
-
-		w.WriteHeader(http.StatusCreated)
-	}))
-	t.Cleanup(server.Close)
-
-	resultCh := make(chan contributorbilling.Result, 1)
-	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
-		HTTPClient: server.Client(),
-		IngestURL:  server.URL,
-		Capability: contributorbilling.CapabilityIaC,
-		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Timeout:    50 * time.Millisecond,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "slow"},
-			{EntityID: "fast"},
-		},
-		OnResult: func(result contributorbilling.Result) {
-			resultCh <- result
-		},
-	})
-
-	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
-	assert.Equal(t, contributorbilling.FailReasonTimeout, result.FailReason)
-	assert.Equal(t, 1, result.ItemsEmitted)
-	assert.Equal(t, 1, result.ItemsFailed)
-	assert.Equal(t, 2, int(requestCount.Load()))
 }
 
 func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *testing.T) {
@@ -1035,8 +870,8 @@ func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *tes
 		ScopeID:             "11111111-1111-1111-1111-111111111111",
 		RepoPath:            ".",
 		CollectContributors: true,
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "22222222-2222-2222-2222-222222222222"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "22222222-2222-2222-2222-222222222222",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result

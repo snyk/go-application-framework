@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	gitutil "github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
@@ -27,12 +29,8 @@ func collectContributors(repoPath string, now time.Time) ([]Contributor, error) 
 
 // dedupeContributorsByEmail collapses duplicate contributor emails in one emit payload,
 // treating emails as case-insensitive and keeping the latest commit date per email.
-// Order is preserved from the input slice.
+// Skips contributors with empty emails. Order is preserved from the input slice.
 func dedupeContributorsByEmail(contributors []Contributor) []Contributor {
-	if len(contributors) <= 1 {
-		return contributors
-	}
-
 	seen := make(map[string]int)
 	deduped := make([]Contributor, 0, len(contributors))
 
@@ -59,11 +57,29 @@ func dedupeContributorsByEmail(contributors []Contributor) []Contributor {
 	return deduped
 }
 
-func dedupeContributorsForItems(items []BillingItem) {
-	for i := range items {
-		if len(items[i].Contributors) == 0 {
-			continue
-		}
-		items[i].Contributors = dedupeContributorsByEmail(items[i].Contributors)
+func fillContributors(item *BillingItem, defaultRepoPath string, now time.Time, logger *zerolog.Logger) error {
+	if len(item.Contributors) > 0 {
+		return nil
 	}
+
+	repoPath := item.RepoPath
+	if repoPath == "" {
+		repoPath = defaultRepoPath
+	}
+
+	contributors, err := collectContributors(repoPath, now)
+	if err != nil {
+		logger.Debug().Err(err).Str("repo_path", repoPath).Msg("contributor billing: git collection failed, continuing with empty contributors")
+		return err
+	}
+
+	item.Contributors = contributors
+	return nil
+}
+
+func dedupeContributor(item *BillingItem) {
+	if len(item.Contributors) == 0 {
+		return
+	}
+	item.Contributors = dedupeContributorsByEmail(item.Contributors)
 }

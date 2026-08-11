@@ -16,9 +16,15 @@ func buildIngestRequest(item BillingItem, logger *zerolog.Logger) v20260729.Crea
 			}
 			continue
 		}
+		if strings.TrimSpace(contributor.Email) == "" {
+			if logger != nil {
+				logger.Warn().Msg("contributor billing: skipping contributor with empty email")
+			}
+			continue
+		}
 
 		contributors = append(contributors, v20260729.Contributor{
-			Email:      contributor.Email,
+			Email:      strings.TrimSpace(contributor.Email),
 			CommitDate: contributor.LatestCommitDate.UTC(),
 		})
 	}

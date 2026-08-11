@@ -16,14 +16,15 @@ type Contributor struct {
 	LatestCommitDate time.Time
 }
 
-// BillingItem is one entity scope emitted as a separate ingest POST.
+// BillingItem is the entity scope emitted as an ingest POST.
 type BillingItem struct {
 	// EntityID is the UUID portion of contributors_entity_id (paired with EntityType).
+	// Required.
 	EntityID string
 	// EntityType is the ES ingest entity prefix (project, target, revision). Defaults to project.
 	EntityType   string
 	Contributors []Contributor
-	// RepoPath overrides EmitOptions.RepoPath for contributor collection on this item.
+	// RepoPath overrides EmitOptions.RepoPath for contributor collection.
 	RepoPath string
 }
 
@@ -36,7 +37,7 @@ type EmitOptions struct {
 	// It is not sent on the HTTP payload.
 	Capability string
 	ScopeID    string
-	Items      []BillingItem
+	Item       BillingItem
 
 	// Configuration and Engine optionally supply IngestURL, AuthHeader, and HTTPClient
 	// via ApplyFromConfiguration when those fields are unset.
@@ -65,7 +66,6 @@ const (
 type SkipReason string
 
 const (
-	SkipReasonEmptyItems        SkipReason = "empty_items"
 	SkipReasonMissingEntityID   SkipReason = "missing_entity_id"
 	SkipReasonInvalidCapability SkipReason = "invalid_capability"
 	SkipReasonInvalidEntityType SkipReason = "invalid_entity_type"
@@ -89,10 +89,6 @@ type Result struct {
 	FailReason FailReason
 	HTTPStatus int
 	Err        error
-	// ItemsEmitted counts ingest POSTs that returned HTTP 201 in this emit call.
-	ItemsEmitted int
-	// ItemsFailed counts ingest POSTs that failed after earlier items were still attempted.
-	ItemsFailed int
 	// ContributorCollectionErr is set when git collection failed but the POST still ran.
 	ContributorCollectionErr error
 }

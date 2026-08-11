@@ -38,8 +38,8 @@ func TestEmitContributorBilling_Integration_AppliesConfigurationAndPosts(t *test
 		Configuration: config,
 		Engine:        engine,
 		ScopeID:       "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "22222222-2222-2222-2222-222222222222"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "22222222-2222-2222-2222-222222222222",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result

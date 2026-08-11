@@ -20,24 +20,17 @@ func EmitContributorBilling(ctx context.Context, opts EmitOptions) {
 	defaultEmitter.EmitContributorBilling(ctx, opts)
 }
 
-func cloneItems(items []BillingItem) []BillingItem {
-	if len(items) == 0 {
-		return nil
+func cloneItem(item BillingItem) BillingItem {
+	cloned := BillingItem{
+		EntityID:   item.EntityID,
+		EntityType: item.EntityType,
 	}
-
-	cloned := make([]BillingItem, len(items))
-	for i, item := range items {
-		cloned[i] = BillingItem{
-			EntityID:   item.EntityID,
-			EntityType: item.EntityType,
-		}
-		if item.RepoPath != "" {
-			cloned[i].RepoPath = resolveRepoPath(item.RepoPath)
-		}
-		if len(item.Contributors) > 0 {
-			cloned[i].Contributors = make([]Contributor, len(item.Contributors))
-			copy(cloned[i].Contributors, item.Contributors)
-		}
+	if item.RepoPath != "" {
+		cloned.RepoPath = resolveRepoPath(item.RepoPath)
+	}
+	if len(item.Contributors) > 0 {
+		cloned.Contributors = make([]Contributor, len(item.Contributors))
+		copy(cloned.Contributors, item.Contributors)
 	}
 	return cloned
 }
@@ -57,15 +50,20 @@ func (opts EmitOptions) withDefaults() EmitOptions {
 }
 
 func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
-	items, skipReason := filterItems(opts.Items)
-	if len(items) == 0 {
+	opts.Item.EntityID = strings.TrimSpace(opts.Item.EntityID)
+	if opts.Item.EntityID == "" {
+		skipReason := SkipReasonMissingEntityID
 		logSkip(opts.Logger, skipReason)
 		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
 	}
 
-	if skipReason := validateItemEntityTypes(items); skipReason != "" {
-		logSkip(opts.Logger, skipReason)
-		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+	if opts.Item.EntityType != "" {
+		opts.Item.EntityType = strings.TrimSpace(opts.Item.EntityType)
+		if !isKnownEntityType(opts.Item.EntityType) {
+			skipReason := SkipReasonInvalidEntityType
+			logSkip(opts.Logger, skipReason)
+			return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+		}
 	}
 
 	if skipReason := validateRequiredFields(opts); skipReason != "" {
@@ -79,26 +77,16 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 
 	var collectionErr error
 	if opts.CollectContributors {
-		collectionErr = fillContributors(items, opts.RepoPath, time.Now(), opts.Logger)
+		collectionErr = fillContributors(&opts.Item, opts.RepoPath, time.Now(), opts.Logger)
 	}
 
-	dedupeContributorsForItems(items)
+	dedupeContributor(&opts.Item)
 
-	result := postIngest(parent, opts, items)
+	result := postIngest(parent, opts, opts.Item)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
 	}
 	return result
-}
-
-func validateItemEntityTypes(items []BillingItem) SkipReason {
-	for _, item := range items {
-		entityType := strings.TrimSpace(item.EntityType)
-		if entityType != "" && !isKnownEntityType(entityType) {
-			return SkipReasonInvalidEntityType
-		}
-	}
-	return ""
 }
 
 func validateRequiredFields(opts EmitOptions) SkipReason {
@@ -129,81 +117,13 @@ func isKnownEntityType(entityType string) bool {
 	}
 }
 
-func fillContributors(items []BillingItem, defaultRepoPath string, now time.Time, logger *zerolog.Logger) error {
-	needsCollection := false
-	for _, item := range items {
-		if len(item.Contributors) == 0 {
-			needsCollection = true
-			break
-		}
-	}
-	if !needsCollection {
-		return nil
-	}
-
-	cache := make(map[string][]Contributor)
-	var firstErr error
-
-	for i := range items {
-		if len(items[i].Contributors) > 0 {
-			continue
-		}
-
-		repoPath := items[i].RepoPath
-		if repoPath == "" {
-			repoPath = defaultRepoPath
-		}
-
-		contributors, cached := cache[repoPath]
-		if !cached {
-			var err error
-			contributors, err = collectContributors(repoPath, now)
-			if err != nil {
-				logger.Debug().Err(err).Str("repo_path", repoPath).Msg("contributor billing: git collection failed, continuing with empty contributors")
-				cache[repoPath] = nil
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			cache[repoPath] = contributors
-		}
-
-		items[i].Contributors = contributors
-	}
-
-	return firstErr
-}
-
-func filterItems(items []BillingItem) ([]BillingItem, SkipReason) {
-	if len(items) == 0 {
-		return nil, SkipReasonEmptyItems
-	}
-
-	filtered := make([]BillingItem, 0, len(items))
-	for _, item := range items {
-		entityID := strings.TrimSpace(item.EntityID)
-		if entityID == "" {
-			continue
-		}
-		item.EntityID = entityID
-		filtered = append(filtered, item)
-	}
-
-	if len(filtered) == 0 {
-		return nil, SkipReasonMissingEntityID
-	}
-
-	return filtered, ""
-}
-
 func missingIngestURLResult(logger *zerolog.Logger) Result {
 	err := errors.New("ingest URL is required")
 	logger.Debug().Err(err).Msg("contributor billing: missing ingest URL")
 	return Result{Status: ResultStatusFailed, FailReason: FailReasonMissingIngestURL, Err: err}
 }
 
-func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) Result {
+func postIngest(parent context.Context, opts EmitOptions, item BillingItem) Result {
 	client, err := entitlements_service.NewIngestClient(opts.HTTPClient, opts.IngestURL)
 	if err != nil {
 		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create ingest client")
@@ -211,57 +131,22 @@ func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) R
 	}
 
 	baseCtx := context.WithoutCancel(parent)
-	var (
-		lastStatus    int
-		emitted       int
-		failed        int
-		failureResult *Result
-	)
+	itemCtx, cancel := context.WithTimeout(baseCtx, opts.Timeout)
+	defer cancel()
 
-	for _, item := range items {
-		itemCtx, cancel := context.WithTimeout(baseCtx, opts.Timeout)
-		request := buildIngestRequest(item, opts.Logger)
-		result := postSingleIngest(itemCtx, client, opts, request)
-		cancel()
+	request := buildIngestRequest(item, opts.Logger)
+	result := postSingleIngest(itemCtx, client, opts, request)
 
-		if result.Status == ResultStatusEmitted {
-			emitted++
-			lastStatus = result.HTTPStatus
-			continue
-		}
-
-		failed++
-		if failureResult == nil {
-			copied := result
-			failureResult = &copied
-		}
-	}
-
-	if failed == 0 {
-		opts.Logger.Debug().Int("status", lastStatus).Int("items", len(items)).Msg("contributor billing: emitted")
-		return Result{
-			Status:       ResultStatusEmitted,
-			HTTPStatus:   lastStatus,
-			ItemsEmitted: emitted,
-		}
+	if result.Status == ResultStatusEmitted {
+		opts.Logger.Debug().Int("status", result.HTTPStatus).Msg("contributor billing: emitted")
+		return result
 	}
 
 	opts.Logger.Debug().
-		Int("items_emitted", emitted).
-		Int("items_failed", failed).
-		Msg("contributor billing: ingest completed with failures")
+		Str("fail_reason", string(result.FailReason)).
+		Msg("contributor billing: ingest failed")
 
-	aggregated := Result{
-		Status:       ResultStatusFailed,
-		ItemsEmitted: emitted,
-		ItemsFailed:  failed,
-	}
-	if failureResult != nil {
-		aggregated.FailReason = failureResult.FailReason
-		aggregated.HTTPStatus = failureResult.HTTPStatus
-		aggregated.Err = failureResult.Err
-	}
-	return aggregated
+	return result
 }
 
 func postSingleIngest(
@@ -295,5 +180,5 @@ func postSingleIngest(
 }
 
 func logSkip(logger *zerolog.Logger, reason SkipReason) {
-	logger.Debug().Str("reason", string(reason)).Msg("contributor billing: skipped emit")
+	logger.Info().Str("reason", string(reason)).Msg("contributor billing: skipped emit")
 }

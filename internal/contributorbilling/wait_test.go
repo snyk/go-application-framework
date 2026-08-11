@@ -36,8 +36,8 @@ func TestWaitWithTimeout_WaitsForInFlightEmit(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -82,8 +82,8 @@ func TestWaitWithTimeout_TimesOut(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 	})
 

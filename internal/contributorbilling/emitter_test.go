@@ -36,8 +36,8 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 		IngestURL:  slowServer.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-1"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
 		},
 	})
 
@@ -50,8 +50,8 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 		IngestURL:  fastServer.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-2"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-2",
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -67,28 +67,50 @@ func TestEmitter_WaitWithTimeout_IsolatedFromOtherEmitters(t *testing.T) {
 	slow.Wait()
 }
 
-func TestDefaultEmitter_WaitWithTimeout_WaitsForLaterEmit(t *testing.T) {
-	blockPost := make(chan struct{})
+func TestEmitter_RecoversFromPanicInOnResult(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-blockPost
 		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
 
-	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+	emitter := contributorbilling.NewEmitter()
+
+	emitter.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
 		HTTPClient: server.Client(),
 		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "11111111-1111-1111-1111-111111111111",
-		Items: []contributorbilling.BillingItem{
-			{EntityID: "project-blocked"},
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+		},
+		OnResult: func(result contributorbilling.Result) {
+			panic("intentional panic in callback")
 		},
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	// Should not hang; goroutine should recover from panic
+	ok := emitter.WaitWithTimeout(2 * time.Second)
+	assert.True(t, ok, "emitter should recover from OnResult panic and complete wait")
 
-	ok := contributorbilling.WaitWithTimeout(50 * time.Millisecond)
-	assert.False(t, ok, "wait should not complete while blocked POST is in flight")
+	// Subsequent emit should work normally
+	resultCh := make(chan contributorbilling.Result, 1)
+	emitter.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityOSS,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-2",
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
 
-	close(blockPost)
-	assert.True(t, contributorbilling.WaitWithTimeout(2*time.Second))
+	ok = emitter.WaitWithTimeout(2 * time.Second)
+	assert.True(t, ok)
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
 }

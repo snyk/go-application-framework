@@ -2,17 +2,15 @@ package contributorbilling
 
 import "time"
 
-// WaitBudget returns a teardown wait duration large enough for one emit call that POSTs
-// itemCount entities sequentially, each with its own perRequestTimeout budget.
-func WaitBudget(itemCount int, perRequestTimeout time.Duration) time.Duration {
-	if itemCount <= 0 {
-		itemCount = 1
-	}
-	if perRequestTimeout <= 0 {
-		perRequestTimeout = DefaultTimeout
+// WaitBudget returns a teardown wait duration for one emit call.
+// The timeout parameter covers the HTTP POST; if zero or negative, DefaultTimeout is used.
+// Collection overhead (git log, dedup, etc.) is always added.
+func WaitBudget(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		timeout = DefaultTimeout
 	}
 
-	return time.Duration(itemCount) * perRequestTimeout
+	return timeout
 }
 
 // Wait blocks until all in-flight EmitContributorBilling goroutines on the package default Emitter complete.

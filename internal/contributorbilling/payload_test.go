@@ -101,72 +101,30 @@ func TestContributorsEntityID_ReturnsBareUUID(t *testing.T) {
 	}))
 }
 
-func TestCloneItems(t *testing.T) {
+func TestCloneItem(t *testing.T) {
 	t.Parallel()
 
-	original := []BillingItem{
-		{
-			EntityID:   "project-a",
-			EntityType: EntityTypeTarget,
-			RepoPath:   "repo-a",
-			Contributors: []Contributor{
-				{Email: "dev@example.com", LatestCommitDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
-			},
+	original := BillingItem{
+		EntityID:   "project-a",
+		EntityType: EntityTypeTarget,
+		RepoPath:   "repo-a",
+		Contributors: []Contributor{
+			{Email: "dev@example.com", LatestCommitDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
 
-	cloned := cloneItems(original)
-	require.Len(t, cloned, 1)
+	cloned := cloneItem(original)
 
-	original[0].EntityID = "mutated"
-	original[0].EntityType = EntityTypeProject
-	original[0].RepoPath = "mutated-repo"
-	original[0].Contributors[0].Email = "mutated@example.com"
+	original.EntityID = "mutated"
+	original.EntityType = EntityTypeProject
+	original.RepoPath = "mutated-repo"
+	original.Contributors[0].Email = "mutated@example.com"
 
-	assert.Equal(t, "project-a", cloned[0].EntityID)
-	assert.Equal(t, EntityTypeTarget, cloned[0].EntityType)
-	assert.True(t, filepath.IsAbs(cloned[0].RepoPath))
-	assert.Contains(t, cloned[0].RepoPath, "repo-a")
-	assert.Equal(t, "dev@example.com", cloned[0].Contributors[0].Email)
-}
-
-func TestFilterItems(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty input", func(t *testing.T) {
-		t.Parallel()
-		items, reason := filterItems(nil)
-		assert.Empty(t, items)
-		assert.Equal(t, SkipReasonEmptyItems, reason)
-	})
-
-	t.Run("all missing target id", func(t *testing.T) {
-		t.Parallel()
-		items, reason := filterItems([]BillingItem{{EntityID: ""}, {EntityID: "  "}})
-		assert.Empty(t, items)
-		assert.Equal(t, SkipReasonMissingEntityID, reason)
-	})
-
-	t.Run("keeps valid items", func(t *testing.T) {
-		t.Parallel()
-		items, reason := filterItems([]BillingItem{
-			{EntityID: ""},
-			{EntityID: "project-a"},
-		})
-		require.Len(t, items, 1)
-		assert.Equal(t, "project-a", items[0].EntityID)
-		assert.Empty(t, reason)
-	})
-
-	t.Run("trims target id", func(t *testing.T) {
-		t.Parallel()
-		items, reason := filterItems([]BillingItem{
-			{EntityID: "  project-a  "},
-		})
-		require.Len(t, items, 1)
-		assert.Equal(t, "project-a", items[0].EntityID)
-		assert.Empty(t, reason)
-	})
+	assert.Equal(t, "project-a", cloned.EntityID)
+	assert.Equal(t, EntityTypeTarget, cloned.EntityType)
+	assert.True(t, filepath.IsAbs(cloned.RepoPath))
+	assert.Contains(t, cloned.RepoPath, "repo-a")
+	assert.Equal(t, "dev@example.com", cloned.Contributors[0].Email)
 }
 
 func TestValidateRequiredFields(t *testing.T) {
