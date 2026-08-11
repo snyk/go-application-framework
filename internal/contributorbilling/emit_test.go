@@ -716,7 +716,7 @@ func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
 	require.NotNil(t, attributes)
 	contributors, ok := attributes["contributors"].([]interface{})
 	require.True(t, ok)
-	require.Len(t, contributors, 3)
+	require.Len(t, contributors, 2)
 
 	byEmail := make(map[string]string)
 	for _, raw := range contributors {
@@ -730,7 +730,6 @@ func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
 	}
 
 	assert.Equal(t, newer.Format(time.RFC3339), byEmail["alice@example.com"])
-	assert.Equal(t, otherWhen.Format(time.RFC3339), byEmail["Alice@example.com"])
 	assert.Equal(t, older.Format(time.RFC3339), byEmail["bob@example.com"])
 }
 

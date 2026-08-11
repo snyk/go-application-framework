@@ -27,19 +27,20 @@ func TestDedupeContributorsByEmail_KeepsLatestCommitDate(t *testing.T) {
 	assert.Equal(t, older, got[1].LatestCommitDate)
 }
 
-func TestDedupeContributorsByEmail_CaseSensitive(t *testing.T) {
+func TestDedupeContributorsByEmail_CaseInsensitive(t *testing.T) {
 	t.Parallel()
 
-	when := time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC)
+	older := time.Date(2026, 1, 10, 8, 0, 0, 0, time.UTC)
+	newer := time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC)
 
 	got := dedupeContributorsByEmail([]Contributor{
-		{Email: "Alice@example.com", LatestCommitDate: when},
-		{Email: "alice@example.com", LatestCommitDate: when},
+		{Email: "Alice@example.com", LatestCommitDate: older},
+		{Email: "alice@example.com", LatestCommitDate: newer},
 	})
 
-	require.Len(t, got, 2)
-	assert.Equal(t, "Alice@example.com", got[0].Email)
-	assert.Equal(t, "alice@example.com", got[1].Email)
+	require.Len(t, got, 1)
+	assert.Equal(t, "alice@example.com", got[0].Email)
+	assert.Equal(t, newer, got[0].LatestCommitDate)
 }
 
 func TestDedupeContributorsByEmail_SkipsEmptyEmail(t *testing.T) {

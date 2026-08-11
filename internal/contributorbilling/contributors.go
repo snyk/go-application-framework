@@ -1,7 +1,7 @@
 package contributorbilling
 
 import (
-	"sort"
+	"strings"
 	"time"
 
 	gitutil "github.com/snyk/go-application-framework/pkg/utils/git"
@@ -26,41 +26,35 @@ func collectContributors(repoPath string, now time.Time) ([]Contributor, error) 
 }
 
 // dedupeContributorsByEmail collapses duplicate contributor emails in one emit payload,
-// keeping the latest commit date per exact email match (case-sensitive, as git returns).
+// treating emails as case-insensitive and keeping the latest commit date per email.
 func dedupeContributorsByEmail(contributors []Contributor) []Contributor {
 	if len(contributors) <= 1 {
 		return contributors
 	}
 
-	byEmail := make(map[string]Contributor, len(contributors))
-	order := make([]string, 0, len(contributors))
+	byEmail := make(map[string]Contributor)
 
 	for _, contributor := range contributors {
 		if contributor.Email == "" {
 			continue
 		}
 
-		existing, seen := byEmail[contributor.Email]
-		if !seen {
-			order = append(order, contributor.Email)
-			byEmail[contributor.Email] = contributor
-			continue
-		}
-
-		if contributor.LatestCommitDate.After(existing.LatestCommitDate) {
-			byEmail[contributor.Email] = contributor
+		normalizedEmail := strings.ToLower(strings.TrimSpace(contributor.Email))
+		existing, seen := byEmail[normalizedEmail]
+		if !seen || contributor.LatestCommitDate.After(existing.LatestCommitDate) {
+			byEmail[normalizedEmail] = contributor
 		}
 	}
 
-	if len(order) == 0 {
+	if len(byEmail) == 0 {
 		return nil
 	}
 
-	sort.Strings(order)
-
-	deduped := make([]Contributor, 0, len(order))
-	for _, email := range order {
-		deduped = append(deduped, byEmail[email])
+	deduped := make([]Contributor, len(byEmail))
+	i := 0
+	for _, c := range byEmail {
+		deduped[i] = c
+		i++
 	}
 
 	return deduped

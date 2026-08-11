@@ -44,7 +44,8 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Au
 	}
 
 	iter, err := repo.Log(&git.LogOptions{
-		From: head.Hash(),
+		From:  head.Hash(),
+		Since: &since,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read log: %w", err)
@@ -63,10 +64,8 @@ func ListContributors(path string, since, until time.Time, maxCommits int) ([]Au
 		}
 
 		when := commit.Author.When
-		if when.Before(since) {
-			break
-		}
-		if when.After(until) {
+		// date can be before the 90 day period as we are looking at authored date but filtered by commit date
+		if when.Before(since) || when.After(until) {
 			continue
 		}
 

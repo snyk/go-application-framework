@@ -33,10 +33,10 @@ type EngineImpl struct {
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
-	mu                   sync.RWMutex
-	invocationCounter    int
-	postInvokeHooks      []PostInvokeHook
-	postInvokeHookTimer  time.Duration
+	mu                  sync.RWMutex
+	invocationCounter   int
+	postInvokeHooks     []PostInvokeHook
+	postInvokeHookTimer time.Duration
 }
 
 var _ Engine = (*EngineImpl)(nil)
