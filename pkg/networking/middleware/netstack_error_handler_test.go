@@ -6,15 +6,18 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"syscall"
 	"testing"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -112,6 +115,35 @@ func Test_NetworkStackErrorHandlerMiddleware(t *testing.T) {
 		assert.Equal(t, originalError.Title, snykError.Title)
 		assert.Equal(t, originalError.ErrorCode, snykError.ErrorCode)
 		assert.Equal(t, "TEST-001", snykError.ErrorCode)
+	})
+
+	t.Run("handleError with proxy connection error from go-httpauth - passes through unchanged", func(t *testing.T) {
+		// go-httpauth tunnels inside DialContext, so it reports the failing proxy hop itself
+		// instead of leaving it to be categorized here.
+		cause := &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
+		originalError := httpauth.NewProxyConnectionError(&url.URL{Scheme: "http", Host: "proxy.internal:8080"}, cause)
+
+		var capturedError error
+		errHandler := func(err error, ctx context.Context) error {
+			capturedError = err
+			return err
+		}
+		middlewareInstance := NewNetworkStackErrorHandlerMiddleware(http.DefaultTransport, errHandler)
+
+		req, err := http.NewRequest(http.MethodGet, "https://api.snyk.io/test", nil)
+		assert.NoError(t, err)
+
+		result := middlewareInstance.handleError(originalError, req)
+
+		// the proxy category survives instead of being re-categorized as a connection refusal
+		var snykError snyk_errors.Error
+		assert.True(t, errors.As(result, &snykError))
+		assert.Equal(t, cli.NewProxyConnectionError("").ErrorCode, snykError.ErrorCode)
+		assert.Equal(t, result, capturedError)
+
+		// the underlying network error stays available to errors.As
+		var opError *net.OpError
+		assert.True(t, errors.As(result, &opError))
 	})
 
 	t.Run("handleError with wrapped snyk_errors.Error - passes through unchanged", func(t *testing.T) {
@@ -531,6 +563,74 @@ func Test_categorizeNetworkError(t *testing.T) {
 
 		expectedGenericError := cli.NewGenericNetworkError("")
 		assert.Equal(t, expectedGenericError.ErrorCode, cliError.ErrorCode)
+	})
+}
+
+func Test_categorizeNetworkError_FirewallAndProxy(t *testing.T) {
+	middleware := &NetworkStackErrorHandlerMiddleware{}
+	req, err := http.NewRequest(http.MethodGet, "https://api.snyk.io/test", nil)
+	assert.NoError(t, err)
+
+	wrapURL := func(inner error) error {
+		return &url.Error{Op: "Get", URL: "https://api.snyk.io/test", Err: inner}
+	}
+
+	assertCode := func(t *testing.T, result error, expected snyk_errors.Error) {
+		t.Helper()
+		var cliError snyk_errors.Error
+		assert.True(t, errors.As(result, &cliError))
+		assert.Equal(t, expected.ErrorCode, cliError.ErrorCode)
+	}
+
+	connectionRefused := cli.NewConnectionRefusedError("")
+	connectionReset := cli.NewConnectionResetError("")
+	genericError := cli.NewGenericNetworkError("")
+
+	t.Run("connection reset by peer via ECONNRESET - connection reset", func(t *testing.T) {
+		opErr := &net.OpError{Op: "read", Net: "tcp", Err: os.NewSyscallError("read", syscall.ECONNRESET)}
+		assertCode(t, middleware.categorizeNetworkError(opErr, req), connectionReset)
+	})
+
+	t.Run("connection reset by peer via string - connection reset", func(t *testing.T) {
+		e := errors.New("read tcp 10.0.0.2:52000->1.2.3.4:443: read: connection reset by peer")
+		assertCode(t, middleware.categorizeNetworkError(e, req), connectionReset)
+	})
+
+	t.Run("broken pipe via EPIPE - connection reset", func(t *testing.T) {
+		opErr := &net.OpError{Op: "write", Net: "tcp", Err: os.NewSyscallError("write", syscall.EPIPE)}
+		assertCode(t, middleware.categorizeNetworkError(opErr, req), connectionReset)
+	})
+
+	t.Run("windows reset message text - connection reset", func(t *testing.T) {
+		e := errors.New("read tcp 10.0.0.2:52000->1.2.3.4:443: wsarecv: An existing connection was forcibly closed by the remote host.")
+		assertCode(t, middleware.categorizeNetworkError(e, req), connectionReset)
+	})
+
+	t.Run("windows abort message text - connection reset", func(t *testing.T) {
+		e := errors.New("read tcp 10.0.0.2:52000->1.2.3.4:443: wsarecv: An established connection was aborted by the software in your host machine.")
+		assertCode(t, middleware.categorizeNetworkError(e, req), connectionReset)
+	})
+
+	t.Run("unexpected EOF mid-handshake - connection reset", func(t *testing.T) {
+		assertCode(t, middleware.categorizeNetworkError(wrapURL(io.ErrUnexpectedEOF), req), connectionReset)
+	})
+
+	t.Run("unexpected EOF off the network stack - connection reset", func(t *testing.T) {
+		opErr := &net.OpError{Op: "read", Net: "tcp", Err: io.ErrUnexpectedEOF}
+		assertCode(t, middleware.categorizeNetworkError(opErr, req), connectionReset)
+	})
+
+	t.Run("bare unexpected EOF from a wrapped round tripper - generic", func(t *testing.T) {
+		assertCode(t, middleware.categorizeNetworkError(io.ErrUnexpectedEOF, req), genericError)
+	})
+
+	t.Run("genuine connection refused still maps to connection refused", func(t *testing.T) {
+		opErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+		assertCode(t, middleware.categorizeNetworkError(opErr, req), connectionRefused)
+	})
+
+	t.Run("unrelated error still falls back to generic", func(t *testing.T) {
+		assertCode(t, middleware.categorizeNetworkError(errors.New("some random failure"), req), genericError)
 	})
 }
 
