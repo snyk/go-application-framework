@@ -1539,6 +1539,39 @@ func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T
 	})
 }
 
+func Test_NetworkRetryOptIn_AllowedPathsFromPersistedJSONConfig(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
+
+	configFile, err := configuration.CreateConfigurationFile("gaf-retry-test.json")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configFile, []byte(`{"internal_network_request_retry_allowed_paths": ["custom-retryable"]}`), 0600))
+
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts(
+		configuration.WithFiles("gaf-retry-test"),
+		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
+	)
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/custom-retryable", bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
 func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
 	tests := []struct {
 		name  string
