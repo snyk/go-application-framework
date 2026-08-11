@@ -45,6 +45,7 @@ type FileFilter struct {
 	config          configuration.Configuration
 	metricsRecorder metrics.Recorder
 	metricScopeID   string
+	pruneGlobs      []string // set by GetRules; used by GetAllFiles when the feature flag is on
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -183,34 +184,152 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 	return NewFileFilter(path, logger, allOptions...)
 }
 
-// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
+// After GetRules, and with FF_GITIGNORE_RESPECT_TRACKED_FILES enabled, it skips excluded
+// directories that hold no tracked files.
+//
+// Two caller requirements, neither enforceable here: do not call GetRules and GetAllFiles
+// concurrently on one instance, and keep any globs added after GetRules exclusion-only —
+// a pruned directory is never walked, so a negation cannot bring its files back.
 func (fw *FileFilter) GetAllFiles() chan string {
+	if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) && len(fw.pruneGlobs) > 0 {
+		if ch := fw.getAllFilesPruned(fw.pruneGlobs); ch != nil {
+			return ch
+		}
+	}
+	return fw.getAllFilesUnpruned()
+}
+
+func (fw *FileFilter) getAllFilesUnpruned() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
-
-		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(fw.path, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-
 			if !d.IsDir() {
-				filesCh <- path
+				filesCh <- p
 			}
-
 			return err
 		})
 		if err != nil {
 			fw.logger.Error().Msgf("walk dir failed: %v", err)
 		}
 	}()
-
 	return filesCh
+}
+
+func (fw *FileFilter) getAllFilesPruned(pruneGlobs []string) chan string {
+	allGlobs := make([]string, 0, len(pruneGlobs))
+	for _, g := range pruneGlobs {
+		if rule, ok := strings.CutPrefix(g, gitIgnoreGlobPrefix); ok {
+			allGlobs = append(allGlobs, rule)
+		} else {
+			allGlobs = append(allGlobs, g)
+		}
+	}
+
+	excludeMatcher := gitignore.CompileIgnoreLines(allGlobs...)
+	var negScopeMatcher *gitignore.GitIgnore
+	if negScopes := widenNegationScopes(allGlobs); len(negScopes) > 0 {
+		negScopeMatcher = gitignore.CompileIgnoreLines(negScopes...)
+	}
+
+	trackedDirs, repoRoot := fw.buildTrackedDirSet()
+	if trackedDirs == nil {
+		return nil
+	}
+
+	var filesCh = make(chan string)
+	go func() {
+		defer close(filesCh)
+		err := filepath.WalkDir(fw.path, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if p != fw.path && isPrunableDir(p, repoRoot, trackedDirs, negScopeMatcher, excludeMatcher) {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			filesCh <- p
+			return nil
+		})
+		if err != nil {
+			fw.logger.Error().Msgf("walk dir failed: %v", err)
+		}
+	}()
+	return filesCh
+}
+
+func isPrunableDir(dir, repoRoot string, trackedDirs map[string]bool, negScope, exclude *gitignore.GitIgnore) bool {
+	rel, err := filepath.Rel(repoRoot, dir)
+	if err != nil {
+		return false
+	}
+	if trackedDirs[filepath.ToSlash(rel)] {
+		return false
+	}
+	// the rules match files, not directories, so probe with a synthetic child
+	testPath := filepath.ToSlash(dir) + "/x"
+	if negScope != nil && negScope.MatchesPath(testPath) {
+		return false
+	}
+	return exclude.MatchesPath(testPath)
+}
+
+// widenNegationScopes turns each negation into its directory scope, so a directory holding a
+// negated file is never pruned.
+func widenNegationScopes(allGlobs []string) []string {
+	var widened []string
+	for _, g := range allGlobs {
+		if !strings.HasPrefix(g, "!") {
+			continue
+		}
+		pattern := g[1:]
+		dir := path.Dir(pattern)
+		if dir == "." || dir == "" {
+			dir = ""
+		}
+		widened = append(widened, dir+"/**")
+	}
+	return widened
+}
+
+func (fw *FileFilter) buildTrackedDirSet() (map[string]bool, string) {
+	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		fw.logger.Debug().Msgf("walk pruning: cannot open git repository: %v", err)
+		return nil, ""
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, ""
+	}
+	gitIndex, err := repo.Storer.Index()
+	if err != nil {
+		return nil, ""
+	}
+	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	if err != nil {
+		return nil, ""
+	}
+	dirs := make(map[string]bool)
+	for _, entry := range gitIndex.Entries {
+		d := filepath.ToSlash(filepath.Dir(entry.Name))
+		for d != "." && d != "" && !dirs[d] {
+			dirs[d] = true
+			d = filepath.ToSlash(filepath.Dir(d))
+		}
+	}
+	return dirs, repoRoot
 }
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	files := fw.GetAllFiles()
+	files := fw.getAllFilesUnpruned()
 
 	// iterate filesToFilter channel and find ignore filesToFilter
 	var ignoreFiles = make([]string, 0)
@@ -229,7 +348,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append(fw.defaultRules, globs...), nil
+	result := append(fw.defaultRules, globs...)
+	fw.pruneGlobs = result
+	return result, nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on

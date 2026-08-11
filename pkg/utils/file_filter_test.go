@@ -2130,3 +2130,273 @@ func filterGitTrackedFiles(t *testing.T, root string, ruleFiles []string, featur
 
 	return filteredFiles
 }
+
+var allRuleFileNames = []string{".gitignore", ".dcignore", ".snyk"}
+
+// Pruning is an optimisation, so it must be output-neutral: the pruned and unpruned walks
+// have to produce the same filtered result.
+func TestFileFilter_WalkPruning(t *testing.T) {
+	type walkPruningCase struct {
+		name          string
+		files         map[string]string
+		trackedFiles  []string
+		ruleFiles     map[string]string
+		wantWalked    []string
+		wantNotWalked []string
+	}
+
+	cases := []walkPruningCase{
+		{
+			name: "excluded directory with no tracked files is pruned",
+			files: map[string]string{
+				"app.js":                  "app",
+				"node_modules/a/index.js": "dep",
+				"node_modules/b/index.js": "dep",
+			},
+			trackedFiles:  []string{"app.js"},
+			ruleFiles:     map[string]string{".gitignore": "node_modules/\n"},
+			wantWalked:    []string{"app.js", ".gitignore"},
+			wantNotWalked: []string{"node_modules/a/index.js", "node_modules/b/index.js"},
+		},
+		{
+			name: "directory with tracked files is not pruned even if excluded",
+			files: map[string]string{
+				"app.js":             "app",
+				"build/tracked.js":   "tracked",
+				"build/untracked.js": "untracked",
+			},
+			trackedFiles: []string{"app.js", "build/tracked.js"},
+			ruleFiles:    map[string]string{".gitignore": "build/\n"},
+			wantWalked:   []string{"build/tracked.js", "build/untracked.js"},
+		},
+		{
+			name: "negated untracked file in an excluded directory is preserved",
+			files: map[string]string{
+				"app.js":            "app",
+				"dist/important.js": "must survive",
+				"dist/junk.js":      "excluded",
+			},
+			trackedFiles: []string{"app.js"},
+			ruleFiles:    map[string]string{".gitignore": "dist/**\n!dist/important.js\n"},
+			wantWalked:   []string{"dist/important.js", "dist/junk.js"},
+		},
+		{
+			name: "tracked file deep inside an excluded directory keeps its ancestors walked",
+			files: map[string]string{
+				"app.js":                         "app",
+				"node_modules/a/index.js":        "dep",
+				"node_modules/pkg/deep/kept.js":  "tracked",
+				"node_modules/pkg/deep/other.js": "untracked sibling file",
+			},
+			trackedFiles:  []string{"app.js", "node_modules/pkg/deep/kept.js"},
+			ruleFiles:     map[string]string{".gitignore": "node_modules/\n"},
+			wantWalked:    []string{"node_modules/pkg/deep/kept.js", "node_modules/pkg/deep/other.js"},
+			wantNotWalked: []string{"node_modules/a/index.js"},
+		},
+		{
+			name: "dcignore exclusion prunes just like gitignore",
+			files: map[string]string{
+				"app.js":      "app",
+				"vendor/a.js": "vendored",
+				"vendor/b.js": "vendored",
+			},
+			trackedFiles:  []string{"app.js"},
+			ruleFiles:     map[string]string{".dcignore": "vendor/\n"},
+			wantWalked:    []string{"app.js"},
+			wantNotWalked: []string{"vendor/a.js", "vendor/b.js"},
+		},
+	}
+
+	t.Run("walk assertions", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				testCase := gitTrackedFilesTestCase{
+					files:        tc.files,
+					trackedFiles: tc.trackedFiles,
+					ruleFiles:    tc.ruleFiles,
+				}
+				root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+				config := newTestConfig(map[string]bool{
+					FF_FILE_FILTER_METACHARACTER_FIX:   true,
+					FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+				})
+				filter := NewFileFilter(root, &log.Logger, WithConfig(config))
+				_, err := filter.GetRules(allRuleFileNames)
+				require.NoError(t, err)
+
+				var walked []string
+				for f := range filter.GetAllFiles() {
+					rel, relErr := filepath.Rel(root, f)
+					require.NoError(t, relErr)
+					walked = append(walked, filepath.ToSlash(rel))
+				}
+
+				for _, want := range tc.wantWalked {
+					assert.Contains(t, walked, want)
+				}
+				for _, notWant := range tc.wantNotWalked {
+					assert.NotContains(t, walked, notWant)
+				}
+			})
+		}
+	})
+
+	t.Run("GetAllFiles without feature flag walks the full tree", func(t *testing.T) {
+		tc := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"app.js":                  "app",
+				"node_modules/a/index.js": "dep",
+			},
+			trackedFiles: []string{"app.js"},
+			ruleFiles:    map[string]string{".gitignore": "node_modules/\n"},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, tc)
+
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		filter := NewFileFilter(root, &log.Logger, WithConfig(config))
+		_, err := filter.GetRules([]string{".gitignore"})
+		require.NoError(t, err)
+
+		var walked []string
+		for f := range filter.GetAllFiles() {
+			rel, relErr := filepath.Rel(root, f)
+			require.NoError(t, relErr)
+			walked = append(walked, filepath.ToSlash(rel))
+		}
+
+		assert.Contains(t, walked, "node_modules/a/index.js",
+			"without the feature flag, pruning must not activate")
+		assert.Contains(t, walked, "app.js")
+	})
+
+	t.Run("GetAllFiles without prior GetRules walks the full tree", func(t *testing.T) {
+		tc := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"app.js":                  "app",
+				"node_modules/a/index.js": "dep",
+			},
+			trackedFiles: []string{"app.js"},
+			ruleFiles:    map[string]string{".gitignore": "node_modules/\n"},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, tc)
+
+		config := newTestConfig(map[string]bool{
+			FF_FILE_FILTER_METACHARACTER_FIX:   true,
+			FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+		})
+		filter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+		var walked []string
+		for f := range filter.GetAllFiles() {
+			rel, relErr := filepath.Rel(root, f)
+			require.NoError(t, relErr)
+			walked = append(walked, filepath.ToSlash(rel))
+		}
+
+		assert.Contains(t, walked, "node_modules/a/index.js",
+			"without GetRules, pruning must not activate — all files must be walked")
+		assert.Contains(t, walked, "app.js")
+	})
+
+	t.Run("snyk exclusion still wins when pruning is active", func(t *testing.T) {
+		testCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"app.js":         "app",
+				"secret/keys.js": "tracked but excluded by .snyk",
+			},
+			trackedFiles: []string{"app.js", "secret/keys.js"},
+			ruleFiles: map[string]string{
+				".gitignore": "secret/\n",
+				".snyk":      "exclude:\n  global:\n    - secret/**\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+		config := newTestConfig(map[string]bool{
+			FF_FILE_FILTER_METACHARACTER_FIX:   true,
+			FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+		})
+		filter := NewFileFilter(root, &log.Logger, WithConfig(config))
+		rules, err := filter.GetRules(allRuleFileNames)
+		require.NoError(t, err)
+
+		var filtered []string
+		for f := range filter.GetFilteredFiles(filter.GetAllFiles(), rules) {
+			rel, relErr := filepath.Rel(root, f)
+			require.NoError(t, relErr)
+			filtered = append(filtered, filepath.ToSlash(rel))
+		}
+
+		assert.NotContains(t, filtered, "secret/keys.js",
+			"a .snyk exclusion must win over git tracking")
+		assert.Contains(t, filtered, "app.js")
+	})
+
+	t.Run("GetRules is idempotent", func(t *testing.T) {
+		testCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"app.js":                      "app",
+				"node_modules/pkg/index.js":   "dep",
+				"node_modules/pkg/.gitignore": "*.map\n",
+			},
+			trackedFiles: []string{"app.js"},
+			ruleFiles:    map[string]string{".gitignore": "node_modules/\n"},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+		config := newTestConfig(map[string]bool{
+			FF_FILE_FILTER_METACHARACTER_FIX:   true,
+			FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+		})
+		filter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+		rules1, err := filter.GetRules([]string{".gitignore"})
+		require.NoError(t, err)
+		rules2, err := filter.GetRules([]string{".gitignore"})
+		require.NoError(t, err)
+
+		assert.Equal(t, rules1, rules2, "second GetRules call must return the same rules")
+	})
+
+	t.Run("pruning and the full walk agree on every file", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				testCase := gitTrackedFilesTestCase{
+					files:        tc.files,
+					trackedFiles: tc.trackedFiles,
+					ruleFiles:    tc.ruleFiles,
+				}
+				root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+				config := newTestConfig(map[string]bool{
+					FF_FILE_FILTER_METACHARACTER_FIX:   true,
+					FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+				})
+
+				prunedFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+				rules, err := prunedFilter.GetRules(allRuleFileNames)
+				require.NoError(t, err)
+				var prunedResult []string
+				for f := range prunedFilter.GetFilteredFiles(prunedFilter.GetAllFiles(), rules) {
+					rel, relErr := filepath.Rel(root, f)
+					require.NoError(t, relErr)
+					prunedResult = append(prunedResult, filepath.ToSlash(rel))
+				}
+
+				unprunedFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+				rules2, err := unprunedFilter.GetRules(allRuleFileNames)
+				require.NoError(t, err)
+				var unprunedResult []string
+				for f := range unprunedFilter.GetFilteredFiles(unprunedFilter.getAllFilesUnpruned(), rules2) {
+					rel, relErr := filepath.Rel(root, f)
+					require.NoError(t, relErr)
+					unprunedResult = append(unprunedResult, filepath.ToSlash(rel))
+				}
+
+				assert.ElementsMatch(t, unprunedResult, prunedResult,
+					"pruned and unpruned walks must produce identical filtered output")
+			})
+		}
+	})
+}
