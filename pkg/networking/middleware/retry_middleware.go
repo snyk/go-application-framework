@@ -18,7 +18,6 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
@@ -28,8 +27,12 @@ const defaultMaxAttemptsCount = 1 // Per default max network attempts (=1) this 
 const defaultRetryAfterSeconds = 5
 const maxRetryAfter = 10 * time.Minute
 const ConfigurationKeyRequestAttempts = "internal_network_request_max_attempts"
-const configurationKeyRetryAfter = "internal_network_request_retry_after_seconds"
+const ConfigurationKeyRetryAfter = "internal_network_request_retry_after_seconds"
 const retryCountHeaderKey = "Snyk-Request-Attempt-Count"
+
+// Successful JSON bodies are buffered only to detect truncation, and every in-flight request may hold
+// one such buffer, so the bound stays small; larger bodies stream through unbuffered instead.
+const maxBufferedJSONResponseBytes = 4 * 1024 * 1024
 
 type retryLogic struct {
 	shouldRetry      bool
@@ -119,13 +122,6 @@ func isSuccessResponse(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
-func responseBufferCapBytes(config configuration.Configuration) int {
-	if capBytes := config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES); capBytes > 0 {
-		return capBytes
-	}
-	return constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB
-}
-
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -158,7 +154,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		maxAttempts = tmp
 	}
 
-	if tmp := rm.config.GetInt(configurationKeyRetryAfter); tmp > 0 {
+	if tmp := rm.config.GetInt(ConfigurationKeyRetryAfter); tmp > 0 {
 		retryAfterSeconds = tmp
 	}
 
@@ -253,8 +249,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		if transportRetryEnabled && isSuccessResponse(response.StatusCode) && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
-			bufferCap := responseBufferCapBytes(rm.config)
-			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, int64(bufferCap)+1))
+			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maxBufferedJSONResponseBytes+1))
 			if readErr != nil {
 				// unlike getErrorList, this read error must surface as a retry/failure
 				drainAndClose(response.Body)
@@ -269,7 +264,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 				}
 				return response, retryErr
 			}
-			if len(bodyBytes) > bufferCap {
+			if len(bodyBytes) > maxBufferedJSONResponseBytes {
 				// over the cap: keep streaming rather than error or drop bytes
 				response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
 			} else {

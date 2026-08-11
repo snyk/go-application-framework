@@ -26,7 +26,6 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -164,7 +163,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 1)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -185,7 +184,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -203,7 +202,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -241,7 +240,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -269,7 +268,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -297,7 +296,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -317,7 +316,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -335,7 +334,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -353,7 +352,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
@@ -406,7 +405,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		rt := &getBodyRetryRoundTripper{t: t, expectedBody: expectedBody}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
-		config.Set(configurationKeyRetryAfter, 1)
+		config.Set(ConfigurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, rt)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(expectedBody)))
@@ -925,7 +924,7 @@ func TestRetryMiddleware_429_POST_BodyPreservedAcrossRetries(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 1)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -983,7 +982,7 @@ func TestRetryMiddleware_GetBodyPreset_SkipsBuffering(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -1046,7 +1045,7 @@ func TestRetryMiddleware_GetBodyNil_BuffersBody(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -1117,7 +1116,7 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -1196,7 +1195,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1256,7 +1255,7 @@ func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 5)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -1310,7 +1309,7 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 1) // maxAttempts=1 → permanent stop on first 429
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1374,7 +1373,7 @@ func TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed(t *testing.T) 
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 5)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1422,7 +1421,7 @@ func setupRetryMiddleware(
 	rt := &failRoundtripper{t: t, roundTripFn: &fn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 	return NewRetryMiddleware(config, logger, rt, WithErrorHandler(errorHandler)), &attemptCount
 }
 
@@ -1457,7 +1456,7 @@ func Test_RetryMiddleware_TransportError_RetriedWhenOptedIn(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(tt.enableFlag, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1484,7 +1483,7 @@ func Test_RetryMiddleware_TransportError_NotRetriedWhenOptInAbsent(t *testing.T)
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1526,7 +1525,7 @@ func Test_RetryMiddleware_TransportError_ErrorAxis(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1572,7 +1571,7 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			req := httptest.NewRequest(tt.method, tt.path, nil)
@@ -1606,7 +1605,7 @@ func Test_RetryMiddleware_TransportError_ExhaustsAtMaxAttempts(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1633,7 +1632,7 @@ func Test_RetryMiddleware_TransportError_RetryCountHeaderSetOnRecovery(t *testin
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1659,7 +1658,7 @@ func Test_RetryMiddleware_TransportError_SharesBudgetWith429Override(t *testing.
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 1) // 429 override bumps this to 3
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1684,7 +1683,7 @@ func Test_RetryMiddleware_TransportError_ContextCancelledMidFlightStopsImmediate
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 5)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
@@ -1733,7 +1732,7 @@ func Test_RetryMiddleware_TransportError_ResponseBodyClosed(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1770,7 +1769,7 @@ func Test_RetryMiddleware_TransportError_TerminalBodyNotClosed_OptInOff(t *testi
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1795,7 +1794,7 @@ func Test_RetryMiddleware_TransportError_NilResponseDoesNotPanic(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
@@ -1851,7 +1850,36 @@ func Test_RetryMiddleware_Acceptance_TruncatedBodyRetriedToSuccess(t *testing.T)
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+
+	resp, err := sut.RoundTrip(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	gotBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, fullBody, gotBody, "caller must receive the complete body after the transparent retry")
+	assert.EqualValues(t, 2, atomic.LoadInt32(attempts))
+}
+
+// IN_MEMORY_THRESHOLD_BYTES sizes workflow.Data persistence, not HTTP response buffering; wiring the
+// two together made a documented setting like INTERNAL_IN_MEMORY_THRESHOLD_BYTES=1 disable retries.
+func Test_RetryMiddleware_Acceptance_TruncatedBodyRetried_IndependentOfInMemoryThreshold(t *testing.T) {
+	fullBody := []byte(`{"vulnerabilities":["CVE-1","CVE-2","CVE-3"]}`)
+	server, attempts := truncatingJSONServer(t, fullBody, 10)
+	defer server.Close()
+
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(ConfigurationKeyRetryAfter, 1)
+	config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 1)
 
 	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
@@ -1877,7 +1905,7 @@ func Test_RetryMiddleware_Acceptance_TruncatedBody_OptInOff_MatchesTodayBehavior
 	logger := zerolog.Nop()
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
@@ -1923,7 +1951,7 @@ func Test_RetryMiddleware_TruncatedJSONBody_RetriedWhenOptedIn(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(tt.enableFlag, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1953,7 +1981,7 @@ func Test_RetryMiddleware_TruncatedJSONBody_ExhaustedAttemptsYieldsErrorAndRespo
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1990,7 +2018,7 @@ func Test_RetryMiddleware_StatusCodeRetryDenied(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, tt.path, nil))
@@ -2016,7 +2044,7 @@ func Test_RetryMiddleware_StatusCodeRetryDenied_OptInOff(t *testing.T) {
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/v1/monitor/npm", nil))
@@ -2058,7 +2086,7 @@ func Test_RetryMiddleware_TruncatedJSONBody_NeverBufferedOrRetried(t *testing.T)
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(tt.method, tt.path, nil))
@@ -2089,7 +2117,7 @@ func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", nil)
@@ -2109,11 +2137,10 @@ func Test_RetryMiddleware_BodyCapBoundary(t *testing.T) {
 	tests := []struct {
 		name         string
 		bodySize     int
-		cap          int
 		wantBuffered bool
 	}{
-		{"over cap: streams without buffering", 20, 5, false},
-		{"exact cap: still buffered", 5, 5, true},
+		{"over cap: streams without buffering", maxBufferedJSONResponseBytes + 1, false},
+		{"exact cap: still buffered", maxBufferedJSONResponseBytes, true},
 	}
 
 	for _, tt := range tests {
@@ -2140,8 +2167,7 @@ func Test_RetryMiddleware_BodyCapBoundary(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 			config.Set(ConfigurationKeyRequestAttempts, 3)
-			config.Set(configurationKeyRetryAfter, 1)
-			config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, tt.cap)
+			config.Set(ConfigurationKeyRetryAfter, 1)
 
 			sut := NewRetryMiddleware(config, &logger, rt)
 			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
@@ -2161,25 +2187,6 @@ func Test_RetryMiddleware_BodyCapBoundary(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_responseBufferCapBytes(t *testing.T) {
-	t.Run("uses configured value when set", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 42)
-		assert.Equal(t, 42, responseBufferCapBytes(config))
-	})
-
-	t.Run("falls back to the default when unset", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
-	})
-
-	t.Run("falls back to the default when non-positive", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
-		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, responseBufferCapBytes(config))
-	})
 }
 
 func Test_isJSONResponse(t *testing.T) {

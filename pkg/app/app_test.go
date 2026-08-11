@@ -46,9 +46,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// Mirrors middleware's unexported configurationKeyRetryAfter; tests must set this small or backoff sleeps for real.
-const networkRequestRetryAfterSecondsKey = "internal_network_request_retry_after_seconds"
-
 func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
 	t.Helper()
 	var count int32
@@ -1365,7 +1362,7 @@ func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
 
 			config := configuration.NewWithOpts()
 			config.Set(tt.enableFlag, true)
-			config.Set(networkRequestRetryAfterSecondsKey, 1)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 			engine := CreateAppEngineWithOptions(WithConfiguration(config))
 			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1384,7 +1381,7 @@ func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
 	config := configuration.NewWithOpts()
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1403,7 +1400,7 @@ func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1421,7 +1418,7 @@ func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1439,7 +1436,7 @@ func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1479,7 +1476,7 @@ func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar(t *testing.T) {
 
 			config := newCLIStyleConfig()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-			config.Set(networkRequestRetryAfterSecondsKey, 1)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 			t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", tt.envVar)
 
 			engine := CreateAppEngineWithOptions(WithConfiguration(config))
@@ -1504,7 +1501,7 @@ func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T
 
 		config := newCLIStyleConfig()
 		config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-		config.Set(networkRequestRetryAfterSecondsKey, 1)
+		config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(config))
 		client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1525,7 +1522,7 @@ func Test_NetworkRetryOptIn_AllowedPathsEnvVarUnset_DefaultBehavior(t *testing.T
 
 		config := newCLIStyleConfig()
 		config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-		config.Set(networkRequestRetryAfterSecondsKey, 1)
+		config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(config))
 		client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1600,7 +1597,7 @@ func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
 
 			config := configuration.NewWithOpts()
 			config.Set(tt.enableFlag, true)
-			config.Set(networkRequestRetryAfterSecondsKey, 1)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 			engine := CreateAppEngineWithOptions(WithConfiguration(config))
 			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1621,7 +1618,7 @@ func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1647,7 +1644,7 @@ func Test_TransportRetry_OptIn_PostRetried(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1665,7 +1662,7 @@ func Test_TransportRetry_OptIn_MonitorPathNotRetried(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1682,7 +1679,7 @@ func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T
 	baseURL, connCount, _ := newResettingServer(t, 1)
 
 	config := configuration.NewWithOpts()
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1700,7 +1697,7 @@ func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *t
 
 	config := configuration.NewWithOpts()
 	config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1718,7 +1715,7 @@ func Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit(t *testing.
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -1740,7 +1737,7 @@ func Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
-	config.Set(networkRequestRetryAfterSecondsKey, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
