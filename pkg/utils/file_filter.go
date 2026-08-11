@@ -84,6 +84,7 @@ const (
 	metricFileFilterMetacharacterFix      = "metacharacterFix"      // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
 	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"   // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
 	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount" // tracked files kept despite a matching .gitignore rule
+	metricFileFilterPrunedSubtreeCount    = "prunedSubtreeCount"    // subtrees skipped by the walk, not directories avoided: nested directories below a skipped one are never visited and not counted. Absent when pruning did not run
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -239,15 +240,22 @@ func (fw *FileFilter) getAllFilesPruned(pruneGlobs []string) chan string {
 		return nil
 	}
 
+	walkScopeID := newFileFilterMetricScopeID()
+	prunedSubtrees := 0
+
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
+		defer fw.recordMetricLazy(walkScopeID, metricFileFilterPrunedSubtreeCount, func() int {
+			return prunedSubtrees
+		})
 		err := filepath.WalkDir(fw.path, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if d.IsDir() {
 				if p != fw.path && isPrunableDir(p, repoRoot, trackedDirs, negScopeMatcher, excludeMatcher) {
+					prunedSubtrees++
 					return fs.SkipDir
 				}
 				return nil

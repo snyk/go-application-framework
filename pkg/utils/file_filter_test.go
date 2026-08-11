@@ -2601,6 +2601,77 @@ func TestFileFilter_Metrics(t *testing.T) {
 	})
 }
 
+// Every count here includes .git, which the built-in **/.git/** rule prunes.
+func TestFileFilter_Metrics_PrunedSubtreeCount(t *testing.T) {
+	tests := []struct {
+		name           string
+		testCase       gitTrackedFilesTestCase
+		featureEnabled bool
+		expectPruning  bool
+		expectedCount  int
+	}{
+		{
+			name: "counts every skipped subtree",
+			testCase: gitTrackedFilesTestCase{
+				files: map[string]string{
+					"app.js":                  "app",
+					"node_modules/a/index.js": "dep",
+					"node_modules/b/index.js": "dep",
+					"dist/out.js":             "built",
+				},
+				trackedFiles: []string{"app.js"},
+				ruleFiles:    map[string]string{".gitignore": "node_modules/\ndist/\n"},
+			},
+			featureEnabled: true,
+			expectPruning:  true,
+			expectedCount:  3, // node_modules, dist, .git — the directories below them are never visited
+		},
+		{
+			name: "counts only .git when no rule matches a directory",
+			testCase: gitTrackedFilesTestCase{
+				files:        map[string]string{"app.js": "app", "src/main.js": "source"},
+				trackedFiles: []string{"app.js", "src/main.js"},
+				ruleFiles:    map[string]string{".gitignore": "nothing-matches-this\n"},
+			},
+			featureEnabled: true,
+			expectPruning:  true,
+			expectedCount:  1, // .git only
+		},
+		{
+			name: "records nothing while the feature is disabled",
+			testCase: gitTrackedFilesTestCase{
+				files:        map[string]string{"app.js": "app", "node_modules/a/index.js": "dep"},
+				trackedFiles: []string{"app.js"},
+				ruleFiles:    map[string]string{".gitignore": "node_modules/\n"},
+			},
+			featureEnabled: false,
+			expectPruning:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root, _ := setupGitTrackedFilesTestCase(t, test.testCase)
+			recorder := &metrics.RecorderFake{}
+			config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: test.featureEnabled})
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+			runFileFilter(t, fileFilter, ".gitignore")
+
+			if !test.expectPruning {
+				for _, run := range metricsByScope(t, recorder) {
+					assert.NotContains(t, run.ints, metricFileFilterPrunedSubtreeCount,
+						"pruning did not run, so it must not report")
+				}
+				return
+			}
+
+			run := singleRun(t, recorder, metricFileFilterPrunedSubtreeCount)
+			assert.Equal(t, test.expectedCount, run.ints[metricFileFilterPrunedSubtreeCount])
+		})
+	}
+}
+
 func TestFileFilter_Metrics_TrackedFilesKeptCount(t *testing.T) {
 	tests := []struct {
 		name           string
