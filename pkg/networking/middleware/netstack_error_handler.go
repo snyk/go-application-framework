@@ -66,7 +66,7 @@ func (ns *NetworkStackErrorHandlerMiddleware) categorizeNetworkError(err error, 
 		err = cli.NewTLSCertificateError(detail, cause)
 	case ns.isConnectionRefusedError(err):
 		err = cli.NewConnectionRefusedError(detail, cause)
-	case ns.isConnectionResetError(err):
+	case isConnectionResetError(err):
 		err = cli.NewConnectionResetError(detail, cause)
 	default:
 		err = cli.NewGenericNetworkError(detail, cause)
@@ -173,8 +173,12 @@ func (ns *NetworkStackErrorHandlerMiddleware) isNetworkUnreachableError(err erro
 		strings.Contains(errStr, "connect: no route to host")
 }
 
-func (ns *NetworkStackErrorHandlerMiddleware) isConnectionResetError(err error) bool {
-	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+// Windows WSAECONNRESET (10054); Go's syscall package does not map it onto
+// syscall.ECONNRESET the way POSIX does, so it must be matched by numeric value.
+const errWSAEConnReset = syscall.Errno(10054)
+
+func isConnectionResetError(err error) bool {
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) || errors.Is(err, errWSAEConnReset) {
 		return true
 	}
 

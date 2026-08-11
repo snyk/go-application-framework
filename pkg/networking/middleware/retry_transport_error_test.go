@@ -38,6 +38,17 @@ func Test_isRetryableTransportError(t *testing.T) {
 			true,
 		},
 		{"Windows WSAECONNRESET", syscall.Errno(10054), true},
+		{"bare EPIPE", syscall.EPIPE, true},
+		{
+			"io.ErrUnexpectedEOF wrapped in net.OpError",
+			&net.OpError{Op: "read", Net: "tcp", Err: io.ErrUnexpectedEOF},
+			true,
+		},
+		{
+			"io.ErrUnexpectedEOF wrapped in url.Error",
+			&url.Error{Op: "Get", URL: "http://example.com", Err: io.ErrUnexpectedEOF},
+			true,
+		},
 		{"os.ErrDeadlineExceeded", os.ErrDeadlineExceeded, true},
 		{"DNS NotFound", &net.DNSError{IsNotFound: true}, false},
 		{"DNS timeout", &net.DNSError{IsTimeout: true}, true},

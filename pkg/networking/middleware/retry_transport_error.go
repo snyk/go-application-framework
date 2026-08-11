@@ -6,19 +6,10 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"syscall"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
-
-// Windows WSAECONNRESET (10054); Go's syscall package does not map it onto
-// syscall.ECONNRESET the way POSIX does, so it must be matched by numeric value.
-const errWSAEConnReset = syscall.Errno(10054)
-
-func isConnectionReset(err error) bool {
-	return errors.Is(err, syscall.ECONNRESET) || errors.Is(err, errWSAEConnReset)
-}
 
 // context.DeadlineExceeded also satisfies net.Error.Timeout(), so the
 // cancellation/deadline deny-check must run before the timeout allow-check.
@@ -29,7 +20,7 @@ func isRetryableTransportError(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if isConnectionReset(err) {
+	if isConnectionResetError(err) {
 		return true
 	}
 	var netErr net.Error
