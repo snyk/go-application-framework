@@ -12,9 +12,7 @@ func buildIngestRequest(item BillingItem, logger *zerolog.Logger) v20260729.Crea
 	for _, contributor := range item.Contributors {
 		if contributor.LatestCommitDate.IsZero() {
 			if logger != nil {
-				logger.Debug().
-					Str("email", contributor.Email).
-					Msg("contributor billing: skipping contributor with zero latest commit date")
+				logger.Warn().Msg("contributor billing: skipping contributor with zero latest commit date")
 			}
 			continue
 		}

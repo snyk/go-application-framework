@@ -67,8 +67,8 @@ type SkipReason string
 const (
 	SkipReasonEmptyItems        SkipReason = "empty_items"
 	SkipReasonMissingEntityID   SkipReason = "missing_entity_id"
-	SkipReasonMissingCapability SkipReason = "missing_capability"
 	SkipReasonInvalidCapability SkipReason = "invalid_capability"
+	SkipReasonInvalidEntityType SkipReason = "invalid_entity_type"
 	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"
 )
 

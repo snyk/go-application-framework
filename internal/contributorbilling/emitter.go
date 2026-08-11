@@ -2,6 +2,7 @@ package contributorbilling
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -30,6 +31,33 @@ func (e *Emitter) EmitContributorBilling(ctx context.Context, opts EmitOptions) 
 	e.pending.add()
 	go func(parent context.Context) {
 		defer e.pending.done()
+
+		defer func() {
+			if r := recover(); r != nil {
+				var err error
+				switch v := r.(type) {
+				case error:
+					err = v
+				default:
+					err = fmt.Errorf("panic: %v", v)
+				}
+
+				result := Result{
+					Status:     ResultStatusFailed,
+					FailReason: FailReasonRequestError,
+					Err:        err,
+				}
+
+				if opts.OnResult != nil {
+					func() {
+						defer func() {
+							_ = recover()
+						}()
+						opts.OnResult(result)
+					}()
+				}
+			}
+		}()
 
 		result := emitContributorBilling(parent, opts)
 		if opts.OnResult != nil {

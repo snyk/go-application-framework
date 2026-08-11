@@ -63,6 +63,11 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
 	}
 
+	if skipReason := validateItemEntityTypes(items); skipReason != "" {
+		logSkip(opts.Logger, skipReason)
+		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+	}
+
 	if skipReason := validateRequiredFields(opts); skipReason != "" {
 		logSkip(opts.Logger, skipReason)
 		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
@@ -86,6 +91,16 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 	return result
 }
 
+func validateItemEntityTypes(items []BillingItem) SkipReason {
+	for _, item := range items {
+		entityType := strings.TrimSpace(item.EntityType)
+		if entityType != "" && !isKnownEntityType(entityType) {
+			return SkipReasonInvalidEntityType
+		}
+	}
+	return ""
+}
+
 func validateRequiredFields(opts EmitOptions) SkipReason {
 	if opts.Capability != "" && !isKnownCapability(opts.Capability) {
 		return SkipReasonInvalidCapability
@@ -99,6 +114,15 @@ func validateRequiredFields(opts EmitOptions) SkipReason {
 func isKnownCapability(capability string) bool {
 	switch capability {
 	case CapabilityOSS, CapabilityCode, CapabilityIaC:
+		return true
+	default:
+		return false
+	}
+}
+
+func isKnownEntityType(entityType string) bool {
+	switch entityType {
+	case EntityTypeProject, EntityTypeTarget, EntityTypeRevision:
 		return true
 	default:
 		return false

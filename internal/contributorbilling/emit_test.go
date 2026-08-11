@@ -255,6 +255,35 @@ func TestEmitContributorBilling_SkipsInvalidCapability(t *testing.T) {
 	assert.False(t, called)
 }
 
+func TestEmitContributorBilling_SkipsInvalidEntityType(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{EntityID: "project-1", EntityType: "invalid-type"},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
+	assert.Equal(t, contributorbilling.SkipReasonInvalidEntityType, result.SkipReason)
+	assert.False(t, called)
+}
+
 func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
 	t.Parallel()
 
@@ -733,6 +762,62 @@ func TestEmitContributorBilling_DedupesContributorsByEmail(t *testing.T) {
 	assert.Equal(t, older.Format(time.RFC3339), byEmail["bob@example.com"])
 }
 
+func TestEmitContributorBilling_PreservesContributorOrder(t *testing.T) {
+	t.Parallel()
+
+	when := time.Date(2026, 1, 10, 8, 0, 0, 0, time.UTC)
+
+	var gotBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(body, &gotBody))
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityOSS,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{
+				EntityID: "project-ordered",
+				Contributors: []contributorbilling.Contributor{
+					{Email: "zebra@example.com", LatestCommitDate: when},
+					{Email: "alice@example.com", LatestCommitDate: when},
+					{Email: "bob@example.com", LatestCommitDate: when},
+				},
+			},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+
+	attributes := ingestAttributes(gotBody)
+	require.NotNil(t, attributes)
+	contributors, ok := attributes["contributors"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, contributors, 3)
+
+	emails := make([]string, 0, len(contributors))
+	for _, raw := range contributors {
+		contributor, ok := raw.(map[string]interface{})
+		require.True(t, ok)
+		email, ok := contributor["email"].(string)
+		require.True(t, ok)
+		emails = append(emails, email)
+	}
+
+	assert.Equal(t, []string{"zebra@example.com", "alice@example.com", "bob@example.com"}, emails)
+}
+
 func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T) {
 	t.Parallel()
 
@@ -931,21 +1016,12 @@ func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
 }
 
 func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *testing.T) {
-	t.Parallel()
-
 	repoPath := initGitRepo(t, commitSpec{
 		email: "dev@example.com",
 		when:  time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC),
 	})
-	otherDir := t.TempDir()
 
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, os.Chdir(cwd))
-	})
-
-	require.NoError(t, os.Chdir(repoPath))
+	t.Chdir(repoPath)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -966,8 +1042,6 @@ func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *tes
 			resultCh <- result
 		},
 	})
-
-	require.NoError(t, os.Chdir(otherDir))
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)

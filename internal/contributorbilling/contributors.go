@@ -27,12 +27,14 @@ func collectContributors(repoPath string, now time.Time) ([]Contributor, error) 
 
 // dedupeContributorsByEmail collapses duplicate contributor emails in one emit payload,
 // treating emails as case-insensitive and keeping the latest commit date per email.
+// Order is preserved from the input slice.
 func dedupeContributorsByEmail(contributors []Contributor) []Contributor {
 	if len(contributors) <= 1 {
 		return contributors
 	}
 
-	byEmail := make(map[string]Contributor)
+	seen := make(map[string]int)
+	deduped := make([]Contributor, 0, len(contributors))
 
 	for _, contributor := range contributors {
 		if contributor.Email == "" {
@@ -40,21 +42,18 @@ func dedupeContributorsByEmail(contributors []Contributor) []Contributor {
 		}
 
 		normalizedEmail := strings.ToLower(strings.TrimSpace(contributor.Email))
-		existing, seen := byEmail[normalizedEmail]
-		if !seen || contributor.LatestCommitDate.After(existing.LatestCommitDate) {
-			byEmail[normalizedEmail] = contributor
+		if idx, exists := seen[normalizedEmail]; exists {
+			if contributor.LatestCommitDate.After(deduped[idx].LatestCommitDate) {
+				deduped[idx] = contributor
+			}
+		} else {
+			seen[normalizedEmail] = len(deduped)
+			deduped = append(deduped, contributor)
 		}
 	}
 
-	if len(byEmail) == 0 {
+	if len(deduped) == 0 {
 		return nil
-	}
-
-	deduped := make([]Contributor, len(byEmail))
-	i := 0
-	for _, c := range byEmail {
-		deduped[i] = c
-		i++
 	}
 
 	return deduped

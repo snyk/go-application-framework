@@ -430,6 +430,10 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	hookTimeout := e.postInvokeHookTimer
 	e.mu.RUnlock()
 
+	if hookTimeout == 0 {
+		hookTimeout = 5 * time.Second
+	}
+
 	hctx := &postInvokeContextImpl{
 		workflowID: id,
 		err:        invokeErr,

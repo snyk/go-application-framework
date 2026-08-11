@@ -11,10 +11,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 var expectedDataIdentifier []Identifier
@@ -905,4 +907,30 @@ func Test_PostInvokeHook_Timeout(t *testing.T) {
 	secondHookDone.Wait()
 	assert.NoError(t, err)
 	assert.Less(t, time.Since(start), 2*time.Second, "invoke should not block on the hanging hook")
+}
+
+func Test_PostInvokeHook_DefaultsTimerWhenUninitialized(t *testing.T) {
+	engine := &EngineImpl{
+		workflows:            make(map[string]Entry),
+		config:               configuration.New(),
+		ui:                   ui.DefaultUi(),
+		extensionInitializer: make([]ExtensionInit, 0),
+		logger:               &zerolog.Logger{},
+	}
+
+	wfId := NewWorkflowIdentifier("default-timer")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	hookCalled := false
+	addPostInvokeHook(t, engine, func(context.Context, Engine, PostInvokeContext) {
+		hookCalled = true
+	})
+
+	assert.NoError(t, engine.Init())
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+	assert.True(t, hookCalled, "hook should fire even when timer was uninitialized")
 }

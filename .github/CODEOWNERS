@@ -1,5 +1,4 @@
 * @snyk/developer-experience_cli @snyk/developer-experience_ide
 
 # CLI Active Contributor billing (IANDT-237/238/240)
-/internal/contributorbilling/ @snyk/developer-experience_cli
-/pkg/clibilling/ @snyk/developer-experience_cli
+/internal/contributorbilling/ @snyk/platformeng_identity-tenancy

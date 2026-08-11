@@ -1,6 +1,10 @@
 package contributorbilling
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	zlog "github.com/rs/zerolog/log"
+)
 
 func resolveRepoPath(path string) string {
 	if path == "" {
@@ -9,6 +13,7 @@ func resolveRepoPath(path string) string {
 
 	abs, err := filepath.Abs(path)
 	if err != nil {
+		zlog.Warn().Err(err).Str("path", path).Msg("contributor billing: failed to resolve repo path to absolute")
 		return path
 	}
 
