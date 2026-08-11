@@ -4,10 +4,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -63,6 +66,8 @@ func (ns *NetworkStackErrorHandlerMiddleware) categorizeNetworkError(err error, 
 		err = cli.NewTLSCertificateError(detail, cause)
 	case ns.isConnectionRefusedError(err):
 		err = cli.NewConnectionRefusedError(detail, cause)
+	case ns.isConnectionResetError(err):
+		err = cli.NewConnectionResetError(detail, cause)
 	default:
 		err = cli.NewGenericNetworkError(detail, cause)
 	}
@@ -166,4 +171,26 @@ func (ns *NetworkStackErrorHandlerMiddleware) isNetworkUnreachableError(err erro
 		strings.Contains(errStr, "network is unreachable") ||
 		strings.Contains(errStr, "host is unreachable") ||
 		strings.Contains(errStr, "connect: no route to host")
+}
+
+func (ns *NetworkStackErrorHandlerMiddleware) isConnectionResetError(err error) bool {
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+
+	// An EOF only means a reset when it comes off the network stack; the wrapped
+	// round tripper is arbitrary and can surface io.ErrUnexpectedEOF for its own reasons.
+	var opErr *net.OpError
+	var urlErr *url.Error
+	if errors.Is(err, io.ErrUnexpectedEOF) && (errors.As(err, &opErr) || errors.As(err, &urlErr)) {
+		return true
+	}
+
+	// The Windows clauses match the WSAECONNRESET / WSAECONNABORTED message text,
+	// which the net package surfaces instead of syscall.ECONNRESET / syscall.EPIPE.
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "broken pipe") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "forcibly closed") ||
+		strings.Contains(errStr, "connection was aborted")
 }
