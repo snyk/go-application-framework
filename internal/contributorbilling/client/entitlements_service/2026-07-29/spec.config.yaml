@@ -1,0 +1,5 @@
+package: v20260729
+generate:
+  models: true
+  client: true
+output: entitlements_service.go

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make generate *)",
+      "Bash(make test *)",
+      "Bash(go test *)",
+      "Bash(make format *)",
+      "Bash(make lint *)",
+      "Bash(gh pr *)",
+      "Bash(git fetch *)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)",
+      "Bash(go build *)",
+      "Bash(grep -n \"Items: \\\\[\\\\]contributorbilling.BillingItem{$\" internal/contributorbilling/emit_test.go)"
+    ]
+  }
+}
