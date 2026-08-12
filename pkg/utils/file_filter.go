@@ -32,8 +32,6 @@ const (
 // by default, all rules are valid
 var defaultInvalidRules = []string{}
 
-var nextFileFilterMetricScopeID atomic.Uint64
-
 const gitIgnoreGlobPrefix = "#gitignore:"
 
 type FileFilter struct {
@@ -43,7 +41,7 @@ type FileFilter struct {
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
-	metricsRecorder metrics.Recorder
+	metrics         *metrics.Accumulator
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -74,14 +72,28 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
+// File-filter metric keys, of the shape "file-filter.<variant>.<metric>". Both parts come from a
+// fixed set, so that an analytics backend can derive facets from them; see metrics.Accumulator.
 const (
 	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
 
-	metricFileFilterDurationMs           = "durationMs"           // elapsed time for GetFilteredFiles: exclusion-predicate build (incl. git index read) and filtering, including caller drain of the result channel
-	metricFileFilterSurvivingFileCount   = "survivingFileCount"   // number of files that passed exclusion in this filter run
-	metricFileFilterRulesBuildDurationMs = "rulesBuildDurationMs" // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
-	metricFileFilterMetacharacterFix     = "metacharacterFix"     // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
-	metricFileFilterRespectTrackedFiles  = "respectTrackedFiles"  // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
+	// The variant names the behavior a run applied, keeping values attributable to it.
+	metricFileFilterVariantLegacy       = "var0" // neither feature flag enabled
+	metricFileFilterVariantMetacharFix  = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
+	metricFileFilterVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
+	metricFileFilterVariantBothFixes    = "var3" // both feature flags enabled
+
+	metricFileFilterInputFileCount = "filter.inputFileCount" // files offered to GetFilteredFiles, before exclusion
+	metricFileFilterRuleCount      = "filter.ruleCount"      // glob patterns GetRules produced
+
+	// Recorded alongside the variant so a consumer can read a run's behavior directly off its
+	// metrics, without having to know which variant name maps to which feature flag combination.
+	metricFileFilterFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
+	metricFileFilterFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
+
+	metricFileFilterDurationMs           = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
+	metricFileFilterRulesBuildDurationMs = "rules.durationMs"       // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
+	metricFileFilterSurvivingFileCount   = "filter.outputFileCount" // number of files that passed exclusion
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -126,31 +138,50 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 // Callers must pass a pkg/analytics.Analytics implementation here; it satisfies this interface.
 func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	return func(filter *FileFilter) error {
-		filter.metricsRecorder = recorder
+		filter.metrics = metrics.NewAccumulator(recorder)
 		return nil
 	}
 }
 
-func (fw *FileFilter) recordMetricLazy(scopeID, key string, getMetric func() int) {
-	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionIntegerValue(metricKey(scopeID, key), getMetric())
+// The record*Lazy helpers obtain a metric only once it is known to be recorded, so that a FileFilter
+// without a recorder pays for none of them.
+func (fw *FileFilter) recordSumLazy(variant, key string, getMetric func() int) {
+	if fw.metrics.Recording() {
+		fw.metrics.AddToSum(metricKey(variant, key), getMetric())
 	}
 }
 
-func (fw *FileFilter) recordBoolMetricLazy(scopeID, key string, getMetric func() bool) {
-	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionBoolValue(metricKey(scopeID, key), getMetric())
+// metricVariant names the behavior the calling run applies. It returns an empty variant while nothing
+// is recorded, so that the flags — whose lookup may reach the network — are not resolved for metrics alone.
+func (fw *FileFilter) metricVariant() string {
+	if !fw.metrics.Recording() {
+		return ""
 	}
+
+	metacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	respectTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+
+	var variant string
+	switch {
+	case metacharacterFix && respectTrackedFiles:
+		variant = metricFileFilterVariantBothFixes
+	case metacharacterFix:
+		variant = metricFileFilterVariantMetacharFix
+	case respectTrackedFiles:
+		variant = metricFileFilterVariantTrackedFiles
+	default:
+		variant = metricFileFilterVariantLegacy
+	}
+
+	fw.metrics.RecordBool(metricKey(variant, metricFileFilterFeatureMetacharFix), metacharacterFix)
+	fw.metrics.RecordBool(metricKey(variant, metricFileFilterFeatureTrackedFiles), respectTrackedFiles)
+
+	return variant
 }
 
-// metricKey namespaces a metric under the scope of the filter run that recorded it, so that
-// repeated runs do not overwrite each other in a recorder that keeps only the last value per key.
-func metricKey(scopeID, key string) string {
-	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, scopeID, key)
-}
-
-func newFileFilterMetricScopeID() string {
-	return fmt.Sprintf("%d", nextFileFilterMetricScopeID.Add(1))
+// metricKey namespaces a metric under the file-filter prefix and the variant that produced it.
+func metricKey(variant, key string) string {
+	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, variant, key)
 }
 
 // NewFileFilter creates a FileFilter rooted at path. Without WithConfig, feature flags default to disabled (legacy).
@@ -161,6 +192,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
+		metrics:         metrics.NewAccumulator(nil),                                           // discards until WithMetrics supplies a recorder
 	}
 
 	options = append([]FileFilterOption{WithConfig(nil)}, options...)
@@ -207,21 +239,12 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	// Both feature flags change how rules are built (see buildGlobs), so the rules scope reports
-	// them alongside the build duration rather than relying on a GetFilteredFiles run that may
-	// never happen or may read a different flag value.
-	scopeID := newFileFilterMetricScopeID()
+	// Reports under its own variant: a GetFilteredFiles run may never happen, or may resolve the flags differently.
+	variant := fw.metricVariant()
 	start := time.Now()
-	defer fw.recordMetricLazy(scopeID, metricFileFilterRulesBuildDurationMs, func() int {
+	defer fw.recordSumLazy(variant, metricFileFilterRulesBuildDurationMs, func() int {
 		return int(time.Since(start).Milliseconds())
 	})
-	fw.recordBoolMetricLazy(scopeID, metricFileFilterMetacharacterFix, func() bool {
-		return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
-	})
-	fw.recordBoolMetricLazy(scopeID, metricFileFilterRespectTrackedFiles, func() bool {
-		return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
-	})
-
 	files := fw.GetAllFiles()
 
 	// iterate filesToFilter channel and find ignore filesToFilter
@@ -241,22 +264,23 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append(fw.defaultRules, globs...), nil
+	rules := append(fw.defaultRules, globs...)
+	fw.recordSumLazy(variant, metricFileFilterRuleCount, func() int { return len(rules) })
+
+	return rules, nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
-	// Each run reports under its own scope, so that concurrent or repeated runs of this FileFilter
-	// neither race on shared state nor overwrite each other's values in the recorder.
-	runScopeID := newFileFilterMetricScopeID()
-
 	var filteredFilesCh = make(chan string)
 
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
+		variant := fw.metricVariant()
 		start := time.Now()
 		var resolvedFileCount atomic.Int64
+		candidateFileCount := 0
 
 		defer close(filteredFilesCh)
 
@@ -274,6 +298,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 		// iterate the filesToFilter channel
 		for file := range filesCh {
+			candidateFileCount++
 			err := availableThreads.Acquire(ctx, 1)
 			if err != nil {
 				fw.logger.Err(err).Msg("failed to limit threads")
@@ -294,18 +319,14 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 
-		fw.recordBoolMetricLazy(runScopeID, metricFileFilterMetacharacterFix, func() bool {
-			return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+		fw.recordSumLazy(variant, metricFileFilterInputFileCount, func() int {
+			return candidateFileCount
 		})
-		fw.recordBoolMetricLazy(runScopeID, metricFileFilterRespectTrackedFiles, func() bool {
-			return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
-		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterDurationMs, func() int {
-			return int(time.Since(start).Milliseconds())
-		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterSurvivingFileCount, func() int {
+		fw.recordSumLazy(variant, metricFileFilterSurvivingFileCount, func() int {
 			return int(resolvedFileCount.Load())
 		})
+
+		fw.recordSumLazy(variant, metricFileFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
 	}()
 
 	return filteredFilesCh
