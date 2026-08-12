@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -125,6 +126,55 @@ func TestLoadFile(t *testing.T) {
 
 		require.Equal(t, uniqueEnvVar, os.Getenv(uniqueEnvVar))
 	})
+
+	t.Run("should not load HOME or other non-allow-listed variables from the config file", func(t *testing.T) {
+		dir := t.TempDir()
+		fileName := filepath.Join(dir, "env-file")
+
+		originalHome := os.Getenv("HOME")
+		t.Setenv("HOME", originalHome)
+
+		disallowedVar := "DISALLOWED_" + strconv.Itoa(rand.Int())
+		t.Setenv(disallowedVar, "")
+
+		contents := fmt.Sprintf("HOME=/tmp/evil-home\n%s=poisoned\n", disallowedVar)
+		require.NoError(t, os.WriteFile(fileName, []byte(contents), 0660))
+
+		loadFile(fileName)
+
+		require.Equal(t, originalHome, os.Getenv("HOME"), "HOME must not be overwritten by a config file")
+		require.Empty(t, os.Getenv(disallowedVar), "non-allow-listed variables must not be set from a config file")
+	})
+
+	t.Run("should load allow-listed variables other than SNYK_ prefixed ones", func(t *testing.T) {
+		dir := t.TempDir()
+		fileName := filepath.Join(dir, "env-file")
+
+		t.Setenv("JAVA_HOME", "")
+
+		contents := "JAVA_HOME=/opt/java\n"
+		require.NoError(t, os.WriteFile(fileName, []byte(contents), 0660))
+
+		loadFile(fileName)
+
+		require.Equal(t, "/opt/java", os.Getenv("JAVA_HOME"))
+	})
+}
+
+func TestIsAllowedEnvVarName(t *testing.T) {
+	allowed := []string{"PATH", "JAVA_HOME", "HTTP_PROXY", "https_proxy", "NO_PROXY", "SNYK_TOKEN", "SNYK_CFG_ORG"}
+	for _, name := range allowed {
+		t.Run(name+" is allowed", func(t *testing.T) {
+			require.True(t, isAllowedEnvVarName(name))
+		})
+	}
+
+	disallowed := []string{"HOME", "SHELL", "BASH_ENV", "ENV", "LD_PRELOAD", "RANDOM_VAR"}
+	for _, name := range disallowed {
+		t.Run(name+" is not allowed", func(t *testing.T) {
+			require.False(t, isAllowedEnvVarName(name))
+		})
+	}
 }
 
 func TestLoadConfiguredEnvironment(t *testing.T) {
@@ -149,11 +199,33 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		err = os.Chdir(currentDir)
 		require.NoError(t, err)
 	})
+
+	t.Run("should only read the shell environment once, even across multiple calls", func(t *testing.T) {
+		originalLoader := shellEnvLoader
+		t.Cleanup(func() {
+			shellEnvOnce = sync.Once{}
+			shellEnvLoader = originalLoader
+		})
+		shellEnvOnce = sync.Once{}
+
+		var callCount int
+		shellEnvLoader = func() { callCount++ }
+
+		dir := t.TempDir()
+
+		LoadConfiguredEnvironment(nil, dir)
+		LoadConfiguredEnvironment(nil, dir)
+		LoadConfiguredEnvironment(nil, dir)
+
+		require.Equal(t, 1, callCount, "the shell environment must only be read once per process")
+	})
 }
 
+// setupTestFile writes a config file containing a single, uniquely-named, allow-listed (SNYK_-prefixed)
+// environment variable, and returns the variable name and the absolute path of the file written.
 func setupTestFile(t *testing.T, fileName string, dir string) (string, string) {
 	t.Helper()
-	uniqueEnvVar := strconv.Itoa(rand.Int())
+	uniqueEnvVar := "SNYK_TEST_" + strconv.Itoa(rand.Int())
 	t.Setenv(uniqueEnvVar, "")
 	absFileName := filepath.Join(dir, fileName)
 	varName := []byte(fmt.Sprintf("%s=%s\n", uniqueEnvVar, uniqueEnvVar))
