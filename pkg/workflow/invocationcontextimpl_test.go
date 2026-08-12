@@ -122,7 +122,6 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 		assert.ElementsMatch(t, []string{
 			"durationMs",
 			"survivingFileCount",
-			"trackedFilesKeptCount",
 			"metacharacterFix",
 			"respectTrackedFiles",
 		}, filterScope)

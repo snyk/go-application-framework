@@ -2233,9 +2233,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 			// .gitignore and file.txt pass the filter, ignored.txt does not
 			assert.Equal(t, 2, run.ints[metricFileFilterSurvivingFileCount])
 			assert.Contains(t, run.ints, metricFileFilterDurationMs)
-			// newRepo isn't a git repository, so no tracked file is ever exempted from a gitignore rule
-			assert.Equal(t, 0, run.ints[metricFileFilterTrackedFilesKeptCount])
-			assert.Len(t, run.ints, 3)
+			assert.Len(t, run.ints, 2)
 
 			// Building the rules reports its duration and the flags it built them with, under a scope of its own.
 			rulesRun := singleRun(t, recorder, metricFileFilterRulesBuildDurationMs)
@@ -2329,72 +2327,4 @@ func TestFileFilter_Metrics(t *testing.T) {
 			assert.Contains(t, run.ints, metricFileFilterDurationMs, "scope %s", scopeID)
 		}
 	})
-}
-
-func TestFileFilter_Metrics_TrackedFilesKeptCount(t *testing.T) {
-	tests := []struct {
-		name           string
-		testCase       gitTrackedFilesTestCase
-		ruleFiles      []string
-		featureEnabled bool
-		expectedCount  int
-	}{
-		{
-			// regular.txt is tracked but no gitignore rule matches it, so it is not a kept file
-			name: "counts every tracked file a gitignore rule would have excluded",
-			testCase: gitTrackedFilesTestCase{
-				files: map[string]string{
-					"tracked.log":      "tracked but ignored",
-					"also-tracked.log": "tracked but ignored",
-					"untracked.log":    "untracked and ignored",
-					"regular.txt":      "regular file",
-				},
-				trackedFiles: []string{"tracked.log", "also-tracked.log", "regular.txt"},
-				ruleFiles:    map[string]string{".gitignore": "*.log\n"},
-			},
-			ruleFiles:      []string{".gitignore"},
-			featureEnabled: true,
-			expectedCount:  2,
-		},
-		{
-			// vendored.log is exempted from .gitignore, but the .dcignore rule still excludes it
-			name: "does not count a tracked file another rule still excludes",
-			testCase: gitTrackedFilesTestCase{
-				files:        map[string]string{"vendored.log": "vendored", "regular.txt": "regular"},
-				trackedFiles: []string{"vendored.log"},
-				ruleFiles: map[string]string{
-					".gitignore": "vendored.log\n",
-					".dcignore":  "vendored.log\n",
-				},
-			},
-			ruleFiles:      []string{".gitignore", ".dcignore"},
-			featureEnabled: true,
-			expectedCount:  0,
-		},
-		{
-			name: "does not count tracked files while the feature is disabled",
-			testCase: gitTrackedFilesTestCase{
-				files:        map[string]string{"tracked.log": "tracked but ignored"},
-				trackedFiles: []string{"tracked.log"},
-				ruleFiles:    map[string]string{".gitignore": "*.log\n"},
-			},
-			ruleFiles:      []string{".gitignore"},
-			featureEnabled: false,
-			expectedCount:  0,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root, _ := setupGitTrackedFilesTestCase(t, test.testCase)
-			recorder := &metrics.RecorderFake{}
-			config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: test.featureEnabled})
-			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
-
-			runFileFilter(t, fileFilter, test.ruleFiles...)
-
-			run := singleRun(t, recorder, metricFileFilterDurationMs)
-			assert.Equal(t, test.expectedCount, run.ints[metricFileFilterTrackedFilesKeptCount])
-		})
-	}
 }

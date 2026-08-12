@@ -77,12 +77,11 @@ type DotSnykRule struct {
 const (
 	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
 
-	metricFileFilterDurationMs            = "durationMs"            // elapsed time for GetFilteredFiles: exclusion-predicate build (incl. git index read) and filtering, including caller drain of the result channel
-	metricFileFilterSurvivingFileCount    = "survivingFileCount"    // number of files that passed exclusion in this filter run
-	metricFileFilterRulesBuildDurationMs  = "rulesBuildDurationMs"  // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
-	metricFileFilterMetacharacterFix      = "metacharacterFix"      // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
-	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"   // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
-	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount" // tracked files kept despite a matching .gitignore rule
+	metricFileFilterDurationMs           = "durationMs"           // elapsed time for GetFilteredFiles: exclusion-predicate build (incl. git index read) and filtering, including caller drain of the result channel
+	metricFileFilterSurvivingFileCount   = "survivingFileCount"   // number of files that passed exclusion in this filter run
+	metricFileFilterRulesBuildDurationMs = "rulesBuildDurationMs" // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
+	metricFileFilterMetacharacterFix     = "metacharacterFix"     // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
+	metricFileFilterRespectTrackedFiles  = "respectTrackedFiles"  // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -264,9 +263,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
 		// opens the repository and reads the git index, so it is timed alongside the filtering.
 		var isFileExcluded func(string) bool
-		var trackedFilesKeptCount atomic.Int64
 		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-			isFileExcluded = fw.trackedFileExclusionPredicate(globs, &trackedFilesKeptCount)
+			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
 		} else {
 			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 			isFileExcluded = func(filePath string) bool {
@@ -307,9 +305,6 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		})
 		fw.recordMetricLazy(runScopeID, metricFileFilterSurvivingFileCount, func() int {
 			return int(resolvedFileCount.Load())
-		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterTrackedFilesKeptCount, func() int {
-			return int(trackedFilesKeptCount.Load())
 		})
 	}()
 
@@ -355,13 +350,11 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 // .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
 // exempted from the .gitignore rule and not excluded by any other rule (e.g. a .snyk or
 // .dcignore rule).
-func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *atomic.Int64) func(string) bool {
-	gitignoreGlobs := make([]string, 0)
+func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
 	allGlobs := make([]string, 0, len(globs))
 
 	for _, glob := range globs {
 		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
-			gitignoreGlobs = append(gitignoreGlobs, gitignoreGlob)
 			allGlobs = append(allGlobs, gitignoreGlob)
 			continue
 		}
@@ -375,8 +368,6 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 	defaultPredicate := func(file string) bool {
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
 	}
-
-	gitignoreMatcher := gitignore.CompileIgnoreLines(gitignoreGlobs...)
 
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
 		DetectDotGit: true,
@@ -404,13 +395,9 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 		return defaultPredicate
 	}
 
-	trackedFilesToPreserve := make(map[string]bool)
-
+	trackedFiles := make(map[string]bool, len(gitIndex.Entries))
 	for _, entry := range gitIndex.Entries {
-		relativePath := filepath.ToSlash(filepath.Join(repoRoot, filepath.FromSlash(entry.Name)))
-		if gitignoreMatcher.MatchesPath(relativePath) {
-			trackedFilesToPreserve[entry.Name] = true
-		}
+		trackedFiles[entry.Name] = true
 	}
 
 	return func(file string) bool {
@@ -420,12 +407,8 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if trackedFilesToPreserve[filepath.ToSlash(relativePath)] {
-			excluded := otherMatcher.MatchesPath(normalizedPath)
-			if !excluded {
-				keptCount.Add(1)
-			}
-			return excluded
+		if trackedFiles[filepath.ToSlash(relativePath)] {
+			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
 		return allMatcher.MatchesPath(normalizedPath)
