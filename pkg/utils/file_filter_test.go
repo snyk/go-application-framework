@@ -2216,7 +2216,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 		{name: "both fixes", metacharacterFix: true, respectTrackedFiles: true, expectedVariant: metricFileFilterVariantBothFixes},
 	} {
 		t.Run("records every metric under the variant of the run, "+test.name, func(t *testing.T) {
-			recorder := &metrics.RecorderFake{}
+			recorder := metrics.NewRecorderFake()
 			config := newTestConfig(map[string]bool{
 				FF_FILE_FILTER_METACHARACTER_FIX:   test.metacharacterFix,
 				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.respectTrackedFiles,
@@ -2258,7 +2258,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 	// Every run of a FileFilter reports under the same keys, so their values add up rather than
 	// overwriting each other.
 	t.Run("aggregates repeated runs into one value per key", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 
@@ -2288,7 +2288,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 	})
 
 	t.Run("records metrics when no ignore file produces globs", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 		root := t.TempDir()
 		createFileInPath(t, filepath.Join(root, "file.txt"), []byte("x"))
@@ -2305,7 +2305,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 	// or lose its values to another. Run under -race to cover the former.
 	t.Run("concurrent filter runs aggregate without loss", func(t *testing.T) {
 		const concurrentRuns = 4
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithMetrics(recorder))
 
 		var wg sync.WaitGroup
@@ -2327,7 +2327,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 	// A feature flag may resolve differently between the runs of one FileFilter. Each run then reports
 	// under the variant of the behavior it applied, leaving neither variant holding values of the other.
 	t.Run("keeps runs applying differing behavior apart", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false})
 		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 

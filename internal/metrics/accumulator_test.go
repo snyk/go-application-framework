@@ -11,7 +11,7 @@ import (
 
 func TestAccumulator_AddToSum(t *testing.T) {
 	t.Run("writes the running sum through on every update", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		accumulator := metrics.NewAccumulator(recorder)
 
 		accumulator.AddToSum("files", 2)
@@ -22,7 +22,7 @@ func TestAccumulator_AddToSum(t *testing.T) {
 	})
 
 	t.Run("keeps sums of different keys apart", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 		accumulator := metrics.NewAccumulator(recorder)
 
 		accumulator.AddToSum("files", 2)
@@ -33,7 +33,7 @@ func TestAccumulator_AddToSum(t *testing.T) {
 	})
 
 	t.Run("records a zero delta so the key is present", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := metrics.NewRecorderFake()
 
 		metrics.NewAccumulator(recorder).AddToSum("files", 0)
 
@@ -77,7 +77,7 @@ func TestAccumulator_KeepMaximum(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			recorder := &metrics.RecorderFake{}
+			recorder := metrics.NewRecorderFake()
 			accumulator := metrics.NewAccumulator(recorder)
 
 			for _, value := range test.values {
@@ -107,7 +107,7 @@ func TestAccumulator_WithoutRecorder(t *testing.T) {
 	}
 
 	t.Run("reports recording with a recorder", func(t *testing.T) {
-		assert.True(t, metrics.NewAccumulator(&metrics.RecorderFake{}).Recording())
+		assert.True(t, metrics.NewAccumulator(metrics.NewRecorderFake()).Recording())
 	})
 }
 
@@ -120,7 +120,7 @@ func TestAccumulator_ConcurrentUpdates(t *testing.T) {
 		expectedTotalFiles = writers * updatesPerWriter
 	)
 
-	recorder := &metrics.RecorderFake{}
+	recorder := metrics.NewRecorderFake()
 	accumulator := metrics.NewAccumulator(recorder)
 
 	var wg sync.WaitGroup
