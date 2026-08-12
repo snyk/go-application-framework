@@ -240,6 +240,23 @@ EmitContributorBilling(ctx, EmitOptions{
 })
 ```
 
+## Metrics
+
+Callers can record emit outcomes (success/skip/fail counts) by providing a `MetricsRecorder`:
+
+```go
+emitter.EmitContributorBilling(ctx, EmitOptions{
+    // ... other fields ...
+    MetricsRecorder: analytics,  // pass pkg/analytics.Analytics or any metrics.Recorder
+})
+// Metrics recorded:
+// - "contributor_billing.emitted" (integer count)
+// - "contributor_billing.skipped" + "contributor_billing.skipped.reason" (string)
+// - "contributor_billing.failed" + "contributor_billing.failed.reason" (string)
+```
+
+The recorder is optional; if nil, no metrics are recorded.
+
 ## Concurrency
 
 `Emitter` is thread-safe. Multiple goroutines can safely call emit/wait on the same emitter.

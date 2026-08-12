@@ -854,7 +854,7 @@ func TestEmitContributorBilling_CollectionFailureSkipsWhenEmpty(t *testing.T) {
 func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *testing.T) {
 	repoPath := initGitRepo(t, commitSpec{
 		email: "dev@example.com",
-		when:  time.Now().AddDate(0, 0, -5),  // within 90-day window
+		when:  time.Now().AddDate(0, 0, -5), // within 90-day window
 	})
 
 	t.Chdir(repoPath)
@@ -882,4 +882,164 @@ func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *tes
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
 	assert.NoError(t, result.ContributorCollectionErr)
+}
+
+func TestEmitContributorBilling_RecordsMetrics_Emitted(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	recorder := &metricsRecorderStub{}
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+		},
+		MetricsRecorder: recorder,
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+
+	require.Len(t, recorder.intValues, 1)
+	assert.Equal(t, "contributor_billing.emitted", recorder.intValues[0].key)
+	assert.Equal(t, 1, recorder.intValues[0].value)
+}
+
+func TestEmitContributorBilling_RecordsMetrics_Skipped(t *testing.T) {
+	t.Parallel()
+
+	recorder := &metricsRecorderStub{}
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		ScopeID: "11111111-1111-1111-1111-111111111111",
+		Item: contributorbilling.BillingItem{
+			EntityID: "",
+		},
+		MetricsRecorder: recorder,
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
+	assert.Equal(t, contributorbilling.SkipReasonMissingEntityID, result.SkipReason)
+
+	require.Len(t, recorder.intValues, 1)
+	assert.Equal(t, "contributor_billing.skipped", recorder.intValues[0].key)
+	assert.Equal(t, 1, recorder.intValues[0].value)
+
+	require.Len(t, recorder.stringValues, 1)
+	assert.Equal(t, "contributor_billing.skipped.reason", recorder.stringValues[0].key)
+	assert.Equal(t, string(contributorbilling.SkipReasonMissingEntityID), recorder.stringValues[0].value)
+}
+
+func TestEmitContributorBilling_RecordsMetrics_Failed(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	recorder := &metricsRecorderStub{}
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+		},
+		MetricsRecorder: recorder,
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
+	assert.Equal(t, contributorbilling.FailReasonHTTPError, result.FailReason)
+
+	require.Len(t, recorder.intValues, 1)
+	assert.Equal(t, "contributor_billing.failed", recorder.intValues[0].key)
+	assert.Equal(t, 1, recorder.intValues[0].value)
+
+	require.Len(t, recorder.stringValues, 1)
+	assert.Equal(t, "contributor_billing.failed.reason", recorder.stringValues[0].key)
+	assert.Equal(t, string(contributorbilling.FailReasonHTTPError), recorder.stringValues[0].value)
+}
+
+func TestEmitContributorBilling_NoMetricsWhenRecorderNil(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	// Don't set MetricsRecorder
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Item: contributorbilling.BillingItem{
+			EntityID: "project-1",
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	// Test should complete without panicking on nil recorder
+}
+
+// metricsRecorderStub implements metrics.Recorder for testing
+type metricsRecorderStub struct {
+	intValues []struct {
+		key   string
+		value int
+	}
+	stringValues []struct {
+		key   string
+		value string
+	}
+	boolValues []struct {
+		key   string
+		value bool
+	}
+}
+
+func (m *metricsRecorderStub) AddExtensionIntegerValue(key string, value int) {
+	m.intValues = append(m.intValues, struct {
+		key   string
+		value int
+	}{key, value})
+}
+
+func (m *metricsRecorderStub) AddExtensionStringValue(key string, value string) {
+	m.stringValues = append(m.stringValues, struct {
+		key   string
+		value string
+	}{key, value})
+}
+
+func (m *metricsRecorderStub) AddExtensionBoolValue(key string, value bool) {
+	m.boolValues = append(m.boolValues, struct {
+		key   string
+		value bool
+	}{key, value})
 }

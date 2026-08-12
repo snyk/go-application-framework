@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/internal/metrics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -51,6 +52,10 @@ type EmitOptions struct {
 	Timeout  time.Duration
 	Logger   *zerolog.Logger
 	OnResult func(Result)
+
+	// MetricsRecorder optionally records emit outcomes (emitted, skipped, failed counts).
+	// Callers must pass a pkg/analytics.Analytics implementation; it satisfies this interface.
+	MetricsRecorder metrics.Recorder
 }
 
 // ResultStatus describes the outcome of an emit attempt.
@@ -62,15 +67,23 @@ const (
 	ResultStatusFailed  ResultStatus = "failed"
 )
 
+// Metric key constants for analytics recording.
+const (
+	metricContributorBillingPrefix = "contributor_billing"
+	metricEmitted                  = "emitted"
+	metricSkipped                  = "skipped"
+	metricFailed                   = "failed"
+)
+
 // SkipReason explains why an emit was not attempted.
 type SkipReason string
 
 const (
-	SkipReasonMissingEntityID      SkipReason = "missing_entity_id"
-	SkipReasonInvalidCapability    SkipReason = "invalid_capability"
-	SkipReasonInvalidEntityType    SkipReason = "invalid_entity_type"
-	SkipReasonMissingScopeID       SkipReason = "missing_scope_id"
-	SkipReasonEmptyContributors    SkipReason = "empty_contributors"
+	SkipReasonMissingEntityID   SkipReason = "missing_entity_id"
+	SkipReasonInvalidCapability SkipReason = "invalid_capability"
+	SkipReasonInvalidEntityType SkipReason = "invalid_entity_type"
+	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"
+	SkipReasonEmptyContributors SkipReason = "empty_contributors"
 )
 
 // FailReason explains why an emit POST failed.

@@ -50,11 +50,17 @@ func (opts EmitOptions) withDefaults() EmitOptions {
 }
 
 func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
+	var result Result
+	defer func() {
+		recordEmitMetric(opts, result)
+	}()
+
 	opts.Item.EntityID = strings.TrimSpace(opts.Item.EntityID)
 	if opts.Item.EntityID == "" {
 		skipReason := SkipReasonMissingEntityID
 		logSkip(opts.Logger, skipReason)
-		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+		result = Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+		return result
 	}
 
 	if opts.Item.EntityType != "" {
@@ -62,17 +68,20 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		if !isKnownEntityType(opts.Item.EntityType) {
 			skipReason := SkipReasonInvalidEntityType
 			logSkip(opts.Logger, skipReason)
-			return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+			result = Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+			return result
 		}
 	}
 
 	if skipReason := validateRequiredFields(opts); skipReason != "" {
 		logSkip(opts.Logger, skipReason)
-		return Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+		result = Result{Status: ResultStatusSkipped, SkipReason: skipReason}
+		return result
 	}
 
 	if strings.TrimSpace(opts.IngestURL) == "" {
-		return missingIngestURLResult(opts.Logger)
+		result = missingIngestURLResult(opts.Logger)
+		return result
 	}
 
 	var collectionErr error
@@ -86,10 +95,11 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 	if opts.CollectContributors && len(opts.Item.Contributors) == 0 {
 		skipReason := SkipReasonEmptyContributors
 		logSkip(opts.Logger, skipReason)
-		return Result{Status: ResultStatusSkipped, SkipReason: skipReason, ContributorCollectionErr: collectionErr}
+		result = Result{Status: ResultStatusSkipped, SkipReason: skipReason, ContributorCollectionErr: collectionErr}
+		return result
 	}
 
-	result := postIngest(parent, opts, opts.Item)
+	result = postIngest(parent, opts, opts.Item)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
 	}
@@ -188,4 +198,22 @@ func postSingleIngest(
 
 func logSkip(logger *zerolog.Logger, reason SkipReason) {
 	logger.Info().Str("reason", string(reason)).Msg("contributor billing: skipped emit")
+}
+
+func recordEmitMetric(opts EmitOptions, result Result) {
+	if opts.MetricsRecorder == nil {
+		return
+	}
+
+	key := fmt.Sprintf("%s.%s", metricContributorBillingPrefix, result.Status)
+	opts.MetricsRecorder.AddExtensionIntegerValue(key, 1)
+
+	// Record skip/fail reason if applicable
+	if result.Status == ResultStatusSkipped {
+		reasonKey := fmt.Sprintf("%s.%s.reason", metricContributorBillingPrefix, metricSkipped)
+		opts.MetricsRecorder.AddExtensionStringValue(reasonKey, string(result.SkipReason))
+	} else if result.Status == ResultStatusFailed {
+		reasonKey := fmt.Sprintf("%s.%s.reason", metricContributorBillingPrefix, metricFailed)
+		opts.MetricsRecorder.AddExtensionStringValue(reasonKey, string(result.FailReason))
+	}
 }
