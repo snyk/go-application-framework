@@ -356,27 +356,28 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 // exempted from the .gitignore rule and not excluded by any other rule (e.g. a .snyk or
 // .dcignore rule).
 func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *atomic.Int64) func(string) bool {
-	gitignoreGlobs := make([]string, 0)
+	var nonGitignoreGlobs []string
 	allGlobs := make([]string, 0, len(globs))
+	hasGitignoreGlobs := false
 
 	for _, glob := range globs {
-		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
-			gitignoreGlobs = append(gitignoreGlobs, gitignoreGlob)
-			allGlobs = append(allGlobs, gitignoreGlob)
-			continue
+		if stripped, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
+			allGlobs = append(allGlobs, stripped)
+			hasGitignoreGlobs = true
+		} else {
+			nonGitignoreGlobs = append(nonGitignoreGlobs, glob)
+			allGlobs = append(allGlobs, glob)
 		}
-
-		allGlobs = append(allGlobs, glob)
 	}
-
-	otherMatcher := gitignore.CompileIgnoreLines(globs...)
 
 	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
 	defaultPredicate := func(file string) bool {
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
 	}
 
-	gitignoreMatcher := gitignore.CompileIgnoreLines(gitignoreGlobs...)
+	if !hasGitignoreGlobs {
+		return defaultPredicate
+	}
 
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
 		DetectDotGit: true,
@@ -404,31 +405,32 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 		return defaultPredicate
 	}
 
-	trackedFilesToPreserve := make(map[string]bool)
-
+	trackedFiles := make(map[string]struct{}, len(gitIndex.Entries))
 	for _, entry := range gitIndex.Entries {
-		relativePath := filepath.ToSlash(filepath.Join(repoRoot, filepath.FromSlash(entry.Name)))
-		if gitignoreMatcher.MatchesPath(relativePath) {
-			trackedFilesToPreserve[entry.Name] = true
-		}
+		trackedFiles[entry.Name] = struct{}{}
+	}
+
+	repoPrefix := filepath.ToSlash(repoRoot) + "/"
+
+	var nonGitignoreMatcher *gitignore.GitIgnore
+	if len(nonGitignoreGlobs) > 0 {
+		nonGitignoreMatcher = gitignore.CompileIgnoreLines(nonGitignoreGlobs...)
 	}
 
 	return func(file string) bool {
 		normalizedPath := filepath.ToSlash(file)
-		relativePath, err := filepath.Rel(repoRoot, file)
-		if err != nil {
-			return allMatcher.MatchesPath(normalizedPath)
+		if !allMatcher.MatchesPath(normalizedPath) {
+			return false
 		}
-
-		if trackedFilesToPreserve[filepath.ToSlash(relativePath)] {
-			excluded := otherMatcher.MatchesPath(normalizedPath)
-			if !excluded {
-				keptCount.Add(1)
+		relPath := strings.TrimPrefix(normalizedPath, repoPrefix)
+		if _, tracked := trackedFiles[relPath]; tracked {
+			if nonGitignoreMatcher != nil && nonGitignoreMatcher.MatchesPath(normalizedPath) {
+				return true
 			}
-			return excluded
+			keptCount.Add(1)
+			return false
 		}
-
-		return allMatcher.MatchesPath(normalizedPath)
+		return true
 	}
 }
 
