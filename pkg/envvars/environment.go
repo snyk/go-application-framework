@@ -26,8 +26,8 @@ const (
 var shellEnvOnce sync.Once
 
 // shellEnvLoader is the function invoked (at most once per process) by LoadConfiguredEnvironment to
-// read the user's shell environment. It is a variable, rather than a direct call, so tests can verify
-// it only ever runs once.
+// read the user's shell environment. It is a variable, rather than a direct call, so tests can
+// substitute a stub in place of spawning a real shell and verify call count/ordering.
 var shellEnvLoader = loadShellEnvironment
 
 // LoadConfiguredEnvironment updates the environment with user and local configuration.
@@ -87,22 +87,42 @@ func loadShellEnvironment() {
 // allowedEnvVarNames lists the exact environment variable names permitted to be set from a config file
 // loaded by loadFile. See isAllowedEnvVarName for the security rationale.
 var allowedEnvVarNames = map[string]bool{
-	PathEnvVarName:        true,
-	"JAVA_HOME":           true,
-	"HTTP_PROXY":          true,
-	"http_proxy":          true,
-	"HTTPS_PROXY":         true,
-	"https_proxy":         true,
-	"NO_PROXY":            true,
-	"no_proxy":            true,
-	"NODE_EXTRA_CA_CERTS": true,
-	"KRB5_CONFIG":         true,
-	"KRB5CCNAME":          true,
+	PathEnvVarName: true,
+	"Path":         true, // Windows conventionally spells this "Path" rather than "PATH"
+	"JAVA_HOME":    true,
+	"HTTP_PROXY":   true,
+	"http_proxy":   true,
+	"HTTPS_PROXY":  true,
+	"https_proxy":  true,
+	"ALL_PROXY":    true,
+	"all_proxy":    true,
+	"NO_PROXY":     true,
+	"no_proxy":     true,
 }
 
 // allowedEnvVarPrefixes lists environment variable name prefixes permitted to be set from a config
-// file loaded by loadFile, in addition to allowedEnvVarNames. See isAllowedEnvVarName.
+// file loaded by loadFile, in addition to allowedEnvVarNames, unless denied by
+// deniedSnykEnvVarNames/deniedSnykEnvVarPrefixes. See isAllowedEnvVarName.
 var allowedEnvVarPrefixes = []string{"SNYK_"}
+
+// deniedSnykEnvVarNames lists SNYK_-prefixed environment variable names that must never be set from a
+// workspace config file, even though the SNYK_ prefix is otherwise allowed. These directly control
+// authentication or API routing. See isAllowedEnvVarName for the full rationale.
+var deniedSnykEnvVarNames = map[string]bool{
+	"SNYK_TOKEN":             true,
+	"SNYK_OAUTH_TOKEN":       true,
+	"SNYK_DOCKER_TOKEN":      true,
+	"SNYK_API":               true,
+	"SNYK_REGISTRY_USERNAME": true,
+	"SNYK_REGISTRY_PASSWORD": true,
+}
+
+// deniedSnykEnvVarPrefixes lists SNYK_-prefixed environment variable name prefixes that must never be
+// set from a workspace config file. SNYK_CFG_<KEY> is bound by Configuration.AutomaticEnv to the
+// arbitrary config key <key> (lowercased), which includes (via alternative keys) authentication and
+// API routing - so unlike a fixed set of names, this whole family must be denied. See
+// isAllowedEnvVarName for the full rationale.
+var deniedSnykEnvVarPrefixes = []string{"SNYK_CFG_"}
 
 // isAllowedEnvVarName reports whether a variable read from a workspace config file (e.g. .snyk.env,
 // .envrc) may be applied to the process environment.
@@ -111,18 +131,38 @@ var allowedEnvVarPrefixes = []string{"SNYK_"}
 // variables. Previously any variable - including HOME - could be set this way; combined with
 // loadShellEnvironment spawning `bash --login` (which sources $HOME/.bash_profile), this allowed
 // arbitrary code execution (IDE-2136). Only variables genuinely needed by Snyk tooling (the SNYK_
-// prefix) or well-known variables required by common build/proxy tooling are allowed through. This is
-// a partial mitigation: some allowed variables (e.g. JAVA_HOME) could still be pointed at malicious
-// executables, but the direct HOME/shell-profile vector is closed.
+// prefix, minus the explicit exceptions below) or well-known variables required by common build/proxy
+// tooling are allowed through. This is a partial mitigation: some allowed variables (e.g. JAVA_HOME)
+// could still be pointed at malicious executables, but the direct HOME/shell-profile vector is closed.
+//
+// The SNYK_ prefix is not unconditionally safe: GAF's default Configuration binds any SNYK_-prefixed
+// environment variable directly to a config key of the same (lowercased) name (see
+// Configuration.AutomaticEnv), and SNYK_CFG_<KEY> is documented to override any config key, including
+// ones used for authentication (e.g. AUTHENTICATION_TOKEN) and API routing (e.g. API_URL). Allowing
+// those through would let a workspace config file substitute the user's credentials or redirect API
+// traffic to an attacker-controlled endpoint - a vulnerability of comparable severity to the one this
+// allow-list exists to close - so deniedSnykEnvVarNames/deniedSnykEnvVarPrefixes carve those back out.
 func isAllowedEnvVarName(name string) bool {
 	if allowedEnvVarNames[name] {
 		return true
 	}
 
 	for _, prefix := range allowedEnvVarPrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
+		if !strings.HasPrefix(name, prefix) {
+			continue
 		}
+
+		if deniedSnykEnvVarNames[name] {
+			return false
+		}
+
+		for _, deniedPrefix := range deniedSnykEnvVarPrefixes {
+			if strings.HasPrefix(name, deniedPrefix) {
+				return false
+			}
+		}
+
+		return true
 	}
 
 	return false
