@@ -9,9 +9,17 @@ import (
 	"github.com/snyk/go-application-framework/internal/metrics"
 )
 
+// newRecorder returns a Recorder for a test that asserts the values it saw. The accumulated values
+// are package state, so a test may not inherit those of a preceding one.
+func newRecorder(t *testing.T) *metrics.RecorderFake {
+	t.Helper()
+	metrics.ResetAccumulated()
+	return metrics.NewRecorderFake()
+}
+
 func TestAccumulator_AddToSum(t *testing.T) {
 	t.Run("writes the running sum through on every update", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
+		recorder := newRecorder(t)
 		accumulator := metrics.NewAccumulator(recorder)
 
 		accumulator.AddToSum("files", 2)
@@ -22,7 +30,7 @@ func TestAccumulator_AddToSum(t *testing.T) {
 	})
 
 	t.Run("keeps sums of different keys apart", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
+		recorder := newRecorder(t)
 		accumulator := metrics.NewAccumulator(recorder)
 
 		accumulator.AddToSum("files", 2)
@@ -33,7 +41,7 @@ func TestAccumulator_AddToSum(t *testing.T) {
 	})
 
 	t.Run("records a zero delta so the key is present", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
+		recorder := newRecorder(t)
 
 		metrics.NewAccumulator(recorder).AddToSum("files", 0)
 
@@ -43,7 +51,7 @@ func TestAccumulator_AddToSum(t *testing.T) {
 
 func TestAccumulator_RecordBool(t *testing.T) {
 	t.Run("writes the value through", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := newRecorder(t)
 
 		metrics.NewAccumulator(recorder).RecordBool("featureEnabled", true)
 
@@ -51,7 +59,7 @@ func TestAccumulator_RecordBool(t *testing.T) {
 	})
 
 	t.Run("overwrites rather than aggregating repeated calls", func(t *testing.T) {
-		recorder := &metrics.RecorderFake{}
+		recorder := newRecorder(t)
 		accumulator := metrics.NewAccumulator(recorder)
 
 		accumulator.RecordBool("featureEnabled", true)
@@ -77,7 +85,7 @@ func TestAccumulator_KeepMaximum(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			recorder := metrics.NewRecorderFake()
+			recorder := newRecorder(t)
 			accumulator := metrics.NewAccumulator(recorder)
 
 			for _, value := range test.values {
@@ -87,6 +95,45 @@ func TestAccumulator_KeepMaximum(t *testing.T) {
 			assert.Equal(t, map[string]int{"durationMs": test.expected}, recorder.IntValues)
 		})
 	}
+}
+
+// The aggregate is shared by every Accumulator, so operations reporting under one key add up no
+// matter how many Accumulators they are spread over, rather than the Recorder keeping only the last.
+func TestAccumulator_SharedAggregate(t *testing.T) {
+	t.Run("aggregates over several Accumulators on one Recorder", func(t *testing.T) {
+		recorder := newRecorder(t)
+
+		metrics.NewAccumulator(recorder).AddToSum("files", 2)
+		metrics.NewAccumulator(recorder).AddToSum("files", 3)
+		metrics.NewAccumulator(recorder).KeepMaximum("durationMs", 7)
+		metrics.NewAccumulator(recorder).KeepMaximum("durationMs", 4)
+
+		assert.Equal(t, map[string]int{"files": 5, "durationMs": 7}, recorder.IntValues)
+	})
+
+	// The trade-off of a shared aggregate: a key holds the same value wherever it is read, at the
+	// price of no longer being attributable to the Accumulator that reported it.
+	t.Run("reports the shared aggregate to every Recorder", func(t *testing.T) {
+		first := newRecorder(t)
+		second := metrics.NewRecorderFake()
+
+		metrics.NewAccumulator(first).AddToSum("files", 2)
+		metrics.NewAccumulator(second).AddToSum("files", 3)
+
+		assert.Equal(t, map[string]int{"files": 2}, first.IntValues, "the value it saw last")
+		assert.Equal(t, map[string]int{"files": 5}, second.IntValues, "the aggregate of both")
+	})
+
+	t.Run("starts from no accumulated value after a reset", func(t *testing.T) {
+		recorder := newRecorder(t)
+		metrics.NewAccumulator(recorder).AddToSum("files", 2)
+
+		metrics.ResetAccumulated()
+		next := metrics.NewRecorderFake()
+		metrics.NewAccumulator(next).AddToSum("files", 3)
+
+		assert.Equal(t, map[string]int{"files": 3}, next.IntValues)
+	})
 }
 
 func TestAccumulator_WithoutRecorder(t *testing.T) {
@@ -111,8 +158,8 @@ func TestAccumulator_WithoutRecorder(t *testing.T) {
 	})
 }
 
-// Several operations of one invocation may report concurrently, so no update may be lost.
-// Run under -race to also cover the accumulator's own state.
+// Several operations of one invocation may report concurrently, each through an Accumulator of its
+// own, so no update may be lost. Run under -race to also cover the accumulated state.
 func TestAccumulator_ConcurrentUpdates(t *testing.T) {
 	const (
 		writers            = 8
@@ -120,14 +167,14 @@ func TestAccumulator_ConcurrentUpdates(t *testing.T) {
 		expectedTotalFiles = writers * updatesPerWriter
 	)
 
-	recorder := metrics.NewRecorderFake()
-	accumulator := metrics.NewAccumulator(recorder)
+	recorder := newRecorder(t)
 
 	var wg sync.WaitGroup
 	wg.Add(writers)
 	for writer := range writers {
 		go func() {
 			defer wg.Done()
+			accumulator := metrics.NewAccumulator(recorder)
 			for range updatesPerWriter {
 				accumulator.AddToSum("files", 1)
 				accumulator.KeepMaximum("durationMs", writer)

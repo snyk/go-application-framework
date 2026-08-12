@@ -134,8 +134,8 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 	}
 }
 
-// WithMetrics supplies a recorder for file-filter analytics values.
-// Callers must pass a pkg/analytics.Analytics implementation here; it satisfies this interface.
+// WithMetrics supplies a recorder (e.g. pkg/analytics.Analytics) for file-filter analytics values.
+// Every FileFilter reports under the same keys, so values aggregate instead of overwriting each other.
 func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.metrics = metrics.NewAccumulator(recorder)

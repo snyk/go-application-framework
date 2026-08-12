@@ -2142,6 +2142,14 @@ func drainFilteredFiles(t *testing.T, filesCh <-chan string) []string {
 	return filteredFiles
 }
 
+// newMetricsRecorder returns a recorder for a test that asserts the values it saw; a test may not
+// inherit the accumulated values of a preceding one, see metrics.ResetAccumulated.
+func newMetricsRecorder(t *testing.T) *metrics.RecorderFake {
+	t.Helper()
+	metrics.ResetAccumulated()
+	return metrics.NewRecorderFake()
+}
+
 // filterMetrics holds everything a recorder saw, keyed by metric name.
 type filterMetrics struct {
 	ints  map[string]int
@@ -2149,8 +2157,7 @@ type filterMetrics struct {
 }
 
 // recordedMetrics groups what a recorder saw by variant, asserting the fixed
-// "file-filter.<variant>.<metric>" shape of every key on the way. Both parts come from a closed set,
-// so a run may not introduce a key of its own; its values are aggregated into its variant instead.
+// "file-filter.<variant>.<metric>" shape of every key on the way.
 func recordedMetrics(t *testing.T, recorder *metrics.RecorderFake) map[string]filterMetrics {
 	t.Helper()
 
@@ -2216,7 +2223,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 		{name: "both fixes", metacharacterFix: true, respectTrackedFiles: true, expectedVariant: metricFileFilterVariantBothFixes},
 	} {
 		t.Run("records every metric under the variant of the run, "+test.name, func(t *testing.T) {
-			recorder := metrics.NewRecorderFake()
+			recorder := newMetricsRecorder(t)
 			config := newTestConfig(map[string]bool{
 				FF_FILE_FILTER_METACHARACTER_FIX:   test.metacharacterFix,
 				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.respectTrackedFiles,
@@ -2255,22 +2262,83 @@ func TestFileFilter_Metrics(t *testing.T) {
 		})
 	}
 
-	// Every run of a FileFilter reports under the same keys, so their values add up rather than
-	// overwriting each other.
-	t.Run("aggregates repeated runs into one value per key", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
-		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
+	// Every run of a FileFilter reports under the same keys, so the runs of one FileFilter, or the
+	// runs of several, add up rather than overwriting each other.
+	t.Run("aggregates runs into one value per key", func(t *testing.T) {
+		for _, test := range []struct {
+			name     string
+			filters  int
+			runsEach int
+		}{
+			{name: "repeated runs of one FileFilter", filters: 1, runsEach: 2},
+			{name: "one run each of several FileFilters", filters: 3, runsEach: 1},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				recorder := newMetricsRecorder(t)
+				config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+				totalRuns := test.filters * test.runsEach
 
-		// the rules are built once and reused, so the filter runs may not rely on GetRules reporting
-		rules, err := fileFilter.GetRules([]string{".gitignore"})
-		require.NoError(t, err)
-		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
-		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
+				for range test.filters {
+					fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 
-		variant := recordedMetrics(t, recorder)[metricFileFilterVariantMetacharFix]
-		assert.Equal(t, 2*3, variant.ints[metricFileFilterInputFileCount])
-		assert.Equal(t, 2*2, variant.ints[metricFileFilterSurvivingFileCount])
+					// the rules are built once and reused, so repeated runs may not rely on GetRules reporting
+					rules, err := fileFilter.GetRules([]string{".gitignore"})
+					require.NoError(t, err)
+					for range test.runsEach {
+						drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
+					}
+				}
+
+				variant := recordedMetrics(t, recorder)[metricFileFilterVariantMetacharFix]
+				assert.Equal(t, totalRuns*3, variant.ints[metricFileFilterInputFileCount])
+				assert.Equal(t, totalRuns*2, variant.ints[metricFileFilterSurvivingFileCount])
+			})
+		}
+	})
+
+	// Several FileFilters, or several goroutines sharing one, may run concurrently: neither races on
+	// the accumulated values nor loses them to one another. Run under -race to cover the former.
+	t.Run("concurrent runs aggregate without loss", func(t *testing.T) {
+		for _, test := range []struct {
+			name          string
+			oneFilterEach bool
+		}{
+			{name: "several FileFilters", oneFilterEach: true},
+			{name: "one FileFilter from several goroutines", oneFilterEach: false},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				const concurrentRuns = 4
+				recorder := newMetricsRecorder(t)
+
+				// the filters are created up front, so that the goroutines only run them
+				filters := make([]*FileFilter, concurrentRuns)
+				if test.oneFilterEach {
+					for i := range filters {
+						filters[i] = NewFileFilter(newRepo(t), &log.Logger, WithMetrics(recorder))
+					}
+				} else {
+					shared := NewFileFilter(newRepo(t), &log.Logger, WithMetrics(recorder))
+					for i := range filters {
+						filters[i] = shared
+					}
+				}
+
+				var wg sync.WaitGroup
+				wg.Add(concurrentRuns)
+				for _, fileFilter := range filters {
+					go func() {
+						defer wg.Done()
+						drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), []string{"**/.git/**"}))
+					}()
+				}
+				wg.Wait()
+
+				variant := recordedMetrics(t, recorder)[metricFileFilterVariantLegacy]
+				// **/.git/** excludes none of newRepo's three files
+				assert.Equal(t, concurrentRuns*3, variant.ints[metricFileFilterInputFileCount])
+				assert.Equal(t, concurrentRuns*3, variant.ints[metricFileFilterSurvivingFileCount])
+			})
+		}
 	})
 
 	t.Run("without a recorder filtering is unaffected", func(t *testing.T) {
@@ -2288,7 +2356,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 	})
 
 	t.Run("records metrics when no ignore file produces globs", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
+		recorder := newMetricsRecorder(t)
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 		root := t.TempDir()
 		createFileInPath(t, filepath.Join(root, "file.txt"), []byte("x"))
@@ -2301,33 +2369,10 @@ func TestFileFilter_Metrics(t *testing.T) {
 		assert.Equal(t, 1, variant.ints[metricFileFilterSurvivingFileCount])
 	})
 
-	// One FileFilter may be started from several goroutines at once: no run may race on shared state
-	// or lose its values to another. Run under -race to cover the former.
-	t.Run("concurrent filter runs aggregate without loss", func(t *testing.T) {
-		const concurrentRuns = 4
-		recorder := metrics.NewRecorderFake()
-		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithMetrics(recorder))
-
-		var wg sync.WaitGroup
-		wg.Add(concurrentRuns)
-		for range concurrentRuns {
-			go func() {
-				defer wg.Done()
-				drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), []string{"**/.git/**"}))
-			}()
-		}
-		wg.Wait()
-
-		variant := recordedMetrics(t, recorder)[metricFileFilterVariantLegacy]
-		// **/.git/** excludes none of newRepo's three files
-		assert.Equal(t, concurrentRuns*3, variant.ints[metricFileFilterInputFileCount])
-		assert.Equal(t, concurrentRuns*3, variant.ints[metricFileFilterSurvivingFileCount])
-	})
-
 	// A feature flag may resolve differently between the runs of one FileFilter. Each run then reports
 	// under the variant of the behavior it applied, leaving neither variant holding values of the other.
 	t.Run("keeps runs applying differing behavior apart", func(t *testing.T) {
-		recorder := metrics.NewRecorderFake()
+		recorder := newMetricsRecorder(t)
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false})
 		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 

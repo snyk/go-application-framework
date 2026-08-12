@@ -2,28 +2,32 @@ package metrics
 
 import "sync"
 
-// Accumulator aggregates the metrics of repeated operations into one value per key, so that callers
-// report under a fixed set of keys instead of namespacing every operation with a run identifier.
-// A key must use the same aggregation throughout.
-//
-// A Recorder keeps only the last value per key, so every update writes the running aggregate
-// through and there is nothing to flush. Two Accumulators sharing a key on one Recorder overwrite
-// each other rather than aggregating, so operations reporting under one key must share one.
-//
-// An Accumulator is safe for concurrent use.
+// accumulated is shared by every Accumulator, so two of them reporting under one key add up
+// instead of overwriting each other in a Recorder, which keeps only the last value per key.
+var (
+	accumulatedMu sync.Mutex
+	accumulated   = map[string]int{}
+)
+
+// Accumulator aggregates repeated operations into one running value per key, so callers report
+// under a fixed set of keys instead of namespacing every operation. Safe for concurrent use.
 type Accumulator struct {
-	mu       sync.Mutex
 	recorder Recorder
-	ints     map[string]int
 }
 
-// NewAccumulator returns an Accumulator writing through to recorder. A nil recorder discards
-// everything; use Recording to skip obtaining values that are expensive to compute.
+// NewAccumulator returns an Accumulator writing through to recorder; a nil recorder discards
+// everything. It continues the shared aggregate rather than starting one of its own.
 func NewAccumulator(recorder Recorder) *Accumulator {
-	return &Accumulator{
-		recorder: recorder,
-		ints:     make(map[string]int),
-	}
+	return &Accumulator{recorder: recorder}
+}
+
+// ResetAccumulated discards every accumulated value. It exists for tests, which assert the values a
+// single Recorder saw and would otherwise observe the aggregate of preceding tests.
+func ResetAccumulated() {
+	accumulatedMu.Lock()
+	defer accumulatedMu.Unlock()
+
+	accumulated = map[string]int{}
 }
 
 // Recording reports whether values written to this Accumulator reach a Recorder.
@@ -37,11 +41,11 @@ func (a *Accumulator) AddToSum(key string, delta int) {
 		return
 	}
 
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	accumulatedMu.Lock()
+	defer accumulatedMu.Unlock()
 
-	a.ints[key] += delta
-	a.recorder.AddExtensionIntegerValue(key, a.ints[key])
+	accumulated[key] += delta
+	a.recorder.AddExtensionIntegerValue(key, accumulated[key])
 }
 
 // RecordBool records value under key, overwriting whatever was recorded for it before. Unlike
@@ -62,13 +66,13 @@ func (a *Accumulator) KeepMaximum(key string, value int) {
 		return
 	}
 
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	accumulatedMu.Lock()
+	defer accumulatedMu.Unlock()
 
-	if current, recorded := a.ints[key]; recorded && current >= value {
+	if current, recorded := accumulated[key]; recorded && current >= value {
 		return
 	}
 
-	a.ints[key] = value
+	accumulated[key] = value
 	a.recorder.AddExtensionIntegerValue(key, value)
 }
