@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -31,7 +30,7 @@ func isRetryableRequest(req *http.Request, config configuration.Configuration) b
 	if isSafeMethod(req.Method) {
 		return true
 	}
-	return isAllowedPath(req.URL.Path, retryAllowedPaths(config))
+	return isAllowedPath(req.URL.Path, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
 }
 
 func isSafeMethod(method string) bool {
@@ -43,15 +42,7 @@ func isSafeMethod(method string) bool {
 	}
 }
 
-// IsSet (not len>0) so an explicit empty override is honored rather than treated as unset.
-func retryAllowedPaths(config configuration.Configuration) []string {
-	if config.IsSet(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS) {
-		return config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS)
-	}
-	return constants.DEFAULT_RETRY_ALLOWED_PATHS
-}
-
-// Contiguous-segment matching avoids near-misses like /v1/test-dep-graph-something.
+// Contiguous-segment matching avoids near-misses: an entry "foo" must not match /v1/foo-something.
 // A blank entry would otherwise match the empty leading segment of every absolute path.
 func isAllowedPath(path string, allowed []string) bool {
 	segments := strings.Split(path, "/")

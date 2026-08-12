@@ -300,13 +300,10 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 }
 
 // GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
-// single unsplit entry, so it must be normalized into a []string first.
+// single unsplit entry, so it must be normalized into a []string first. The
+// framework contributes no paths of its own; the application declares them.
 func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		if existingValue == nil {
-			return constants.DEFAULT_RETRY_ALLOWED_PATHS, nil
-		}
-
 		if raw, ok := existingValue.(string); ok {
 			paths := []string{}
 			for _, part := range strings.Split(raw, ",") {

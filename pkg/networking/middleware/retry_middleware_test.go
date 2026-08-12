@@ -1551,8 +1551,8 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 		retried bool
 	}{
 		{"plain POST not retried", http.MethodPost, "/", false},
-		{"POST to allow-listed path retried", http.MethodPost, "/v1/test-dep-graph", true},
-		{"monitor path not retried", http.MethodPost, "/v1/monitor/npm", false},
+		{"POST to allow-listed path retried", http.MethodPost, "/v1/declared", true},
+		{"POST to undeclared path not retried", http.MethodPost, "/v1/undeclared/npm", false},
 	}
 
 	for _, tt := range tests {
@@ -1570,6 +1570,7 @@ func Test_RetryMiddleware_TransportError_RequestAxis(t *testing.T) {
 			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 			config := configuration.NewWithOpts()
 			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"declared"})
 			config.Set(ConfigurationKeyRequestAttempts, 3)
 			config.Set(ConfigurationKeyRetryAfter, 1)
 
@@ -2137,7 +2138,7 @@ func Test_RetryMiddleware_TruncatedJSONBody_NeverBufferedOrRetried(t *testing.T)
 	}
 }
 
-func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t *testing.T) {
+func Test_RetryMiddleware_Acceptance_DeclaredPath_TransientFailureRecovers(t *testing.T) {
 	var attempts int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if atomic.AddInt32(&attempts, 1) == 1 {
@@ -2151,11 +2152,12 @@ func Test_RetryMiddleware_Acceptance_TestDepGraphPath_TransientFailureRecovers(t
 	logger := zerolog.Nop()
 	config := configuration.NewWithOpts()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"declared"})
 	config.Set(ConfigurationKeyRequestAttempts, 3)
 	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, http.DefaultTransport)
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/test-dep-graph", nil)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/declared", nil)
 	require.NoError(t, err)
 
 	resp, err := sut.RoundTrip(req)
