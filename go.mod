@@ -1,6 +1,6 @@
 module github.com/snyk/go-application-framework
 
-go 1.26.2
+go 1.26.5
 
 retract v1.0.0 // Accidental release: GAF intentionally stays on major version 0
 
@@ -15,7 +15,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/snyk/code-client-go v1.31.1
+	github.com/snyk/code-client-go v1.27.6-0.20260812155622-7574c749c95e
 	github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
