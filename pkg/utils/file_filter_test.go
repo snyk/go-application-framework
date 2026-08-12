@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path"
@@ -2397,4 +2399,103 @@ func TestFileFilter_Metrics_TrackedFilesKeptCount(t *testing.T) {
 			assert.Equal(t, test.expectedCount, run.ints[metricFileFilterTrackedFilesKeptCount])
 		})
 	}
+}
+
+func gitIndexV2Entry(nameLen int, name string) []byte {
+	header := make([]byte, 62)
+	binary.BigEndian.PutUint16(header[60:62], uint16(nameLen))
+	entry := append(header, []byte(name)...)
+	padLen := 8 - len(entry)%8
+	return append(entry, make([]byte, padLen)...)
+}
+
+func gitIndexV4Entry(stripLen int, suffix string) []byte {
+	header := make([]byte, 62)
+	entry := append(header, byte(stripLen))
+	entry = append(entry, []byte(suffix)...)
+	return append(entry, 0)
+}
+
+func buildGitIndex(t *testing.T, version uint32, entries [][]byte) string {
+	t.Helper()
+	var buf bytes.Buffer
+	buf.WriteString("DIRC")
+	require.NoError(t, binary.Write(&buf, binary.BigEndian, version))
+	require.NoError(t, binary.Write(&buf, binary.BigEndian, uint32(len(entries))))
+	for _, entry := range entries {
+		buf.Write(entry)
+	}
+
+	dotGit := t.TempDir()
+	indexPath := filepath.Join(dotGit, "index")
+	require.NoError(t, os.WriteFile(indexPath, buf.Bytes(), 0o644))
+	return dotGit
+}
+
+func TestReadTrackedFileNames_v2(t *testing.T) {
+	dotGit := buildGitIndex(t, 2, [][]byte{
+		gitIndexV2Entry(len("a.txt"), "a.txt"),
+		gitIndexV2Entry(len("src/b.txt"), "src/b.txt"),
+	})
+
+	names, err := readTrackedFileNames(dotGit)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]struct{}{
+		"a.txt":     {},
+		"src/b.txt": {},
+	}, names)
+}
+
+func TestReadTrackedFileNames_v2LongNameUsesNameMask(t *testing.T) {
+	longName := "src/" + strings.Repeat("a", 4100) + "/file.txt"
+	dotGit := buildGitIndex(t, 2, [][]byte{
+		gitIndexV2Entry(0xfff, longName),
+	})
+
+	names, err := readTrackedFileNames(dotGit)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]struct{}{longName: {}}, names)
+}
+
+func TestReadTrackedFileNames_v4PrefixCompression(t *testing.T) {
+	dotGit := buildGitIndex(t, 4, [][]byte{
+		gitIndexV4Entry(0, "src/a.txt"),
+		gitIndexV4Entry(len("a.txt"), "b.txt"),
+	})
+
+	names, err := readTrackedFileNames(dotGit)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]struct{}{
+		"src/a.txt": {},
+		"src/b.txt": {},
+	}, names)
+}
+
+func TestFindDotGit(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(root, ".git"), 0o755))
+	nested := filepath.Join(root, "a", "b")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+
+	dotGitDir, worktreeRoot, err := findDotGit(nested)
+	require.NoError(t, err)
+
+	expectedRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	resolvedDotGit, err := filepath.EvalSymlinks(dotGitDir)
+	require.NoError(t, err)
+	resolvedWorktree, err := filepath.EvalSymlinks(worktreeRoot)
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(expectedRoot, ".git"), resolvedDotGit)
+	assert.Equal(t, expectedRoot, resolvedWorktree)
+}
+
+func TestFindDotGit_notFound(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.MkdirAll(sub, 0o755))
+
+	_, _, err := findDotGit(sub)
+	require.Error(t, err)
 }

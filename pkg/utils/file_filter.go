@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -14,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -379,35 +381,22 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 		return defaultPredicate
 	}
 
-	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	dotGitDir, worktreeRoot, err := findDotGit(fw.path)
 	if err != nil {
-		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+		fw.logger.Debug().Msgf("failed to find .git directory: %v", err)
 		return defaultPredicate
 	}
 
-	worktree, err := repo.Worktree()
+	trackedFiles, err := readTrackedFileNames(dotGitDir)
 	if err != nil {
-		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
+		fw.logger.Debug().Msgf("failed to read git index: %v", err)
 		return defaultPredicate
 	}
 
-	gitIndex, err := repo.Storer.Index()
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to get git index: %v", err)
-		return defaultPredicate
-	}
-
-	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	repoRoot, err := matchingRepositoryRoot(fw.path, worktreeRoot)
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
 		return defaultPredicate
-	}
-
-	trackedFiles := make(map[string]struct{}, len(gitIndex.Entries))
-	for _, entry := range gitIndex.Entries {
-		trackedFiles[entry.Name] = struct{}{}
 	}
 
 	repoPrefix := filepath.ToSlash(repoRoot) + "/"
@@ -456,6 +445,186 @@ func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
 	}
 
 	return filepath.Clean(filepath.Join(scanRoot, relativeRoot)), nil
+}
+
+// findDotGit walks up from startPath looking for a .git directory, mirroring go-git's
+// DetectDotGit: true. It returns the .git path and the worktree root (its parent).
+func findDotGit(startPath string) (dotGitDir string, worktreeRoot string, err error) {
+	dir, err := filepath.Abs(startPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	for {
+		candidate := filepath.Join(dir, ".git")
+		info, statErr := os.Stat(candidate)
+		if statErr == nil {
+			if info.IsDir() {
+				return candidate, dir, nil
+			}
+			resolved, resolveErr := resolveGitlink(candidate, dir)
+			if resolveErr != nil {
+				return "", "", resolveErr
+			}
+			return resolved, dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", fmt.Errorf("no .git directory found from %s", startPath)
+		}
+		dir = parent
+	}
+}
+
+// resolveGitlink reads a gitlink file (used for worktrees/submodules) and returns the .git
+// directory it points to.
+func resolveGitlink(gitlinkPath, baseDir string) (string, error) {
+	content, err := os.ReadFile(gitlinkPath)
+	if err != nil {
+		return "", err
+	}
+
+	const prefix = "gitdir:"
+	line := strings.TrimSpace(string(content))
+	if !strings.HasPrefix(line, prefix) {
+		return "", fmt.Errorf("malformed .git link file %s", gitlinkPath)
+	}
+
+	target := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(baseDir, target)
+	}
+	return filepath.Clean(target), nil
+}
+
+const (
+	gitIndexEntryHeaderLength = 62
+	gitIndexEntryExtendedFlag = 0x4000
+	gitIndexNameMask          = 0xfff
+)
+
+// readTrackedFileNames parses the git index binary format directly, reading only file names and
+// discarding every other entry field (hash, timestamps, mode, ...). This avoids go-git's full
+// Entry deserialization, which is significant overhead on repositories with many tracked files.
+func readTrackedFileNames(dotGitPath string) (map[string]struct{}, error) {
+	f, err := os.Open(filepath.Join(dotGitPath, "index"))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	r := bufio.NewReader(f)
+
+	var header [12]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return nil, err
+	}
+	if string(header[:4]) != "DIRC" {
+		return nil, fmt.Errorf("git index: missing DIRC signature")
+	}
+
+	version := binary.BigEndian.Uint32(header[4:8])
+	if version < 2 || version > 4 {
+		return nil, fmt.Errorf("git index: unsupported version %d", version)
+	}
+	entryCount := binary.BigEndian.Uint32(header[8:12])
+
+	names := make(map[string]struct{}, entryCount)
+	entryHeader := make([]byte, gitIndexEntryHeaderLength)
+	var lastName string
+
+	for i := uint32(0); i < entryCount; i++ {
+		if _, err := io.ReadFull(r, entryHeader); err != nil {
+			return nil, err
+		}
+		flags := binary.BigEndian.Uint16(entryHeader[60:62])
+		consumedHeader := gitIndexEntryHeaderLength
+
+		if version >= 3 && flags&gitIndexEntryExtendedFlag != 0 {
+			if _, err := r.Discard(2); err != nil {
+				return nil, err
+			}
+			consumedHeader += 2
+		}
+
+		name, nameConsumed, err := readGitIndexEntryName(r, version, flags, lastName)
+		if err != nil {
+			return nil, err
+		}
+
+		names[name] = struct{}{}
+		lastName = name
+
+		if version != 4 {
+			entrySize := consumedHeader + len(name)
+			padLen := 8 - entrySize%8
+			padLen -= nameConsumed - len(name)
+			if padLen > 0 {
+				if _, err := r.Discard(padLen); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	return names, nil
+}
+
+// readGitIndexEntryName reads a single entry's name, returning the name and the number of bytes
+// consumed from the stream for the name portion (used to compute v2/v3 padding).
+func readGitIndexEntryName(r *bufio.Reader, version uint32, flags uint16, lastName string) (name string, consumed int, err error) {
+	if version == 4 {
+		stripLen, err := readGitVarInt(r)
+		if err != nil {
+			return "", 0, err
+		}
+		if stripLen < 0 || int(stripLen) > len(lastName) {
+			return "", 0, fmt.Errorf("git index: invalid v4 name strip length %d", stripLen)
+		}
+		suffix, err := r.ReadString(0)
+		if err != nil {
+			return "", 0, err
+		}
+		name = lastName[:len(lastName)-int(stripLen)] + strings.TrimSuffix(suffix, "\x00")
+		return name, 0, nil
+	}
+
+	nameLen := int(flags & gitIndexNameMask)
+	if nameLen == gitIndexNameMask {
+		suffix, err := r.ReadString(0)
+		if err != nil {
+			return "", 0, err
+		}
+		name = strings.TrimSuffix(suffix, "\x00")
+		return name, len(name) + 1, nil
+	}
+
+	buf := make([]byte, nameLen)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", 0, err
+	}
+	return string(buf), nameLen, nil
+}
+
+// readGitVarInt reads a Git VLQ-encoded integer, used by the v4 index format for name-prefix
+// strip lengths.
+func readGitVarInt(r io.ByteReader) (int64, error) {
+	c, err := r.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+
+	v := int64(c & 0x7f)
+	for c&0x80 != 0 {
+		v++
+		c, err = r.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		v = (v << 7) + int64(c&0x7f)
+	}
+	return v, nil
 }
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
