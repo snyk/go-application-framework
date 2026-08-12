@@ -815,7 +815,7 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 	assert.Equal(t, "item@example.com", email)
 }
 
-func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
+func TestEmitContributorBilling_CollectionFailureSkipsWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -845,15 +845,16 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 	})
 
 	result := waitForResult(t, resultCh)
-	assert.True(t, called)
-	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.False(t, called)
+	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
+	assert.Equal(t, contributorbilling.SkipReasonEmptyContributors, result.SkipReason)
 	require.Error(t, result.ContributorCollectionErr)
 }
 
 func TestEmitContributorBilling_CollectContributorsSurvivesChdirAfterEmit(t *testing.T) {
 	repoPath := initGitRepo(t, commitSpec{
 		email: "dev@example.com",
-		when:  time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC),
+		when:  time.Now().AddDate(0, 0, -5),  // within 90-day window
 	})
 
 	t.Chdir(repoPath)

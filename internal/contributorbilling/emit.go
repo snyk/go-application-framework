@@ -82,6 +82,13 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 
 	dedupeContributor(&opts.Item)
 
+	// Skip if collection was requested but returned empty (no point emitting with no contributors)
+	if opts.CollectContributors && len(opts.Item.Contributors) == 0 {
+		skipReason := SkipReasonEmptyContributors
+		logSkip(opts.Logger, skipReason)
+		return Result{Status: ResultStatusSkipped, SkipReason: skipReason, ContributorCollectionErr: collectionErr}
+	}
+
 	result := postIngest(parent, opts, opts.Item)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr

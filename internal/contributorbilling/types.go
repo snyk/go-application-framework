@@ -66,10 +66,11 @@ const (
 type SkipReason string
 
 const (
-	SkipReasonMissingEntityID   SkipReason = "missing_entity_id"
-	SkipReasonInvalidCapability SkipReason = "invalid_capability"
-	SkipReasonInvalidEntityType SkipReason = "invalid_entity_type"
-	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"
+	SkipReasonMissingEntityID      SkipReason = "missing_entity_id"
+	SkipReasonInvalidCapability    SkipReason = "invalid_capability"
+	SkipReasonInvalidEntityType    SkipReason = "invalid_entity_type"
+	SkipReasonMissingScopeID       SkipReason = "missing_scope_id"
+	SkipReasonEmptyContributors    SkipReason = "empty_contributors"
 )
 
 // FailReason explains why an emit POST failed.
