@@ -178,22 +178,37 @@
 							{{- $createdAt := $ignoreDetails.GetCreatedAt }}
 							{{- $expiresAt := $ignoreDetails.GetExpiresAt }}
 							{{- $ignoredBy := $ignoreDetails.GetIgnoredBy }}
-							{{- if or $reasonType $createdAt $expiresAt $ignoredBy }},
+							{{- $reviewedOn := $ignoreDetails.GetReviewedOn }}
+							{{- $reviewedBy := $ignoreDetails.GetReviewedBy }}
+							{{- if or $reasonType $createdAt $expiresAt $ignoredBy $reviewedOn $reviewedBy }},
 							"properties": {
 								{{- if $reasonType }}
-								"category": {{ getQuotedString $reasonType }}{{if or $expiresAt $createdAt $ignoredBy}},{{end}}
+								"category": {{ getQuotedString $reasonType }}{{if or $expiresAt $createdAt $ignoredBy $reviewedOn $reviewedBy}},{{end}}
 								{{- end }}
 								{{- if $expiresAt }}
-								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $createdAt $ignoredBy}},{{end}}
+								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $createdAt $ignoredBy $reviewedOn $reviewedBy}},{{end}}
 								{{- end }}
 								{{- if $createdAt }}
-								"ignoredOn": "{{ $createdAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if $ignoredBy}},{{end}}
+								"ignoredOn": "{{ $createdAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $ignoredBy $reviewedOn $reviewedBy}},{{end}}
 								{{- end }}
 								{{- if $ignoredBy }}
 								"ignoredBy": {
 									"name": {{ getQuotedString $ignoredBy.Name }},
 									{{- if $ignoredBy.Email }}
 									"email": {{ getQuotedString $ignoredBy.Email }}
+									{{- else }}
+									"email": ""
+									{{- end }}
+								}{{if or $reviewedOn $reviewedBy}},{{end}}
+								{{- end }}
+								{{- if $reviewedOn }}
+								"reviewedOn": "{{ $reviewedOn.Format "2006-01-02T15:04:05Z07:00" }}"{{if $reviewedBy}},{{end}}
+								{{- end }}
+								{{- if $reviewedBy }}
+								"reviewedBy": {
+									"name": {{ getQuotedString $reviewedBy.Name }},
+									{{- if $reviewedBy.Email }}
+									"email": {{ getQuotedString $reviewedBy.Email }}
 									{{- else }}
 									"email": ""
 									{{- end }}

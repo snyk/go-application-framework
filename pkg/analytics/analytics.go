@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"bytes"
+
 	"github.com/snyk/go-application-framework/pkg/logging"
 
 	//nolint:gosec // insecure sha1 used for legacy identifier
@@ -21,6 +22,7 @@ import (
 	"github.com/hashicorp/go-uuid"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/metrics"
 	utils2 "github.com/snyk/go-application-framework/internal/utils"
 )
 
@@ -44,6 +46,9 @@ type Analytics interface {
 	AddExtensionStringValue(key string, value string)
 	AddExtensionBoolValue(key string, value bool)
 }
+
+// Compile-time check that Analytics satisfies metrics.Recorder.
+var _ metrics.Recorder = (Analytics)(nil)
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
 type AnalyticsImpl struct {

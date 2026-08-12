@@ -1068,6 +1068,12 @@ type TypesReferenceId struct {
 	Index      int    `json:"index"`
 }
 
+// TypesReviewer Reviewer definition
+type TypesReviewer struct {
+	Email *string `json:"email,omitempty"`
+	Name  string  `json:"name"`
+}
+
 // TypesRules Based on Sarif rules
 type TypesRules struct {
 	DefaultConfiguration struct {
@@ -1181,6 +1187,10 @@ type TypesSuppressionDetails struct {
 	// IgnoredBy User definition
 	IgnoredBy TypesUser `json:"ignoredBy"`
 	IgnoredOn string    `json:"ignoredOn"`
+
+	// ReviewedBy Reviewer definition
+	ReviewedBy *TypesReviewer `json:"reviewedBy,omitempty"`
+	ReviewedOn *string        `json:"reviewedOn,omitempty"`
 }
 
 // TypesTestContext TestContext identifies the context in which this Test occurs.

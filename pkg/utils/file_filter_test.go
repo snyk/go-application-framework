@@ -7,11 +7,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/metrics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -1694,6 +1700,701 @@ func TestDotSnykExclude_isExpired(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, test.expected, isExpired)
+		})
+	}
+}
+
+type gitTrackedFilesTestCase struct {
+	files        map[string]string
+	trackedFiles []string
+	ruleFiles    map[string]string
+	noGitRepo    bool
+}
+
+func TestFileFilter_GitTrackedFilesNotFiltered(t *testing.T) {
+	testCase := gitTrackedFilesTestCase{
+		files: map[string]string{
+			"tracked.log":   "tracked but ignored",
+			"untracked.log": "untracked and ignored",
+			"regular.txt":   "regular file",
+		},
+		trackedFiles: []string{"tracked.log", "regular.txt"},
+		ruleFiles: map[string]string{
+			".gitignore": "*.log\n",
+		},
+	}
+
+	t.Run("committed files are not filtered even if they match gitignore", func(t *testing.T) {
+		root, worktree := setupGitTrackedFilesTestCase(t, testCase)
+		_, err := worktree.Commit("initial commit", &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "Test",
+				Email: "test@test.com",
+				When:  time.Now(),
+			},
+		})
+		require.NoError(t, err)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, []string{
+			".gitignore",
+			"regular.txt",
+		})
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+			"tracked.log",
+		})
+	})
+
+	t.Run("staged but uncommitted files are not filtered even if they match gitignore", func(t *testing.T) {
+		root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, []string{
+			".gitignore",
+			"regular.txt",
+		})
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+			"tracked.log",
+		})
+	})
+
+	t.Run("nested gitignore preserves matching tracked files", func(t *testing.T) {
+		nestedTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"src/tracked.generated.js":   "tracked",
+				"src/untracked.generated.js": "untracked",
+				"src/regular.js":             "regular",
+			},
+			trackedFiles: []string{"src/tracked.generated.js"},
+			ruleFiles: map[string]string{
+				"src/.gitignore": "*.generated.js\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, nestedTestCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, []string{
+			"src/.gitignore",
+			"src/regular.js",
+		})
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			"src/.gitignore",
+			"src/regular.js",
+			"src/tracked.generated.js",
+		})
+	})
+
+	t.Run("dcignore still excludes tracked files matching gitignore", func(t *testing.T) {
+		dcignoreTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"vendored.log": "vendored",
+				"regular.txt":  "regular",
+			},
+			trackedFiles: []string{"vendored.log"},
+			ruleFiles: map[string]string{
+				".gitignore": "vendored.log\n",
+				".dcignore":  "vendored.log\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, dcignoreTestCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore", ".dcignore"}, true, []string{
+			".dcignore",
+			".gitignore",
+			"regular.txt",
+		})
+	})
+
+	t.Run("snyk exclusion still excludes tracked files matching gitignore", func(t *testing.T) {
+		snykTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"secret.log":  "secret",
+				"regular.txt": "regular",
+			},
+			trackedFiles: []string{"secret.log"},
+			ruleFiles: map[string]string{
+				".gitignore": "secret.log\n",
+				".snyk": "exclude:\n" +
+					"  global:\n" +
+					"    - secret.log\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, snykTestCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore", ".snyk"}, true, []string{
+			".gitignore",
+			".snyk",
+			"regular.txt",
+		})
+	})
+
+	t.Run("tracked files in an ignored directory are preserved", func(t *testing.T) {
+		directoryTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"build/tracked.js":   "tracked",
+				"build/untracked.js": "untracked",
+				"regular.js":         "regular",
+			},
+			trackedFiles: []string{"build/tracked.js"},
+			ruleFiles: map[string]string{
+				".gitignore": "build/\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, directoryTestCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, []string{
+			".gitignore",
+			"regular.js",
+		})
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"build/tracked.js",
+			"regular.js",
+		})
+	})
+
+	t.Run("gitignore negation remains effective", func(t *testing.T) {
+		negationTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"gen/drop.js": "drop",
+				"gen/keep.js": "keep",
+				"regular.js":  "regular",
+			},
+			ruleFiles: map[string]string{
+				".gitignore": "gen/*.js\n!gen/keep.js\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, negationTestCase)
+
+		expected := []string{
+			".gitignore",
+			"gen/keep.js",
+			"regular.js",
+		}
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, expected)
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, expected)
+	})
+
+	t.Run("files removed from the index remain excluded", func(t *testing.T) {
+		removedTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"removed.log": "removed",
+				"regular.txt": "regular",
+			},
+			trackedFiles: []string{"removed.log"},
+			ruleFiles: map[string]string{
+				".gitignore": "removed.log\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, removedTestCase)
+		repo, err := git.PlainOpen(root)
+		require.NoError(t, err)
+		gitIndex, err := repo.Storer.Index()
+		require.NoError(t, err)
+		_, err = gitIndex.Remove("removed.log")
+		require.NoError(t, err)
+		require.NoError(t, repo.Storer.SetIndex(gitIndex))
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+		})
+	})
+
+	t.Run("tracked files missing from the worktree do not affect filtering", func(t *testing.T) {
+		missingTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"gone.log":    "gone",
+				"regular.txt": "regular",
+			},
+			trackedFiles: []string{"gone.log"},
+			ruleFiles: map[string]string{
+				".gitignore": "gone.log\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, missingTestCase)
+		require.NoError(t, os.Remove(filepath.Join(root, "gone.log")))
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+		})
+	})
+
+	t.Run("feature flag is a no-op when no matching file is tracked", func(t *testing.T) {
+		noTrackedMatchTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"ignored.log": "ignored",
+				"regular.txt": "regular",
+			},
+			trackedFiles: []string{"regular.txt"},
+			ruleFiles: map[string]string{
+				".gitignore": "*.log\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, noTrackedMatchTestCase)
+
+		expected := []string{
+			".gitignore",
+			"regular.txt",
+		}
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, false, expected)
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, expected)
+	})
+
+	t.Run("outside a git repository keeps legacy filtering", func(t *testing.T) {
+		noGitTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"ignored.log": "ignored",
+				"regular.txt": "regular",
+			},
+			ruleFiles: map[string]string{
+				".gitignore": "*.log\n",
+			},
+			noGitRepo: true,
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, noGitTestCase)
+
+		assertGitTrackedFiles(t, root, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+		})
+	})
+
+	t.Run("scanning a repository subdirectory resolves tracked files from the repository root", func(t *testing.T) {
+		subdirectoryTestCase := gitTrackedFilesTestCase{
+			files: map[string]string{
+				"src/tracked.generated.js":   "tracked",
+				"src/untracked.generated.js": "untracked",
+				"src/regular.js":             "regular",
+			},
+			trackedFiles: []string{"src/tracked.generated.js"},
+			ruleFiles: map[string]string{
+				"src/.gitignore": "*.generated.js\n",
+			},
+		}
+		root, _ := setupGitTrackedFilesTestCase(t, subdirectoryTestCase)
+		scanRoot := filepath.Join(root, "src")
+
+		assertGitTrackedFiles(t, scanRoot, []string{".gitignore"}, false, []string{
+			".gitignore",
+			"regular.js",
+		})
+		assertGitTrackedFiles(t, scanRoot, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.js",
+			"tracked.generated.js",
+		})
+	})
+
+	t.Run("scanning through a symlinked parent preserves tracked files", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink creation may require elevated privileges on Windows")
+		}
+
+		root, _ := setupGitTrackedFilesTestCase(t, testCase)
+		symlinkedParent := filepath.Join(t.TempDir(), "repo-parent")
+		err := os.Symlink(filepath.Dir(root), symlinkedParent)
+		require.NoError(t, err)
+		scanRoot := filepath.Join(symlinkedParent, filepath.Base(root))
+
+		assertGitTrackedFiles(t, scanRoot, []string{".gitignore"}, true, []string{
+			".gitignore",
+			"regular.txt",
+			"tracked.log",
+		})
+	})
+}
+
+func TestFileFilter_GetRulesIdentifiesGitignoreRules(t *testing.T) {
+	testCase := gitTrackedFilesTestCase{
+		ruleFiles: map[string]string{
+			".gitignore": "*.log\n",
+			".dcignore":  "*.tmp\n",
+			".snyk": "exclude:\n" +
+				"  global:\n" +
+				"    - secret.txt\n",
+		},
+		noGitRepo: true,
+	}
+	root, _ := setupGitTrackedFilesTestCase(t, testCase)
+
+	tests := []struct {
+		name           string
+		ruleFile       string
+		featureEnabled bool
+		expectPrefix   bool
+	}{
+		{
+			name:           "enabled gitignore",
+			ruleFile:       ".gitignore",
+			featureEnabled: true,
+			expectPrefix:   true,
+		},
+		{
+			name:           "disabled gitignore",
+			ruleFile:       ".gitignore",
+			featureEnabled: false,
+			expectPrefix:   false,
+		},
+		{
+			name:           "dcignore",
+			ruleFile:       ".dcignore",
+			featureEnabled: true,
+			expectPrefix:   false,
+		},
+		{
+			name:           "snyk",
+			ruleFile:       ".snyk",
+			featureEnabled: true,
+			expectPrefix:   false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := newTestConfig(map[string]bool{
+				FF_FILE_FILTER_METACHARACTER_FIX:   true,
+				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.featureEnabled,
+			})
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+			rules, err := fileFilter.GetRules([]string{test.ruleFile})
+			require.NoError(t, err)
+			require.Greater(t, len(rules), len(fileFilter.defaultRules))
+
+			for _, rule := range rules[len(fileFilter.defaultRules):] {
+				assert.Equal(t, test.expectPrefix, strings.HasPrefix(rule, gitIgnoreGlobPrefix))
+			}
+		})
+	}
+}
+
+func setupGitTrackedFilesTestCase(t *testing.T, testCase gitTrackedFilesTestCase) (string, *git.Worktree) {
+	t.Helper()
+
+	root := t.TempDir()
+	for file, content := range testCase.files {
+		createFileInPath(t, filepath.Join(root, file), []byte(content))
+	}
+
+	var worktree *git.Worktree
+	if !testCase.noGitRepo {
+		repo, err := git.PlainInit(root, false)
+		require.NoError(t, err)
+		worktree, err = repo.Worktree()
+		require.NoError(t, err)
+		for _, file := range testCase.trackedFiles {
+			_, err = worktree.Add(file)
+			require.NoError(t, err)
+		}
+	}
+
+	for file, content := range testCase.ruleFiles {
+		createFileInPath(t, filepath.Join(root, file), []byte(content))
+	}
+	return root, worktree
+}
+
+func assertGitTrackedFiles(t *testing.T, root string, ruleFiles []string, featureFlagEnabled bool, expected []string) {
+	t.Helper()
+
+	for _, metacharacterFixEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("metacharacter_fix=%t", metacharacterFixEnabled), func(t *testing.T) {
+			config := newTestConfig(map[string]bool{
+				FF_FILE_FILTER_METACHARACTER_FIX:   metacharacterFixEnabled,
+				FF_GITIGNORE_RESPECT_TRACKED_FILES: featureFlagEnabled,
+			})
+
+			filteredFiles := runFileFilter(t, NewFileFilter(root, &log.Logger, WithConfig(config)), ruleFiles...)
+			actual := make([]string, 0, len(filteredFiles))
+			for _, file := range filteredFiles {
+				relativePath, err := filepath.Rel(root, file)
+				require.NoError(t, err)
+				actual = append(actual, filepath.ToSlash(relativePath))
+			}
+
+			assert.ElementsMatch(t, expected, actual)
+		})
+	}
+}
+
+// runFileFilter applies ruleFiles with the given FileFilter and returns the files that survive filtering.
+func runFileFilter(t *testing.T, fileFilter *FileFilter, ruleFiles ...string) []string {
+	t.Helper()
+
+	rules, err := fileFilter.GetRules(ruleFiles)
+	require.NoError(t, err)
+
+	return drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
+}
+
+func drainFilteredFiles(t *testing.T, filesCh <-chan string) []string {
+	t.Helper()
+
+	var filteredFiles []string
+	for file := range filesCh {
+		filteredFiles = append(filteredFiles, file)
+	}
+
+	return filteredFiles
+}
+
+// filterRunMetrics holds what a single FileFilter run recorded, keyed by metric name.
+type filterRunMetrics struct {
+	ints  map[string]int
+	bools map[string]bool
+}
+
+// metricsByScope groups everything a recorder saw by run scope, asserting the
+// "file-filter.<scopeID>.<metric>" shape of every key on the way. Scope IDs are allocated
+// inside a run and never exposed, so tests discover them here rather than predicting them.
+func metricsByScope(t *testing.T, recorder *metrics.RecorderFake) map[string]filterRunMetrics {
+	t.Helper()
+
+	runs := make(map[string]filterRunMetrics)
+	runFor := func(key string) (filterRunMetrics, string) {
+		parts := strings.Split(key, ".")
+		require.Len(t, parts, 3, "metric key %q must be %s.<scopeID>.<metric>", key, metricFileFilterPrefix)
+		require.Equal(t, metricFileFilterPrefix, parts[0])
+
+		run, ok := runs[parts[1]]
+		if !ok {
+			run = filterRunMetrics{ints: map[string]int{}, bools: map[string]bool{}}
+			runs[parts[1]] = run
+		}
+		return run, parts[2]
+	}
+
+	for key, value := range recorder.IntValues {
+		run, metric := runFor(key)
+		run.ints[metric] = value
+	}
+	for key, value := range recorder.BoolValues {
+		run, metric := runFor(key)
+		run.bools[metric] = value
+	}
+
+	return runs
+}
+
+// singleRun returns the metrics of the one run a recorder is expected to have seen that recorded
+// the given metric. The metric picks the kind of run: metricFileFilterDurationMs is recorded by
+// GetFilteredFiles, metricFileFilterRulesBuildDurationMs by GetRules.
+func singleRun(t *testing.T, recorder *metrics.RecorderFake, metric string) filterRunMetrics {
+	t.Helper()
+
+	var matched []filterRunMetrics
+	for _, run := range metricsByScope(t, recorder) {
+		if _, ok := run.ints[metric]; ok {
+			matched = append(matched, run)
+		}
+	}
+	require.Len(t, matched, 1, "expected exactly one run recording %q", metric)
+
+	return matched[0]
+}
+
+func TestFileFilter_Metrics(t *testing.T) {
+	// newRepo creates a directory holding a .gitignore plus one file that survives filtering.
+	newRepo := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("ignored.txt\n"))
+		createFileInPath(t, filepath.Join(root, "ignored.txt"), []byte("x"))
+		createFileInPath(t, filepath.Join(root, "file.txt"), []byte("x"))
+		return root
+	}
+
+	// The two feature flags carry opposite values so that a mix-up between their metric keys cannot pass.
+	for _, test := range []struct {
+		name                string
+		metacharacterFix    bool
+		respectTrackedFiles bool
+	}{
+		{name: "metacharacter fix only", metacharacterFix: true},
+		{name: "respect tracked files only", respectTrackedFiles: true},
+	} {
+		t.Run("records every metric under run-scoped keys, "+test.name, func(t *testing.T) {
+			recorder := &metrics.RecorderFake{}
+			config := newTestConfig(map[string]bool{
+				FF_FILE_FILTER_METACHARACTER_FIX:   test.metacharacterFix,
+				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.respectTrackedFiles,
+			})
+			fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+			runFileFilter(t, fileFilter, ".gitignore")
+
+			run := singleRun(t, recorder, metricFileFilterDurationMs)
+			assert.Equal(t, map[string]bool{
+				metricFileFilterMetacharacterFix:    test.metacharacterFix,
+				metricFileFilterRespectTrackedFiles: test.respectTrackedFiles,
+			}, run.bools)
+			// .gitignore and file.txt pass the filter, ignored.txt does not
+			assert.Equal(t, 2, run.ints[metricFileFilterSurvivingFileCount])
+			assert.Contains(t, run.ints, metricFileFilterDurationMs)
+			// newRepo isn't a git repository, so no tracked file is ever exempted from a gitignore rule
+			assert.Equal(t, 0, run.ints[metricFileFilterTrackedFilesKeptCount])
+			assert.Len(t, run.ints, 3)
+
+			// Building the rules reports its duration and the flags it built them with, under a scope of its own.
+			rulesRun := singleRun(t, recorder, metricFileFilterRulesBuildDurationMs)
+			assert.Equal(t, map[string]bool{
+				metricFileFilterMetacharacterFix:    test.metacharacterFix,
+				metricFileFilterRespectTrackedFiles: test.respectTrackedFiles,
+			}, rulesRun.bools)
+			assert.Len(t, rulesRun.ints, 1)
+		})
+	}
+
+	// Neither several FileFilter instances nor repeated runs of one instance may overwrite each other's values.
+	// The rules are built once and reused, so every run has to report on its own rather than relying on GetRules.
+	t.Run("every run reports under its own scope", func(t *testing.T) {
+		recorder := &metrics.RecorderFake{}
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		require.NoError(t, err)
+
+		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
+		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
+		runFileFilter(t, NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder)), ".gitignore")
+
+		// two GetFilteredFiles runs of one FileFilter, one GetRules, and one full runFileFilter
+		// (GetRules + GetFilteredFiles), each under its own scope
+		runs := metricsByScope(t, recorder)
+		assert.Len(t, runs, 5)
+
+		filterRuns := 0
+		for scopeID, run := range runs {
+			if count, ok := run.ints[metricFileFilterSurvivingFileCount]; ok {
+				filterRuns++
+				assert.Equal(t, 2, count, "scope %s", scopeID)
+				assert.True(t, run.bools[metricFileFilterMetacharacterFix], "scope %s", scopeID)
+			}
+		}
+		assert.Equal(t, 3, filterRuns)
+	})
+
+	t.Run("without a recorder filtering is unaffected", func(t *testing.T) {
+		root := newRepo(t)
+
+		for _, fileFilter := range []*FileFilter{
+			NewFileFilter(root, &log.Logger),
+			NewFileFilter(root, &log.Logger, WithMetrics(nil)),
+		} {
+			assert.ElementsMatch(t, []string{
+				filepath.Join(root, ".gitignore"),
+				filepath.Join(root, "file.txt"),
+			}, runFileFilter(t, fileFilter, ".gitignore"))
+		}
+	})
+
+	t.Run("records bool metrics when no ignore files produce globs", func(t *testing.T) {
+		recorder := &metrics.RecorderFake{}
+		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, "file.txt"), []byte("x"))
+		fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+		drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), nil))
+
+		assert.Equal(t, map[string]bool{
+			metricFileFilterMetacharacterFix:    true,
+			metricFileFilterRespectTrackedFiles: false,
+		}, singleRun(t, recorder, metricFileFilterDurationMs).bools)
+	})
+
+	// One FileFilter may be started from several goroutines at once: no run may race on shared
+	// state or land in the scope of another. Run under -race to cover the former.
+	t.Run("concurrent filter runs use distinct metric scopes", func(t *testing.T) {
+		const concurrentRuns = 4
+		recorder := &metrics.RecorderFake{}
+		fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithMetrics(recorder))
+
+		var wg sync.WaitGroup
+		wg.Add(concurrentRuns)
+		for range concurrentRuns {
+			go func() {
+				defer wg.Done()
+				drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), []string{"**/.git/**"}))
+			}()
+		}
+		wg.Wait()
+
+		runs := metricsByScope(t, recorder)
+		assert.Len(t, runs, concurrentRuns)
+		for scopeID, run := range runs {
+			assert.Contains(t, run.ints, metricFileFilterDurationMs, "scope %s", scopeID)
+		}
+	})
+}
+
+func TestFileFilter_Metrics_TrackedFilesKeptCount(t *testing.T) {
+	tests := []struct {
+		name           string
+		testCase       gitTrackedFilesTestCase
+		ruleFiles      []string
+		featureEnabled bool
+		expectedCount  int
+	}{
+		{
+			// regular.txt is tracked but no gitignore rule matches it, so it is not a kept file
+			name: "counts every tracked file a gitignore rule would have excluded",
+			testCase: gitTrackedFilesTestCase{
+				files: map[string]string{
+					"tracked.log":      "tracked but ignored",
+					"also-tracked.log": "tracked but ignored",
+					"untracked.log":    "untracked and ignored",
+					"regular.txt":      "regular file",
+				},
+				trackedFiles: []string{"tracked.log", "also-tracked.log", "regular.txt"},
+				ruleFiles:    map[string]string{".gitignore": "*.log\n"},
+			},
+			ruleFiles:      []string{".gitignore"},
+			featureEnabled: true,
+			expectedCount:  2,
+		},
+		{
+			// vendored.log is exempted from .gitignore, but the .dcignore rule still excludes it
+			name: "does not count a tracked file another rule still excludes",
+			testCase: gitTrackedFilesTestCase{
+				files:        map[string]string{"vendored.log": "vendored", "regular.txt": "regular"},
+				trackedFiles: []string{"vendored.log"},
+				ruleFiles: map[string]string{
+					".gitignore": "vendored.log\n",
+					".dcignore":  "vendored.log\n",
+				},
+			},
+			ruleFiles:      []string{".gitignore", ".dcignore"},
+			featureEnabled: true,
+			expectedCount:  0,
+		},
+		{
+			name: "does not count tracked files while the feature is disabled",
+			testCase: gitTrackedFilesTestCase{
+				files:        map[string]string{"tracked.log": "tracked but ignored"},
+				trackedFiles: []string{"tracked.log"},
+				ruleFiles:    map[string]string{".gitignore": "*.log\n"},
+			},
+			ruleFiles:      []string{".gitignore"},
+			featureEnabled: false,
+			expectedCount:  0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root, _ := setupGitTrackedFilesTestCase(t, test.testCase)
+			recorder := &metrics.RecorderFake{}
+			config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: test.featureEnabled})
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
+
+			runFileFilter(t, fileFilter, test.ruleFiles...)
+
+			run := singleRun(t, recorder, metricFileFilterDurationMs)
+			assert.Equal(t, test.expectedCount, run.ints[metricFileFilterTrackedFilesKeptCount])
 		})
 	}
 }
