@@ -2142,15 +2142,13 @@ func drainFilteredFiles(t *testing.T, filesCh <-chan string) []string {
 	return filteredFiles
 }
 
-// newMetricsRecorder returns a recorder for a test that asserts the values it saw; a test may not
-// inherit the accumulated values of a preceding one, see metrics.ResetAccumulated.
+// newMetricsRecorder prevents shared values leaking between tests.
 func newMetricsRecorder(t *testing.T) *metrics.RecorderFake {
 	t.Helper()
 	metrics.ResetAccumulated()
 	return metrics.NewRecorderFake()
 }
 
-// filterMetrics holds everything a recorder saw, keyed by metric name.
 type filterMetrics struct {
 	ints  map[string]int
 	bools map[string]bool
@@ -2170,8 +2168,7 @@ func recordedMetrics(t *testing.T, recorder *metrics.RecorderFake) map[string]fi
 
 	recorded := map[string]filterMetrics{}
 	variantFor := func(key string) (filterMetrics, string) {
-		// the metric names a group of its own (e.g. "filter.durationMs"), so only the prefix and the
-		// variant are split off
+		// Preserve dots within the metric name, such as "filter.durationMs".
 		parts := strings.SplitN(key, ".", 3)
 		require.Len(t, parts, 3, "metric key %q must be %s.<variant>.<metric>", key, metricFileFilterPrefix)
 		require.Equal(t, metricFileFilterPrefix, parts[0])
@@ -2209,8 +2206,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 		return root
 	}
 
-	// Each combination of the feature flags names a variant of its own, so that the values of a run
-	// are never read as those of a run applying different behavior.
 	for _, test := range []struct {
 		name                string
 		metacharacterFix    bool
@@ -2238,7 +2233,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 
 			variant := recorded[test.expectedVariant]
 
-			// The durations depend on timing, so assert that they are reported and compare the rest exactly.
+			// Durations vary, so compare only their presence.
 			for _, duration := range []string{metricFileFilterDurationMs, metricFileFilterRulesBuildDurationMs} {
 				assert.Contains(t, variant.ints, duration)
 				delete(variant.ints, duration)
@@ -2253,8 +2248,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 				metricFileFilterRuleCount: 3,
 			}, variant.ints)
 
-			// The variant is named after the flag combination, but a consumer should not have to
-			// decode that name: the flags a run applied are also recorded directly.
 			assert.Equal(t, map[string]bool{
 				metricFileFilterFeatureMetacharFix:  test.metacharacterFix,
 				metricFileFilterFeatureTrackedFiles: test.respectTrackedFiles,
@@ -2262,8 +2255,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 		})
 	}
 
-	// Every run of a FileFilter reports under the same keys, so the runs of one FileFilter, or the
-	// runs of several, add up rather than overwriting each other.
 	t.Run("aggregates runs into one value per key", func(t *testing.T) {
 		for _, test := range []struct {
 			name     string
@@ -2281,7 +2272,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 				for range test.filters {
 					fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 
-					// the rules are built once and reused, so repeated runs may not rely on GetRules reporting
 					rules, err := fileFilter.GetRules([]string{".gitignore"})
 					require.NoError(t, err)
 					for range test.runsEach {
@@ -2296,8 +2286,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 		}
 	})
 
-	// Several FileFilters, or several goroutines sharing one, may run concurrently: neither races on
-	// the accumulated values nor loses them to one another. Run under -race to cover the former.
+	// Run under -race to cover concurrent access to accumulated values.
 	t.Run("concurrent runs aggregate without loss", func(t *testing.T) {
 		for _, test := range []struct {
 			name          string
@@ -2310,7 +2299,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 				const concurrentRuns = 4
 				recorder := newMetricsRecorder(t)
 
-				// the filters are created up front, so that the goroutines only run them
 				filters := make([]*FileFilter, concurrentRuns)
 				if test.oneFilterEach {
 					for i := range filters {
@@ -2369,8 +2357,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 		assert.Equal(t, 1, variant.ints[metricFileFilterSurvivingFileCount])
 	})
 
-	// A feature flag may resolve differently between the runs of one FileFilter. Each run then reports
-	// under the variant of the behavior it applied, leaving neither variant holding values of the other.
 	t.Run("keeps runs applying differing behavior apart", func(t *testing.T) {
 		recorder := newMetricsRecorder(t)
 		config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: false})
@@ -2385,7 +2371,6 @@ func TestFileFilter_Metrics(t *testing.T) {
 		assert.ElementsMatch(t, []string{metricFileFilterVariantLegacy, metricFileFilterVariantMetacharFix},
 			slices.Collect(maps.Keys(recorded)))
 
-		// the rules were built on the legacy behavior, the filtering applied the fix
 		legacy := recorded[metricFileFilterVariantLegacy]
 		assert.Contains(t, legacy.ints, metricFileFilterRuleCount)
 		assert.NotContains(t, legacy.ints, metricFileFilterInputFileCount)

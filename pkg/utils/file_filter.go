@@ -72,12 +72,10 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
-// File-filter metric keys, of the shape "file-filter.<variant>.<metric>". Both parts come from a
-// fixed set, so that an analytics backend can derive facets from them; see metrics.Accumulator.
+// File-filter metric keys have the shape "file-filter.<variant>.<metric>".
 const (
 	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
 
-	// The variant names the behavior a run applied, keeping values attributable to it.
 	metricFileFilterVariantLegacy       = "var0" // neither feature flag enabled
 	metricFileFilterVariantMetacharFix  = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
 	metricFileFilterVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
@@ -86,8 +84,7 @@ const (
 	metricFileFilterInputFileCount = "filter.inputFileCount" // files offered to GetFilteredFiles, before exclusion
 	metricFileFilterRuleCount      = "filter.ruleCount"      // glob patterns GetRules produced
 
-	// Recorded alongside the variant so a consumer can read a run's behavior directly off its
-	// metrics, without having to know which variant name maps to which feature flag combination.
+	// Record feature flags alongside the variant so consumers need not decode its name.
 	metricFileFilterFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
 	metricFileFilterFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
 
@@ -134,8 +131,7 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 	}
 }
 
-// WithMetrics supplies a recorder (e.g. pkg/analytics.Analytics) for file-filter analytics values.
-// Every FileFilter reports under the same keys, so values aggregate instead of overwriting each other.
+// WithMetrics supplies a recorder for aggregated file-filter analytics.
 func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.metrics = metrics.NewAccumulator(recorder)
@@ -143,18 +139,16 @@ func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	}
 }
 
-// The record*Lazy helpers obtain a metric only once it is known to be recorded, so that a FileFilter
-// without a recorder pays for none of them.
+// Avoid computing metrics when no recorder is configured.
 func (fw *FileFilter) recordSumLazy(variant, key string, getMetric func() int) {
-	if fw.metrics.Recording() {
+	if fw.metrics.IsRecording() {
 		fw.metrics.AddToSum(metricKey(variant, key), getMetric())
 	}
 }
 
-// metricVariant names the behavior the calling run applies. It returns an empty variant while nothing
-// is recorded, so that the flags — whose lookup may reach the network — are not resolved for metrics alone.
+// Avoid resolving flags, which may require network access, when metrics are disabled.
 func (fw *FileFilter) metricVariant() string {
-	if !fw.metrics.Recording() {
+	if !fw.metrics.IsRecording() {
 		return ""
 	}
 
@@ -179,7 +173,6 @@ func (fw *FileFilter) metricVariant() string {
 	return variant
 }
 
-// metricKey namespaces a metric under the file-filter prefix and the variant that produced it.
 func metricKey(variant, key string) string {
 	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, variant, key)
 }
@@ -192,7 +185,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
-		metrics:         metrics.NewAccumulator(nil),                                           // discards until WithMetrics supplies a recorder
+		metrics:         metrics.NewAccumulator(nil),
 	}
 
 	options = append([]FileFilterOption{WithConfig(nil)}, options...)
@@ -239,7 +232,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	// Reports under its own variant: a GetFilteredFiles run may never happen, or may resolve the flags differently.
+	// Rule building and filtering may resolve feature flags at different times.
 	variant := fw.metricVariant()
 	start := time.Now()
 	defer fw.recordSumLazy(variant, metricFileFilterRulesBuildDurationMs, func() int {
@@ -265,7 +258,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	}
 
 	rules := append(fw.defaultRules, globs...)
-	fw.recordSumLazy(variant, metricFileFilterRuleCount, func() int { return len(rules) })
+
+	recordRulesCount := func() int { return len(rules) }
+	fw.recordSumLazy(variant, metricFileFilterRuleCount, recordRulesCount)
 
 	return rules, nil
 }

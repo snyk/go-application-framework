@@ -9,8 +9,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/metrics"
 )
 
-// newRecorder returns a Recorder for a test that asserts the values it saw. The accumulated values
-// are package state, so a test may not inherit those of a preceding one.
+// newRecorder prevents shared values leaking between tests.
 func newRecorder(t *testing.T) *metrics.RecorderFake {
 	t.Helper()
 	metrics.ResetAccumulated()
@@ -78,7 +77,6 @@ func TestAccumulator_KeepMaximum(t *testing.T) {
 		{name: "keeps a later larger value", values: []int{3, 9}, expected: 9},
 		{name: "keeps an earlier larger value", values: []int{9, 3}, expected: 9},
 		{name: "keeps the largest of many", values: []int{3, 9, 4, 1}, expected: 9},
-		// a first report of 0 must still land, otherwise the key is missing entirely
 		{name: "records a single zero", values: []int{0}, expected: 0},
 		{name: "prefers any value over zero", values: []int{0, 2}, expected: 2},
 	}
@@ -97,8 +95,6 @@ func TestAccumulator_KeepMaximum(t *testing.T) {
 	}
 }
 
-// The aggregate is shared by every Accumulator, so operations reporting under one key add up no
-// matter how many Accumulators they are spread over, rather than the Recorder keeping only the last.
 func TestAccumulator_SharedAggregate(t *testing.T) {
 	t.Run("aggregates over several Accumulators on one Recorder", func(t *testing.T) {
 		recorder := newRecorder(t)
@@ -111,8 +107,7 @@ func TestAccumulator_SharedAggregate(t *testing.T) {
 		assert.Equal(t, map[string]int{"files": 5, "durationMs": 7}, recorder.IntValues)
 	})
 
-	// The trade-off of a shared aggregate: a key holds the same value wherever it is read, at the
-	// price of no longer being attributable to the Accumulator that reported it.
+	// Different recorders still share the same aggregate.
 	t.Run("reports the shared aggregate to every Recorder", func(t *testing.T) {
 		first := newRecorder(t)
 		second := metrics.NewRecorderFake()
@@ -137,13 +132,12 @@ func TestAccumulator_SharedAggregate(t *testing.T) {
 }
 
 func TestAccumulator_WithoutRecorder(t *testing.T) {
-	// Callers hold an Accumulator unconditionally, so one without a recorder has to stay usable.
 	for name, accumulator := range map[string]*metrics.Accumulator{
 		"nil recorder":    metrics.NewAccumulator(nil),
 		"nil accumulator": nil,
 	} {
 		t.Run(name+" discards every value", func(t *testing.T) {
-			assert.False(t, accumulator.Recording())
+			assert.False(t, accumulator.IsRecording())
 
 			assert.NotPanics(t, func() {
 				accumulator.AddToSum("files", 2)
@@ -154,12 +148,11 @@ func TestAccumulator_WithoutRecorder(t *testing.T) {
 	}
 
 	t.Run("reports recording with a recorder", func(t *testing.T) {
-		assert.True(t, metrics.NewAccumulator(metrics.NewRecorderFake()).Recording())
+		assert.True(t, metrics.NewAccumulator(metrics.NewRecorderFake()).IsRecording())
 	})
 }
 
-// Several operations of one invocation may report concurrently, each through an Accumulator of its
-// own, so no update may be lost. Run under -race to also cover the accumulated state.
+// Run under -race to cover concurrent access to accumulated state.
 func TestAccumulator_ConcurrentUpdates(t *testing.T) {
 	const (
 		writers            = 8

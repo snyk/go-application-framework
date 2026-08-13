@@ -4,7 +4,6 @@ import "sync"
 
 // RecorderFake is a simple in-memory Recorder for use in tests.
 // Like the production recorder it may be written to concurrently, so its values are mutex guarded.
-// Construct it with NewRecorderFake rather than a bare struct literal, so its maps are never nil.
 type RecorderFake struct {
 	mu           sync.Mutex
 	IntValues    map[string]int
@@ -12,7 +11,7 @@ type RecorderFake struct {
 	BoolValues   map[string]bool
 }
 
-// NewRecorderFake returns a RecorderFake with its value maps ready to write to.
+// NewRecorderFake returns an initialized recorder.
 func NewRecorderFake() *RecorderFake {
 	return &RecorderFake{
 		IntValues:    make(map[string]int),

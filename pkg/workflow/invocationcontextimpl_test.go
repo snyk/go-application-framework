@@ -78,7 +78,6 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 			"the option passed by the caller must win over the invocation's configuration")
 	})
 
-	// fileFilterMetrics returns the file-filter entries of an invocation's instrumentation extension.
 	fileFilterMetrics := func(t *testing.T, invocationAnalytics analytics.Analytics) map[string]any {
 		t.Helper()
 
@@ -94,8 +93,6 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 		return recorded
 	}
 
-	// The FileFilter records into the invocation's Analytics, so the metrics have to show up in its
-	// instrumentation, under keys carrying no run-specific segment.
 	t.Run("reports filter metrics through the analytics of the invocation", func(t *testing.T) {
 		base, _ := setup(t)
 		invocationAnalytics := analytics.New()
@@ -107,7 +104,6 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 
 		filteredFiles(t, ictx.GetFileFilter(base))
 
-		// no feature flag is set on this invocation, so its runs report as legacy
 		assert.ElementsMatch(t, []string{
 			"file-filter.var0.filter.inputFileCount",
 			"file-filter.var0.filter.ruleCount",
