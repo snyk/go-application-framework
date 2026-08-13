@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -28,7 +29,7 @@ type EngineImpl struct {
 	config               configuration.Configuration
 	analytics            analytics.Analytics
 	networkAccess        networking.NetworkAccess
-	initialized          bool
+	initialized          atomic.Bool
 	logger               *zerolog.Logger
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
@@ -92,16 +93,21 @@ func withNested() EngineInvokeOption {
 	}
 }
 
-type postInvokeContextImpl struct {
+type invokeOutputImpl struct {
 	workflowID Identifier
+	output     []Data
 	err        error
 }
 
-func (p *postInvokeContextImpl) GetWorkflowIdentifier() Identifier {
+func (p *invokeOutputImpl) GetWorkflowIdentifier() Identifier {
 	return p.workflowID
 }
 
-func (p *postInvokeContextImpl) GetError() error {
+func (p *invokeOutputImpl) GetOutput() []Data {
+	return p.output
+}
+
+func (p *invokeOutputImpl) GetError() error {
 	return p.err
 }
 
@@ -173,7 +179,6 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 func NewDefaultWorkFlowEngine() Engine {
 	engine := &EngineImpl{
 		workflows:            make(map[string]Entry),
-		initialized:          false,
 		extensionInitializer: make([]ExtensionInit, 0),
 		invocationCounter:    0,
 		logger:               &zlog.Logger,
@@ -207,9 +212,7 @@ func (e *EngineImpl) Init() error {
 	}
 
 	if err == nil {
-		e.mu.Lock()
-		e.initialized = true
-		e.mu.Unlock()
+		e.initialized.Store(true)
 	}
 
 	return err
@@ -321,10 +324,7 @@ func (e *EngineImpl) Invoke(
 	var callbackPanic any
 	var callbackPanicStack []byte
 
-	e.mu.RLock()
-	initialized := e.initialized
-	e.mu.RUnlock()
-	if !initialized {
+	if !e.initialized.Load() {
 		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
 
@@ -407,7 +407,7 @@ func (e *EngineImpl) Invoke(
 	}
 
 	if !options.nested {
-		e.firePostInvokeHooks(hookCtx, id, err, options.ic)
+		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic)
 	}
 
 	if callbackPanic != nil {
@@ -419,7 +419,7 @@ func (e *EngineImpl) Invoke(
 
 var postInvokeHookTimeout = 5 * time.Second
 
-func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeErr error, ic analytics.InstrumentationCollector) {
+func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
 		e.mu.RUnlock()
@@ -429,8 +429,9 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	copy(hooks, e.postInvokeHooks)
 	e.mu.RUnlock()
 
-	hctx := &postInvokeContextImpl{
+	result := &invokeOutputImpl{
 		workflowID: id,
+		output:     invokeOutput,
 		err:        invokeErr,
 	}
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
@@ -448,7 +449,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 					e.GetLogger().Error().Msgf("post-invoke hook panicked: %v\n%s", r, debug.Stack())
 				}
 			}()
-			hook(hookCtx, hookEngine, hctx)
+			hook(hookCtx, hookEngine, result)
 		}()
 	}
 
@@ -489,14 +490,14 @@ func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 // Hooks fire in registration order and are skipped for nested (sub-workflow) invocations.
 // Hooks must be registered before or during Init; calls after Init return an error.
 func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.initialized {
+	if e.initialized.Load() {
 		return fmt.Errorf("AddPostInvokeHook called after Init")
 	}
 	if hook == nil {
 		return nil
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.postInvokeHooks = append(e.postInvokeHooks, hook)
 	return nil
 }

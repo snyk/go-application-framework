@@ -1125,7 +1125,7 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 
 func Test_WithPostInvokeHooks(t *testing.T) {
 	hookCalled := false
-	hook := func(ctx context.Context, eng workflow.Engine, hctx workflow.PostInvokeContext) {
+	hook := func(ctx context.Context, eng workflow.Engine, output workflow.InvokeOutput) {
 		hookCalled = true
 	}
 

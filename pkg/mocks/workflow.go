@@ -21,31 +21,31 @@ import (
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// MockPostInvokeContext is a mock of PostInvokeContext interface.
-type MockPostInvokeContext struct {
+// MockInvokeOutput is a mock of InvokeOutput interface.
+type MockInvokeOutput struct {
 	ctrl     *gomock.Controller
-	recorder *MockPostInvokeContextMockRecorder
+	recorder *MockInvokeOutputMockRecorder
 }
 
-// MockPostInvokeContextMockRecorder is the mock recorder for MockPostInvokeContext.
-type MockPostInvokeContextMockRecorder struct {
-	mock *MockPostInvokeContext
+// MockInvokeOutputMockRecorder is the mock recorder for MockInvokeOutput.
+type MockInvokeOutputMockRecorder struct {
+	mock *MockInvokeOutput
 }
 
-// NewMockPostInvokeContext creates a new mock instance.
-func NewMockPostInvokeContext(ctrl *gomock.Controller) *MockPostInvokeContext {
-	mock := &MockPostInvokeContext{ctrl: ctrl}
-	mock.recorder = &MockPostInvokeContextMockRecorder{mock}
+// NewMockInvokeOutput creates a new mock instance.
+func NewMockInvokeOutput(ctrl *gomock.Controller) *MockInvokeOutput {
+	mock := &MockInvokeOutput{ctrl: ctrl}
+	mock.recorder = &MockInvokeOutputMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPostInvokeContext) EXPECT() *MockPostInvokeContextMockRecorder {
+func (m *MockInvokeOutput) EXPECT() *MockInvokeOutputMockRecorder {
 	return m.recorder
 }
 
 // GetError mocks base method.
-func (m *MockPostInvokeContext) GetError() error {
+func (m *MockInvokeOutput) GetError() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetError")
 	ret0, _ := ret[0].(error)
@@ -53,13 +53,27 @@ func (m *MockPostInvokeContext) GetError() error {
 }
 
 // GetError indicates an expected call of GetError.
-func (mr *MockPostInvokeContextMockRecorder) GetError() *gomock.Call {
+func (mr *MockInvokeOutputMockRecorder) GetError() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetError", reflect.TypeOf((*MockPostInvokeContext)(nil).GetError))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetError", reflect.TypeOf((*MockInvokeOutput)(nil).GetError))
+}
+
+// GetOutput mocks base method.
+func (m *MockInvokeOutput) GetOutput() []workflow.Data {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOutput")
+	ret0, _ := ret[0].([]workflow.Data)
+	return ret0
+}
+
+// GetOutput indicates an expected call of GetOutput.
+func (mr *MockInvokeOutputMockRecorder) GetOutput() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOutput", reflect.TypeOf((*MockInvokeOutput)(nil).GetOutput))
 }
 
 // GetWorkflowIdentifier mocks base method.
-func (m *MockPostInvokeContext) GetWorkflowIdentifier() workflow.Identifier {
+func (m *MockInvokeOutput) GetWorkflowIdentifier() workflow.Identifier {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWorkflowIdentifier")
 	ret0, _ := ret[0].(workflow.Identifier)
@@ -67,9 +81,9 @@ func (m *MockPostInvokeContext) GetWorkflowIdentifier() workflow.Identifier {
 }
 
 // GetWorkflowIdentifier indicates an expected call of GetWorkflowIdentifier.
-func (mr *MockPostInvokeContextMockRecorder) GetWorkflowIdentifier() *gomock.Call {
+func (mr *MockInvokeOutputMockRecorder) GetWorkflowIdentifier() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkflowIdentifier", reflect.TypeOf((*MockPostInvokeContext)(nil).GetWorkflowIdentifier))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkflowIdentifier", reflect.TypeOf((*MockInvokeOutput)(nil).GetWorkflowIdentifier))
 }
 
 // MockData is a mock of Data interface.
@@ -965,4 +979,41 @@ func (m *MockEngine) SetUserInterface(ui ui.UserInterface) {
 func (mr *MockEngineMockRecorder) SetUserInterface(ui interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserInterface", reflect.TypeOf((*MockEngine)(nil).SetUserInterface), ui)
+}
+
+// MockPostInvokeHookRegistrar is a mock of PostInvokeHookRegistrar interface.
+type MockPostInvokeHookRegistrar struct {
+	ctrl     *gomock.Controller
+	recorder *MockPostInvokeHookRegistrarMockRecorder
+}
+
+// MockPostInvokeHookRegistrarMockRecorder is the mock recorder for MockPostInvokeHookRegistrar.
+type MockPostInvokeHookRegistrarMockRecorder struct {
+	mock *MockPostInvokeHookRegistrar
+}
+
+// NewMockPostInvokeHookRegistrar creates a new mock instance.
+func NewMockPostInvokeHookRegistrar(ctrl *gomock.Controller) *MockPostInvokeHookRegistrar {
+	mock := &MockPostInvokeHookRegistrar{ctrl: ctrl}
+	mock.recorder = &MockPostInvokeHookRegistrarMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPostInvokeHookRegistrar) EXPECT() *MockPostInvokeHookRegistrarMockRecorder {
+	return m.recorder
+}
+
+// AddPostInvokeHook mocks base method.
+func (m *MockPostInvokeHookRegistrar) AddPostInvokeHook(hook workflow.PostInvokeHook) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPostInvokeHook", hook)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddPostInvokeHook indicates an expected call of AddPostInvokeHook.
+func (mr *MockPostInvokeHookRegistrarMockRecorder) AddPostInvokeHook(hook interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostInvokeHook", reflect.TypeOf((*MockPostInvokeHookRegistrar)(nil).AddPostInvokeHook), hook)
 }

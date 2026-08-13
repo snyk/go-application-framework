@@ -622,10 +622,10 @@ func Test_PostInvokeHook_FiresOnTopLevel(t *testing.T) {
 	engine, wfId := setupHookTestEngine(t, "hook-test", nil)
 
 	var hookCalled bool
-	var receivedHctx PostInvokeContext
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	var receivedOutput InvokeOutput
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		hookCalled = true
-		receivedHctx = hctx
+		receivedOutput = output
 	})
 
 	assert.NoError(t, engine.Init())
@@ -633,8 +633,8 @@ func Test_PostInvokeHook_FiresOnTopLevel(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, hookCalled)
-	assert.Equal(t, wfId.String(), receivedHctx.GetWorkflowIdentifier().String())
-	assert.NoError(t, receivedHctx.GetError())
+	assert.Equal(t, wfId.String(), receivedOutput.GetWorkflowIdentifier().String())
+	assert.NoError(t, receivedOutput.GetError())
 }
 
 func Test_PostInvokeHook_ReceivesError(t *testing.T) {
@@ -643,8 +643,8 @@ func Test_PostInvokeHook_ReceivesError(t *testing.T) {
 	})
 
 	var receivedErr error
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		receivedErr = hctx.GetError()
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
+		receivedErr = output.GetError()
 	})
 
 	assert.NoError(t, engine.Init())
@@ -667,7 +667,7 @@ func Test_PostInvokeHook_SkippedForNestedInvocations(t *testing.T) {
 	assert.NoError(t, err)
 
 	hookCallCount := 0
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		hookCallCount++
 	})
 
@@ -683,7 +683,7 @@ func Test_PostInvokeHook_MultipleHooksAllFire(t *testing.T) {
 	var mu sync.Mutex
 	var fired []int
 	for _, id := range []int{1, 2, 3} {
-		addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+		addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 			mu.Lock()
 			fired = append(fired, id)
 			mu.Unlock()
@@ -701,7 +701,7 @@ func Test_PostInvokeHook_ConcurrentTopLevelInvocations(t *testing.T) {
 
 	var mu sync.Mutex
 	hookCallCount := 0
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		mu.Lock()
 		hookCallCount++
 		mu.Unlock()
@@ -733,16 +733,16 @@ func Test_PostInvokeHook_FiresForMissingWorkflow(t *testing.T) {
 	engine := NewWorkFlowEngine(configuration.NewInMemory())
 	missingWfId := NewWorkflowIdentifier("does-not-exist")
 
-	var receivedHctx PostInvokeContext
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
-		receivedHctx = hctx
+	var receivedOutput InvokeOutput
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
+		receivedOutput = output
 	})
 
 	assert.NoError(t, engine.Init())
 	_, err := engine.Invoke(missingWfId)
 	assert.Error(t, err)
-	assert.Equal(t, missingWfId.String(), receivedHctx.GetWorkflowIdentifier().String())
-	assert.Error(t, receivedHctx.GetError())
+	assert.Equal(t, missingWfId.String(), receivedOutput.GetWorkflowIdentifier().String())
+	assert.Error(t, receivedOutput.GetError())
 }
 
 func Test_PostInvokeHook_IgnoredAfterInit(t *testing.T) {
@@ -750,7 +750,7 @@ func Test_PostInvokeHook_IgnoredAfterInit(t *testing.T) {
 	assert.NoError(t, engine.Init())
 
 	hookCalled := false
-	assert.Error(t, AddPostInvokeHook(engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	assert.Error(t, AddPostInvokeHook(engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		hookCalled = true
 	}))
 
@@ -775,13 +775,13 @@ func Test_PostInvokeHook_PanicRecovery(t *testing.T) {
 
 	var mu sync.Mutex
 	var fired []int
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		mu.Lock()
 		fired = append(fired, 1)
 		mu.Unlock()
 	})
-	addPostInvokeHook(t, engine, func(context.Context, Engine, PostInvokeContext) { panic("hook blew up") })
-	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { panic("hook blew up") })
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		mu.Lock()
 		fired = append(fired, 3)
 		mu.Unlock()
@@ -799,7 +799,7 @@ func Test_PostInvokeHook_FiresPerInvocation(t *testing.T) {
 	engine, wfId := setupHookTestEngine(t, "per-invoke", nil)
 
 	hookCallCount := 0
-	addPostInvokeHook(t, engine, func(context.Context, Engine, PostInvokeContext) { hookCallCount++ })
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { hookCallCount++ })
 
 	assert.NoError(t, engine.Init())
 	for range 3 {
@@ -816,7 +816,7 @@ func Test_PostInvokeHook_ReceivesContextValues(t *testing.T) {
 	testKey := ctxKey("hook-test-key")
 
 	var receivedCtx context.Context
-	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ PostInvokeContext) { receivedCtx = ctx })
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) { receivedCtx = ctx })
 
 	assert.NoError(t, engine.Init())
 
@@ -840,7 +840,7 @@ func Test_PostInvokeHook_NestedInvokeOfMissingWorkflow(t *testing.T) {
 	})
 
 	hookCallCount := 0
-	addPostInvokeHook(t, engine, func(context.Context, Engine, PostInvokeContext) { hookCallCount++ })
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { hookCallCount++ })
 
 	assert.NoError(t, engine.Init())
 	_, err := engine.Invoke(outerWfId)
@@ -855,9 +855,9 @@ func Test_PostInvokeHook_FiresOnCallbackPanic(t *testing.T) {
 
 	var hookErr error
 	hookCalled := false
-	addPostInvokeHook(t, engine, func(_ context.Context, _ Engine, hctx PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(_ context.Context, _ Engine, output InvokeOutput) {
 		hookCalled = true
-		hookErr = hctx.GetError()
+		hookErr = output.GetError()
 	})
 
 	assert.NoError(t, engine.Init())
@@ -874,8 +874,8 @@ func Test_PostInvokeHook_PanicNilObserved(t *testing.T) {
 	})
 
 	var hookErr error
-	addPostInvokeHook(t, engine, func(_ context.Context, _ Engine, hctx PostInvokeContext) {
-		hookErr = hctx.GetError()
+	addPostInvokeHook(t, engine, func(_ context.Context, _ Engine, output InvokeOutput) {
+		hookErr = output.GetError()
 	})
 
 	assert.NoError(t, engine.Init())
@@ -894,11 +894,11 @@ func Test_PostInvokeHook_Timeout(t *testing.T) {
 
 	var secondHookDone sync.WaitGroup
 	secondHookDone.Add(1)
-	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ PostInvokeContext) {
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) {
 		<-ctx.Done()
 		time.Sleep(time.Second)
 	})
-	addPostInvokeHook(t, engine, func(context.Context, Engine, PostInvokeContext) { secondHookDone.Done() })
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { secondHookDone.Done() })
 
 	assert.NoError(t, engine.Init())
 

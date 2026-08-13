@@ -23,11 +23,12 @@ type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
 
-// PostInvokeContext provides read access to the result of a top-level Invoke call.
+// InvokeOutput provides read access to the result of a top-level Invoke call.
 // Hooks fire globally for every top-level Invoke, so GetError may return an error originating
 // from any registered workflow — not necessarily one the hook "owns."
-type PostInvokeContext interface {
+type InvokeOutput interface {
 	GetWorkflowIdentifier() Identifier
+	GetOutput() []Data
 	GetError() error
 }
 
@@ -43,7 +44,7 @@ type PostInvokeContext interface {
 // are treated as nested and will not re-trigger hooks. WARNING: this recursion guard is
 // convention-based — hooks must use the provided engine parameter for invocations. A hook that
 // captures and calls the original *EngineImpl directly will bypass the guard.
-type PostInvokeHook func(ctx context.Context, engine Engine, hctx PostInvokeContext)
+type PostInvokeHook func(ctx context.Context, engine Engine, output InvokeOutput)
 
 // interfaces
 

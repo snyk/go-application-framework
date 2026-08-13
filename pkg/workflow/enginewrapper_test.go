@@ -85,7 +85,7 @@ func Test_EngineWrapper_HookRecursionGuard(t *testing.T) {
 	assert.NoError(t, err)
 
 	hookCallCount := 0
-	err = AddPostInvokeHook(engine, func(ctx context.Context, eng Engine, hctx PostInvokeContext) {
+	err = AddPostInvokeHook(engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
 		hookCallCount++
 		_, invokeErr := eng.Invoke(reportWfId)
 		assert.NoError(t, invokeErr)
