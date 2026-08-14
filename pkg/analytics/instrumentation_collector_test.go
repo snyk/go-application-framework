@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
@@ -216,6 +217,52 @@ func Test_InstrumentationCollector(t *testing.T) {
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
 			"password": "***",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should shape-scrub secret-shaped extension values when WithConfiguration is supplied", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("note", "Bearer abcdef123456")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"note":    "Bearer ***",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should leave secret-shaped extension values untouched when WithConfiguration is omitted", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("note", "Bearer abcdef123456")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"note":    "Bearer abcdef123456",
 		}
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension

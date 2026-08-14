@@ -196,6 +196,17 @@ func TestScrubFunction(t *testing.T) {
 	})
 }
 
+func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+	input := []byte("Authorization: Bearer sometoken123456")
+
+	expected := scrub(input, dict)
+	actual := Scrub(input, dict)
+
+	assert.Equal(t, string(expected), string(actual))
+	assert.Equal(t, "Authorization: Bearer ***", string(actual), "Scrub should redact the token, not just mirror the input")
+}
+
 func TestAddDefaults(t *testing.T) {
 	dict := addMandatoryMasking(ScrubbingDict{})
 	u, uErr := user.Current()

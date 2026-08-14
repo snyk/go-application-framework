@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
@@ -71,6 +72,7 @@ type instrumentationCollectorImpl struct {
 
 type serializeOptions struct {
 	logger *zerolog.Logger
+	cfg    configuration.Configuration
 }
 
 type serializeOptionFunc func(*serializeOptions)
@@ -78,6 +80,15 @@ type serializeOptionFunc func(*serializeOptions)
 func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
 	return func(o *serializeOptions) {
 		o.logger = logger
+	}
+}
+
+// WithConfiguration opts sanitizeExtensionData into shape-based secret redaction,
+// using the same scrub dictionary GAF's debug-log redaction already trusts.
+// Omitted, sanitizeExtensionData's behavior is unchanged from before this option existed.
+func WithConfiguration(cfg configuration.Configuration) serializeOptionFunc {
+	return func(o *serializeOptions) {
+		o.cfg = cfg
 	}
 }
 
@@ -156,10 +167,10 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 		o(&options)
 	}
 
-	return t.getV2InstrumentationObject(options.logger), nil
+	return t.getV2InstrumentationObject(&options), nil
 }
 
-func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerolog.Logger) *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
 	d := api.AnalyticsData{
@@ -167,13 +178,14 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerol
 		Attributes: a,
 	}
 
-	return ic.sanitizeExtensionData(logger, d)
+	return ic.sanitizeExtensionData(options, d)
 }
 
 // Since the `extension` attribute in the analytics payload is a value any
 // product line potentially can contribute to, we utilize the same sanitation logic
 // already in place for the legacy v1 analytics, to ensure the same level of PII protection.
-func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Logger, d api.AnalyticsData) *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
+	logger := options.logger
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
 	result := &api.AnalyticsRequestBody{
 		Data: d,
@@ -183,6 +195,10 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Lo
 	if err != nil {
 		logger.Printf("failed to marshal extension, removing extension object from analytics payload: %v", err)
 		return result
+	}
+
+	if options.cfg != nil {
+		extension = logging.Scrub(extension, logging.GetScrubDictFromConfig(options.cfg))
 	}
 
 	var sanitized []byte

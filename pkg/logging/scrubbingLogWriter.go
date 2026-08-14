@@ -316,6 +316,11 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
+// Scrub applies scrubDict's redaction rules to data, the same logic used internally by ScrubbingLogWriter.
+func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
+	return scrub(data, scrubDict)
+}
+
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
 	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
