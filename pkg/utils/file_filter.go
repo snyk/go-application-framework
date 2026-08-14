@@ -352,10 +352,12 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 // .dcignore rule).
 func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
 	allGlobs := make([]string, 0, len(globs))
+	hasGitignoreGlobs := false
 
 	for _, glob := range globs {
 		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
 			allGlobs = append(allGlobs, gitignoreGlob)
+			hasGitignoreGlobs = true
 			continue
 		}
 
@@ -367,6 +369,10 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
 	defaultPredicate := func(file string) bool {
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
+	}
+
+	if !hasGitignoreGlobs {
+		return defaultPredicate
 	}
 
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
