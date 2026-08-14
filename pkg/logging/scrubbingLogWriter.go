@@ -133,6 +133,9 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
+	for _, term := range config.GetStringSlice(configuration.REDACTION_TERMS) {
+		addStaticTermToDict(term, dict)
+	}
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
 		return dict

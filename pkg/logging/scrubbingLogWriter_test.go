@@ -90,6 +90,20 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	require.Equal(t, expected, string(mockWriter.written), "password should be scrubbed")
 }
 
+func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.REDACTION_TERMS, []string{"my-literal-secret"})
+
+	mockWriter := &mockWriter{}
+	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
+
+	n, err := writer.Write([]byte("my-literal-secret"))
+
+	assert.Nil(t, err)
+	assert.Equal(t, len("my-literal-secret"), n)
+	require.Equal(t, "***", string(mockWriter.written), "configured redaction term should be scrubbed")
+}
+
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
 		"token":  {0, regexp.MustCompile("token"), ""},
