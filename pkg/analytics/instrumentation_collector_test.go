@@ -254,6 +254,23 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
+	t.Run("it should not stack-overflow when a shape-scrubbed extension value contains a cycle", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+
+		cyclic := map[string]interface{}{"note": "Bearer abcdef123456"}
+		cyclic["self"] = cyclic
+		ic.AddExtension("cyclic", cyclic)
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+
+		extension := *actualV2InstrumentationObject.Data.Attributes.Interaction.Extension
+		cyclicResult, ok := extension["cyclic"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, "Bearer ***", cyclicResult["note"])
+		assert.Nil(t, cyclicResult["self"])
+	})
+
 	t.Run("it should not redact unrelated extension values that merely share a substring with a scrubbed secret", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)

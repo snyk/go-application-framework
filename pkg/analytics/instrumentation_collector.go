@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"maps"
 	"os/user"
+	"reflect"
 	"sync"
 	"time"
 
@@ -238,23 +239,46 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 // AddExtension payload without ever serializing it to JSON bytes first, so a redaction
 // can't run past the field it matched in and corrupt or bleed into a sibling field.
 func scrubExtensionMap(m map[string]interface{}, dict logging.ScrubbingDict) map[string]interface{} {
+	return scrubExtensionMapSeen(m, dict, map[uintptr]bool{})
+}
+
+// seen tracks map/slice pointers on the current recursion path, guarding against
+// cycles a caller of AddExtension could construct (e.g. a map containing itself).
+// It is deleted on the way back up so a value referenced from two non-cyclic
+// branches (a diamond, not a cycle) is still scrubbed both times.
+func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) map[string]interface{} {
+	ptr := reflect.ValueOf(m).Pointer()
+	if seen[ptr] {
+		return nil
+	}
+	seen[ptr] = true
+	defer delete(seen, ptr)
+
 	scrubbed := make(map[string]interface{}, len(m))
 	for k, v := range m {
-		scrubbed[k] = scrubExtensionValue(v, dict)
+		scrubbed[k] = scrubExtensionValueSeen(v, dict, seen)
 	}
 	return scrubbed
 }
 
-func scrubExtensionValue(v interface{}, dict logging.ScrubbingDict) interface{} {
+func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
 	switch val := v.(type) {
 	case string:
 		return string(logging.Scrub([]byte(val), dict))
 	case map[string]interface{}:
-		return scrubExtensionMap(val, dict)
+		return scrubExtensionMapSeen(val, dict, seen)
 	case []interface{}:
+		ptr := reflect.ValueOf(val).Pointer()
+		if ptr != 0 && seen[ptr] {
+			return nil
+		}
+		if ptr != 0 {
+			seen[ptr] = true
+			defer delete(seen, ptr)
+		}
 		scrubbed := make([]interface{}, len(val))
 		for i, item := range val {
-			scrubbed[i] = scrubExtensionValue(item, dict)
+			scrubbed[i] = scrubExtensionValueSeen(item, dict, seen)
 		}
 		return scrubbed
 	default:
