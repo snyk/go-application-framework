@@ -186,6 +186,15 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 // already in place for the legacy v1 analytics, to ensure the same level of PII protection.
 func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
 	logger := options.logger
+
+	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.Scrub
+	// does whole-string literal replacement, so running it over raw JSON would let a redacted
+	// value collide with an unrelated field that happens to contain the same substring.
+	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
+		scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, logging.GetScrubDictFromConfig(options.cfg))
+		d.Attributes.Interaction.Extension = &scrubbed
+	}
+
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
 	result := &api.AnalyticsRequestBody{
 		Data: d,
@@ -195,10 +204,6 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	if err != nil {
 		logger.Printf("failed to marshal extension, removing extension object from analytics payload: %v", err)
 		return result
-	}
-
-	if options.cfg != nil {
-		extension = logging.Scrub(extension, logging.GetScrubDictFromConfig(options.cfg))
 	}
 
 	var sanitized []byte
@@ -227,6 +232,34 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	}
 
 	return result
+}
+
+// scrubExtensionMap and scrubExtensionValue redact string leaves of an arbitrary
+// AddExtension payload without ever serializing it to JSON bytes first, so a redaction
+// can't run past the field it matched in and corrupt or bleed into a sibling field.
+func scrubExtensionMap(m map[string]interface{}, dict logging.ScrubbingDict) map[string]interface{} {
+	scrubbed := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		scrubbed[k] = scrubExtensionValue(v, dict)
+	}
+	return scrubbed
+}
+
+func scrubExtensionValue(v interface{}, dict logging.ScrubbingDict) interface{} {
+	switch val := v.(type) {
+	case string:
+		return string(logging.Scrub([]byte(val), dict))
+	case map[string]interface{}:
+		return scrubExtensionMap(val, dict)
+	case []interface{}:
+		scrubbed := make([]interface{}, len(val))
+		for i, item := range val {
+			scrubbed[i] = scrubExtensionValue(item, dict)
+		}
+		return scrubbed
+	default:
+		return v
+	}
 }
 
 func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {

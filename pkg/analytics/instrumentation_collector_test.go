@@ -254,6 +254,56 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
+	t.Run("it should not redact unrelated extension values that merely share a substring with a scrubbed secret", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("detail", "Bearer abcdef123456")
+		ic.AddExtension("note", "unrelated log message mentioning abcdef123456 in passing")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"detail":  "Bearer ***",
+			"note":    "unrelated log message mentioning abcdef123456 in passing",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should not corrupt sibling fields when a short-form-keyed extension value is a nested object", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("p", map[string]interface{}{"nested": "obj"})
+		ic.AddExtension("tail", "keep")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"p":       map[string]interface{}{"nested": "obj"},
+			"tail":    "keep",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
 	t.Run("it should leave secret-shaped extension values untouched when WithConfiguration is omitted", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
