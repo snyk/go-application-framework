@@ -72,14 +72,16 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
-// File-filter metric keys have the shape "file-filter.<variant>.<metric>".
+// File-filter metric keys have the shape "file-filter.<variant>.<metric>", except for
+// metricFileFilterVariantBothFixes, the target end state once both feature flags are always on,
+// whose keys drop the variant segment: "file-filter.<metric>".
 const (
 	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
 
 	metricFileFilterVariantLegacy       = "var0" // neither feature flag enabled
 	metricFileFilterVariantMetacharFix  = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
 	metricFileFilterVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
-	metricFileFilterVariantBothFixes    = "var3" // both feature flags enabled
+	metricFileFilterVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
 
 	metricFileFilterInputFileCount = "filter.inputFileCount" // files offered to GetFilteredFiles, before exclusion
 	metricFileFilterRuleCount      = "filter.ruleCount"      // glob patterns GetRules produced
@@ -174,6 +176,9 @@ func (fw *FileFilter) metricVariant() string {
 }
 
 func metricKey(variant, key string) string {
+	if variant == metricFileFilterVariantBothFixes {
+		return fmt.Sprintf("%s.%s", metricFileFilterPrefix, key)
+	}
 	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, variant, key)
 }
 

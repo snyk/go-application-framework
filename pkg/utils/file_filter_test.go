@@ -2155,7 +2155,8 @@ type filterMetrics struct {
 }
 
 // recordedMetrics groups what a recorder saw by variant, asserting the fixed
-// "file-filter.<variant>.<metric>" shape of every key on the way.
+// "file-filter.<variant>.<metric>" shape of every key on the way, except for
+// metricFileFilterVariantBothFixes, whose keys drop the variant segment: "file-filter.<metric>".
 func recordedMetrics(t *testing.T, recorder *metrics.RecorderFake) map[string]filterMetrics {
 	t.Helper()
 
@@ -2163,23 +2164,28 @@ func recordedMetrics(t *testing.T, recorder *metrics.RecorderFake) map[string]fi
 		metricFileFilterVariantLegacy,
 		metricFileFilterVariantMetacharFix,
 		metricFileFilterVariantTrackedFiles,
-		metricFileFilterVariantBothFixes,
 	}
 
 	recorded := map[string]filterMetrics{}
 	variantFor := func(key string) (filterMetrics, string) {
-		// Preserve dots within the metric name, such as "filter.durationMs".
-		parts := strings.SplitN(key, ".", 3)
-		require.Len(t, parts, 3, "metric key %q must be %s.<variant>.<metric>", key, metricFileFilterPrefix)
-		require.Equal(t, metricFileFilterPrefix, parts[0])
-		require.Contains(t, knownVariants, parts[1], "metric key %q must name a known variant", key)
+		rest, ok := strings.CutPrefix(key, metricFileFilterPrefix+".")
+		require.True(t, ok, "metric key %q must start with %q", key, metricFileFilterPrefix+".")
 
-		variant, ok := recorded[parts[1]]
-		if !ok {
-			variant = filterMetrics{ints: map[string]int{}, bools: map[string]bool{}}
-			recorded[parts[1]] = variant
+		// Preserve dots within the metric name, such as "filter.durationMs".
+		variant, metric := metricFileFilterVariantBothFixes, rest
+		for _, known := range knownVariants {
+			if m, hasVariant := strings.CutPrefix(rest, known+"."); hasVariant {
+				variant, metric = known, m
+				break
+			}
 		}
-		return variant, parts[2]
+
+		group, ok := recorded[variant]
+		if !ok {
+			group = filterMetrics{ints: map[string]int{}, bools: map[string]bool{}}
+			recorded[variant] = group
+		}
+		return group, metric
 	}
 
 	for key, value := range recorder.IntValues {
