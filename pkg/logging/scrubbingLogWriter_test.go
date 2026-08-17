@@ -92,7 +92,7 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 
 func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
 	config := configuration.NewInMemory()
-	config.Set(configuration.REDACTION_TERMS, []string{"my-literal-secret"})
+	config.Set(REDACTION_TERMS, []string{"my-literal-secret"})
 
 	mockWriter := &mockWriter{}
 	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))

@@ -53,12 +53,6 @@ const (
 	AUTHENTICATION_ADDITIONAL_URLS string = "internal_additional_auth_urls" // AUTHENTICATION_ADDITIONAL_URLS ([]string) array of additional urls to add authentication for
 
 	// ---------
-	// redaction related configuration
-	// ---------
-
-	REDACTION_TERMS string = "internal_redaction_terms" // REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log output, in addition to the token/OAuth-derived terms GetScrubDictFromConfig already adds
-
-	// ---------
 	// general application configuration
 	// ---------
 
