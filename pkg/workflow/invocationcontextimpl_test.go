@@ -106,7 +106,6 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 
 		assert.ElementsMatch(t, []string{
 			"file-filter.var0.filter.inputFileCount",
-			"file-filter.var0.filter.ruleCount",
 			"file-filter.var0.filter.durationMs",
 			"file-filter.var0.rules.durationMs",
 			"file-filter.var0.filter.outputFileCount",

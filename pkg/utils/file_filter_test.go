@@ -2249,9 +2249,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 				// .gitignore, ignored.txt and file.txt are walked
 				metricFilterInputFileCount: 3,
 				// .gitignore and file.txt pass the filter, ignored.txt does not
-				metricFilterSurvivingFileCount: 2,
-				// **/.git/** plus the two globs the ignored.txt rule expands into
-				metricFilterRuleCount: 3,
+				metricFilterOutputFileCount: 2,
 			}, variant.ints)
 
 			assert.Equal(t, map[string]bool{
@@ -2287,7 +2285,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 
 				variant := recordedMetrics(t, recorder)[metriVariantMetacharFix]
 				assert.Equal(t, totalRuns*3, variant.ints[metricFilterInputFileCount])
-				assert.Equal(t, totalRuns*2, variant.ints[metricFilterSurvivingFileCount])
+				assert.Equal(t, totalRuns*2, variant.ints[metricFilterOutputFileCount])
 			})
 		}
 	})
@@ -2330,7 +2328,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 				variant := recordedMetrics(t, recorder)[metricVariantLegacy]
 				// **/.git/** excludes none of newRepo's three files
 				assert.Equal(t, concurrentRuns*3, variant.ints[metricFilterInputFileCount])
-				assert.Equal(t, concurrentRuns*3, variant.ints[metricFilterSurvivingFileCount])
+				assert.Equal(t, concurrentRuns*3, variant.ints[metricFilterOutputFileCount])
 			})
 		}
 	})
@@ -2359,8 +2357,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 		runFileFilter(t, fileFilter, ".gitignore")
 
 		variant := recordedMetrics(t, recorder)[metriVariantMetacharFix]
-		assert.Equal(t, 1, variant.ints[metricFilterRuleCount], "only the default **/.git/** rule remains")
-		assert.Equal(t, 1, variant.ints[metricFilterSurvivingFileCount])
+		assert.Equal(t, 1, variant.ints[metricFilterOutputFileCount])
 	})
 
 	t.Run("keeps runs applying differing behavior apart", func(t *testing.T) {
@@ -2378,11 +2375,11 @@ func TestFileFilter_Metrics(t *testing.T) {
 			slices.Collect(maps.Keys(recorded)))
 
 		legacy := recorded[metricVariantLegacy]
-		assert.Contains(t, legacy.ints, metricFilterRuleCount)
+		assert.Contains(t, legacy.ints, metricRulesBuildDurationMs)
 		assert.NotContains(t, legacy.ints, metricFilterInputFileCount)
 
 		metacharFix := recorded[metriVariantMetacharFix]
 		assert.Contains(t, metacharFix.ints, metricFilterInputFileCount)
-		assert.NotContains(t, metacharFix.ints, metricFilterRuleCount)
+		assert.NotContains(t, metacharFix.ints, metricRulesBuildDurationMs)
 	})
 }

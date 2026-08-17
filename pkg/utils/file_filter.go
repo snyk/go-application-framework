@@ -83,10 +83,9 @@ const (
 	metricVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
 	metricVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
 
-	metricFilterRuleCount          = "filter.ruleCount"       // glob patterns GetRules produced
-	metricFilterInputFileCount     = "filter.inputFileCount"  // files offered to GetFilteredFiles, before exclusion
-	metricFilterSurvivingFileCount = "filter.outputFileCount" // number of files that passed exclusion
-	metricFilterDurationMs         = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
+	metricFilterInputFileCount  = "filter.inputFileCount"  // files offered to GetFilteredFiles, before exclusion
+	metricFilterOutputFileCount = "filter.outputFileCount" // number of files that passed exclusion
+	metricFilterDurationMs      = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
 
 	metricRulesBuildDurationMs = "rules.durationMs" // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
 
@@ -141,13 +140,6 @@ func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	}
 }
 
-// Avoid computing metrics when no recorder is configured.
-func (fw *FileFilter) recordSumLazy(variant, key string, getMetric func() int) {
-	if fw.metrics.IsRecording() {
-		fw.metrics.AddToSum(metricKey(variant, key), getMetric())
-	}
-}
-
 // Avoid resolving flags, which may require network access, when metrics are disabled.
 func (fw *FileFilter) metricVariant() string {
 	if !fw.metrics.IsRecording() {
@@ -169,13 +161,26 @@ func (fw *FileFilter) metricVariant() string {
 		variant = metricVariantLegacy
 	}
 
-	fw.metrics.RecordBool(metricKey(variant, metricFeatureMetacharFix), metacharacterFix)
-	fw.metrics.RecordBool(metricKey(variant, metricFeatureTrackedFiles), respectTrackedFiles)
+	fw.recordBool(variant, metricFeatureMetacharFix, func() bool { return metacharacterFix })
+	fw.recordBool(variant, metricFeatureTrackedFiles, func() bool { return respectTrackedFiles })
 
 	return variant
 }
 
-func metricKey(variant, key string) string {
+// Avoid computing metrics when no recorder is configured.
+func (fw *FileFilter) recordBool(variant, key string, getMetric func() bool) {
+	if fw.metrics.IsRecording() {
+		fw.metrics.RecordBool(buildMetricKey(variant, key), getMetric())
+	}
+}
+
+func (fw *FileFilter) recordSumLazy(variant, key string, getMetric func() int) {
+	if fw.metrics.IsRecording() {
+		fw.metrics.AddToSum(buildMetricKey(variant, key), getMetric())
+	}
+}
+
+func buildMetricKey(variant, key string) string {
 	if variant == metricVariantBothFixes {
 		return fmt.Sprintf("%s.%s", metricPrefix, key)
 	}
@@ -237,12 +242,12 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	// Rule building and filtering may resolve feature flags at different times.
 	variant := fw.metricVariant()
 	start := time.Now()
 	defer fw.recordSumLazy(variant, metricRulesBuildDurationMs, func() int {
 		return int(time.Since(start).Milliseconds())
 	})
+
 	files := fw.GetAllFiles()
 
 	// iterate filesToFilter channel and find ignore filesToFilter
@@ -263,9 +268,6 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	}
 
 	rules := append(fw.defaultRules, globs...)
-
-	recordRulesCount := func() int { return len(rules) }
-	fw.recordSumLazy(variant, metricFilterRuleCount, recordRulesCount)
 
 	return rules, nil
 }
@@ -319,13 +321,13 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 
+		// Record metrics
 		fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
 			return candidateFileCount
 		})
-		fw.recordSumLazy(variant, metricFilterSurvivingFileCount, func() int {
+		fw.recordSumLazy(variant, metricFilterOutputFileCount, func() int {
 			return int(resolvedFileCount.Load())
 		})
-
 		fw.recordSumLazy(variant, metricFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
 	}()
 
