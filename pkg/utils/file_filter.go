@@ -73,26 +73,26 @@ type DotSnykRule struct {
 }
 
 // File-filter metric keys have the shape "file-filter.<variant>.<metric>", except for
-// metricFileFilterVariantBothFixes, the target end state once both feature flags are always on,
+// metricVariantBothFixes, the target end state once both feature flags are always on,
 // whose keys drop the variant segment: "file-filter.<metric>".
 const (
-	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
+	metricPrefix = "file-filter" // prefix for all file-filter analytics keys
 
-	metricFileFilterVariantLegacy       = "var0" // neither feature flag enabled
-	metricFileFilterVariantMetacharFix  = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
-	metricFileFilterVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
-	metricFileFilterVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
+	metricVariantLegacy       = "var0" // neither feature flag enabled
+	metriVariantMetacharFix   = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
+	metricVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
+	metricVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
 
-	metricFileFilterInputFileCount = "filter.inputFileCount" // files offered to GetFilteredFiles, before exclusion
-	metricFileFilterRuleCount      = "filter.ruleCount"      // glob patterns GetRules produced
+	metricFilterRuleCount          = "filter.ruleCount"       // glob patterns GetRules produced
+	metricFilterInputFileCount     = "filter.inputFileCount"  // files offered to GetFilteredFiles, before exclusion
+	metricFilterSurvivingFileCount = "filter.outputFileCount" // number of files that passed exclusion
+	metricFilterDurationMs         = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
+
+	metricRulesBuildDurationMs = "rules.durationMs" // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
 
 	// Record feature flags alongside the variant so consumers need not decode its name.
-	metricFileFilterFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
-	metricFileFilterFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
-
-	metricFileFilterDurationMs           = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
-	metricFileFilterRulesBuildDurationMs = "rules.durationMs"       // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
-	metricFileFilterSurvivingFileCount   = "filter.outputFileCount" // number of files that passed exclusion
+	metricFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
+	metricFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -160,26 +160,26 @@ func (fw *FileFilter) metricVariant() string {
 	var variant string
 	switch {
 	case metacharacterFix && respectTrackedFiles:
-		variant = metricFileFilterVariantBothFixes
+		variant = metricVariantBothFixes
 	case metacharacterFix:
-		variant = metricFileFilterVariantMetacharFix
+		variant = metriVariantMetacharFix
 	case respectTrackedFiles:
-		variant = metricFileFilterVariantTrackedFiles
+		variant = metricVariantTrackedFiles
 	default:
-		variant = metricFileFilterVariantLegacy
+		variant = metricVariantLegacy
 	}
 
-	fw.metrics.RecordBool(metricKey(variant, metricFileFilterFeatureMetacharFix), metacharacterFix)
-	fw.metrics.RecordBool(metricKey(variant, metricFileFilterFeatureTrackedFiles), respectTrackedFiles)
+	fw.metrics.RecordBool(metricKey(variant, metricFeatureMetacharFix), metacharacterFix)
+	fw.metrics.RecordBool(metricKey(variant, metricFeatureTrackedFiles), respectTrackedFiles)
 
 	return variant
 }
 
 func metricKey(variant, key string) string {
-	if variant == metricFileFilterVariantBothFixes {
-		return fmt.Sprintf("%s.%s", metricFileFilterPrefix, key)
+	if variant == metricVariantBothFixes {
+		return fmt.Sprintf("%s.%s", metricPrefix, key)
 	}
-	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, variant, key)
+	return fmt.Sprintf("%s.%s.%s", metricPrefix, variant, key)
 }
 
 // NewFileFilter creates a FileFilter rooted at path. Without WithConfig, feature flags default to disabled (legacy).
@@ -240,7 +240,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	// Rule building and filtering may resolve feature flags at different times.
 	variant := fw.metricVariant()
 	start := time.Now()
-	defer fw.recordSumLazy(variant, metricFileFilterRulesBuildDurationMs, func() int {
+	defer fw.recordSumLazy(variant, metricRulesBuildDurationMs, func() int {
 		return int(time.Since(start).Milliseconds())
 	})
 	files := fw.GetAllFiles()
@@ -265,7 +265,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	rules := append(fw.defaultRules, globs...)
 
 	recordRulesCount := func() int { return len(rules) }
-	fw.recordSumLazy(variant, metricFileFilterRuleCount, recordRulesCount)
+	fw.recordSumLazy(variant, metricFilterRuleCount, recordRulesCount)
 
 	return rules, nil
 }
@@ -319,14 +319,14 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 
-		fw.recordSumLazy(variant, metricFileFilterInputFileCount, func() int {
+		fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
 			return candidateFileCount
 		})
-		fw.recordSumLazy(variant, metricFileFilterSurvivingFileCount, func() int {
+		fw.recordSumLazy(variant, metricFilterSurvivingFileCount, func() int {
 			return int(resolvedFileCount.Load())
 		})
 
-		fw.recordSumLazy(variant, metricFileFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
+		fw.recordSumLazy(variant, metricFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
 	}()
 
 	return filteredFilesCh
