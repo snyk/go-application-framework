@@ -1192,3 +1192,56 @@ func Test_PostInvokeHook_InitRetryPreservesPreInitHooks(t *testing.T) {
 
 	assert.True(t, preInitHookCalled, "hook registered before Init should still fire after failed and retried Init")
 }
+
+func Test_PostInvokeHook_NestedInvokeContextBoundByHookTimeout(t *testing.T) {
+	// Verify that nested invocations made through the engine given to a hook
+	// are bound by the same timeout the hook is bound by.
+	config := configuration.NewInMemory()
+	config.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 50*time.Millisecond)
+	engine := NewWorkFlowEngine(config)
+
+	outerWfId := NewWorkflowIdentifier("outer-timeout-test")
+	innerWfId := NewWorkflowIdentifier("inner-timeout-test")
+	opts := ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+
+	_, err := engine.Register(outerWfId, opts, func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	ctxCanceledDuringInvoke := make(chan bool, 1)
+	_, err = engine.Register(innerWfId, opts, func(inv InvocationContext, _ []Data) ([]Data, error) {
+		// Wait up to 200ms and check if context gets canceled.
+		// With the bug: context won't be canceled (unbounded)
+		// With the fix: context will be canceled (bounded by 50ms hook timeout)
+		wasCanceled := false
+		select {
+		case <-inv.Context().Done():
+			wasCanceled = true
+		case <-time.After(200 * time.Millisecond):
+		}
+		ctxCanceledDuringInvoke <- wasCanceled
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, _ InvokeOutput) {
+		// Invoke inner workflow WITHOUT passing WithContext.
+		// It should inherit the hook's timeout-bounded context, not the unbounded parent.
+		_, invokeErr := eng.Invoke(innerWfId)
+		assert.NoError(t, invokeErr)
+	})
+
+	assert.NoError(t, engine.Init())
+
+	_, err = engine.Invoke(outerWfId)
+	assert.NoError(t, err)
+
+	// Wait for inner workflow callback to report whether its context was canceled
+	select {
+	case canceled := <-ctxCanceledDuringInvoke:
+		assert.True(t, canceled, "nested invoke context should be canceled by hook timeout")
+	case <-time.After(1 * time.Second):
+		assert.FailNow(t, "timeout waiting for inner workflow callback")
+	}
+}

@@ -47,9 +47,11 @@ type InvokeOutput interface {
 // caller after Invoke has returned (a real hazard, verified with the Go race detector).
 //
 // The engine parameter passed to the hook is scoped so that any Invoke calls from within the hook
-// are treated as nested and will not re-trigger hooks. WARNING: this recursion guard is
-// convention-based — hooks must use the provided engine parameter for invocations. A hook that
-// captures and calls the original *EngineImpl directly will bypass the guard.
+// are treated as nested and will not re-trigger hooks. Nested invocations are also bound by the
+// hook's timeout: if a nested Invoke is in progress when the timeout fires, its context will be
+// canceled. WARNING: this recursion guard is convention-based — hooks must use the provided
+// engine parameter for invocations. A hook that captures and calls the original *EngineImpl directly
+// will bypass the guard.
 type PostInvokeHook func(ctx context.Context, engine Engine, output InvokeOutput)
 
 // interfaces

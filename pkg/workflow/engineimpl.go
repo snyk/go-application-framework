@@ -438,7 +438,6 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 		output:     invokeOutput,
 		err:        invokeErr,
 	}
-	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
 
 	// Use per-invocation config if provided, otherwise fall back to engine-wide config
 	resolvedCfg := cfg
@@ -451,8 +450,11 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 		hookTimeout = 5 * time.Second
 	}
 
-	hookCtx, cancel := context.WithTimeout(ctx, hookTimeout)
+	boundedHookCtx, cancel := context.WithTimeout(ctx, hookTimeout)
 	defer cancel()
+
+	// Nested invocations made through hookEngine must be bound by the same timeout.
+	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: ic}
 
 	var wg sync.WaitGroup
 	var completedCount atomic.Int32
@@ -468,7 +470,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 					e.GetLogger().Error().Msgf("post-invoke hook panicked: %v\n%s", r, debug.Stack())
 				}
 			}()
-			hook(hookCtx, hookEngine, result)
+			hook(boundedHookCtx, hookEngine, result)
 		}()
 	}
 
@@ -480,7 +482,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 
 	select {
 	case <-done:
-	case <-hookCtx.Done():
+	case <-boundedHookCtx.Done():
 		stillRunning := len(hooks) - int(completedCount.Load())
 		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s (%d still running)", hookTimeout, stillRunning)
 	}
