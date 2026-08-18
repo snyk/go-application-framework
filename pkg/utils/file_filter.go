@@ -83,11 +83,11 @@ const (
 	metricVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
 	metricVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
 
-	metricFilterInputFileCount  = "filter.inputFileCount"  // files offered to GetFilteredFiles, before exclusion
-	metricFilterOutputFileCount = "filter.outputFileCount" // number of files that passed exclusion
-	metricFilterDurationMs      = "filter.durationMs"      // elapsed time for GetFilteredFiles, including the caller's drain of the result channel
+	metricFilterInputFileCount  = "filter.inputFileCount"  // sum, across all GetFilteredFiles calls for the variant, of files offered before exclusion
+	metricFilterOutputFileCount = "filter.outputFileCount" // sum, across all GetFilteredFiles calls for the variant, of files that passed exclusion
+	metricFilterDurationMs      = "filter.durationMs"      // sum, across all GetFilteredFiles calls for the variant, of elapsed time including the caller's drain of the result channel
 
-	metricRulesBuildDurationMs = "rules.durationMs" // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
+	metricRulesBuildDurationMs = "rules.durationMs" // sum, across all GetRules calls for the variant, of elapsed time for directory walk, ignore discovery, and buildGlobs
 
 	// Record feature flags alongside the variant so consumers need not decode its name.
 	metricFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
