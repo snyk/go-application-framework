@@ -409,7 +409,7 @@ func (e *EngineImpl) Invoke(
 	}
 
 	if !options.nested {
-		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic)
+		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic, options.config)
 	}
 
 	if callbackPanic != nil {
@@ -419,7 +419,7 @@ func (e *EngineImpl) Invoke(
 	return output, err
 }
 
-func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector) {
+func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector, cfg configuration.Configuration) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
 		e.mu.RUnlock()
@@ -436,7 +436,13 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
 
-	hookTimeout := e.config.GetDuration(configuration.POST_INVOKE_HOOK_TIMEOUT)
+	// Use per-invocation config if provided, otherwise fall back to engine-wide config
+	resolvedCfg := cfg
+	if resolvedCfg == nil {
+		resolvedCfg = e.config
+	}
+
+	hookTimeout := resolvedCfg.GetDuration(configuration.POST_INVOKE_HOOK_TIMEOUT)
 	if hookTimeout <= 0 {
 		hookTimeout = 5 * time.Second
 	}

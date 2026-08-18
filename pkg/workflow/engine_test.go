@@ -1029,3 +1029,91 @@ func Test_PostInvokeHook_TimeoutObservability(t *testing.T) {
 	assert.Contains(t, logOutput, "post-invoke hooks timed out", "log should contain timeout warning")
 	assert.Contains(t, logOutput, "(2 still running)", "log should contain the count of still-running hooks")
 }
+
+func Test_PostInvokeHook_PerInvocationTimeoutOverride(t *testing.T) {
+	// Create engine with a LONG timeout in engine-wide config
+	engineConfig := configuration.NewInMemory()
+	engineConfig.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 10*time.Second) // Very long
+	engine := NewWorkFlowEngine(engineConfig)
+
+	wfId := NewWorkflowIdentifier("per-invocation-timeout")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	// Track how long it takes for hook context to be canceled
+	hookDone := make(chan time.Duration, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) {
+		start := time.Now()
+		<-ctx.Done()
+		canceled := time.Since(start)
+		hookDone <- canceled
+		wg.Done()
+	})
+
+	assert.NoError(t, engine.Init())
+
+	// Invoke with a SHORT timeout override via WithConfig
+	invokeConfig := configuration.NewInMemory()
+	invokeConfig.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 50*time.Millisecond) // Very short override
+
+	start := time.Now()
+	_, err = engine.Invoke(wfId, WithConfig(invokeConfig))
+	totalElapsed := time.Since(start)
+	assert.NoError(t, err)
+
+	// Wait for hook to complete
+	wg.Wait()
+	hookCtxCanceledAfter := <-hookDone
+
+	// Verify the hook saw its context canceled quickly (respecting the short timeout)
+	// not after the long engine-wide timeout
+	assert.Greater(t, hookCtxCanceledAfter, 30*time.Millisecond, "hook context should be canceled")
+	assert.Less(t, hookCtxCanceledAfter, 200*time.Millisecond, "hook context should be canceled quickly, not wait for 10s engine-wide timeout")
+	assert.Less(t, totalElapsed, 1*time.Second, "total invocation should complete quickly, not wait for 10s timeout")
+}
+
+func Test_PostInvokeHook_EngineWideTimeoutWhenNoOverride(t *testing.T) {
+	// Create engine with a short timeout in engine-wide config
+	engineConfig := configuration.NewInMemory()
+	engineConfig.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 50*time.Millisecond)
+	engine := NewWorkFlowEngine(engineConfig)
+
+	wfId := NewWorkflowIdentifier("engine-wide-timeout")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	// Track how long it takes for hook context to be canceled
+	hookDone := make(chan time.Duration, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) {
+		start := time.Now()
+		<-ctx.Done()
+		canceled := time.Since(start)
+		hookDone <- canceled
+		wg.Done()
+	})
+
+	assert.NoError(t, engine.Init())
+
+	// Invoke WITHOUT WithConfig - should use engine-wide timeout
+	start := time.Now()
+	_, err = engine.Invoke(wfId)
+	totalElapsed := time.Since(start)
+	assert.NoError(t, err)
+
+	// Wait for hook to complete
+	wg.Wait()
+	hookCtxCanceledAfter := <-hookDone
+
+	// Verify the hook saw its context canceled with the engine-wide timeout
+	assert.Greater(t, hookCtxCanceledAfter, 30*time.Millisecond, "hook context should be canceled")
+	assert.Less(t, hookCtxCanceledAfter, 200*time.Millisecond, "hook context should be canceled with engine-wide timeout")
+	assert.Less(t, totalElapsed, 500*time.Millisecond, "total invocation should complete quickly")
+}
