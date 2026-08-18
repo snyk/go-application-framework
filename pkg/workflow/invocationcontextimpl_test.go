@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -77,7 +78,21 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 			"the option passed by the caller must win over the invocation's configuration")
 	})
 
-	// The FileFilter records into the invocation's Analytics, so the metrics have to show up in its instrumentation.
+	fileFilterMetrics := func(t *testing.T, invocationAnalytics analytics.Analytics) map[string]any {
+		t.Helper()
+
+		obj, err := analytics.GetV2InstrumentationObject(invocationAnalytics.GetInstrumentation())
+		require.NoError(t, err)
+
+		recorded := map[string]any{}
+		for key, value := range *obj.Data.Attributes.Interaction.Extension {
+			if strings.HasPrefix(key, "file-filter.") {
+				recorded[key] = value
+			}
+		}
+		return recorded
+	}
+
 	t.Run("reports filter metrics through the analytics of the invocation", func(t *testing.T) {
 		base, _ := setup(t)
 		invocationAnalytics := analytics.New()
@@ -87,43 +102,15 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 			Analytics:     invocationAnalytics,
 		}
 
-		fileFilter := ictx.GetFileFilter(base)
-		filteredFiles(t, fileFilter)
-
-		obj, err := analytics.GetV2InstrumentationObject(invocationAnalytics.GetInstrumentation())
-		require.NoError(t, err)
-
-		recorded := map[string][]string{}
-		for key := range *obj.Data.Attributes.Interaction.Extension {
-			// keys are scoped per filter run: file-filter.<scopeID>.<metric>
-			parts := strings.Split(key, ".")
-			if len(parts) == 3 && parts[0] == "file-filter" {
-				recorded[parts[1]] = append(recorded[parts[1]], parts[2])
-			}
-		}
-
-		// GetRules and GetFilteredFiles each report under a scope of their own; scope IDs are
-		// allocated inside the run, so the scopes are told apart by their duration metric.
-		require.Len(t, recorded, 2)
-		var rulesScope, filterScope []string
-		for _, metricNames := range recorded {
-			if slices.Contains(metricNames, "rulesBuildDurationMs") {
-				rulesScope = metricNames
-			} else {
-				filterScope = metricNames
-			}
-		}
+		filteredFiles(t, ictx.GetFileFilter(base))
 
 		assert.ElementsMatch(t, []string{
-			"rulesBuildDurationMs",
-			"metacharacterFix",
-			"respectTrackedFiles",
-		}, rulesScope)
-		assert.ElementsMatch(t, []string{
-			"durationMs",
-			"survivingFileCount",
-			"metacharacterFix",
-			"respectTrackedFiles",
-		}, filterScope)
+			"file-filter.var0.filter.inputFileCount",
+			"file-filter.var0.filter.durationMs",
+			"file-filter.var0.rules.durationMs",
+			"file-filter.var0.filter.outputFileCount",
+			"file-filter.var0.feature.metaCharFix",
+			"file-filter.var0.feature.includeTracked",
+		}, slices.Collect(maps.Keys(fileFilterMetrics(t, invocationAnalytics))))
 	})
 }
