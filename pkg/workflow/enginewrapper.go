@@ -43,7 +43,10 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 }
 
 // Invoke invokes the workflow with the given identifier.
+// Calls through the wrapper are marked as nested so post-invoke hooks are skipped.
 func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
+	opts = append([]EngineInvokeOption{withNested()}, opts...)
+
 	options := &engineRuntimeConfig{}
 	for _, opt := range opts {
 		opt(options)
