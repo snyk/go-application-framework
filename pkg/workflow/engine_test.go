@@ -1117,3 +1117,78 @@ func Test_PostInvokeHook_EngineWideTimeoutWhenNoOverride(t *testing.T) {
 	assert.Less(t, hookCtxCanceledAfter, 200*time.Millisecond, "hook context should be canceled with engine-wide timeout")
 	assert.Less(t, totalElapsed, 500*time.Millisecond, "total invocation should complete quickly")
 }
+
+func Test_PostInvokeHook_InitRetryDeduplication(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	wfId := NewWorkflowIdentifier("test-retry-hook")
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	hookCallCount := 0
+	engine.AddExtensionInitializer(func(e Engine) error {
+		return AddPostInvokeHook(e, func(ctx context.Context, eng Engine, output InvokeOutput) {
+			hookCallCount++
+		})
+	})
+
+	initCallCount := 0
+	engine.AddExtensionInitializer(func(e Engine) error {
+		initCallCount++
+		if initCallCount == 1 {
+			return fmt.Errorf("init failed on first attempt")
+		}
+		return nil
+	})
+
+	err = engine.Init()
+	assert.Error(t, err)
+	assert.Equal(t, 1, initCallCount)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, initCallCount)
+
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, hookCallCount, "hook should fire exactly once despite Init being retried")
+}
+
+func Test_PostInvokeHook_InitRetryPreservesPreInitHooks(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	wfId := NewWorkflowIdentifier("test-pre-init-hook")
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	preInitHookCalled := false
+	addPostInvokeHook(t, engine, func(ctx context.Context, eng Engine, output InvokeOutput) {
+		preInitHookCalled = true
+	})
+
+	initCallCount := 0
+	engine.AddExtensionInitializer(func(e Engine) error {
+		initCallCount++
+		if initCallCount == 1 {
+			return fmt.Errorf("init failed on first attempt")
+		}
+		return nil
+	})
+
+	err = engine.Init()
+	assert.Error(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	preInitHookCalled = false
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+
+	assert.True(t, preInitHookCalled, "hook registered before Init should still fire after failed and retried Init")
+}

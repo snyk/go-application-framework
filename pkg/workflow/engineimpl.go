@@ -194,6 +194,7 @@ func (e *EngineImpl) Init() error {
 
 	e.mu.Lock()
 	e.invocationCounter = 0
+	preInitHookCount := len(e.postInvokeHooks)
 	e.mu.Unlock()
 
 	_ = e.GetNetworkAccess()
@@ -201,6 +202,9 @@ func (e *EngineImpl) Init() error {
 	for i := range e.extensionInitializer {
 		err = e.extensionInitializer[i](e)
 		if err != nil {
+			e.mu.Lock()
+			e.postInvokeHooks = e.postInvokeHooks[:preInitHookCount]
+			e.mu.Unlock()
 			return err
 		}
 	}
