@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 )
@@ -19,7 +19,10 @@ const DIR_PERMISSION = 0755
 
 func GetTemporaryDirectory(baseCacheDirectory string, versionNumber string) string {
 	pid := os.Getpid()
-	return path.Join(baseCacheDirectory, versionNumber, "tmp", fmt.Sprintf("pid%d", pid))
+	// filepath.Join rather than path.Join so the result uses the platform
+	// separator. Callers that measure path length (Windows MAX_PATH) or compare
+	// paths cannot do so reliably against a mix of both separators.
+	return filepath.Join(baseCacheDirectory, versionNumber, "tmp", fmt.Sprintf("pid%d", pid))
 }
 
 func CreateAllDirectories(baseCacheDirectory string, versionNumber string) error {
@@ -32,6 +35,21 @@ func CreateAllDirectories(baseCacheDirectory string, versionNumber string) error
 		if err != nil {
 			return errors.Wrap(err, "failed to create all directories.")
 		}
+	}
+
+	return nil
+}
+
+// CreateDirectory creates the given directory, and any missing parent, without
+// deriving any additional path segments from it.
+//
+// Prefer this over CreateAllDirectories when the caller already holds the final
+// path: CreateAllDirectories treats its argument as a *base cache* directory and
+// appends <version>/tmp/pid<PID> to it, so passing an already-complete
+// temporary directory to it creates a redundant nested subtree.
+func CreateDirectory(directory string) error {
+	if err := os.MkdirAll(directory, DIR_PERMISSION); err != nil {
+		return errors.Wrapf(err, "failed to create directory %s", directory)
 	}
 
 	return nil
