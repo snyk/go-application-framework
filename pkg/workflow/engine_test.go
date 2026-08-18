@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/url"
@@ -886,11 +887,15 @@ func Test_PostInvokeHook_PanicNilObserved(t *testing.T) {
 }
 
 func Test_PostInvokeHook_Timeout(t *testing.T) {
-	original := postInvokeHookTimeout
-	postInvokeHookTimeout = 50 * time.Millisecond
-	defer func() { postInvokeHookTimeout = original }()
+	config := configuration.NewInMemory()
+	config.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 50*time.Millisecond)
+	engine := NewWorkFlowEngine(config)
 
-	engine, wfId := setupHookTestEngine(t, "timeout-test", nil)
+	wfId := NewWorkflowIdentifier("timeout-test")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
 
 	var secondHookDone sync.WaitGroup
 	secondHookDone.Add(1)
@@ -903,8 +908,124 @@ func Test_PostInvokeHook_Timeout(t *testing.T) {
 	assert.NoError(t, engine.Init())
 
 	start := time.Now()
-	_, err := engine.Invoke(wfId)
+	_, err = engine.Invoke(wfId)
 	secondHookDone.Wait()
 	assert.NoError(t, err)
 	assert.Less(t, time.Since(start), 2*time.Second, "invoke should not block on the hanging hook")
+}
+
+func Test_PostInvokeHook_ConcurrentAddAndInit(t *testing.T) {
+	const numAdders = 100
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+
+	wfId := NewWorkflowIdentifier("concurrent-test")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	var wg sync.WaitGroup
+	var barrier sync.WaitGroup
+	barrier.Add(numAdders + 1) // All adders plus Init
+
+	var countAfterInit int
+
+	// Goroutine that will call Init, snapshot hook count, then signal
+	wg.Add(1)
+	initDone := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		barrier.Wait() // Wait for all adders to be ready
+
+		assert.NoError(t, engine.Init())
+
+		// Snapshot the hook count immediately after Init returns
+		// Access the engine's internal postInvokeHooks slice under its mutex
+		engineImpl, ok := engine.(*EngineImpl)
+		assert.True(t, ok)
+		engineImpl.mu.RLock()
+		countAfterInit = len(engineImpl.postInvokeHooks)
+		engineImpl.mu.RUnlock()
+
+		close(initDone)
+	}()
+
+	// Multiple goroutines trying to add hooks concurrently with Init
+	for i := 0; i < numAdders; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			barrier.Done() // Signal ready
+			// Try to add a hook - this races with Init
+			//nolint:errcheck // expected: some will fail after Init, some will succeed
+			AddPostInvokeHook(engine, func(context.Context, Engine, InvokeOutput) {})
+		}()
+	}
+
+	barrier.Done() // Init goroutine is also ready
+	wg.Wait()
+
+	// Wait for Init to complete and countAfterInit to be set
+	<-initDone
+
+	// Now check the final hook count
+	engineImpl, ok := engine.(*EngineImpl)
+	assert.True(t, ok)
+	engineImpl.mu.RLock()
+	countFinal := len(engineImpl.postInvokeHooks)
+	engineImpl.mu.RUnlock()
+
+	// The critical invariant: once Init has returned, the hook slice must not grow
+	assert.Equal(t, countAfterInit, countFinal,
+		"hook slice must not grow after Init returns; snapshot=%d, final=%d", countAfterInit, countFinal)
+}
+
+func Test_PostInvokeHook_TimeoutObservability(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.POST_INVOKE_HOOK_TIMEOUT, 50*time.Millisecond)
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("timeout-observability")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(InvocationContext, []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	// Create a buffer to capture log output
+	var logBuffer bytes.Buffer
+	logger := zerolog.New(&logBuffer).With().Timestamp().Logger()
+	engine.SetLogger(&logger)
+
+	// Register hooks: 2 that will hang past timeout, 1 that completes immediately
+	hangingCtx := make(chan struct{})
+	defer close(hangingCtx)
+
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) {
+		<-ctx.Done()
+		<-hangingCtx // Wait for test cleanup
+	})
+
+	addPostInvokeHook(t, engine, func(ctx context.Context, _ Engine, _ InvokeOutput) {
+		<-ctx.Done()
+		<-hangingCtx // Wait for test cleanup
+	})
+
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) {
+		// This one returns immediately
+	})
+
+	assert.NoError(t, engine.Init())
+
+	start := time.Now()
+	_, err = engine.Invoke(wfId)
+	elapsed := time.Since(start)
+
+	assert.NoError(t, err)
+	// Should timeout and not block waiting for the hanging hooks
+	assert.Less(t, elapsed, 500*time.Millisecond, "invoke should not wait for all hooks to complete")
+
+	logOutput := logBuffer.String()
+	// Assert the log contains the warning about the timeout with the correct count of still-running hooks
+	assert.Contains(t, logOutput, "post-invoke hooks timed out", "log should contain timeout warning")
+	assert.Contains(t, logOutput, "(2 still running)", "log should contain the count of still-running hooks")
 }

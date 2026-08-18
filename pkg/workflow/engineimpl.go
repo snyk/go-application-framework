@@ -212,7 +212,9 @@ func (e *EngineImpl) Init() error {
 	}
 
 	if err == nil {
+		e.mu.Lock()
 		e.initialized.Store(true)
+		e.mu.Unlock()
 	}
 
 	return err
@@ -417,8 +419,6 @@ func (e *EngineImpl) Invoke(
 	return output, err
 }
 
-var postInvokeHookTimeout = 5 * time.Second
-
 func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
@@ -436,14 +436,23 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return ctx }, defaultInstrumentationCollector: ic}
 
-	hookCtx, cancel := context.WithTimeout(ctx, postInvokeHookTimeout)
+	hookTimeout := e.config.GetDuration(configuration.POST_INVOKE_HOOK_TIMEOUT)
+	if hookTimeout <= 0 {
+		hookTimeout = 5 * time.Second
+	}
+
+	hookCtx, cancel := context.WithTimeout(ctx, hookTimeout)
 	defer cancel()
 
 	var wg sync.WaitGroup
+	var completedCount atomic.Int32
 	for _, hook := range hooks {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer func() {
+				completedCount.Add(1)
+				wg.Done()
+			}()
 			defer func() {
 				if r := recover(); r != nil {
 					e.GetLogger().Error().Msgf("post-invoke hook panicked: %v\n%s", r, debug.Stack())
@@ -462,7 +471,8 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	select {
 	case <-done:
 	case <-hookCtx.Done():
-		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s", postInvokeHookTimeout)
+		stillRunning := len(hooks) - int(completedCount.Load())
+		e.GetLogger().Warn().Msgf("post-invoke hooks timed out after %s (%d still running)", hookTimeout, stillRunning)
 	}
 }
 
@@ -490,14 +500,14 @@ func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 // Hooks fire in registration order and are skipped for nested (sub-workflow) invocations.
 // Hooks must be registered before or during Init; calls after Init return an error.
 func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
-	if e.initialized.Load() {
-		return fmt.Errorf("AddPostInvokeHook called after Init")
-	}
 	if hook == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.initialized.Load() {
+		return fmt.Errorf("AddPostInvokeHook called after Init")
+	}
 	e.postInvokeHooks = append(e.postInvokeHooks, hook)
 	return nil
 }

@@ -36,9 +36,15 @@ type InvokeOutput interface {
 // (including when the workflow is not found). Nested invocations (sub-workflow calls within an
 // invocation chain) do not trigger hooks.
 //
-// All registered hooks run concurrently in separate goroutines with a shared timeout-bounded
-// context. Invoke returns once every hook completes or the timeout expires; timed-out hooks are
-// logged and their goroutines are left to drain.
+// All hooks run concurrently in separate goroutines under a shared timeout-bounded context.
+// Invoke returns once every hook completes or the timeout expires. If a hook exceeds the timeout
+// it is ABANDONED: Invoke returns and the hook keeps running in the background. The timeout
+// warning reports how many hooks were still running when it fired.
+//
+// The timeout is configurable via configuration.POST_INVOKE_HOOK_TIMEOUT and defaults to 5 seconds.
+// Hooks MUST honor ctx.Done() and return promptly when it fires. A hook MUST NOT write to
+// caller-owned state without its own synchronization, because a timed-out hook can race with the
+// caller after Invoke has returned (a real hazard, verified with the Go race detector).
 //
 // The engine parameter passed to the hook is scoped so that any Invoke calls from within the hook
 // are treated as nested and will not re-trigger hooks. WARNING: this recursion guard is
