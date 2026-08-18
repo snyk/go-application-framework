@@ -357,7 +357,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
 	defaultMap["getFindingTypesFromMultipleTestResults"] = getFindingTypesFromMultipleTestResults
-	defaultMap["getFirstMetadataValue"] = getFirstMetadataValue
 	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
 	}
@@ -603,19 +602,6 @@ func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []
 	slices.Sort(findingTypesList)
 	slices.Reverse(findingTypesList)
 	return findingTypesList
-}
-
-func getFirstMetadataValue(testResults []testapi.TestResult, key string) string {
-	for _, result := range testResults {
-		if result == nil {
-			continue
-		}
-		if value, ok := result.GetMetadataValue(key).(string); ok && value != "" {
-			return value
-		}
-	}
-
-	return ""
 }
 
 func getDefaultFindingTypesFromConfig(testResults testapi.TestResult) []testapi.FindingType {

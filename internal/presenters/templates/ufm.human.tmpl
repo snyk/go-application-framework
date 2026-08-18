@@ -349,7 +349,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- end }}
 
     {{- /* Render asset inventory link when available (sbom test --report) */ -}}
-    {{- with getFirstMetadataValue $.TestResults "asset" }}
+    {{- with $.AssetLink }}
         {{- if gt $totalResults 1 }}{{- "\n" }}{{- end }}
         {{- "\n" }}
         {{- printf "View your asset(s) at: %s" ( . | bold ) }}

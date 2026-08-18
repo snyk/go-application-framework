@@ -28,7 +28,7 @@ func getTotalNumberOfUnifiedFindings(results []testapi.TestResult) int {
 	return count
 }
 
-func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) error {
+func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, assetLink string, invocation workflow.InvocationContext) error {
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfUnifiedFindings(results) == 0 {
@@ -51,6 +51,7 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 		config,
 		wEntry.writer,
 		presenters.UfmWithRuntimeInfo(invocation.GetRuntimeInfo()),
+		presenters.UfmWithAssetLink(assetLink),
 	)
 
 	debugLogger.Info().Msgf("UFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
@@ -64,20 +65,43 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 	return nil
 }
 
-func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult, []workflow.Data) {
-	var results []testapi.TestResult
+func getTestsFromWorkflowData(input []workflow.Data) ([]ufm.Test, []workflow.Data) {
+	var tests []ufm.Test
 	remainingData := []workflow.Data{}
 
 	for _, data := range input {
-		tmp := ufm.GetTestResultsFromWorkflowData(data)
-		if tmp != nil {
-			results = append(results, tmp...)
+		test := ufm.GetTestFromWorkflowData(data)
+		if test != nil {
+			tests = append(tests, *test)
 			continue
 		}
 		remainingData = append(remainingData, data)
 	}
 
-	return results, remainingData
+	return tests, remainingData
+}
+
+// testResultsOf flattens the results of the given tests, for the rendering and counting that
+// works a result at a time.
+func testResultsOf(tests []ufm.Test) []testapi.TestResult {
+	var results []testapi.TestResult
+	for _, test := range tests {
+		results = append(results, test.Results...)
+	}
+	return results
+}
+
+// assetLinkOf returns the inventory link of the asset covered by the given tests.
+//
+// A test has at most one asset, and only a test of an SBOM reports one at all, so there is
+// never more than one link to show.
+func assetLinkOf(tests []ufm.Test) string {
+	for _, test := range tests {
+		if link := test.AssetLink(); link != "" {
+			return link
+		}
+	}
+	return ""
 }
 
 // HandleContentTypeUnifiedModel handles the unified model content type.
@@ -87,7 +111,9 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	config := invocation.GetConfiguration()
 
 	// Extract TestResults from workflow data
-	results, remainingData := getTestResultsFromWorkflowData(input)
+	tests, remainingData := getTestsFromWorkflowData(input)
+	results := testResultsOf(tests)
+	assetLink := assetLinkOf(tests)
 	if len(results) == 0 {
 		debugLogger.Info().Msg("UFM - No data to process")
 		return remainingData, nil
@@ -126,14 +152,14 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 			break
 		}
 
-		go func(name string, writer *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) {
+		go func(name string, writer *WriterEntry, results []testapi.TestResult, assetLink string, invocation workflow.InvocationContext) {
 			defer availableThreads.Release(1)
-			if renderErr := useRendererWithUnifiedModel(name, writer, results, invocation); renderErr != nil {
+			if renderErr := useRendererWithUnifiedModel(name, writer, results, assetLink, invocation); renderErr != nil {
 				errMu.Lock()
 				errs = append(errs, renderErr)
 				errMu.Unlock()
 			}
-		}(k, v, results, invocation)
+		}(k, v, results, assetLink, invocation)
 	}
 
 	// Wait for all goroutines to complete by acquiring all thread slots

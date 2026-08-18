@@ -9,19 +9,21 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// CreateWorkflowDataFromTestResults converts TestResults to JSON-serializable format,
+// CreateWorkflowDataFromTest converts a test and its results to JSON-serializable format,
 // serializes them to JSON bytes, and wraps them in workflow.Data.
-// This ensures the results can be safely persisted, cached, or transmitted.
-func CreateWorkflowDataFromTestResults(id workflow.Identifier, results []testapi.TestResult) workflow.Data {
+// This ensures the data can be safely persisted, cached, or transmitted.
+//
+// Metadata describes the test as a whole, such as the asset it covers.
+func CreateWorkflowDataFromTest(id workflow.Identifier, metadata map[string]interface{}, results []testapi.TestResult) workflow.Data {
 	if len(results) == 0 {
 		return nil
 	}
 
 	// Convert to serializable format to ensure data is truly JSON-serializable
 	ctx := context.Background()
-	serializableResults := make([]testapi.TestResult, 0, len(results))
+	serializableResults := make([]*jsonTestResult, 0, len(results))
 	for _, result := range results {
-		serializable, err := NewSerializableTestResult(ctx, result)
+		serializable, err := newSerializableTestResult(ctx, result)
 		if err != nil {
 			// If serialization fails, skip this result
 			// This could happen if findings fetch fails
@@ -35,7 +37,7 @@ func CreateWorkflowDataFromTestResults(id workflow.Identifier, results []testapi
 	}
 
 	// Serialize to JSON bytes
-	jsonBytes, err := json.Marshal(serializableResults)
+	jsonBytes, err := json.Marshal(jsonTest{Metadata: metadata, Results: serializableResults})
 	if err != nil {
 		return nil
 	}
@@ -44,30 +46,41 @@ func CreateWorkflowDataFromTestResults(id workflow.Identifier, results []testapi
 	return data
 }
 
-// GetTestResultsFromWorkflowData extracts and deserializes TestResults from workflow.Data.
-// The data is expected to be JSON bytes created by CreateWorkflowDataFromTestResults.
-func GetTestResultsFromWorkflowData(data workflow.Data) []testapi.TestResult {
+// CreateWorkflowDataFromTestResults wraps results as a test carrying no metadata of its own.
+//
+// Use CreateWorkflowDataFromTest where there are facts describing the test as a whole, such
+// as the asset it covers, rather than any one result.
+func CreateWorkflowDataFromTestResults(id workflow.Identifier, results []testapi.TestResult) workflow.Data {
+	return CreateWorkflowDataFromTest(id, nil, results)
+}
+
+// GetTestFromWorkflowData extracts and deserializes a test and its results from
+// workflow.Data. The data is expected to be JSON bytes created by
+// CreateWorkflowDataFromTest. It returns nil if data holds no test.
+func GetTestFromWorkflowData(data workflow.Data) *Test {
 	if data.GetContentType() != content_type.UFM_RESULT {
 		return nil
 	}
 
-	payload := data.GetPayload()
-
 	// Deserialize from JSON bytes
-	jsonBytes, ok := payload.([]byte)
+	jsonBytes, ok := data.GetPayload().([]byte)
 	if !ok {
 		return nil
 	}
 
-	var results []*jsonTestResult
-	if err := json.Unmarshal(jsonBytes, &results); err != nil {
+	test, err := NewSerializableTestFromBytes(jsonBytes)
+	if err != nil {
 		return nil
 	}
+	return test
+}
 
-	// Convert to []testapi.TestResult
-	testResults := make([]testapi.TestResult, len(results))
-	for i, r := range results {
-		testResults[i] = r
+// GetTestResultsFromWorkflowData extracts and deserializes the results of a test from
+// workflow.Data, discarding the metadata of the test itself.
+func GetTestResultsFromWorkflowData(data workflow.Data) []testapi.TestResult {
+	test := GetTestFromWorkflowData(data)
+	if test == nil {
+		return nil
 	}
-	return testResults
+	return test.Results
 }

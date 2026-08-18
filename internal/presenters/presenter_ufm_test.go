@@ -1300,7 +1300,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			testResultBytes, err := os.ReadFile(tc.testResultPath)
 			assert.NoError(t, err)
 
-			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			test, err := ufm.NewSerializableTestFromBytes(testResultBytes)
 			assert.NoError(t, err)
 
 			config := configuration.NewWithOpts()
@@ -1312,7 +1312,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 			writer := &bytes.Buffer{}
 
-			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			presenter := presenters.NewUfmRenderer(
+				test.Results,
+				config,
+				writer,
+				presenters.UfmWithRuntimeInfo(ri),
+				presenters.UfmWithAssetLink(test.AssetLink()),
+			)
 			err = presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType)
 			assert.NoError(t, err)
 

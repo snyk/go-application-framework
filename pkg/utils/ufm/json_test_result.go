@@ -205,6 +205,12 @@ func (j *jsonTestResult) Findings(ctx context.Context) (resultFindings []testapi
 // 2. Replacing problems in findings with references
 // The returned TestResult can be safely marshaled to JSON using json.Marshal.
 func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (testapi.TestResult, error) {
+	return newSerializableTestResult(ctx, tr)
+}
+
+// newSerializableTestResult is NewSerializableTestResult typed concretely, so that callers
+// which need to marshal the result as part of a larger document can do so.
+func newSerializableTestResult(ctx context.Context, tr testapi.TestResult) (*jsonTestResult, error) {
 	if tr == nil {
 		return nil, fmt.Errorf("testResult cannot be nil")
 	}
@@ -335,18 +341,12 @@ func BuildOptimizedFormat(findings []testapi.FindingData) (map[string]json.RawMe
 }
 
 func NewSerializableTestResultFromBytes(jsonBytes []byte) ([]testapi.TestResult, error) {
-	var tmp []jsonTestResult
-	err := json.Unmarshal(jsonBytes, &tmp)
+	test, err := NewSerializableTestFromBytes(jsonBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal test result: %w", err)
+		return nil, err
 	}
 
-	testResults := make([]testapi.TestResult, len(tmp))
-	for i := range tmp {
-		testResults[i] = &tmp[i]
-	}
-
-	return testResults, nil
+	return test.Results, nil
 }
 
 // ReconstructFindings rebuilds full findings from problemStore and problemRefs.

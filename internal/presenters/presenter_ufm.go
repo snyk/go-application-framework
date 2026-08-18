@@ -17,6 +17,7 @@ import (
 type UfmPresenter struct {
 	TestPath         string
 	Input            []testapi.TestResult
+	assetLink        string
 	config           configuration.Configuration
 	writer           io.Writer
 	runtimeinfo      runtimeinfo.RuntimeInfo
@@ -44,6 +45,14 @@ type UfmPresenterOptions func(presentation *UfmPresenter)
 func UfmWithRuntimeInfo(ri runtimeinfo.RuntimeInfo) UfmPresenterOptions {
 	return func(p *UfmPresenter) {
 		p.runtimeinfo = ri
+	}
+}
+
+// UfmWithAssetLink sets the inventory link of the asset covered by the test being rendered.
+// A test has at most one asset, so there is never more than one link to show.
+func UfmWithAssetLink(link string) UfmPresenterOptions {
+	return func(p *UfmPresenter) {
+		p.assetLink = link
 	}
 }
 
@@ -159,15 +168,22 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 		writer = NewJsonWriter(writer, p.config.GetBool(CONFIG_JSON_STRIP_WHITESPACES))
 	}
 
-	err = mainTmpl.Execute(writer, struct {
-		TestResults []testapi.TestResult
-	}{
-		TestResults: p.Input,
-	})
+	err = mainTmpl.Execute(writer, p.templateData())
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// templateData is the value templates are rendered against.
+func (p *UfmPresenter) templateData() interface{} {
+	return struct {
+		TestResults []testapi.TestResult
+		AssetLink   string
+	}{
+		TestResults: p.Input,
+		AssetLink:   p.assetLink,
+	}
 }
 
 // renderHTMLTemplate is the html/template counterpart of RenderTemplate
@@ -187,11 +203,7 @@ func (p *UfmPresenter) renderHTMLTemplate(templateFiles []string, mimeType strin
 		return fmt.Errorf("the template must contain a 'main'")
 	}
 
-	return mainTmpl.Execute(p.writer, struct {
-		TestResults []testapi.TestResult
-	}{
-		TestResults: p.Input,
-	})
+	return mainTmpl.Execute(p.writer, p.templateData())
 }
 
 func (p *UfmPresenter) getHTMLImplementationFromMimeType(mimeType string) (*htmlTemplate.Template, error) {
