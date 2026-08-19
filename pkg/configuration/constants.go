@@ -67,6 +67,8 @@ const (
 	PREVIEW_FEATURES_ENABLED string = "internal_preview_features_enabled" // PREVIEW_FEATURES_ENABLED (boolean) indicates if preview features shall be enabled, this can be used to limit features to the preview version only
 	FLAG_INCLUDE_IGNORES     string = "include-ignores"                   // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
 	FLAG_SEVERITY_THRESHOLD  string = "severity-threshold"                // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
+	FLAG_CHANGED_LINES_FILE  string = "changed-lines-file"                // FLAG_CHANGED_LINES_FILE (string) path to JSON file describing changed line ranges for delta filtering
+	FLAG_CHANGED_LINES       string = "changed-lines"                     // FLAG_CHANGED_LINES (string) inline JSON string describing changed line ranges for delta filtering
 	FLAG_REMOTE_REPO_URL     string = "remote-repo-url"                   // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
 	INPUT_DIRECTORY          string = "targetDirectory"                   // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
 	CUSTOM_CONFIG_FILES      string = "internal_custom_config_files"
