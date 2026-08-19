@@ -1264,6 +1264,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			severityThreshold: "",
 		},
 		{
+			name:              "multi_project_with_asset",
+			expectedPath:      "testdata/ufm/multi_project.with-asset.human.readable",
+			testResultPath:    "testdata/ufm/multi_project.with-asset.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
 			name:              "secrets_duplicated_rules",
 			expectedPath:      "testdata/ufm/secrets.duplicated-sarif-rules.human.readable",
 			testResultPath:    "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
