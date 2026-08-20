@@ -77,6 +77,9 @@ type RetryMiddleware struct {
 	config           configuration.Configuration
 	logger           *zerolog.Logger
 	errorHandler     networktypes.ErrorHandlerFunc
+	// retryInterval overrides the configured backoff for this instance only.
+	// nil keeps the configured value.
+	retryInterval *time.Duration
 }
 
 // noCloseSeekBody wraps an io.ReadSeeker so that Close is suppressed during
@@ -135,6 +138,16 @@ type RetryMiddlewareOption func(*RetryMiddleware)
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
 	return func(rm *RetryMiddleware) {
 		rm.errorHandler = handler
+	}
+}
+
+// WithRetryInterval sets the initial backoff between attempts for this middleware
+// instance, overriding the configured value. Use it for callers on a tighter time
+// budget than a user-facing API request, such as work done during teardown.
+// Server-suggested Retry-After delays are not affected by this override.
+func WithRetryInterval(interval time.Duration) RetryMiddlewareOption {
+	return func(rm *RetryMiddleware) {
+		rm.retryInterval = &interval
 	}
 }
 
@@ -307,8 +320,13 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		return response, nil
 	}
 
+	retryInterval := time.Duration(retryAfterSeconds) * time.Second
+	if rm.retryInterval != nil {
+		retryInterval = *rm.retryInterval
+	}
+
 	backoffMethod := backoff.NewExponentialBackOff()
-	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
+	backoffMethod.InitialInterval = retryInterval
 	reqCtx := req.Context()
 	finalResponse, finalError = backoff.Retry(reqCtx, op,
 		backoff.WithBackOff(backoffMethod),
