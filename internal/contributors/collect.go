@@ -16,6 +16,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 
 	"github.com/snyk/go-application-framework/internal/apiclients/contributors_ingest"
@@ -40,7 +41,9 @@ const contributorWindowDays = 90
 // are sorted by email so payloads are stable.
 //
 // A path that is not a git repository, or a repository with no commits, yields no
-// contributors and no error, because we proceed with a contributor count of 0.
+// contributors and no error, because we proceed with a contributor count of 0. A
+// shallow repository yields the contributors of the history it holds, which
+// undercounts the repository as a whole.
 func collectContributors(ctx context.Context, path string, now time.Time) ([]contributors_ingest.Contributor, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -57,10 +60,15 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 		_ = closeRepo() //nolint:errcheck // nothing to do on close failure
 	}()
 
+	shallow, err := repo.Storer.Shallow()
+	if err != nil {
+		return nil, fmt.Errorf("read shallow commits: %w", err)
+	}
 	roots, err := walkRoots(repo)
 	if err != nil {
 		return nil, err
 	}
+	unreachable := parentsOfShallow(repo.Storer, shallow)
 
 	since := now.AddDate(0, 0, -contributorWindowDays)
 	seen := make(map[plumbing.Hash]bool)
@@ -71,7 +79,7 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 			continue // ignore roots that don't resolve to a commit
 		}
 
-		err = object.NewCommitIterCTime(tip, seen, nil).ForEach(func(commit *object.Commit) error {
+		err = object.NewCommitIterCTime(tip, seen, unreachable).ForEach(func(commit *object.Commit) error {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
@@ -129,6 +137,18 @@ func walkRoots(repo *git.Repository) ([]plumbing.Hash, error) {
 // which a shallow clone did not download. The commit walker loads every parent
 // before yielding a commit and fails on the first one that is absent, so these
 // have to be excluded up front for a shallow repository to be readable at all.
+func parentsOfShallow(store storage.Storer, shallow []plumbing.Hash) []plumbing.Hash {
+	var parents []plumbing.Hash
+	for _, hash := range shallow {
+		commit, err := object.GetCommit(store, hash)
+		if err != nil {
+			continue // a boundary commit we cannot read has no parents to exclude
+		}
+		parents = append(parents, commit.ParentHashes...)
+	}
+	return parents
+}
+
 func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *object.Commit, since, now time.Time) {
 	email := strings.ToLower(strings.TrimSpace(commit.Author.Email))
 	when := commit.Author.When

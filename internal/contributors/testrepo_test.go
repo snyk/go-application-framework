@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -121,6 +122,17 @@ func (r *testRepo) deleteBranch(name string) *testRepo {
 // shallowClone returns a clone truncated to the last depth commits, as a CI job
 // cloning with --depth gets. The clone goes over file:// because git ignores
 // --depth when cloning a plain local path.
+
+func (r *testRepo) shallowClone(depth int) *testRepo {
+	r.t.Helper()
+
+	clone := &testRepo{t: r.t, dir: filepath.Join(r.t.TempDir(), "clone"), home: r.home}
+	r.git("clone", "--depth", strconv.Itoa(depth), "file://"+r.dir, clone.dir)
+	return clone
+}
+
+// worktree returns a linked worktree on a new branch, which keeps its objects
+// and refs in this repository rather than its own git directory.
 
 func (r *testRepo) addCommit(seq int, c commit) {
 	r.t.Helper()

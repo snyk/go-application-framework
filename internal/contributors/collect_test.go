@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -175,6 +176,46 @@ func TestCollectContributors_IncludesCommitsReachableOnlyFromDetachedHead(t *tes
 		emails(contributors),
 		"a detached checkout with no branch pointing at it must still be counted",
 	)
+}
+
+func TestCollectContributors_ReadsShallowCloneToItsDepth(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	source := newTestRepo(t,
+		commit{email: "alice@example.com", when: now.AddDate(0, 0, -3)},
+		commit{email: "bob@example.com", when: now.AddDate(0, 0, -2)},
+		commit{email: "carol@example.com", when: now.AddDate(0, 0, -1)},
+	)
+
+	tests := map[int][]string{
+		1: {"carol@example.com"},
+		2: {"bob@example.com", "carol@example.com"},
+		3: {"alice@example.com", "bob@example.com", "carol@example.com"},
+	}
+
+	for depth, want := range tests {
+		t.Run("depth "+strconv.Itoa(depth), func(t *testing.T) {
+			clone := source.shallowClone(depth)
+
+			contributors, err := collectContributors(t.Context(), clone.path(), now)
+			require.NoError(t, err, "a truncated history must be readable, not a failure")
+			assert.Equal(t, want, emails(contributors), "only the commits a shallow clone holds can be counted")
+		})
+	}
+}
+
+func TestCollectContributors_ReadsShallowDetachedClone(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	// How CI systems commonly check a repository out.
+	repo := newTestRepo(t,
+		commit{email: "alice@example.com", when: now.AddDate(0, 0, -2)},
+		commit{email: "carol@example.com", when: now.AddDate(0, 0, -1)},
+	).shallowClone(1).detach().deleteBranch(testBranch)
+
+	contributors, err := collectContributors(t.Context(), repo.path(), now)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"carol@example.com"}, emails(contributors))
 }
 
 func TestCollectContributors_ReturnsErrorForCancelledContext(t *testing.T) {
