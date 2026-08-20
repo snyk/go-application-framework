@@ -291,10 +291,40 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 			return value, nil
 		}
 
-		if conf.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+		if utils.NetworkRetriesEnabled(conf) {
 			return multipleAttempts, nil
 		}
 		return singleAttempt, nil
+	}
+	return callback
+}
+
+// GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
+// single unsplit entry, so it must be normalized into a []string first. The
+// framework ships oauth2/token for auth-token-refresh retries; applications can
+// declare additional service-specific paths via config or environment variable.
+func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		paths := []string{"oauth2/token"}
+
+		if raw, ok := existingValue.(string); ok {
+			for _, part := range strings.Split(raw, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					paths = append(paths, trimmed)
+				}
+			}
+		} else if strSlice, ok := existingValue.([]string); ok {
+			paths = append(paths, strSlice...)
+		} else if ifaceSlice, ok := existingValue.([]interface{}); ok {
+			// Handle JSON-loaded arrays which come as []interface{}
+			for _, v := range ifaceSlice {
+				if str, ok := v.(string); ok && str != "" {
+					paths = append(paths, str)
+				}
+			}
+		}
+
+		return paths, nil
 	}
 	return callback
 }
@@ -379,6 +409,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
+	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{

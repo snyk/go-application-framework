@@ -59,10 +59,11 @@ func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
 // interpretations (e.g. a parser quirk that hides a smuggled component) fails
 // closed rather than trusting either one alone.
 func IsValidSnykHost(conf configuration.Configuration, input string) (bool, error) {
-	// GetStringSlice does not split a plain string value on commas: an env
-	// var override of CONFIG_KEY_ALLOWED_HOSTS yields a single-element slice
-	// containing the whole value. See the CONFIG_KEY_ALLOWED_HOSTS doc
-	// comment for the single-domain-only env var caveat.
+	// GetStringSlice itself never splits on commas; however, individual config
+	// keys may apply comma-splitting via their DefaultValueFunction before
+	// GetStringSlice runs (e.g. NETWORK_REQUEST_RETRY_ALLOWED_PATHS does).
+	// CONFIG_KEY_ALLOWED_HOSTS has no such DefaultValueFunction, so an env var
+	// override yields a single-element slice containing the whole value.
 	allowedDomains := conf.GetStringSlice(CONFIG_KEY_ALLOWED_HOSTS)
 	if len(allowedDomains) == 0 {
 		return false, nil

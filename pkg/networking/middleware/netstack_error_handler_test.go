@@ -611,6 +611,11 @@ func Test_categorizeNetworkError_FirewallAndProxy(t *testing.T) {
 		assertCode(t, middleware.categorizeNetworkError(e, req), connectionReset)
 	})
 
+	t.Run("windows WSAECONNRESET numeric errno - connection reset", func(t *testing.T) {
+		opErr := &net.OpError{Op: "read", Net: "tcp", Err: syscall.Errno(10054)}
+		assertCode(t, middleware.categorizeNetworkError(opErr, req), connectionReset)
+	})
+
 	t.Run("unexpected EOF mid-handshake - connection reset", func(t *testing.T) {
 		assertCode(t, middleware.categorizeNetworkError(wrapURL(io.ErrUnexpectedEOF), req), connectionReset)
 	})

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,12 +10,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +30,7 @@ import (
 	zlog "github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
 
@@ -32,9 +42,110 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+func newSequencedStatusServer(t *testing.T, statusSequence []int) (*httptest.Server, *int32) {
+	t.Helper()
+	var count int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		idx := int(atomic.AddInt32(&count, 1)) - 1
+		status := statusSequence[len(statusSequence)-1]
+		if idx < len(statusSequence) {
+			status = statusSequence[idx]
+		}
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+	return server, &count
+}
+
+type resettingServerLog struct {
+	mu     sync.Mutex
+	bodies [][]byte
+}
+
+func (l *resettingServerLog) add(body []byte) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.bodies = append(l.bodies, body)
+}
+
+func (l *resettingServerLog) Bodies() [][]byte {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([][]byte, len(l.bodies))
+	copy(out, l.bodies)
+	return out
+}
+
+// Reads each connection to completion so the reset is deterministically read-side, not a write race.
+func newResettingServer(t *testing.T, resetsBeforeSuccess int) (baseURL string, connCount *int32, log *resettingServerLog) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	var count int32
+	log = &resettingServerLog{}
+
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			idx := int(atomic.AddInt32(&count, 1))
+			go serveResettingConnection(conn, idx, resetsBeforeSuccess, log)
+		}
+	}()
+	t.Cleanup(func() { _ = listener.Close() })
+
+	return "http://" + listener.Addr().String(), &count, log
+}
+
+func serveResettingConnection(conn net.Conn, idx int, resetsBeforeSuccess int, log *resettingServerLog) {
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+	contentLength := 0
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		trimmed := strings.TrimRight(line, "\r\n")
+		if trimmed == "" {
+			break
+		}
+		if name, value, found := strings.Cut(trimmed, ":"); found && strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+			parsed, convErr := strconv.Atoi(strings.TrimSpace(value))
+			if convErr == nil {
+				contentLength = parsed
+			}
+		}
+	}
+
+	body := make([]byte, contentLength)
+	if contentLength > 0 {
+		if _, err := io.ReadFull(reader, body); err != nil {
+			return
+		}
+	}
+	log.add(body)
+
+	if idx <= resetsBeforeSuccess {
+		// SetLinger(0) makes the following Close() emit a real RST instead of a graceful FIN.
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetLinger(0) //nolint:errcheck // best-effort RST simulation on a test-only raw socket
+		}
+		return
+	}
+
+	_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")) //nolint:errcheck // best-effort write on a test-only raw socket
+}
 
 func createOAuthTokenWithAudience(t *testing.T, audience string) string {
 	t.Helper()
@@ -1063,6 +1174,7 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 		name           string
 		existingValue  interface{}
 		previewEnabled bool
+		retriesEnabled *bool // nil = key absent
 		expected       int
 	}{
 		{
@@ -1107,12 +1219,99 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			previewEnabled: false,
 			expected:       1,
 		},
+		{
+			name:           "nil, not preview, opt-in absent, return 1",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: nil,
+			expected:       1,
+		},
+		{
+			name:           "nil, not preview, opt-in true, return 3",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "nil, not preview, opt-in false, return 1",
+			existingValue:  nil,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(false),
+			expected:       1,
+		},
+		{
+			name:           "nil, preview, opt-in true, return 3",
+			existingValue:  nil,
+			previewEnabled: true,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=5, not preview, opt-in true, return 5",
+			existingValue:  5,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       5,
+		},
+		{
+			name:           "existing value=5, preview, opt-in true, return 5",
+			existingValue:  5,
+			previewEnabled: true,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       5,
+		},
+		{
+			name:           "existing value=1, not preview, opt-in true, return 1",
+			existingValue:  1,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       1,
+		},
+		{
+			name:           "existing value=-1, not preview, opt-in true, return 3",
+			existingValue:  -1,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=0, not preview, opt-in true, return 3",
+			existingValue:  0,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=-1 string, not preview, opt-in true, return 3",
+			existingValue:  "-1",
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=MaxInt64, not preview, opt-in true, return 3",
+			existingValue:  math.MaxInt64,
+			previewEnabled: false,
+			retriesEnabled: pkg_utils.Ptr(true),
+			expected:       3,
+		},
+		{
+			name:           "existing value=\"3\" string, not preview, opt-in absent, return 3",
+			existingValue:  "3",
+			previewEnabled: false,
+			retriesEnabled: nil,
+			expected:       3,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.PREVIEW_FEATURES_ENABLED, tt.previewEnabled)
+			if tt.retriesEnabled != nil {
+				config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, *tt.retriesEnabled)
+			}
 			defaultFunction := defaultMaxNetworkRequestAttempts()
 
 			result, err := defaultFunction(config, tt.existingValue)
@@ -1121,6 +1320,566 @@ func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func Test_defaultNetworkRequestRetryAllowedPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		existingValue interface{}
+		expected      interface{}
+	}{
+		{"nil yields framework default", nil, []string{"oauth2/token"}},
+		{"csv string splits and merges with defaults", "a,b", []string{"oauth2/token", "a", "b"}},
+		{"csv string trims whitespace and merges", "a, b", []string{"oauth2/token", "a", "b"}},
+		{"empty string yields just framework default", "", []string{"oauth2/token"}},
+		{"non-empty slice merges with default", []string{"x"}, []string{"oauth2/token", "x"}},
+		{"empty slice yields framework default", []string{}, []string{"oauth2/token"}},
+	}
+
+	config := configuration.NewWithOpts()
+	defaultFunction := defaultNetworkRequestRetryAllowedPaths()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := defaultFunction(config, tt.existingValue)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_TransientFailureRecovers(t *testing.T) {
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			resp, err := client.Get(server.URL)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_NotOptedIn_SingleAttempt(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+func Test_NetworkRetryOptIn_ExplicitAttemptCountWins(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+func Test_NetworkRetryOptIn_NonRetryableResponseNotRetried(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusNotFound})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+}
+
+func Test_NetworkRetryOptIn_GivesUpAfterPolicyLimit(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable})
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, int32(3), atomic.LoadInt32(requestCount))
+}
+
+// Bare configuration.NewWithOpts() doesn't enable env var lookups at all.
+func newCLIStyleConfig() configuration.Configuration {
+	return configuration.NewWithOpts(
+		configuration.WithSupportedEnvVars("NODE_EXTRA_CA_CERTS"),
+		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_", "test_"),
+		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
+	)
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsFromEnvVar(t *testing.T) {
+	tests := []struct {
+		name   string
+		envVar string
+		path   string
+	}{
+		{"multi-entry list, first entry", "my-endpoint,other/endpoint", "/v1/my-endpoint"},
+		{"multi-entry list, second entry", "my-endpoint,other/endpoint", "/v1/other/endpoint"},
+		{"whitespace trimmed", "my-endpoint, other/endpoint", "/v1/other/endpoint"},
+		{"single entry", "my-endpoint", "/v1/my-endpoint"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := newCLIStyleConfig()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+			t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", tt.envVar)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+tt.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_NoPathsDeclared_UnsafeRequestNotRetried(t *testing.T) {
+	for _, path := range []string{"/v1/test-dep-graph", "/v1/verify/token", "/v1/feature_flags/evaluation", "/v1/monitor/npm"} {
+		t.Run(path, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := newCLIStyleConfig()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+			assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_DeclaredPathRetried_NearMissNot(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantRetried bool
+	}{
+		{"declared endpoint is replayed", "/v1/my-endpoint", http.StatusOK, true},
+		{"near-miss endpoint is not replayed", "/v1/my-endpoint-other", http.StatusServiceUnavailable, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := newCLIStyleConfig()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"my-endpoint"})
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+tt.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			if tt.wantRetried {
+				assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+			} else {
+				assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+			}
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_AllowedPathsFromPersistedJSONConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		configJSON  string
+		path        string
+		wantStatus  int
+		wantRetried bool
+	}{
+		{
+			"custom-retryable path is retried",
+			fmt.Sprintf(`{%q: ["custom-retryable"]}`, configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS),
+			"/v1/custom-retryable",
+			http.StatusOK,
+			true,
+		},
+		{
+			"empty path entry allows nothing",
+			fmt.Sprintf(`{%q: [""]}`, configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS),
+			"/v1/monitor/npm",
+			http.StatusServiceUnavailable,
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakehome := t.TempDir()
+			t.Setenv("HOME", fakehome)
+			t.Setenv("USERPROFILE", fakehome)
+
+			configFile, err := configuration.CreateConfigurationFile("gaf-retry-test.json")
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(configFile, []byte(tt.configJSON), 0600))
+
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := configuration.NewWithOpts(
+				configuration.WithFiles("gaf-retry-test"),
+				configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+				configuration.WithCachingEnabled(configuration.NoCacheExpiration),
+			)
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+tt.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			if tt.wantRetried {
+				assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+			} else {
+				assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+			}
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_OAuth2TokenRetriedByDefault(t *testing.T) {
+	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+	config := newCLIStyleConfig()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/oauth2/token", bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+}
+
+func Test_initConfiguration_RetryAllowedPaths(t *testing.T) {
+	t.Run("framework contributes oauth2/token by default", func(t *testing.T) {
+		config := newCLIStyleConfig()
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
+		assert.Equal(t, []string{"oauth2/token"}, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
+	})
+
+	t.Run("comma-separated setting merges with framework defaults", func(t *testing.T) {
+		config := newCLIStyleConfig()
+		t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "a, b")
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
+		assert.Equal(t, []string{"oauth2/token", "a", "b"}, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
+	})
+}
+
+func Test_initConfiguration_NetworkRetryOptIn_YieldsResilientAttempts(t *testing.T) {
+	tests := []struct {
+		name  string
+		value interface{}
+	}{
+		{"bool value", true},
+		{"string value", "true"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, tt.value)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			assert.NotNil(t, engine)
+
+			assert.Equal(t, 3, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+		})
+	}
+}
+
+func Test_initConfiguration_NetworkRetryOptIn_DefaultUnchangedWhenAbsent(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	assert.Equal(t, 1, config.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+func Test_initConfiguration_NetworkRetryOptIn_SurvivesConfigClone(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
+	cloned := config.Clone()
+
+	assert.Equal(t, 3, cloned.GetInt(middleware.ConfigurationKeyRequestAttempts))
+}
+
+func Test_TransportRetry_OptIn_ConnectionResetRecovers(t *testing.T) {
+	tests := []struct {
+		name       string
+		enableFlag string
+	}{
+		{"via NETWORK_REQUEST_RETRIES_ENABLED", configuration.NETWORK_REQUEST_RETRIES_ENABLED},
+		{"via PREVIEW_FEATURES_ENABLED alone", configuration.PREVIEW_FEATURES_ENABLED},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseURL, connCount, _ := newResettingServer(t, 1)
+
+			config := configuration.NewWithOpts()
+			config.Set(tt.enableFlag, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			resp, err := client.Get(baseURL)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+		})
+	}
+}
+
+func Test_TransportRetry_OptIn_RetriedRequestSentInFull(t *testing.T) {
+	expectedBody := []byte(`{"hello":"world"}`)
+	baseURL, _, log := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"my-endpoint"})
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/my-endpoint", bytes.NewReader(expectedBody))
+	require.NoError(t, err)
+	req.Header.Set("Idempotency-Key", "test-key")
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	bodies := log.Bodies()
+	require.NotEmpty(t, bodies)
+	for i, body := range bodies {
+		assert.Equal(t, expectedBody, body, "attempt %d", i+1)
+	}
+}
+
+func Test_TransportRetry_OptIn_PostRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"my-endpoint"})
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Post(baseURL+"/v1/my-endpoint", "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(connCount), int32(2))
+}
+
+func Test_TransportRetry_OptIn_UndeclaredPathNotRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"my-endpoint"})
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Post(baseURL+"/v1/other/npm", "application/json", bytes.NewReader([]byte(`{"a":1}`))) //nolint:noctx // test-only request
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_NotOptedIn_ConnectionResetFailsImmediately(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_ExplicitAttemptCountOnly_ConnectionResetNotRetried(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 2)
+
+	config := configuration.NewWithOpts()
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_OptIn_NeverRecovers_GivesUpAfterPolicyLimit(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, math.MaxInt32) // reset on every connection
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+
+	var retryAttemptErr *middleware.RetryAttemptError
+	assert.False(t, errors.As(err, &retryAttemptErr), "exhaustion must surface the original transport error, not a RetryAttemptError")
+	assert.Equal(t, int32(3), atomic.LoadInt32(connCount))
+}
+
+func Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff(t *testing.T) {
+	baseURL, connCount, _ := newResettingServer(t, 1)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+	config.Set(middleware.ConfigurationKeyRequestAttempts, 1)
+	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+	resp, err := client.Get(baseURL)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
 }
 
 func Test_WithPostInvokeHooks(t *testing.T) {
