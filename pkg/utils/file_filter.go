@@ -32,8 +32,6 @@ const (
 // by default, all rules are valid
 var defaultInvalidRules = []string{}
 
-var nextFileFilterMetricScopeID atomic.Uint64
-
 const gitIgnoreGlobPrefix = "#gitignore:"
 
 type FileFilter struct {
@@ -43,7 +41,7 @@ type FileFilter struct {
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
-	metricsRecorder metrics.Recorder
+	metrics         *metrics.Accumulator
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -74,15 +72,26 @@ type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
+// File-filter metric keys have the shape "file-filter.<variant>.<metric>", except for
+// metricVariantBothFixes, the target end state once both feature flags are always on,
+// whose keys drop the variant segment: "file-filter.<metric>".
 const (
-	metricFileFilterPrefix = "file-filter" // prefix for all file-filter analytics keys
+	metricPrefix = "file-filter" // prefix for all file-filter analytics keys
 
-	metricFileFilterDurationMs            = "durationMs"            // elapsed time for GetFilteredFiles: exclusion-predicate build (incl. git index read) and filtering, including caller drain of the result channel
-	metricFileFilterSurvivingFileCount    = "survivingFileCount"    // number of files that passed exclusion in this filter run
-	metricFileFilterRulesBuildDurationMs  = "rulesBuildDurationMs"  // elapsed time for GetRules: directory walk, ignore discovery, and buildGlobs
-	metricFileFilterMetacharacterFix      = "metacharacterFix"      // whether FF_FILE_FILTER_METACHARACTER_FIX was enabled for this run
-	metricFileFilterRespectTrackedFiles   = "respectTrackedFiles"   // whether FF_GITIGNORE_RESPECT_TRACKED_FILES was enabled for this run
-	metricFileFilterTrackedFilesKeptCount = "trackedFilesKeptCount" // tracked files kept despite a matching .gitignore rule
+	metricVariantLegacy       = "var0" // neither feature flag enabled
+	metriVariantMetacharFix   = "var1" // FF_FILE_FILTER_METACHARACTER_FIX only
+	metricVariantTrackedFiles = "var2" // FF_GITIGNORE_RESPECT_TRACKED_FILES only
+	metricVariantBothFixes    = ""     // both feature flags enabled; the variant segment is omitted
+
+	metricFilterInputFileCount  = "filter.inputFileCount"  // sum, across all GetFilteredFiles calls for the variant, of files offered before exclusion
+	metricFilterOutputFileCount = "filter.outputFileCount" // sum, across all GetFilteredFiles calls for the variant, of files that passed exclusion
+	metricFilterDurationMs      = "filter.durationMs"      // sum, across all GetFilteredFiles calls for the variant, of elapsed time including the caller's drain of the result channel
+
+	metricRulesBuildDurationMs = "rules.durationMs" // sum, across all GetRules calls for the variant, of elapsed time for directory walk, ignore discovery, and buildGlobs
+
+	// Record feature flags alongside the variant so consumers need not decode its name.
+	metricFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
+	metricFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -123,35 +132,59 @@ func WithConfig(config configuration.Configuration) FileFilterOption {
 	}
 }
 
-// WithMetrics supplies a recorder for file-filter analytics values.
-// Callers must pass a pkg/analytics.Analytics implementation here; it satisfies this interface.
+// WithMetrics supplies a recorder for aggregated file-filter analytics.
 func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	return func(filter *FileFilter) error {
-		filter.metricsRecorder = recorder
+		filter.metrics = metrics.NewAccumulator(recorder)
 		return nil
 	}
 }
 
-func (fw *FileFilter) recordMetricLazy(scopeID, key string, getMetric func() int) {
-	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionIntegerValue(metricKey(scopeID, key), getMetric())
+// Avoid resolving flags, which may require network access, when metrics are disabled.
+func (fw *FileFilter) metricVariant() string {
+	if !fw.metrics.IsRecording() {
+		return ""
+	}
+
+	metacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+	respectTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+
+	var variant string
+	switch {
+	case metacharacterFix && respectTrackedFiles:
+		variant = metricVariantBothFixes
+	case metacharacterFix:
+		variant = metriVariantMetacharFix
+	case respectTrackedFiles:
+		variant = metricVariantTrackedFiles
+	default:
+		variant = metricVariantLegacy
+	}
+
+	fw.recordBool(variant, metricFeatureMetacharFix, func() bool { return metacharacterFix })
+	fw.recordBool(variant, metricFeatureTrackedFiles, func() bool { return respectTrackedFiles })
+
+	return variant
+}
+
+// Avoid computing metrics when no recorder is configured.
+func (fw *FileFilter) recordBool(variant, key string, getMetric func() bool) {
+	if fw.metrics.IsRecording() {
+		fw.metrics.RecordBool(buildMetricKey(variant, key), getMetric())
 	}
 }
 
-func (fw *FileFilter) recordBoolMetricLazy(scopeID, key string, getMetric func() bool) {
-	if fw.metricsRecorder != nil {
-		fw.metricsRecorder.AddExtensionBoolValue(metricKey(scopeID, key), getMetric())
+func (fw *FileFilter) recordSumLazy(variant, key string, getMetric func() int) {
+	if fw.metrics.IsRecording() {
+		fw.metrics.AddToSum(buildMetricKey(variant, key), getMetric())
 	}
 }
 
-// metricKey namespaces a metric under the scope of the filter run that recorded it, so that
-// repeated runs do not overwrite each other in a recorder that keeps only the last value per key.
-func metricKey(scopeID, key string) string {
-	return fmt.Sprintf("%s.%s.%s", metricFileFilterPrefix, scopeID, key)
-}
-
-func newFileFilterMetricScopeID() string {
-	return fmt.Sprintf("%d", nextFileFilterMetricScopeID.Add(1))
+func buildMetricKey(variant, key string) string {
+	if variant == metricVariantBothFixes {
+		return fmt.Sprintf("%s.%s", metricPrefix, key)
+	}
+	return fmt.Sprintf("%s.%s.%s", metricPrefix, variant, key)
 }
 
 // NewFileFilter creates a FileFilter rooted at path. Without WithConfig, feature flags default to disabled (legacy).
@@ -162,6 +195,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
+		metrics:         metrics.NewAccumulator(nil),
 	}
 
 	options = append([]FileFilterOption{WithConfig(nil)}, options...)
@@ -208,19 +242,10 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	// Both feature flags change how rules are built (see buildGlobs), so the rules scope reports
-	// them alongside the build duration rather than relying on a GetFilteredFiles run that may
-	// never happen or may read a different flag value.
-	scopeID := newFileFilterMetricScopeID()
+	variant := fw.metricVariant()
 	start := time.Now()
-	defer fw.recordMetricLazy(scopeID, metricFileFilterRulesBuildDurationMs, func() int {
+	defer fw.recordSumLazy(variant, metricRulesBuildDurationMs, func() int {
 		return int(time.Since(start).Milliseconds())
-	})
-	fw.recordBoolMetricLazy(scopeID, metricFileFilterMetacharacterFix, func() bool {
-		return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
-	})
-	fw.recordBoolMetricLazy(scopeID, metricFileFilterRespectTrackedFiles, func() bool {
-		return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
 	})
 
 	files := fw.GetAllFiles()
@@ -242,31 +267,30 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append(fw.defaultRules, globs...), nil
+	rules := append(fw.defaultRules, globs...)
+
+	return rules, nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
-	// Each run reports under its own scope, so that concurrent or repeated runs of this FileFilter
-	// neither race on shared state nor overwrite each other's values in the recorder.
-	runScopeID := newFileFilterMetricScopeID()
-
 	var filteredFilesCh = make(chan string)
 
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
+		variant := fw.metricVariant()
 		start := time.Now()
 		var resolvedFileCount atomic.Int64
+		candidateFileCount := 0
 
 		defer close(filteredFilesCh)
 
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
 		// opens the repository and reads the git index, so it is timed alongside the filtering.
 		var isFileExcluded func(string) bool
-		var trackedFilesKeptCount atomic.Int64
 		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-			isFileExcluded = fw.trackedFileExclusionPredicate(globs, &trackedFilesKeptCount)
+			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
 		} else {
 			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 			isFileExcluded = func(filePath string) bool {
@@ -276,6 +300,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 		// iterate the filesToFilter channel
 		for file := range filesCh {
+			candidateFileCount++
 			err := availableThreads.Acquire(ctx, 1)
 			if err != nil {
 				fw.logger.Err(err).Msg("failed to limit threads")
@@ -296,21 +321,14 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 
-		fw.recordBoolMetricLazy(runScopeID, metricFileFilterMetacharacterFix, func() bool {
-			return fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+		// Record metrics
+		fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
+			return candidateFileCount
 		})
-		fw.recordBoolMetricLazy(runScopeID, metricFileFilterRespectTrackedFiles, func() bool {
-			return fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
-		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterDurationMs, func() int {
-			return int(time.Since(start).Milliseconds())
-		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterSurvivingFileCount, func() int {
+		fw.recordSumLazy(variant, metricFilterOutputFileCount, func() int {
 			return int(resolvedFileCount.Load())
 		})
-		fw.recordMetricLazy(runScopeID, metricFileFilterTrackedFilesKeptCount, func() int {
-			return int(trackedFilesKeptCount.Load())
-		})
+		fw.recordSumLazy(variant, metricFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
 	}()
 
 	return filteredFilesCh
@@ -355,14 +373,14 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 // .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
 // exempted from the .gitignore rule and not excluded by any other rule (e.g. a .snyk or
 // .dcignore rule).
-func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *atomic.Int64) func(string) bool {
-	gitignoreGlobs := make([]string, 0)
+func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
 	allGlobs := make([]string, 0, len(globs))
+	hasGitignoreGlobs := false
 
 	for _, glob := range globs {
 		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
-			gitignoreGlobs = append(gitignoreGlobs, gitignoreGlob)
 			allGlobs = append(allGlobs, gitignoreGlob)
+			hasGitignoreGlobs = true
 			continue
 		}
 
@@ -376,7 +394,9 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
 	}
 
-	gitignoreMatcher := gitignore.CompileIgnoreLines(gitignoreGlobs...)
+	if !hasGitignoreGlobs {
+		return defaultPredicate
+	}
 
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
 		DetectDotGit: true,
@@ -404,13 +424,9 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 		return defaultPredicate
 	}
 
-	trackedFilesToPreserve := make(map[string]bool)
-
+	trackedFiles := make(map[string]bool, len(gitIndex.Entries))
 	for _, entry := range gitIndex.Entries {
-		relativePath := filepath.ToSlash(filepath.Join(repoRoot, filepath.FromSlash(entry.Name)))
-		if gitignoreMatcher.MatchesPath(relativePath) {
-			trackedFilesToPreserve[entry.Name] = true
-		}
+		trackedFiles[entry.Name] = true
 	}
 
 	return func(file string) bool {
@@ -420,12 +436,8 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string, keptCount *a
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if trackedFilesToPreserve[filepath.ToSlash(relativePath)] {
-			excluded := otherMatcher.MatchesPath(normalizedPath)
-			if !excluded {
-				keptCount.Add(1)
-			}
-			return excluded
+		if trackedFiles[filepath.ToSlash(relativePath)] {
+			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
 		return allMatcher.MatchesPath(normalizedPath)

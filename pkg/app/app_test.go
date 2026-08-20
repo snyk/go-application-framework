@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -1878,4 +1880,29 @@ func Test_TransportRetry_OptIn_ExplicitSingleAttemptForcesOff(t *testing.T) {
 	}
 	require.Error(t, err)
 	assert.Equal(t, int32(1), atomic.LoadInt32(connCount))
+}
+
+func Test_WithPostInvokeHooks(t *testing.T) {
+	hookCalled := false
+	hook := func(ctx context.Context, eng workflow.Engine, output workflow.InvokeOutput) {
+		hookCalled = true
+	}
+
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewInMemory()),
+		WithPostInvokeHooks(hook),
+	)
+
+	wfId := workflow.NewWorkflowIdentifier("hook-app-test")
+	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+	assert.True(t, hookCalled, "hook registered via WithPostInvokeHooks should fire")
 }

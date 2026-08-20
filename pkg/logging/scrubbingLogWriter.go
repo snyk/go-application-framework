@@ -127,12 +127,21 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
+// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log
+// output, in addition to the token/OAuth-derived terms GetScrubDictFromConfig
+// already adds. Lives here rather than pkg/configuration since this package is
+// its only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
+const REDACTION_TERMS string = "internal_redaction_terms"
+
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
+	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
+		addStaticTermToDict(term, dict)
+	}
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
 		return dict
@@ -314,6 +323,11 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	w.m.RLock()
 	defer w.m.RUnlock()
 	return internalWrite(w.scrubDict, p, w.writer.Write)
+}
+
+// Scrub applies scrubDict's redaction rules to data, the same logic used internally by ScrubbingLogWriter.
+func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
+	return scrub(data, scrubDict)
 }
 
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {

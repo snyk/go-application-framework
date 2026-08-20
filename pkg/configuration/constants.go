@@ -96,4 +96,10 @@ const (
 	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 	// Feature flag to enable native implementation for code, used in code-client-go's code workflow
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
+
+	// ---------
+	// workflow execution configuration
+	// ---------
+
+	POST_INVOKE_HOOK_TIMEOUT string = "internal_post_invoke_hook_timeout" // POST_INVOKE_HOOK_TIMEOUT (time.Duration) sets/returns the timeout for post-invoke hooks to complete
 )

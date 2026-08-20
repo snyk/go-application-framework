@@ -49,6 +49,33 @@ Before changing anything under `pkg/`, ask:
 
 ---
 
+## This repository is public
+
+GAF's source, full git history, issues, and PRs are **publicly visible on
+GitHub**, regardless of the fact that contributions currently come from Snyk
+employees only (see [CONTRIBUTING.md](CONTRIBUTING.md)). Anything you commit
+is exposed externally forever, even if a later commit reverts it.
+
+**Never include, in code, comments, docs, commit messages, or PR
+descriptions:**
+
+- Names, URLs, or code copied/paraphrased from Snyk-internal or other private
+  repositories.
+- Internal hostnames, service names, API endpoints, or architecture details
+  not already public.
+- Contents of internal tickets, Slack threads, or wiki/Confluence pages beyond
+  the bare `[XXX-XXXX]` ticket ID token already used in commit messages.
+- Customer, partner, or employee names not relevant to an external
+  contributor.
+- Credentials, tokens, or other secrets (even test/dummy-looking ones pulled
+  from an internal fixture).
+
+If a task's context comes from an internal source, **restate the requirement
+in your own words** for anything that lands in this repo — do not paste or
+closely mirror the source material.
+
+---
+
 ## Documentation map
 
 | Read this | When |
@@ -132,12 +159,18 @@ Tests live **next to their source files** (`foo.go` → `foo_test.go`).
   (stage anything the tools changed).
 - **Security:** run `snyk code test <absolute-project-path>` after code edits
   and `snyk test <absolute-project-path>` after `go.mod` changes. Fix fixable
-  findings (not in test data).
+  findings (not in test data). Before pushing, also re-read your diff
+  specifically for internal-only repo names, hostnames, ticket contents, or
+  other non-public references (see
+  [This repository is public](#this-repository-is-public)) — Snyk Code and
+  secrets scanning will not catch these.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/)
   (`type: summary`); subject under 72 chars + descriptive body; append
-  `[XXX-XXXX]` from the branch name. Each commit must stand on its own without
-  breaking the release pipeline. Never force-push; always confirm with the user
-  before pushing.
+  `[XXX-XXXX]` from the branch name — the bare ID only; do not paste the
+  internal ticket's title or description verbatim, as it may contain
+  internal-only context. Each commit must stand on its own without breaking
+  the release pipeline. Never force-push; always confirm with the user before
+  pushing.
 
 ---
 

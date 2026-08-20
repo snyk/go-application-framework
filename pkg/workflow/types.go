@@ -23,6 +23,37 @@ type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
 
+// InvokeOutput provides read access to the result of a top-level Invoke call.
+// Hooks fire globally for every top-level Invoke, so GetError may return an error originating
+// from any registered workflow — not necessarily one the hook "owns."
+type InvokeOutput interface {
+	GetWorkflowIdentifier() Identifier
+	GetOutput() []Data
+	GetError() error
+}
+
+// PostInvokeHook is called once per top-level Invoke call, after the workflow callback returns
+// (including when the workflow is not found). Nested invocations (sub-workflow calls within an
+// invocation chain) do not trigger hooks.
+//
+// All hooks run concurrently in separate goroutines under a shared timeout-bounded context.
+// Invoke returns once every hook completes or the timeout expires. If a hook exceeds the timeout
+// it is ABANDONED: Invoke returns and the hook keeps running in the background. The timeout
+// warning reports how many hooks were still running when it fired.
+//
+// The timeout is configurable via configuration.POST_INVOKE_HOOK_TIMEOUT and defaults to 5 seconds.
+// Hooks MUST honor ctx.Done() and return promptly when it fires. A hook MUST NOT write to
+// caller-owned state without its own synchronization, because a timed-out hook can race with the
+// caller after Invoke has returned (a real hazard, verified with the Go race detector).
+//
+// The engine parameter passed to the hook is scoped so that any Invoke calls from within the hook
+// are treated as nested and will not re-trigger hooks. Nested invocations are also bound by the
+// hook's timeout: if a nested Invoke is in progress when the timeout fires, its context will be
+// canceled. WARNING: this recursion guard is convention-based — hooks must use the provided
+// engine parameter for invocations. A hook that captures and calls the original *EngineImpl directly
+// will bypass the guard.
+type PostInvokeHook func(ctx context.Context, engine Engine, output InvokeOutput)
+
 // interfaces
 
 // Data is an interface that wraps the methods that are used to manage data that is passed between workflows.
@@ -113,4 +144,10 @@ type Engine interface {
 	SetUserInterface(ui ui.UserInterface)
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
 	SetRuntimeInfo(ri runtimeinfo.RuntimeInfo)
+}
+
+// PostInvokeHookRegistrar is implemented by engines that support post-invoke hooks.
+// Use the package-level AddPostInvokeHook helper instead of type-asserting manually.
+type PostInvokeHookRegistrar interface {
+	AddPostInvokeHook(hook PostInvokeHook) error
 }
