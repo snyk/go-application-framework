@@ -44,32 +44,17 @@ func isSafeMethod(method string) bool {
 
 // Contiguous-segment matching avoids near-misses: an entry "foo" must not match /v1/foo-something.
 // A blank entry would otherwise match the empty leading segment of every absolute path.
+// Entries are normalized: leading and trailing slashes are trimmed, and whitespace is stripped.
 func isAllowedPath(path string, allowed []string) bool {
-	segments := strings.Split(path, "/")
 	for _, entry := range allowed {
-		if strings.TrimSpace(entry) == "" {
+		// Trim whitespace and leading/trailing slashes from the entry.
+		trimmed := strings.Trim(strings.TrimSpace(entry), "/")
+		if trimmed == "" {
 			continue
 		}
-		if containsContiguous(segments, strings.Split(entry, "/")) {
-			return true
-		}
-	}
-	return false
-}
-
-func containsContiguous(segments, entry []string) bool {
-	if len(entry) == 0 || len(entry) > len(segments) {
-		return false
-	}
-	for start := 0; start+len(entry) <= len(segments); start++ {
-		match := true
-		for i, part := range entry {
-			if segments[start+i] != part {
-				match = false
-				break
-			}
-		}
-		if match {
+		// Slash-padded containment check: "/"+path+"/" contains "/"+trimmed+"/".
+		// This ensures contiguous-segment matching without near-misses.
+		if strings.Contains("/"+path+"/", "/"+trimmed+"/") {
 			return true
 		}
 	}

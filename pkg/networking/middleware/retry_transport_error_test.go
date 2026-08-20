@@ -177,3 +177,25 @@ func Test_isRetryableRequest_ExplicitEmptyAllowlistOnlyAllowsSafeMethods(t *test
 	require.NoError(t, err)
 	assert.True(t, isRetryableRequest(getReq, config), "safe methods retry regardless of the allow-list")
 }
+
+func Test_isAllowedPath_LeadingSlashNormalized(t *testing.T) {
+	// Entries with leading slashes are trimmed and match the same paths as entries without leading slashes.
+	// This is the normalized behavior: "/declared" and "declared" are equivalent.
+	tests := []struct {
+		name    string
+		path    string
+		allowed []string
+		want    bool
+	}{
+		{"bare segment matches anywhere in path", "/v1/declared", []string{"declared"}, true},
+		{"leading slash entry matches same paths as bare entry", "/v1/declared", []string{"/declared"}, true},
+		{"leading slash entry matches multi-segment paths", "/v1/declared/nested", []string{"/declared/nested"}, true},
+		{"leading slash entry still avoids near-misses", "/v1/declared-something", []string{"/declared"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isAllowedPath(tt.path, tt.allowed))
+		})
+	}
+}
