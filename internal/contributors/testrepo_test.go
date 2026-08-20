@@ -111,7 +111,6 @@ func (r *testRepo) detach() *testRepo {
 
 // deleteBranch removes a local branch, leaving its commits reachable only from
 // whatever else still points at them.
-
 func (r *testRepo) deleteBranch(name string) *testRepo {
 	r.t.Helper()
 
@@ -122,7 +121,6 @@ func (r *testRepo) deleteBranch(name string) *testRepo {
 // shallowClone returns a clone truncated to the last depth commits, as a CI job
 // cloning with --depth gets. The clone goes over file:// because git ignores
 // --depth when cloning a plain local path.
-
 func (r *testRepo) shallowClone(depth int) *testRepo {
 	r.t.Helper()
 
@@ -133,6 +131,33 @@ func (r *testRepo) shallowClone(depth int) *testRepo {
 
 // worktree returns a linked worktree on a new branch, which keeps its objects
 // and refs in this repository rather than its own git directory.
+func (r *testRepo) worktree() *testRepo {
+	r.t.Helper()
+
+	return r.addWorktree()
+}
+
+// detachedWorktree returns a linked worktree with a detached HEAD.
+func (r *testRepo) detachedWorktree() *testRepo {
+	r.t.Helper()
+
+	return r.addWorktree("--detach")
+}
+
+// remove deletes the repository from disk, e.g. to orphan a worktree of it.
+func (r *testRepo) remove() {
+	r.t.Helper()
+
+	require.NoError(r.t, os.RemoveAll(r.dir))
+}
+
+func (r *testRepo) addWorktree(args ...string) *testRepo {
+	r.t.Helper()
+
+	worktree := &testRepo{t: r.t, dir: filepath.Join(r.t.TempDir(), "worktree"), home: r.home}
+	r.git(append(append([]string{"worktree", "add"}, args...), worktree.dir)...)
+	return worktree
+}
 
 func (r *testRepo) addCommit(seq int, c commit) {
 	r.t.Helper()

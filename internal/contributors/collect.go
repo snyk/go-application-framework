@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage"
 	"github.com/go-git/go-git/v5/storage/filesystem"
+	"github.com/go-git/go-git/v5/storage/filesystem/dotgit"
 
 	"github.com/snyk/go-application-framework/internal/apiclients/contributors_ingest"
 )
@@ -167,7 +170,10 @@ func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *obj
 // git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true}) does,
 // but reopens the result on go-git's BoundOS filesystem with a kept-open packfile
 // descriptor to avoid reopening the packfile for every object read.
-
+//
+// A linked worktree, whose own git directory holds neither objects nor refs, is
+// read through the common directory of the repository it belongs to.
+//
 // Callers must call the returned close func once done with the repository.
 func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 	noopClose := func() error { return nil }
@@ -194,8 +200,7 @@ func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 		wtFs = osfs.New(wt.Filesystem.Root(), osfs.WithBoundOS())
 	}
 
-	fs := osfs.New(gitDir, osfs.WithBoundOS())
-	st := filesystem.NewStorageWithOptions(fs, cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
+	st := filesystem.NewStorageWithOptions(repositoryFilesystem(gitDir), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
 
 	fast, err := git.Open(st, wtFs)
 	if err != nil {
@@ -203,4 +208,43 @@ func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 		return repo, noopClose, nil //nolint:nilerr // use the slow repo if our fast open fails
 	}
 	return fast, st.Close, nil
+}
+
+// repositoryFilesystem returns the filesystem holding the objects and refs of
+// the git directory at gitDir.
+//
+// go-git resolves a linked worktree's common directory itself, but leaks the
+// open commondir file when it does, which on Windows leaves the scanned
+// repository locked. So the directories are wired up here instead.
+func repositoryFilesystem(gitDir string) billy.Filesystem {
+	commonDir := commonDirOf(gitDir)
+	if commonDir == "" {
+		return osfs.New(gitDir, osfs.WithBoundOS())
+	}
+
+	// Chroot filesystems rather than bound ones: the packfile reader reopens a
+	// pack by the name its file reports, and only a chroot reports the relative
+	// name that routing between these two directories needs.
+	return dotgit.NewRepositoryFilesystem(osfs.New(gitDir), osfs.New(commonDir))
+}
+
+// commonDirOf returns the git directory holding the objects and refs of the
+// linked worktree at gitDir, or empty if it is not a linked worktree.
+func commonDirOf(gitDir string) string {
+	content, err := os.ReadFile(filepath.Join(gitDir, "commondir")) //nolint:gosec // path derived from the repository we just opened
+	if err != nil {
+		return ""
+	}
+
+	commonDir := strings.TrimSpace(string(content))
+	if commonDir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(gitDir, commonDir)
+	}
+	if _, err := os.Stat(commonDir); err != nil {
+		return ""
+	}
+	return commonDir
 }

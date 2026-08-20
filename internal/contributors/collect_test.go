@@ -218,6 +218,58 @@ func TestCollectContributors_ReadsShallowDetachedClone(t *testing.T) {
 	assert.Equal(t, []string{"carol@example.com"}, emails(contributors))
 }
 
+func TestCollectContributors_IncludesCommitsFromLinkedWorktree(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := map[string]func(*testRepo) *testRepo{
+		"on a branch":        (*testRepo).worktree,
+		"with detached head": (*testRepo).detachedWorktree,
+	}
+
+	for name, addWorktree := range tests {
+		t.Run(name, func(t *testing.T) {
+			source := newTestRepo(t,
+				commit{email: "alice@example.com", when: now.AddDate(0, 0, -2)},
+				commit{email: "carol@example.com", when: now.AddDate(0, 0, -1)},
+			)
+
+			contributors, err := collectContributors(t.Context(), addWorktree(source).path(), now)
+			require.NoError(t, err)
+			assert.Equal(t,
+				[]string{"alice@example.com", "carol@example.com"},
+				emails(contributors),
+				"a worktree keeps its objects in the main repository, which must still be read",
+			)
+		})
+	}
+}
+
+func TestCollectContributors_LeavesTheWorktreeItReadDeletable(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	source := newTestRepo(t, commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)})
+	worktree := source.worktree()
+
+	_, err := collectContributors(t.Context(), worktree.path(), now)
+	require.NoError(t, err)
+
+	// Windows refuses to delete a file that is still open, so a handle left on
+	// the worktree's commondir surfaces here.
+	source.remove()
+}
+
+func TestCollectContributors_ReturnsNothingForWorktreeWithoutItsRepository(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	source := newTestRepo(t, commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)})
+	worktree := source.worktree()
+	source.remove()
+
+	contributors, err := collectContributors(t.Context(), worktree.path(), now)
+	require.NoError(t, err, "an unusable repository is a contributor count of 0, not an error")
+	assert.Empty(t, contributors)
+}
+
 func TestCollectContributors_ReturnsErrorForCancelledContext(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	repo := newTestRepo(t, commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)})
