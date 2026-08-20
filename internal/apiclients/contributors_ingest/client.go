@@ -153,8 +153,8 @@ func retrying(base *http.Client, logger *zerolog.Logger) *http.Client {
 		logger = &nop
 	}
 
-	// The retry middleware reads only these two keys, so the policy is owned here
-	// rather than by whatever configuration the caller happens to hold.
+	// The retry middleware reads only this key, so the value is set here
+	// rather than at the callsite of the requests.
 	config := configuration.NewWithOpts()
 	config.Set(middleware.ConfigurationKeyRequestAttempts, requestAttempts)
 

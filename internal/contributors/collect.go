@@ -70,7 +70,7 @@ func collectContributors(path string, now time.Time) ([]contributors_ingest.Cont
 
 		tip, commitErr := object.GetCommit(repo.Storer, ref.Hash())
 		if commitErr != nil {
-			return nil //nolint:nilerr // ingore refs that don't resolve to a commit
+			return nil //nolint:nilerr // ignore refs that don't resolve to a commit
 		}
 
 		return object.NewCommitIterCTime(tip, seen, nil).ForEach(func(commit *object.Commit) error {
@@ -131,7 +131,7 @@ func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 	case errors.Is(err, git.ErrIsBareRepository):
 		// no worktree
 	case err != nil:
-		return repo, noopClose, nil //nolint:nilerr // worktree is invalid, assume no worktree
+		return repo, noopClose, nil //nolint:nilerr // err always git.ErrIsBareRepository at time of writing, but fallback
 	default:
 		wtFs = osfs.New(wt.Filesystem.Root(), osfs.WithBoundOS())
 	}

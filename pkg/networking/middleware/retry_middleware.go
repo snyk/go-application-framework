@@ -112,6 +112,7 @@ func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOpti
 // WithRetryInterval sets the initial backoff between attempts for this middleware
 // instance, overriding the configured value. Use it for callers on a tighter time
 // budget than a user-facing API request, such as work done during teardown.
+// Server-suggested Retry-After delays are not affected by this override.
 func WithRetryInterval(interval time.Duration) RetryMiddlewareOption {
 	return func(rm *RetryMiddleware) {
 		rm.retryInterval = &interval
