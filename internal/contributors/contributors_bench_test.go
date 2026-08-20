@@ -23,7 +23,7 @@ func BenchmarkCollectContributors(b *testing.B) {
 	now := time.Now()
 
 	for b.Loop() {
-		if _, err := collectContributors(path, now); err != nil {
+		if _, err := collectContributors(b.Context(), path, now); err != nil {
 			b.Fatal(err)
 		}
 	}

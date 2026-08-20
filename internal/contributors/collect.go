@@ -1,6 +1,7 @@
 package contributors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -40,7 +41,11 @@ const contributorWindowDays = 90
 //
 // A path that is not a git repository, or a repository with no commits, yields no
 // contributors and no error, because we proceed with a contributor count of 0.
-func collectContributors(path string, now time.Time) ([]contributors_ingest.Contributor, error) {
+func collectContributors(ctx context.Context, path string, now time.Time) ([]contributors_ingest.Contributor, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	repo, closeRepo, err := openRepositoryFast(path)
 	if errors.Is(err, git.ErrRepositoryNotExists) {
 		return nil, nil
@@ -74,23 +79,17 @@ func collectContributors(path string, now time.Time) ([]contributors_ingest.Cont
 		}
 
 		return object.NewCommitIterCTime(tip, seen, nil).ForEach(func(commit *object.Commit) error {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+
 			seen[commit.Hash] = true
 
 			if commit.Committer.When.Before(since) {
 				return storer.ErrStop
 			}
 
-			email := strings.ToLower(strings.TrimSpace(commit.Author.Email))
-			when := commit.Author.When
-
-			if email == "" || when.Before(since) || when.After(now) {
-				return nil
-			}
-
-			if existing, ok := latest[email]; ok && !when.After(existing.CommitDate) {
-				return nil
-			}
-			latest[email] = contributors_ingest.Contributor{Email: email, CommitDate: when}
+			recordAuthor(latest, commit, since, now)
 			return nil
 		})
 	})
@@ -103,6 +102,20 @@ func collectContributors(path string, now time.Time) ([]contributors_ingest.Cont
 		return strings.Compare(a.Email, b.Email)
 	})
 	return contributors, nil
+}
+
+func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *object.Commit, since, now time.Time) {
+	email := strings.ToLower(strings.TrimSpace(commit.Author.Email))
+	when := commit.Author.When
+
+	if email == "" || when.Before(since) || when.After(now) {
+		return
+	}
+
+	if existing, ok := latest[email]; ok && !when.After(existing.CommitDate) {
+		return
+	}
+	latest[email] = contributors_ingest.Contributor{Email: email, CommitDate: when}
 }
 
 // openRepositoryFast opens the git repository at path the same way

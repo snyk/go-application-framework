@@ -144,6 +144,21 @@ func TestEmit_ReturnsIngestFailure(t *testing.T) {
 	assert.ErrorIs(t, err, wantErr)
 }
 
+func TestEmit_SkipsIngestWhenContextIsCancelled(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	repo := newTestRepo(t, commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)})
+
+	ingest := &fakeIngest{}
+	emitter := newTestEmitter(t, ingest, now)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := emitter.Emit(ctx, repo, testOrgID, validItem())
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Zero(t, ingest.calls, "a canceled emit must not POST")
+}
+
 var testOrgID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
 // fakeIngest records what Emit asked it to send.

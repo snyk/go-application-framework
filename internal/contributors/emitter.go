@@ -85,7 +85,7 @@ func (e *Emitter) Emit(ctx context.Context, repoPath string, orgID uuid.UUID, it
 		return err
 	}
 
-	contributors, err := collectContributors(repoPath, e.now())
+	contributors, err := collectContributors(ctx, repoPath, e.now())
 	if err != nil {
 		return fmt.Errorf("collect contributors: %w", err)
 	}
