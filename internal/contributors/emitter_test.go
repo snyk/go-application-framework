@@ -61,7 +61,7 @@ func TestEmit_SendsCollectedContributors(t *testing.T) {
 	ingest := &fakeIngest{}
 	emitter := newTestEmitter(t, ingest, now)
 
-	err := emitter.Emit(t.Context(), repo, testOrgID, Item{
+	err := emitter.Emit(t.Context(), repo.path(), testOrgID, Item{
 		EntityType: contributors_ingest.EntityTypeProject,
 		EntityID:   "22222222-2222-2222-2222-222222222222",
 	})
@@ -80,7 +80,7 @@ func TestEmit_SkipsIngestWhenThereAreNoContributors(t *testing.T) {
 		"repository with no commits in window": newTestRepo(t, commit{
 			email: "old@example.com",
 			when:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
-		}),
+		}).path(),
 	}
 
 	for name, repo := range tests {
@@ -125,7 +125,7 @@ func TestEmit_RejectsInvalidInput(t *testing.T) {
 			ingest := &fakeIngest{}
 			emitter := newTestEmitter(t, ingest, now)
 
-			assert.Error(t, emitter.Emit(t.Context(), repo, tc.orgID, tc.item))
+			assert.Error(t, emitter.Emit(t.Context(), repo.path(), tc.orgID, tc.item))
 			assert.Zero(t, ingest.calls, "invalid input must be caught before any git or network work")
 		})
 	}
@@ -139,7 +139,7 @@ func TestEmit_ReturnsIngestFailure(t *testing.T) {
 	ingest := &fakeIngest{err: wantErr}
 	emitter := newTestEmitter(t, ingest, now)
 
-	err := emitter.Emit(t.Context(), repo, testOrgID, validItem())
+	err := emitter.Emit(t.Context(), repo.path(), testOrgID, validItem())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, wantErr)
 }
@@ -154,7 +154,7 @@ func TestEmit_SkipsIngestWhenContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err := emitter.Emit(ctx, repo, testOrgID, validItem())
+	err := emitter.Emit(ctx, repo.path(), testOrgID, validItem())
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, ingest.calls, "a canceled emit must not POST")
 }

@@ -37,7 +37,7 @@ func TestEmit_ReachesTheIngestEndpoint(t *testing.T) {
 	emitter, err := New(server.Client(), config, &logger)
 	require.NoError(t, err)
 
-	require.NoError(t, emitter.Emit(t.Context(), repo, testOrgID, validItem()))
+	require.NoError(t, emitter.Emit(t.Context(), repo.path(), testOrgID, validItem()))
 
 	assert.Equal(t, "/hidden/orgs/"+testOrgID.String()+"/contributing_devs", gotPath)
 	assert.Contains(t, gotBody, "alice@example.com", "the contributors collected from git must reach the API")
