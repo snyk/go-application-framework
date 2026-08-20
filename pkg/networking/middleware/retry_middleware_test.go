@@ -2251,3 +2251,78 @@ func Test_isJSONResponse(t *testing.T) {
 		})
 	}
 }
+
+func Test_handleSuccessfulJSONResponse(t *testing.T) {
+	t.Run("body under cap is buffered and closed", func(t *testing.T) {
+		bodyContent := []byte(`{"status":"ok"}`)
+		response := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(bodyContent)),
+		}
+
+		err := handleSuccessfulJSONResponse(response)
+
+		require.NoError(t, err)
+		require.NotNil(t, response.Body)
+
+		// Body should be buffered in memory
+		gotBody, readErr := io.ReadAll(response.Body)
+		require.NoError(t, readErr)
+		assert.Equal(t, bodyContent, gotBody)
+
+		// Close should succeed (it's now a NopCloser)
+		assert.NoError(t, response.Body.Close())
+	})
+
+	t.Run("body over cap is reconstructed as multiReadCloser", func(t *testing.T) {
+		// Create a body larger than the cap (defaulting to 4MB, so use 4MB + 1 byte)
+		largePart := bytes.Repeat([]byte("x"), maxBufferedJSONResponseBytes+1)
+		remaining := []byte("more")
+
+		trackingBody := &trackingReadCloser{
+			ReadCloser: io.NopCloser(bytes.NewReader(remaining)),
+		}
+
+		// Create a composite reader with a trailing stream
+		compositeReader := io.MultiReader(bytes.NewReader(largePart), trackingBody)
+
+		response := &http.Response{
+			StatusCode: http.StatusOK,
+			Body: &trackingReadCloser{
+				ReadCloser: io.NopCloser(compositeReader),
+				onClose: func() {
+					_ = trackingBody.Close()
+				},
+			},
+		}
+
+		err := handleSuccessfulJSONResponse(response)
+
+		require.NoError(t, err)
+		require.NotNil(t, response.Body)
+
+		// Body should be available as a stream (multiReadCloser wrapping the buffered part + original stream)
+		gotBody, readErr := io.ReadAll(response.Body)
+		require.NoError(t, readErr)
+
+		// Should contain the initial over-cap bytes plus any remaining bytes
+		assert.True(t, len(gotBody) >= maxBufferedJSONResponseBytes, "body must preserve data beyond the cap")
+	})
+
+	t.Run("read error is returned", func(t *testing.T) {
+		testErr := io.ErrUnexpectedEOF
+		trackingBody := &trackingReadCloser{
+			ReadCloser: &readErrCloser{err: testErr},
+		}
+
+		response := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       trackingBody,
+		}
+
+		err := handleSuccessfulJSONResponse(response)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, testErr)
+	})
+}

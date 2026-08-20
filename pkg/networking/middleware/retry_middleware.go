@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/rand/v2"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -114,8 +115,15 @@ func drainAndClose(body io.ReadCloser) {
 }
 
 func isJSONResponse(response *http.Response) bool {
-	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
-	return mimeType == "application/json" || strings.HasSuffix(mimeType, "+json")
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }
 
 func isSuccessResponse(statusCode int) bool {
@@ -140,6 +148,29 @@ func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logg
 		opt(rm)
 	}
 	return rm
+}
+
+// handleSuccessfulJSONResponse buffers successful JSON responses up to a configured limit
+// to detect truncation (e.g., from SSL proxies resetting the stream mid-body).
+// If the body exceeds maxBufferedJSONResponseBytes, it is reconstructed as a stream
+// (multiReadCloser) to enable retry-on-truncation detection without discarding bytes.
+// If the body is within the cap, it is buffered into memory for transparent inspection.
+func handleSuccessfulJSONResponse(response *http.Response) error {
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maxBufferedJSONResponseBytes+1))
+	if readErr != nil {
+		// Unlike getErrorList, this read error must surface as a retry/failure
+		drainAndClose(response.Body)
+		return readErr
+	}
+	if len(bodyBytes) > maxBufferedJSONResponseBytes {
+		// over the cap: keep streaming rather than error or drop bytes
+		response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
+	} else {
+		// within the cap: buffer into memory for transparent inspection
+		_ = response.Body.Close()
+		response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	}
+	return nil
 }
 
 func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) { //nolint:gocyclo // complexity from sequential retry logic with per-status-code overrides
@@ -203,6 +234,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// errors from the next round tripper cannot be retried
 		if rtErr != nil {
+			// Use the cached max retries if available (set from response status codes like 429).
+			// The effective limit is the maximum of configured maxAttempts and any status-code-based override,
+			// meaning status-code overrides can only raise the limit, never lower it.
 			attemptLimit := maxAttempts
 			if cachedMaxRetries != nil {
 				attemptLimit = *cachedMaxRetries
@@ -223,13 +257,20 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			return response, backoff.Permanent(rtErr)
 		}
 
-		// Cache max retry attempts for the current request
+		// Cache max retry attempts for the current request based on response status code (e.g., 429 enforces minimum 3 attempts).
+		// This value acts as a floor to the configured maxAttempts: the effective limit is max(statusCodeOverride, maxAttempts).
 		if cachedMaxRetries == nil {
 			calculated := getMaxRetryAttempts(response, maxAttempts)
 			cachedMaxRetries = &calculated
+			// Log if the status code override raised the effective limit above the configured maxAttempts
+			if calculated != maxAttempts {
+				rm.logger.Debug().Msgf("Status code %d override enforces minimum %d attempts (configured: %d)", response.StatusCode, calculated, maxAttempts)
+			}
 		}
 
-		// gated on the opt-in so flag-off behavior stays byte-identical to today
+		// gated on the opt-in so flag-off behavior stays byte-identical to today:
+		// status-code retry enforcement is only active when transport retries are explicitly enabled,
+		// preserving byte-identical behavior for opt-out users
 		statusCodeRetryDenied := transportRetryEnabled && !isRetryableRequest(&localRequest, rm.config)
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); !statusCodeRetryDenied && retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
@@ -249,27 +290,17 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		if transportRetryEnabled && isSuccessResponse(response.StatusCode) && isRetryableRequest(&localRequest, rm.config) && isJSONResponse(response) {
-			bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maxBufferedJSONResponseBytes+1))
-			if readErr != nil {
-				// unlike getErrorList, this read error must surface as a retry/failure
-				drainAndClose(response.Body)
+			if handleErr := handleSuccessfulJSONResponse(response); handleErr != nil {
 				retryErr := &RetryAttemptError{
 					StatusCode:  response.StatusCode,
 					Attempt:     actualAttempts,
 					MaxAttempts: *cachedMaxRetries,
-					Err:         readErr,
+					Err:         handleErr,
 				}
 				if actualAttempts >= *cachedMaxRetries {
 					return response, backoff.Permanent(retryErr)
 				}
 				return response, retryErr
-			}
-			if len(bodyBytes) > maxBufferedJSONResponseBytes {
-				// over the cap: keep streaming rather than error or drop bytes
-				response.Body = &multiReadCloser{Reader: io.MultiReader(bytes.NewReader(bodyBytes), response.Body), closer: response.Body}
-			} else {
-				_ = response.Body.Close()
-				response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 
