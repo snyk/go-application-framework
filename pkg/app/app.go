@@ -239,7 +239,10 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 		if existingValue != nil {
 			existingString, ok := existingValue.(string)
 			if ok {
-				err := pkg_utils.CreateAllDirectories(existingString, version)
+				// The value is already the final temporary directory, so create
+				// it as given. CreateAllDirectories would treat it as a base
+				// cache directory and append <version>/tmp/pid<PID> to it.
+				err := pkg_utils.CreateDirectory(existingString)
 				if err != nil {
 					logger.Err(err)
 				}
@@ -249,7 +252,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 		}
 
 		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
-		err := pkg_utils.CreateAllDirectories(tmpDir, version)
+		err := pkg_utils.CreateDirectory(tmpDir)
 		if err != nil {
 			logger.Err(err)
 		}
