@@ -1,0 +1,42 @@
+[1mTesting  (reachability-fixture.json) ...[0m
+
+[1mOpen Security issues: 2[0m
+
+ ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
+   Finding ID: SNYK-JS-GOT-2932019
+   Info: https://snyk.io/vuln/SNYK-JS-GOT-2932019
+   Introduced by: got
+   Introduced through: snyk@1.0.0-monorepo
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342082
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342082
+   Introduced by: marked
+   Introduced through: snyk@1.0.0-monorepo
+   Reachability: Reachable
+
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342082] in [1mmarked@4.0.1[0m
+    introduced by snyk@1.0.0-monorepo
+  This issue was fixed in: [1m4.0.10[0m
+
+╭─────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                            │
+│                                                         │
+│   Organization:      My Org                             │
+│   Test type:         Software Composition Analysis      │
+│   Project path:                                         │
+│   Target file:       reachability-fixture.json          │
+│                                                         │
+│   Total security issues: 2                              │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]    │
+│   Open   : [1m2[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 2 MEDIUM [0m 0 LOW ]    │
+╰─────────────────────────────────────────────────────────╯
+
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
