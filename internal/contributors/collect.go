@@ -28,7 +28,7 @@ const contributorWindowDays = 90
 // collectContributors returns the git authors who committed to the repository at
 // path within the contributor window ending at now, one entry per author holding
 // their most recent commits authored date. All branches, including remotes, are
-// iterated over.
+// iterated over, as is HEAD.
 //
 // Commits are iterated over using commit date, and the assumption is made that
 // commit date >= authored date, which means a cutoff for commit date contains all
@@ -57,28 +57,21 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 		_ = closeRepo() //nolint:errcheck // nothing to do on close failure
 	}()
 
-	since := now.AddDate(0, 0, -contributorWindowDays)
-
-	refs, err := repo.References()
+	roots, err := walkRoots(repo)
 	if err != nil {
-		return nil, fmt.Errorf("read references: %w", err)
+		return nil, err
 	}
-	defer refs.Close()
 
+	since := now.AddDate(0, 0, -contributorWindowDays)
 	seen := make(map[plumbing.Hash]bool)
 	latest := make(map[string]contributors_ingest.Contributor)
-	err = refs.ForEach(func(ref *plumbing.Reference) error {
-		name := ref.Name()
-		if !name.IsBranch() && !name.IsRemote() {
-			return nil
-		}
-
-		tip, commitErr := object.GetCommit(repo.Storer, ref.Hash())
+	for _, root := range roots {
+		tip, commitErr := object.GetCommit(repo.Storer, root)
 		if commitErr != nil {
-			return nil //nolint:nilerr // ignore refs that don't resolve to a commit
+			continue // ignore roots that don't resolve to a commit
 		}
 
-		return object.NewCommitIterCTime(tip, seen, nil).ForEach(func(commit *object.Commit) error {
+		err = object.NewCommitIterCTime(tip, seen, nil).ForEach(func(commit *object.Commit) error {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
@@ -92,9 +85,9 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 			recordAuthor(latest, commit, since, now)
 			return nil
 		})
-	})
-	if err != nil {
-		return nil, fmt.Errorf("read commits: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("read commits: %w", err)
+		}
 	}
 
 	contributors := slices.Collect(maps.Values(latest))
@@ -104,6 +97,38 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 	return contributors, nil
 }
 
+// walkRoots returns the commits to walk the history back from. HEAD is included
+// because a detached checkout, which is how CI systems commonly check a
+// repository out, has no branch pointing at its commits.
+func walkRoots(repo *git.Repository) ([]plumbing.Hash, error) {
+	var roots []plumbing.Hash
+	if head, err := repo.Head(); err == nil {
+		roots = append(roots, head.Hash())
+	}
+
+	refs, err := repo.References()
+	if err != nil {
+		return nil, fmt.Errorf("read references: %w", err)
+	}
+	defer refs.Close()
+
+	err = refs.ForEach(func(ref *plumbing.Reference) error {
+		if name := ref.Name(); name.IsBranch() || name.IsRemote() {
+			roots = append(roots, ref.Hash())
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read references: %w", err)
+	}
+
+	return roots, nil
+}
+
+// parentsOfShallow returns the parents of the given shallow boundary commits,
+// which a shallow clone did not download. The commit walker loads every parent
+// before yielding a commit and fails on the first one that is absent, so these
+// have to be excluded up front for a shallow repository to be readable at all.
 func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *object.Commit, since, now time.Time) {
 	email := strings.ToLower(strings.TrimSpace(commit.Author.Email))
 	when := commit.Author.When
@@ -122,7 +147,7 @@ func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *obj
 // git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true}) does,
 // but reopens the result on go-git's BoundOS filesystem with a kept-open packfile
 // descriptor to avoid reopening the packfile for every object read.
-//
+
 // Callers must call the returned close func once done with the repository.
 func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 	noopClose := func() error { return nil }

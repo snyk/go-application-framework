@@ -101,6 +101,27 @@ func (r *testRepo) path() string {
 }
 
 // detach checks the current commit out directly, leaving HEAD detached.
+func (r *testRepo) detach() *testRepo {
+	r.t.Helper()
+
+	r.git("checkout", "--detach", "HEAD")
+	return r
+}
+
+// deleteBranch removes a local branch, leaving its commits reachable only from
+// whatever else still points at them.
+
+func (r *testRepo) deleteBranch(name string) *testRepo {
+	r.t.Helper()
+
+	r.git("branch", "-D", name)
+	return r
+}
+
+// shallowClone returns a clone truncated to the last depth commits, as a CI job
+// cloning with --depth gets. The clone goes over file:// because git ignores
+// --depth when cloning a plain local path.
+
 func (r *testRepo) addCommit(seq int, c commit) {
 	r.t.Helper()
 

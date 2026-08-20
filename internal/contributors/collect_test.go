@@ -159,6 +159,24 @@ func TestCollectContributors_FindsRepositoryFromSubdirectory(t *testing.T) {
 	assert.Equal(t, "alice@example.com", contributors[0].Email)
 }
 
+func TestCollectContributors_IncludesCommitsReachableOnlyFromDetachedHead(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	repo := newTestRepo(t,
+		commit{email: "alice@example.com", when: now.AddDate(0, 0, -3)},
+		commit{email: "bob@example.com", when: now.AddDate(0, 0, -2)},
+		commit{email: "carol@example.com", when: now.AddDate(0, 0, -1)},
+	).detach().deleteBranch(testBranch)
+
+	contributors, err := collectContributors(t.Context(), repo.path(), now)
+	require.NoError(t, err)
+	assert.Equal(t,
+		[]string{"alice@example.com", "bob@example.com", "carol@example.com"},
+		emails(contributors),
+		"a detached checkout with no branch pointing at it must still be counted",
+	)
+}
+
 func TestCollectContributors_ReturnsErrorForCancelledContext(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	repo := newTestRepo(t, commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)})
