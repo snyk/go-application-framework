@@ -301,20 +301,30 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 
 // GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
 // single unsplit entry, so it must be normalized into a []string first. The
-// framework contributes no paths of its own; the application declares them.
+// framework ships oauth2/token for auth-token-refresh retries; applications can
+// declare additional service-specific paths via config or environment variable.
 func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		paths := []string{"oauth2/token"}
+
 		if raw, ok := existingValue.(string); ok {
-			paths := []string{}
 			for _, part := range strings.Split(raw, ",") {
 				if trimmed := strings.TrimSpace(part); trimmed != "" {
 					paths = append(paths, trimmed)
 				}
 			}
-			return paths, nil
+		} else if strSlice, ok := existingValue.([]string); ok {
+			paths = append(paths, strSlice...)
+		} else if ifaceSlice, ok := existingValue.([]interface{}); ok {
+			// Handle JSON-loaded arrays which come as []interface{}
+			for _, v := range ifaceSlice {
+				if str, ok := v.(string); ok && str != "" {
+					paths = append(paths, str)
+				}
+			}
 		}
 
-		return existingValue, nil
+		return paths, nil
 	}
 	return callback
 }

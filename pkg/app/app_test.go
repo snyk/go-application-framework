@@ -1326,12 +1326,12 @@ func Test_defaultNetworkRequestRetryAllowedPaths(t *testing.T) {
 		existingValue interface{}
 		expected      interface{}
 	}{
-		{"nil stays unset, the framework contributes no paths", nil, nil},
-		{"csv string splits", "a,b", []string{"a", "b"}},
-		{"csv string trims whitespace", "a, b", []string{"a", "b"}},
-		{"empty string yields empty slice", "", []string{}},
-		{"non-empty slice passes through unchanged", []string{"x"}, []string{"x"}},
-		{"empty slice passes through unchanged", []string{}, []string{}},
+		{"nil yields framework default", nil, []string{"oauth2/token"}},
+		{"csv string splits and merges with defaults", "a,b", []string{"oauth2/token", "a", "b"}},
+		{"csv string trims whitespace and merges", "a, b", []string{"oauth2/token", "a", "b"}},
+		{"empty string yields just framework default", "", []string{"oauth2/token"}},
+		{"non-empty slice merges with default", []string{"x"}, []string{"oauth2/token", "x"}},
+		{"empty slice yields framework default", []string{}, []string{"oauth2/token"}},
 	}
 
 	config := configuration.NewWithOpts()
@@ -1561,28 +1561,80 @@ func Test_NetworkRetryOptIn_DeclaredPathRetried_NearMissNot(t *testing.T) {
 }
 
 func Test_NetworkRetryOptIn_AllowedPathsFromPersistedJSONConfig(t *testing.T) {
-	fakehome := t.TempDir()
-	t.Setenv("HOME", fakehome)
-	t.Setenv("USERPROFILE", fakehome)
+	tests := []struct {
+		name        string
+		configJSON  string
+		path        string
+		wantStatus  int
+		wantRetried bool
+	}{
+		{
+			"custom-retryable path is retried",
+			fmt.Sprintf(`{%q: ["custom-retryable"]}`, configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS),
+			"/v1/custom-retryable",
+			http.StatusOK,
+			true,
+		},
+		{
+			"empty path entry allows nothing",
+			fmt.Sprintf(`{%q: [""]}`, configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS),
+			"/v1/monitor/npm",
+			http.StatusServiceUnavailable,
+			false,
+		},
+	}
 
-	configFile, err := configuration.CreateConfigurationFile("gaf-retry-test.json")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, []byte(`{"internal_network_request_retry_allowed_paths": ["custom-retryable"]}`), 0600))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakehome := t.TempDir()
+			t.Setenv("HOME", fakehome)
+			t.Setenv("USERPROFILE", fakehome)
 
+			configFile, err := configuration.CreateConfigurationFile("gaf-retry-test.json")
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(configFile, []byte(tt.configJSON), 0600))
+
+			server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
+
+			config := configuration.NewWithOpts(
+				configuration.WithFiles("gaf-retry-test"),
+				configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+				configuration.WithCachingEnabled(configuration.NoCacheExpiration),
+			)
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+
+			req, err := http.NewRequest(http.MethodPost, server.URL+tt.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			if tt.wantRetried {
+				assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
+			} else {
+				assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
+			}
+		})
+	}
+}
+
+func Test_NetworkRetryOptIn_OAuth2TokenRetriedByDefault(t *testing.T) {
 	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
 
-	config := configuration.NewWithOpts(
-		configuration.WithFiles("gaf-retry-test"),
-		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
-		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
-	)
+	config := newCLIStyleConfig()
 	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
 	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
 
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/custom-retryable", bytes.NewReader([]byte(`{}`)))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/oauth2/token", bytes.NewReader([]byte(`{}`)))
 	require.NoError(t, err)
 
 	resp, err := client.Do(req)
@@ -1593,57 +1645,24 @@ func Test_NetworkRetryOptIn_AllowedPathsFromPersistedJSONConfig(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(requestCount), int32(2))
 }
 
-func Test_NetworkRetryOptIn_EmptyPathEntryInPersistedJSONConfigAllowsNothing(t *testing.T) {
-	fakehome := t.TempDir()
-	t.Setenv("HOME", fakehome)
-	t.Setenv("USERPROFILE", fakehome)
-
-	configFile, err := configuration.CreateConfigurationFile("gaf-retry-test.json")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, []byte(`{"internal_network_request_retry_allowed_paths": [""]}`), 0600))
-
-	server, requestCount := newSequencedStatusServer(t, []int{http.StatusServiceUnavailable, http.StatusOK})
-
-	config := configuration.NewWithOpts(
-		configuration.WithFiles("gaf-retry-test"),
-		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
-		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
-	)
-	config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
-	config.Set(middleware.ConfigurationKeyRetryAfter, 1)
-
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-	client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
-
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/monitor/npm", bytes.NewReader([]byte(`{}`)))
-	require.NoError(t, err)
-
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
-	assert.Equal(t, int32(1), atomic.LoadInt32(requestCount))
-}
-
 func Test_initConfiguration_RetryAllowedPaths(t *testing.T) {
-	t.Run("framework declares no paths of its own", func(t *testing.T) {
+	t.Run("framework contributes oauth2/token by default", func(t *testing.T) {
 		config := newCLIStyleConfig()
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(config))
 		assert.NotNil(t, engine)
 
-		assert.Empty(t, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
+		assert.Equal(t, []string{"oauth2/token"}, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
 	})
 
-	t.Run("comma-separated setting is normalized into a list", func(t *testing.T) {
+	t.Run("comma-separated setting merges with framework defaults", func(t *testing.T) {
 		config := newCLIStyleConfig()
 		t.Setenv("INTERNAL_NETWORK_REQUEST_RETRY_ALLOWED_PATHS", "a, b")
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(config))
 		assert.NotNil(t, engine)
 
-		assert.Equal(t, []string{"a", "b"}, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
+		assert.Equal(t, []string{"oauth2/token", "a", "b"}, config.GetStringSlice(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS))
 	})
 }
 
