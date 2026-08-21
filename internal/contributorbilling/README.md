@@ -5,12 +5,29 @@ entitlements-service after successful in-scope CLI commands.
 
 ## Purpose
 
-After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`),
+After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`, `snyk aibom --upload`),
 callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
 billing events.
 
 This package lives under `internal/contributorbilling/` (not public GAF API). Capture middleware
-writes to an internal command-scoped session (IANDT-238); lifecycle and emit wiring are IANDT-240.
+writes to an internal command-scoped session (IANDT-238). `pkg/clibilling` (IANDT-240) emits on the
+first captured project ID and waits for ingest in the main post-invoke hook.
+
+### CLI host wiring (IANDT-240)
+
+```go
+engine := app.CreateAppEngineWithOptions(...)
+// clibilling.RegisterWithEngine is called from CreateAppEngineWithOptions.
+
+// cliv2 sets analytics command via normal instrumentation (not billing-specific).
+// Capture middleware lazily opens a session on the first billable HTTP request when
+// capture is enabled and clibilling.ActiveCommand(engine) is billable.
+// The first captured project ID triggers an async ingest POST; the main post-invoke hook waits.
+```
+
+When capture is enabled and the command is in scope, contributor capture middleware
+seals the session after the first project ID and starts ingest asynchronously. The main
+post-invoke hook waits for that emit to finish (skip `analytics.report`).
 
 ## Entry point
 
@@ -158,8 +175,8 @@ Each item gets its own ingest POST and its own `Timeout` budget.
 | Repo | When | Entity ID source |
 |------|------|------------------|
 | cliv2 + legacy TS | Monitor / IaC `--report` (TS path) success | capture middleware project UUIDs |
-| cli-extension-os-flows | Dragonfly monitor success | monitor response project public ID |
-| code-client-go | Native `--report` success | `ResultMetaData.TargetId` as target entity |
+| GAF capture middleware | Dragonfly monitor success | Test API CreateTest (`monitor: true`) → GET test `project_entity` locator |
+| code-client-go | Native `--report` success | hidden Test API or components `project_id` |
 
 Not in scope: IaC native extension changes (legacy cliv2 capture only for v1), SCLE Code `--report`, container/docker monitor.
 

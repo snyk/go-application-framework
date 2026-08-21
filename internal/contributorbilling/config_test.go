@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func TestApplyFromConfiguration_FillsUnsetNetworkFields(t *testing.T) {
@@ -18,7 +18,9 @@ func TestApplyFromConfiguration_FillsUnsetNetworkFields(t *testing.T) {
 	config.Set(configuration.API_URL, "https://api.example.test")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "secret-token")
 
-	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(config))
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.SetConfiguration(config)
+	require.NoError(t, engine.Init())
 
 	opts := EmitOptions{
 		ScopeID:       "11111111-1111-1111-1111-111111111111",
@@ -38,7 +40,9 @@ func TestApplyFromConfiguration_PreservesExplicitOverrides(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.example.test")
-	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(config))
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.SetConfiguration(config)
+	require.NoError(t, engine.Init())
 
 	explicitClient := engine.GetNetworkAccess().GetHttpClient()
 	opts := EmitOptions{

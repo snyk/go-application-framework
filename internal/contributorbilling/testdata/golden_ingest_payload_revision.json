@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "contributing_devs",
+    "attributes": {
+      "contributors_entity_type": "revision",
+      "contributors_entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "contributors": [
+        {
+          "email": "billing-test@example.com",
+          "commit_date": "2026-01-15T12:00:00Z"
+        }
+      ]
+    }
+  }
+}

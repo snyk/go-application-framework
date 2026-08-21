@@ -255,6 +255,38 @@ func TestEmitContributorBilling_SkipsInvalidCapability(t *testing.T) {
 	assert.False(t, called)
 }
 
+func TestEmitContributorBilling_AIBOMCapability(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityAIBOM,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{
+				EntityID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+				EntityType: contributorbilling.EntityTypeRevision,
+			},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.True(t, called)
+}
+
 func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
 	t.Parallel()
 

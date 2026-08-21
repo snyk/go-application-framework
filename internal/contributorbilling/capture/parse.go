@@ -13,9 +13,15 @@ var (
 	monitorPathPattern     = regexp.MustCompile(`(?i)^/v1/monitor(?:/|$)`)
 	monitorDepsPattern     = regexp.MustCompile(`(?i)^/v1/monitor-dependencies(?:/|$)`)
 	iacSharePattern        = regexp.MustCompile(`(?i)^/v1/iac-cli-share-results(?:/|$)`)
-	createTestPathPattern  = regexp.MustCompile(`(?i)^/orgs/[0-9a-fA-F-]{36}/tests$`)
-	getTestPathPattern     = regexp.MustCompile(`(?i)^/orgs/[0-9a-fA-F-]{36}/tests/([0-9a-fA-F-]{36})$`)
-	componentsPathPattern  = regexp.MustCompile(`(?i)^/orgs/[0-9a-fA-F-]{36}/tests/([0-9a-fA-F-]{36})/components$`)
+	orgTestsPathPrefix     = `(?i)^(?:/hidden)?/orgs/[0-9a-fA-F-]{36}/tests`
+	createTestPathPattern  = regexp.MustCompile(orgTestsPathPrefix + `$`)
+	getTestJobPathPattern  = regexp.MustCompile(`(?i)^(?:/hidden)?/orgs/[0-9a-fA-F-]{36}/test_jobs/([0-9a-fA-F-]{36})$`)
+	getTestPathPattern     = regexp.MustCompile(orgTestsPathPrefix + `/([0-9a-fA-F-]{36})$`)
+	componentsPathPattern  = regexp.MustCompile(orgTestsPathPrefix + `/([0-9a-fA-F-]{36})/components$`)
+	deeproxyReportPattern  = regexp.MustCompile(`(?i)^/report/([0-9a-fA-F-]{36})/?$`)
+	deeproxyReportCompletePattern = regexp.MustCompile(`(?i)"status"\s*:\s*"COMPLETE"`)
+	deeproxyUploadProjectIDPattern = regexp.MustCompile(`"uploadResult"\s*:\s*\{[^}]*"projectId"\s*:\s*"([0-9a-fA-F-]{36})"`)
+	orgAIBOMUploadPathPattern = regexp.MustCompile(`(?i)^(?:/rest)?/orgs/[0-9a-fA-F-]{36}/ai_boms/upload$`)
 	projectIDFromURI       = regexp.MustCompile(`/project/([0-9a-fA-F-]{36})(?:/|$)`)
 	testExecutionCompleted = "completed"
 
@@ -33,8 +39,11 @@ const (
 	EndpointRegistryMonitor
 	EndpointRegistryIaCShare
 	EndpointTestCreate
+	EndpointTestJobGet
 	EndpointTestGet
 	EndpointTestComponents
+	EndpointDeeproxyReport
+	EndpointAIBOMUpload
 )
 
 type monitorResult struct {
@@ -45,6 +54,7 @@ type createTestRequestDoc struct {
 	Data struct {
 		Attributes struct {
 			Config *struct {
+				Monitor       *bool `json:"monitor,omitempty"`
 				PublishReport *bool `json:"publish_report,omitempty"`
 				ScanConfig    *struct {
 					Sast json.RawMessage `json:"sast,omitempty"`
@@ -54,9 +64,33 @@ type createTestRequestDoc struct {
 	} `json:"data"`
 }
 
+type codeCreateTestRequestDoc struct {
+	Data struct {
+		Attributes struct {
+			Configuration *struct {
+				Output *struct {
+					Report *bool `json:"report,omitempty"`
+				} `json:"output,omitempty"`
+			} `json:"configuration,omitempty"`
+		} `json:"attributes"`
+	} `json:"data"`
+}
+
 type createTestResponseDoc struct {
 	Data struct {
 		ID string `json:"id"`
+	} `json:"data"`
+}
+
+type getTestJobRedirectDoc struct {
+	Data struct {
+		Relationships *struct {
+			Test struct {
+				Data struct {
+					ID string `json:"id"`
+				} `json:"data"`
+			} `json:"test"`
+		} `json:"relationships,omitempty"`
 	} `json:"data"`
 }
 
@@ -86,6 +120,14 @@ type getComponentsResponseDoc struct {
 	} `json:"data"`
 }
 
+type aibomUploadRequestDoc struct {
+	Data struct {
+		Attributes struct {
+			UploadRevisionID string `json:"upload_revision_id"`
+		} `json:"attributes"`
+	} `json:"data"`
+}
+
 // CreateTestRequestMeta holds parsed CreateTest request fields used to register billable tests.
 type CreateTestRequestMeta struct {
 	PublishReport bool
@@ -107,9 +149,18 @@ func MatchRequest(method, path string) (EndpointKind, Capability, bool) {
 		if createTestPathPattern.MatchString(path) {
 			return EndpointTestCreate, "", true
 		}
+		if orgAIBOMUploadPathPattern.MatchString(path) {
+			return EndpointAIBOMUpload, CapabilityAIBOM, true
+		}
 	case http.MethodGet:
+		if deeproxyReportPattern.MatchString(path) {
+			return EndpointDeeproxyReport, CapabilityCode, true
+		}
 		if componentsPathPattern.MatchString(path) {
 			return EndpointTestComponents, "", true
+		}
+		if getTestJobPathPattern.MatchString(path) {
+			return EndpointTestJobGet, "", true
 		}
 		if getTestPathPattern.MatchString(path) {
 			return EndpointTestGet, "", true
@@ -119,18 +170,60 @@ func MatchRequest(method, path string) (EndpointKind, Capability, bool) {
 	return EndpointNone, "", false
 }
 
-// ParseCreateTestRequest extracts publish_report and capability from a CreateTest request body.
+// ParseCreateTestRequest extracts billable Test API intent and capability from a CreateTest body.
+// Supports Dragonfly monitor (config.monitor), publish_report SCA/Code test flows, and Snyk Code
+// hidden Test API (configuration.output.report).
 func ParseCreateTestRequest(body []byte) (CreateTestRequestMeta, bool) {
+	if meta, ok := parseBillableCreateTestRequest(body); ok {
+		return meta, true
+	}
+	return parseCodeReportCreateTestRequest(body)
+}
+
+// ParseAIBOMUploadRequest extracts the upload revision ID from a CreateAndUpload AI-BOM request body.
+func ParseAIBOMUploadRequest(body []byte) (revisionID string, ok bool) {
+	var doc aibomUploadRequestDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return "", false
+	}
+	revisionID = parseUUID(doc.Data.Attributes.UploadRevisionID)
+	if revisionID == "" {
+		return "", false
+	}
+	return revisionID, true
+}
+
+// AIBOMUploadRecord builds a billing capture record for a successful AI-BOM upload POST.
+func AIBOMUploadRecord(path, revisionID string) Record {
+	if revisionID == "" {
+		return Record{}
+	}
+	return Record{
+		Capability:  CapabilityAIBOM,
+		EntityID:    revisionID,
+		EntityType:  EntityTypeRevision,
+		RequestPath: path,
+	}
+}
+
+func parseBillableCreateTestRequest(body []byte) (CreateTestRequestMeta, bool) {
 	var doc createTestRequestDoc
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return CreateTestRequestMeta{}, false
 	}
-	if doc.Data.Attributes.Config == nil || doc.Data.Attributes.Config.PublishReport == nil || !*doc.Data.Attributes.Config.PublishReport {
+	if doc.Data.Attributes.Config == nil {
+		return CreateTestRequestMeta{}, false
+	}
+
+	cfg := doc.Data.Attributes.Config
+	publishReport := cfg.PublishReport != nil && *cfg.PublishReport
+	monitor := cfg.Monitor != nil && *cfg.Monitor
+	if !publishReport && !monitor {
 		return CreateTestRequestMeta{}, false
 	}
 
 	capability := CapabilityOSS
-	if doc.Data.Attributes.Config.ScanConfig != nil && len(doc.Data.Attributes.Config.ScanConfig.Sast) > 0 {
+	if publishReport && cfg.ScanConfig != nil && len(cfg.ScanConfig.Sast) > 0 {
 		capability = CapabilityCode
 	}
 
@@ -140,13 +233,48 @@ func ParseCreateTestRequest(body []byte) (CreateTestRequestMeta, bool) {
 	}, true
 }
 
-// ParseCreateTestResponse extracts the test ID from a successful CreateTest response.
+func parseCodeReportCreateTestRequest(body []byte) (CreateTestRequestMeta, bool) {
+	var doc codeCreateTestRequestDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return CreateTestRequestMeta{}, false
+	}
+	if doc.Data.Attributes.Configuration == nil ||
+		doc.Data.Attributes.Configuration.Output == nil ||
+		doc.Data.Attributes.Configuration.Output.Report == nil ||
+		!*doc.Data.Attributes.Configuration.Output.Report {
+		return CreateTestRequestMeta{}, false
+	}
+
+	return CreateTestRequestMeta{
+		PublishReport: true,
+		Capability:    CapabilityCode,
+	}, true
+}
+
+// ParseCreateTestResponse extracts the test job ID from a successful CreateTest response.
 func ParseCreateTestResponse(body []byte) string {
 	var doc createTestResponseDoc
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return ""
 	}
 	return parseUUID(doc.Data.ID)
+}
+
+// ParseTestJobRedirectResponse extracts the final test ID from a completed Test Job poll (303).
+func ParseTestJobRedirectResponse(body []byte) string {
+	var doc getTestJobRedirectDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return ""
+	}
+	if doc.Data.Relationships == nil {
+		return ""
+	}
+	return parseUUID(doc.Data.Relationships.Test.Data.ID)
+}
+
+// JobIDFromGetPath returns the job UUID from a GET /orgs/{org}/test_jobs/{job} path.
+func JobIDFromGetPath(path string) string {
+	return testJobIDFromPath(path)
 }
 
 // ParseCaptureRecords extracts billing records from a successful response for the given endpoint.
@@ -156,6 +284,8 @@ func ParseCaptureRecords(endpoint EndpointKind, path string, body []byte, testCa
 		return legacyProjectRecords(CapabilityOSS, path, parseMonitorResponse(body))
 	case EndpointRegistryIaCShare:
 		return legacyProjectRecords(CapabilityIaC, path, parseIaCShareResponse(body))
+	case EndpointDeeproxyReport:
+		return parseDeeproxyReportResponse(path, body)
 	case EndpointTestGet:
 		testID := testIDFromGetTestPath(path)
 		if testID == "" || testCapability == "" {
@@ -200,6 +330,67 @@ func legacyProjectRecords(capability Capability, path string, entityIDs []string
 		})
 	}
 	return out
+}
+
+type deeproxyReportBody struct {
+	Status       string `json:"status"`
+	UploadResult struct {
+		ProjectID      string `json:"projectId"`
+		ProjectIDSnake string `json:"project_id"`
+	} `json:"uploadResult"`
+}
+
+func parseDeeproxyReportResponse(path string, body []byte) []Record {
+	if len(body) == 0 {
+		return nil
+	}
+
+	entityID := deeproxyProjectIDFromBody(body)
+	if entityID == "" {
+		return nil
+	}
+
+	return []Record{{
+		Capability:  CapabilityCode,
+		EntityID:    entityID,
+		EntityType:  EntityTypeProject,
+		RequestPath: path,
+	}}
+}
+
+func deeproxyProjectIDFromBody(body []byte) string {
+	var doc deeproxyReportBody
+	if err := json.Unmarshal(body, &doc); err == nil {
+		if !isDeeproxyReportComplete(doc.Status) {
+			return ""
+		}
+		if entityID := parseUUID(firstNonEmpty(doc.UploadResult.ProjectID, doc.UploadResult.ProjectIDSnake)); entityID != "" {
+			return entityID
+		}
+	}
+
+	// Fallback for truncated/overlong bodies where only a prefix was read.
+	if !deeproxyReportCompletePattern.Match(body) {
+		return ""
+	}
+	matches := deeproxyUploadProjectIDPattern.FindSubmatch(body)
+	if len(matches) < 2 {
+		return ""
+	}
+	return parseUUID(string(matches[1]))
+}
+
+func isDeeproxyReportComplete(status string) bool {
+	return strings.EqualFold(strings.TrimSpace(status), "COMPLETE")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseGetTestResponse(path string, body []byte, capability Capability) []Record {
@@ -314,6 +505,14 @@ func parseIaCShareResponse(body []byte) []string {
 	return projectIDs
 }
 
+func testJobIDFromPath(path string) string {
+	matches := getTestJobPathPattern.FindStringSubmatch(normalizePath(path))
+	if len(matches) < 2 {
+		return ""
+	}
+	return parseUUID(matches[1])
+}
+
 func testIDFromGetTestPath(path string) string {
 	matches := getTestPathPattern.FindStringSubmatch(normalizePath(path))
 	if len(matches) < 2 {
@@ -356,6 +555,9 @@ func isIaCShareMetadataKey(key string) bool {
 func normalizePath(path string) string {
 	if path == "" {
 		return "/"
+	}
+	if idx := strings.IndexAny(path, "?#"); idx >= 0 {
+		path = path[:idx]
 	}
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

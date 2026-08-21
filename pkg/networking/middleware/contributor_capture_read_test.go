@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"net/http"
@@ -67,4 +68,28 @@ func TestReadResponseBody_capturesSmallBodyDespiteInflatedContentLength(t *testi
 	downstream, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	assert.Equal(t, body, downstream)
+}
+
+func TestDecodeCaptureBody_gzip(t *testing.T) {
+	t.Parallel()
+
+	plain := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}}`)
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, err := writer.Write(plain)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	got, err := decodeCaptureBody(compressed.Bytes(), "gzip")
+	require.NoError(t, err)
+	assert.Equal(t, plain, got)
+}
+
+func TestDecodeCaptureBody_plainPassthrough(t *testing.T) {
+	t.Parallel()
+
+	plain := []byte(`{"status":"WAITING"}`)
+	got, err := decodeCaptureBody(plain, "")
+	require.NoError(t, err)
+	assert.Equal(t, plain, got)
 }

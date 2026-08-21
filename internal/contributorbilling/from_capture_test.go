@@ -15,6 +15,43 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+func TestEmitFromCaptureFirstRecord_postsOnlyFirstProject(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+
+	emitter := contributorbilling.NewEmitter()
+
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	bag := capture.NewCapture()
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityOSS,
+		EntityID:   "11111111-1111-4111-8111-111111111111",
+	})
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityOSS,
+		EntityID:   "22222222-2222-4222-8222-222222222222",
+	})
+
+	contributorbilling.EmitFromCaptureFirstRecord(context.Background(), bag, contributorbilling.FromCaptureOptions{
+		Configuration: config,
+		Emitter:       emitter,
+		ScopeID:       "33333333-3333-4333-8333-333333333333",
+		IngestURL:     server.URL,
+	})
+
+	require.True(t, emitter.WaitWithTimeout(2*time.Second))
+	assert.Equal(t, 1, requestCount)
+}
+
 func TestEmitFromCapture_postsCapturedProjects(t *testing.T) {
 	var requestCount int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,4 +106,38 @@ func TestEmitFromCapture_skipsEmptyScopeID(t *testing.T) {
 	})
 
 	assert.True(t, emitter.WaitWithTimeout(50*time.Millisecond))
+}
+
+func TestEmitFromCaptureFirstRecord_postsRevisionForAIBOM(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+
+	emitter := contributorbilling.NewEmitter()
+
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	bag := capture.NewCapture()
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityAIBOM,
+		EntityID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		EntityType: capture.EntityTypeRevision,
+	})
+
+	contributorbilling.EmitFromCaptureFirstRecord(context.Background(), bag, contributorbilling.FromCaptureOptions{
+		Configuration: config,
+		Emitter:       emitter,
+		ScopeID:       "33333333-3333-4333-8333-333333333333",
+		IngestURL:     server.URL,
+	})
+
+	require.True(t, emitter.WaitWithTimeout(2*time.Second))
+	assert.Equal(t, 1, requestCount)
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/clibilling"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -439,17 +440,11 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	engine.AddExtensionInitializer(localworkflows.Init)
 
-	if err := engine.AddPostInvokeHook(internalPostInvokeHook); err != nil {
-		engine.GetLogger().Warn().Err(err).Msg("failed to register example post-invoke hook")
-	}
+	clibilling.RegisterWithEngine(engine)
 	return engine
 }
 
 // Deprecated: Use CreateAppEngineWithOptions instead.
 func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	return CreateAppEngineWithOptions(WithLogger(logger))
-}
-
-func internalPostInvokeHook(_ context.Context, engine workflow.Engine, _ workflow.PostInvokeContext) {
-	engine.GetLogger().Print("PostInvokeHook")
 }

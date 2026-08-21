@@ -13,7 +13,6 @@ import (
 	zlog "github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 
-	"github.com/snyk/go-application-framework/internal/contributorbilling/capture"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -198,11 +197,9 @@ func (e *EngineImpl) Init() error {
 
 	networking.SetActiveCommandResolver(e.networkAccess, func() string {
 		if e.analytics != nil {
-			if cmd := strings.TrimSpace(e.analytics.GetCommand()); cmd != "" {
-				return cmd
-			}
+			return strings.TrimSpace(e.analytics.GetCommand())
 		}
-		return capture.CommandNameFromRawArgs(e.config.GetStringSlice(configuration.RAW_CMD_ARGS))
+		return ""
 	})
 
 	if err == nil {

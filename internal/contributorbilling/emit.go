@@ -97,7 +97,7 @@ func validateRequiredFields(opts EmitOptions) SkipReason {
 
 func isKnownCapability(capability string) bool {
 	switch capability {
-	case CapabilityOSS, CapabilityCode, CapabilityIaC:
+	case CapabilityOSS, CapabilityCode, CapabilityIaC, CapabilityAIBOM:
 		return true
 	default:
 		return false
