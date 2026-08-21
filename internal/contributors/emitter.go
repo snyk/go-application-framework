@@ -59,7 +59,8 @@ func New(httpClient *http.Client, config configuration.Configuration, logger *ze
 
 	ingest, err := contributors_ingest.NewClient(
 		httpClient,
-		config.GetString(configuration.API_URL),
+		"http://localhost:9065",
+		// config.GetString(configuration.API_URL),
 		logger,
 	)
 	if err != nil {
