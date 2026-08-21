@@ -10,10 +10,12 @@ import (
 
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
+	"github.com/snyk/go-application-framework/internal/contributors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
@@ -199,6 +201,16 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
 		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
 	}
+
+	getSink := func() contributor_capture.Sink {
+		s := contributors.GetSink()
+		if s != nil {
+			return s
+		}
+		return nil
+	}
+	crt = contributor_capture.NewContributorCaptureMiddleware(crt, n.config, getSink, n.logger)
+
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
 		encapsulatedRoundTripper: crt,

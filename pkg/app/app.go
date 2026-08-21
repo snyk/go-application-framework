@@ -20,6 +20,8 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/contributors"
+	contributorwiring "github.com/snyk/go-application-framework/internal/contributors/wiring"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -415,6 +417,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
 		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:   "clientFileFilterGitignore_MetaCharFix",
 		pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES: "clientFileFilterGitignore_TrackedFilesRollout",
+		contributors.ConfigurationKeyCaptureEnabled:  contributors.FeatureFlagEnableEntityContributorsPublish,
 	})
 }
 
@@ -467,6 +470,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
+	engine.AddExtensionInitializer(contributorwiring.Init)
 	return engine
 }
 
