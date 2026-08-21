@@ -41,7 +41,7 @@ func elapsedForRetries(t *testing.T, config configuration.Configuration, opts ..
 func TestWithRetryInterval_ShortensBackoff(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 2)
-	config.Set(configurationKeyRetryAfter, 30)
+	config.Set(ConfigurationKeyRetryAfter, 30)
 
 	elapsed, attempts := elapsedForRetries(t, config, WithRetryInterval(50*time.Millisecond))
 
@@ -52,7 +52,7 @@ func TestWithRetryInterval_ShortensBackoff(t *testing.T) {
 func TestWithRetryInterval_AbsentOptionKeepsConfiguredBackoff(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 2)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	// Backoff is jittered around the configured 1s, so assert a floor well below it
 	// that a 50ms override could not reach.
@@ -65,11 +65,11 @@ func TestWithRetryInterval_AbsentOptionKeepsConfiguredBackoff(t *testing.T) {
 func TestWithRetryInterval_DoesNotAffectOtherInstances(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, 2)
-	config.Set(configurationKeyRetryAfter, 1)
+	config.Set(ConfigurationKeyRetryAfter, 1)
 
 	overridden, _ := elapsedForRetries(t, config, WithRetryInterval(10*time.Millisecond))
 	shared, _ := elapsedForRetries(t, config)
 
 	assert.Less(t, overridden, shared, "the override is per instance and must not leak into the shared configuration")
-	assert.Equal(t, 1, config.GetInt(configurationKeyRetryAfter), "the configuration itself is untouched")
+	assert.Equal(t, 1, config.GetInt(ConfigurationKeyRetryAfter), "the configuration itself is untouched")
 }
