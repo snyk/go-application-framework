@@ -119,6 +119,8 @@ func billingCapabilityFromCapture(capability capture.Capability) string {
 		return CapabilityIaC
 	case capture.CapabilityCode:
 		return CapabilityCode
+	case capture.CapabilityAIBOM:
+		return CapabilityAIBOM
 	default:
 		return string(capability)
 	}

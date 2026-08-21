@@ -11,8 +11,15 @@ import (
 // ContributorBillingPostInvokeHook waits for contributor billing ingest started during capture.
 func ContributorBillingPostInvokeHook(ctx context.Context, engine workflow.Engine, hctx workflow.PostInvokeContext) {
 	config := engine.GetConfiguration()
-	if config == nil || !captureEnabled(config) || !capture.IsBillableCommand(ActiveCommand(engine)) {
-		return
+
+	commandPendingEmit.mu.Lock()
+	hasPending := commandPendingEmit.emitter != nil
+	commandPendingEmit.mu.Unlock()
+
+	if !hasPending {
+		if config == nil || !captureEnabled(config) || !capture.IsBillableCommand(ActiveCommand(engine)) {
+			return
+		}
 	}
 	if shouldSkipPostInvokeWait(hctx.GetWorkflowIdentifier()) {
 		return

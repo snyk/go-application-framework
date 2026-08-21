@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "ai_bom_file_upload",
+    "attributes": {
+      "upload_revision_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "repo_name": "python-chatbot"
+    }
+  }
+}

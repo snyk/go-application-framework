@@ -20,21 +20,20 @@ func DefaultRepoPath(workingDirectory string) string {
 }
 
 // ActiveCommand returns the in-flight CLI command used for contributor billing gating
-// from analytics, with a legacy RAW_CMD_ARGS fallback when analytics has no command set.
+// from analytics plus RAW_CMD_ARGS (analytics omits flags such as --report).
 func ActiveCommand(engine workflow.Engine) string {
 	if engine == nil {
 		return ""
 	}
+	analyticsCommand := ""
 	if analytics := engine.GetAnalytics(); analytics != nil {
-		if cmd := strings.TrimSpace(analytics.GetCommand()); cmd != "" {
-			return cmd
-		}
+		analyticsCommand = strings.TrimSpace(analytics.GetCommand())
 	}
 	config := engine.GetConfiguration()
 	if config == nil {
-		return ""
+		return analyticsCommand
 	}
-	return capture.CommandNameFromRawArgs(config.GetStringSlice(configuration.RAW_CMD_ARGS))
+	return capture.ResolveBillableCommand(analyticsCommand, config.GetStringSlice(configuration.RAW_CMD_ARGS))
 }
 
 // EnsureCaptureSession lazily opens the command capture session when none is active.

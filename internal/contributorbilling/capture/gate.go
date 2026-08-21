@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"os"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -13,6 +14,9 @@ func IsBillableCommand(command string) bool {
 		return false
 	}
 	if command == "monitor" || strings.HasPrefix(command, "monitor ") {
+		return true
+	}
+	if command == "aibom --upload" || (strings.HasPrefix(command, "aibom ") && strings.Contains(command, "--upload")) {
 		return true
 	}
 	if !strings.Contains(command, "--report") {
@@ -29,13 +33,47 @@ func CommandNameFromRawArgs(args []string) string {
 	if len(args) >= 2 && (args[0] == "iac" || args[0] == "code") && args[1] == "test" {
 		name := args[0] + " " + args[1]
 		for _, arg := range args[2:] {
-			if arg == "--report" {
+			if arg == "--report" || strings.HasPrefix(arg, "--report=") {
 				return name + " --report"
 			}
 		}
 		return name
 	}
+	if len(args) >= 1 && args[0] == "aibom" {
+		for _, arg := range args[1:] {
+			if arg == "--upload" || strings.HasPrefix(arg, "--upload=") {
+				return "aibom --upload"
+			}
+		}
+	}
 	return args[0]
+}
+
+// ResolveBillableCommand picks the command label used for billing gating.
+// cliv2 analytics SetCommand omits flags (e.g. "iac test"). Prefer argv-derived
+// labels from configured RAW_CMD_ARGS, then os.Args (main workflow never sets RAW_CMD_ARGS).
+func ResolveBillableCommand(analyticsCommand string, rawArgs []string) string {
+	for _, args := range [][]string{rawArgs, processArgs()} {
+		fromArgs := CommandNameFromRawArgs(args)
+		if IsBillableCommand(fromArgs) {
+			return fromArgs
+		}
+	}
+	analyticsCommand = strings.TrimSpace(analyticsCommand)
+	if IsBillableCommand(analyticsCommand) {
+		return analyticsCommand
+	}
+	if analyticsCommand != "" {
+		return analyticsCommand
+	}
+	return CommandNameFromRawArgs(rawArgs)
+}
+
+func processArgs() []string {
+	if len(os.Args) > 1 {
+		return os.Args[1:]
+	}
+	return nil
 }
 
 // CaptureEnabledForBillableHTTP reports whether capture may run for the active command.
@@ -51,7 +89,25 @@ func EnsureCaptureSessionForConfig(config configuration.Configuration, command s
 	if !CaptureEnabledForBillableHTTP(config, command) {
 		return nil
 	}
-	return EnsureCommandSession(repoPathFromConfig(config))
+	return ensureCommandSessionWithConfig(repoPathFromConfig(config), config)
+}
+
+func ensureCommandSessionWithConfig(repoPath string, config configuration.Configuration) *Capture {
+	commandSession.mu.Lock()
+	defer commandSession.mu.Unlock()
+
+	if commandSession.sealed && commandSession.capture == nil {
+		return nil
+	}
+	if commandSession.capture != nil {
+		return commandSession.capture
+	}
+
+	bag := NewCapture()
+	commandSession.capture = bag
+	commandSession.repoPath = repoPath
+	commandSession.captureConfig = config
+	return bag
 }
 
 func repoPathFromConfig(config configuration.Configuration) string {

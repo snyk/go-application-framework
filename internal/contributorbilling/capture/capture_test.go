@@ -86,3 +86,24 @@ func TestRegisterBillableTest(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, capture.CapabilityCode, capability)
 }
+
+func TestPromoteBillableJob(t *testing.T) {
+	t.Parallel()
+
+	const (
+		jobID  = "11111111-1111-4111-8111-111111111111"
+		testID = "22222222-2222-4222-8222-222222222222"
+	)
+
+	bag := capture.NewCapture()
+	bag.RegisterBillableTest(jobID, capture.CapabilityOSS)
+
+	bag.PromoteBillableJob(jobID, testID)
+
+	_, ok := bag.BillableTestCapability(jobID)
+	assert.False(t, ok)
+
+	capability, ok := bag.BillableTestCapability(testID)
+	require.True(t, ok)
+	assert.Equal(t, capture.CapabilityOSS, capability)
+}

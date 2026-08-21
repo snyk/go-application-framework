@@ -107,3 +107,37 @@ func TestEmitFromCapture_skipsEmptyScopeID(t *testing.T) {
 
 	assert.True(t, emitter.WaitWithTimeout(50*time.Millisecond))
 }
+
+func TestEmitFromCaptureFirstRecord_postsRevisionForAIBOM(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+
+	emitter := contributorbilling.NewEmitter()
+
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	bag := capture.NewCapture()
+	bag.Add(capture.Record{
+		Capability: capture.CapabilityAIBOM,
+		EntityID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		EntityType: capture.EntityTypeRevision,
+	})
+
+	contributorbilling.EmitFromCaptureFirstRecord(context.Background(), bag, contributorbilling.FromCaptureOptions{
+		Configuration: config,
+		Emitter:       emitter,
+		ScopeID:       "33333333-3333-4333-8333-333333333333",
+		IngestURL:     server.URL,
+	})
+
+	require.True(t, emitter.WaitWithTimeout(2*time.Second))
+	assert.Equal(t, 1, requestCount)
+}

@@ -12,6 +12,8 @@ const (
 	CapabilityCode = "code"
 	// CapabilityIaC is the CLI product flow for IaC registry share billing emit.
 	CapabilityIaC = "iac"
+	// CapabilityAIBOM is the CLI product flow for AI-BOM upload billing emit.
+	CapabilityAIBOM = "aibom"
 
 	// EntityTypeProject is the default ES ingest entity type for Registry project public IDs.
 	EntityTypeProject = "project"

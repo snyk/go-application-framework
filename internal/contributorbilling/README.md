@@ -5,7 +5,7 @@ entitlements-service after successful in-scope CLI commands.
 
 ## Purpose
 
-After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`),
+After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`, `snyk aibom --upload`),
 callers emit contributor usage to the entitlements-service ingest endpoint, which publishes Kafka
 billing events.
 
@@ -175,8 +175,8 @@ Each item gets its own ingest POST and its own `Timeout` budget.
 | Repo | When | Entity ID source |
 |------|------|------------------|
 | cliv2 + legacy TS | Monitor / IaC `--report` (TS path) success | capture middleware project UUIDs |
-| cli-extension-os-flows | Dragonfly monitor success | monitor response project public ID |
-| code-client-go | Native `--report` success | `ResultMetaData.TargetId` as target entity |
+| GAF capture middleware | Dragonfly monitor success | Test API CreateTest (`monitor: true`) → GET test `project_entity` locator |
+| code-client-go | Native `--report` success | hidden Test API or components `project_id` |
 
 Not in scope: IaC native extension changes (legacy cliv2 capture only for v1), SCLE Code `--report`, container/docker monitor.
 

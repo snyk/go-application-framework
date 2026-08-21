@@ -34,10 +34,20 @@ func RegisterWithEngine(engine workflow.Engine) {
 
 // TryEmitAfterFirstCapture starts an async ingest POST for the first captured project ID.
 func TryEmitAfterFirstCapture(ctx context.Context, engine workflow.Engine, config configuration.Configuration) {
-	if engine == nil || config == nil || !captureEnabled(config) {
+	if engine == nil {
 		return
 	}
-	if !capture.IsBillableCommand(ActiveCommand(engine)) {
+
+	bag := capture.ActiveCapture()
+	if bag == nil || !bag.HasRecords() {
+		return
+	}
+
+	emitConfig := capture.SessionConfiguration()
+	if emitConfig == nil {
+		emitConfig = config
+	}
+	if emitConfig == nil {
 		return
 	}
 
@@ -48,20 +58,18 @@ func TryEmitAfterFirstCapture(ctx context.Context, engine workflow.Engine, confi
 	}
 	commandPendingEmit.mu.Unlock()
 
-	bag := capture.ActiveCapture()
-	if bag == nil || !bag.HasRecords() {
-		return
-	}
-
-	scopeID := config.GetString(configuration.ORGANIZATION)
+	scopeID := emitConfig.GetString(configuration.ORGANIZATION)
 	if scopeID == "" {
+		if logger := engine.GetLogger(); logger != nil {
+			logger.Warn().Msg("contributor billing: capture has records but org scope is empty; skipping ingest POST")
+		}
 		return
 	}
 
 	emitter := contributorbilling.NewEmitter()
 	logger := engine.GetLogger()
 	contributorbilling.EmitFromCaptureFirstRecord(ctx, bag, contributorbilling.FromCaptureOptions{
-		Configuration: config,
+		Configuration: emitConfig,
 		Engine:        engine,
 		ScopeID:       scopeID,
 		RepoPath:      capture.SessionRepoPath(),

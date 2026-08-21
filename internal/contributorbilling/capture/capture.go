@@ -11,13 +11,17 @@ type contextKey struct{}
 type Capability string
 
 const (
-	CapabilityOSS  Capability = "oss"
-	CapabilityIaC  Capability = "iac"
-	CapabilityCode Capability = "code"
+	CapabilityOSS   Capability = "oss"
+	CapabilityIaC   Capability = "iac"
+	CapabilityCode  Capability = "code"
+	CapabilityAIBOM Capability = "aibom"
 )
 
 // EntityTypeProject is the default ES ingest entity prefix for Registry project public IDs.
 const EntityTypeProject = "project"
+
+// EntityTypeRevision is the ES ingest entity prefix for upload revision IDs (e.g. aibom --upload).
+const EntityTypeRevision = "revision"
 
 // Record holds one billing entity observed from a successful product API interaction.
 type Record struct {
@@ -71,6 +75,27 @@ func (c *Capture) RegisterBillableTest(testID string, capability Capability) {
 		c.billableTests = make(map[string]billableTest)
 	}
 	c.billableTests[testID] = billableTest{capability: capability}
+}
+
+// PromoteBillableJob copies billable metadata from a CreateTest job ID to the final test ID
+// returned by GET /test_jobs/{job} (303 See Other).
+func (c *Capture) PromoteBillableJob(jobID, testID string) {
+	if c == nil || jobID == "" || testID == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.billableTests == nil {
+		return
+	}
+
+	meta, ok := c.billableTests[jobID]
+	if !ok {
+		return
+	}
+	c.billableTests[testID] = meta
+	delete(c.billableTests, jobID)
 }
 
 // BillableTestCapability returns the capability registered for testID, if any.

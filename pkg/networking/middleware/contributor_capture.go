@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -39,10 +41,15 @@ func NewContributorCaptureMiddleware(
 }
 
 func (m *ContributorCaptureMiddleware) activeCommandName() string {
-	if m.activeCommand == nil {
-		return ""
+	analyticsCommand := ""
+	if m.activeCommand != nil {
+		analyticsCommand = m.activeCommand()
 	}
-	return m.activeCommand()
+	var rawArgs []string
+	if m.config != nil {
+		rawArgs = m.config.GetStringSlice(configuration.RAW_CMD_ARGS)
+	}
+	return capture.ResolveBillableCommand(analyticsCommand, rawArgs)
 }
 
 func (m *ContributorCaptureMiddleware) captureEnabledForBillableHTTP() bool {
@@ -65,15 +72,24 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 		return m.next.RoundTrip(req)
 	}
 
+	billableCommand := m.activeCommandName()
 	if m.captureEnabledForBillableHTTP() {
-		capture.EnsureCaptureSessionForConfig(m.config, m.activeCommandName())
+		capture.EnsureCaptureSessionForConfig(m.config, billableCommand)
+	} else if m.logger != nil && strings.HasPrefix(strings.ToLower(req.URL.Path), "/report/") {
+		m.logger.Debug().
+			Str("path", req.URL.Path).
+			Str("command", billableCommand).
+			Msg("contributor capture: skipping deeproxy report (command not billable)")
 	}
 
 	bag := capture.ActiveCapture()
 	var createTestMeta capture.CreateTestRequestMeta
 	var hasCreateTestMeta bool
+	var aibomUploadRevisionID string
+	var hasAIBOMUploadMeta bool
 	if bag != nil && m.captureEnabledForBillableHTTP() {
 		createTestMeta, hasCreateTestMeta = m.readCreateTestMeta(req)
+		aibomUploadRevisionID, hasAIBOMUploadMeta = m.readAIBOMUploadMeta(req)
 	}
 
 	res, err := m.next.RoundTrip(req)
@@ -82,7 +98,7 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 	}
 
 	if bag != nil && m.captureEnabledForBillableHTTP() && !capture.IsSessionSealed() {
-		m.tryCapture(req, res, bag, hasCreateTestMeta, createTestMeta)
+		m.tryCapture(req, res, bag, hasCreateTestMeta, createTestMeta, hasAIBOMUploadMeta, aibomUploadRevisionID)
 		if bag.HasRecords() {
 			capture.SealAndNotifyFirstRecord()
 		}
@@ -109,12 +125,33 @@ func (m *ContributorCaptureMiddleware) readCreateTestMeta(req *http.Request) (ca
 	return capture.ParseCreateTestRequest(bodyBytes)
 }
 
+func (m *ContributorCaptureMiddleware) readAIBOMUploadMeta(req *http.Request) (revisionID string, ok bool) {
+	if req == nil || req.URL == nil {
+		return "", false
+	}
+
+	endpoint, _, matched := capture.MatchRequest(req.Method, req.URL.Path)
+	if !matched || endpoint != capture.EndpointAIBOMUpload {
+		return "", false
+	}
+
+	bodyBytes, readErr := readRequestBody(req, maxCaptureBodyBytes)
+	if readErr != nil && m.logger != nil {
+		m.logger.Debug().Err(readErr).Str("path", req.URL.Path).Msg("contributor capture: failed to read AI-BOM upload request body")
+		return "", false
+	}
+
+	return capture.ParseAIBOMUploadRequest(bodyBytes)
+}
+
 func (m *ContributorCaptureMiddleware) tryCapture(
 	req *http.Request,
 	res *http.Response,
 	bag *capture.Capture,
 	hasCreateTestMeta bool,
 	createTestMeta capture.CreateTestRequestMeta,
+	hasAIBOMUploadMeta bool,
+	aibomUploadRevisionID string,
 ) {
 	defer func() {
 		if recovered := recover(); recovered != nil && m.logger != nil {
@@ -129,12 +166,12 @@ func (m *ContributorCaptureMiddleware) tryCapture(
 		}
 	}()
 
-	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
+	endpoint, legacyCapability, matched := m.matchedCaptureRequest(req)
+	if !matched {
 		return
 	}
 
-	endpoint, legacyCapability, matched := m.matchedCaptureRequest(req)
-	if !matched {
+	if !captureResponseStatusOK(res.StatusCode, endpoint) {
 		return
 	}
 
@@ -145,7 +182,22 @@ func (m *ContributorCaptureMiddleware) tryCapture(
 		}
 		return
 	}
-	if !parseable {
+	parseBytes := bodyBytes
+	if encoding := res.Header.Get("Content-Encoding"); encoding != "" {
+		decoded, decodeErr := decodeCaptureBody(bodyBytes, encoding)
+		if decodeErr != nil {
+			if m.logger != nil {
+				m.logger.Debug().
+					Err(decodeErr).
+					Str("path", req.URL.Path).
+					Str("content_encoding", encoding).
+					Msg("contributor capture: failed to decode response body, using raw bytes")
+			}
+		} else {
+			parseBytes = decoded
+		}
+	}
+	if !parseable && !captureAllowsTruncatedBodyParse(endpoint) {
 		if m.logger != nil {
 			m.logger.Debug().
 				Int("body_bytes", len(bodyBytes)).
@@ -154,14 +206,31 @@ func (m *ContributorCaptureMiddleware) tryCapture(
 		}
 		return
 	}
+	if endpoint == capture.EndpointAIBOMUpload {
+		m.captureAIBOMUpload(bag, req.URL.Path, hasAIBOMUploadMeta, aibomUploadRevisionID)
+		return
+	}
+	if len(parseBytes) == 0 {
+		return
+	}
 
 	switch endpoint {
 	case capture.EndpointTestCreate:
-		m.captureCreateTest(bag, bodyBytes, hasCreateTestMeta, createTestMeta)
+		m.captureCreateTest(bag, parseBytes, hasCreateTestMeta, createTestMeta)
+	case capture.EndpointTestJobGet:
+		m.captureTestJobRedirect(bag, req, parseBytes)
 	case capture.EndpointTestGet, capture.EndpointTestComponents:
-		m.captureTestFollowUp(bag, req, endpoint, bodyBytes)
+		m.captureTestFollowUp(bag, req, endpoint, parseBytes)
 	default:
-		m.captureLegacyRecords(bag, endpoint, req.URL.Path, bodyBytes, legacyCapability)
+		hadRecords := bag.HasRecords()
+		m.captureLegacyRecords(bag, endpoint, req.URL.Path, parseBytes, legacyCapability)
+		if m.logger != nil && endpoint == capture.EndpointDeeproxyReport && !hadRecords && !bag.HasRecords() {
+			m.logger.Debug().
+				Str("path", req.URL.Path).
+				Int("body_bytes", len(parseBytes)).
+				Bool("parseable", parseable).
+				Msg("contributor capture: deeproxy report parse produced no records")
+		}
 	}
 }
 
@@ -174,11 +243,46 @@ func (m *ContributorCaptureMiddleware) captureCreateTest(
 	if !hasCreateTestMeta || !createTestMeta.PublishReport {
 		return
 	}
-	testID := capture.ParseCreateTestResponse(bodyBytes)
+	jobID := capture.ParseCreateTestResponse(bodyBytes)
+	if jobID == "" {
+		return
+	}
+	bag.RegisterBillableTest(jobID, createTestMeta.Capability)
+}
+
+func (m *ContributorCaptureMiddleware) captureAIBOMUpload(
+	bag *capture.Capture,
+	path string,
+	hasMeta bool,
+	revisionID string,
+) {
+	if !hasMeta || revisionID == "" {
+		return
+	}
+	record := capture.AIBOMUploadRecord(path, revisionID)
+	if record.EntityID == "" {
+		return
+	}
+	bag.Add(record)
+}
+
+func (m *ContributorCaptureMiddleware) captureTestJobRedirect(
+	bag *capture.Capture,
+	req *http.Request,
+	bodyBytes []byte,
+) {
+	if req == nil || req.URL == nil {
+		return
+	}
+	jobID := capture.JobIDFromGetPath(req.URL.Path)
+	if jobID == "" {
+		return
+	}
+	testID := capture.ParseTestJobRedirectResponse(bodyBytes)
 	if testID == "" {
 		return
 	}
-	bag.RegisterBillableTest(testID, createTestMeta.Capability)
+	bag.PromoteBillableJob(jobID, testID)
 }
 
 func (m *ContributorCaptureMiddleware) captureTestFollowUp(
@@ -215,7 +319,7 @@ func (m *ContributorCaptureMiddleware) testCapabilityForPath(bag *capture.Captur
 		testID = capture.TestIDFromGetPath(path)
 	case capture.EndpointTestComponents:
 		testID = capture.TestIDFromComponentsPath(path)
-	case capture.EndpointNone, capture.EndpointRegistryMonitor, capture.EndpointRegistryIaCShare, capture.EndpointTestCreate:
+	case capture.EndpointNone, capture.EndpointRegistryMonitor, capture.EndpointRegistryIaCShare, capture.EndpointTestCreate, capture.EndpointTestJobGet, capture.EndpointDeeproxyReport, capture.EndpointAIBOMUpload:
 		return ""
 	}
 	if testID == "" {
@@ -240,10 +344,39 @@ func (m *ContributorCaptureMiddleware) matchedCaptureRequest(req *http.Request) 
 
 	isKnownHost, err := ShouldRequireAuthentication(apiURL, req.URL, additionalSubdomains, additionalURLs)
 	if !isKnownHost || err != nil {
+		if m.logger != nil && endpoint == capture.EndpointDeeproxyReport {
+			m.logger.Debug().
+				Str("path", req.URL.Path).
+				Str("host", req.URL.Host).
+				Str("api_url", apiURL).
+				Err(err).
+				Bool("known_host", isKnownHost).
+				Msg("contributor capture: deeproxy report host not recognized")
+		}
 		return capture.EndpointNone, "", false
 	}
 
 	return endpoint, legacyCapability, true
+}
+
+// captureAllowsTruncatedBodyParse reports whether an endpoint can be parsed from a
+// response prefix when the full body exceeds maxCaptureBodyBytes.
+func captureResponseStatusOK(statusCode int, endpoint capture.EndpointKind) bool {
+	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
+		return true
+	}
+	return endpoint == capture.EndpointTestJobGet && statusCode == http.StatusSeeOther
+}
+
+func captureAllowsTruncatedBodyParse(endpoint capture.EndpointKind) bool {
+	switch endpoint {
+	case capture.EndpointDeeproxyReport:
+		// Legacy Code deeproxy COMPLETE responses embed full SARIF after top-level
+		// status/uploadResult fields — the billing entity is in that prefix.
+		return true
+	default:
+		return false
+	}
 }
 
 func readRequestBody(req *http.Request, maxBytes int64) ([]byte, error) {
@@ -262,6 +395,28 @@ func readRequestBody(req *http.Request, maxBytes int64) ([]byte, error) {
 		return bodyBytes[:maxBytes], nil
 	}
 	return bodyBytes, nil
+}
+
+func decodeCaptureBody(bodyBytes []byte, contentEncoding string) ([]byte, error) {
+	if len(bodyBytes) == 0 {
+		return bodyBytes, nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(contentEncoding)) {
+	case "gzip", "x-gzip":
+		reader, err := gzip.NewReader(bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		return decoded, nil
+	default:
+		return bodyBytes, nil
+	}
 }
 
 func readResponseBody(res *http.Response, maxBytes int64) (bodyBytes []byte, parseable bool, err error) {

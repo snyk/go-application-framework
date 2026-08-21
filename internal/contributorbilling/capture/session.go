@@ -1,6 +1,10 @@
 package capture
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+)
 
 // ConfigurationKeyCaptureEnabled gates contributor billing HTTP capture. Resolved via
 // feature-flag-service (see FeatureFlagEnableEntityContributorsPublish in app setup).
@@ -19,6 +23,7 @@ type session struct {
 	mu                 sync.Mutex
 	capture            *Capture
 	repoPath           string
+	captureConfig      configuration.Configuration
 	sealed             bool
 	firstRecordHandler FirstRecordHandler
 }
@@ -38,6 +43,7 @@ func OpenCommandSession(repoPath string) *Capture {
 	bag := NewCapture()
 	commandSession.capture = bag
 	commandSession.repoPath = repoPath
+	commandSession.captureConfig = nil
 	commandSession.sealed = false
 	return bag
 }
@@ -57,7 +63,15 @@ func EnsureCommandSession(repoPath string) *Capture {
 	bag := NewCapture()
 	commandSession.capture = bag
 	commandSession.repoPath = repoPath
+	commandSession.captureConfig = nil
 	return bag
+}
+
+// SessionConfiguration returns the configuration active when capture opened.
+func SessionConfiguration() configuration.Configuration {
+	commandSession.mu.Lock()
+	defer commandSession.mu.Unlock()
+	return commandSession.captureConfig
 }
 
 // IsSessionSealed reports whether further capture is disabled for the active command session.
@@ -101,6 +115,7 @@ func CloseCommandSession() (*Capture, string) {
 	repoPath := commandSession.repoPath
 	commandSession.capture = nil
 	commandSession.repoPath = ""
+	commandSession.captureConfig = nil
 	commandSession.sealed = false
 	return bag, repoPath
 }
@@ -118,5 +133,6 @@ func ResetCommandSession() {
 	defer commandSession.mu.Unlock()
 	commandSession.capture = nil
 	commandSession.repoPath = ""
+	commandSession.captureConfig = nil
 	commandSession.sealed = false
 }
