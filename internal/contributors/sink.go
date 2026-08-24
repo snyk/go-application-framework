@@ -23,6 +23,11 @@ func Enable() {
 	captureEnabled.Store(true)
 }
 
+// ResetCaptureForTest disables contributor capture until Enable is called again.
+func ResetCaptureForTest() {
+	captureEnabled.Store(false)
+}
+
 var singleton = &contributorSink{recordsByInteractionID: make(map[string]entityRecord)}
 
 // GetSink returns the active contributor-capture sink, or nil if capture
