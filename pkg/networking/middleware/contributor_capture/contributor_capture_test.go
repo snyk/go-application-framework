@@ -2,6 +2,7 @@ package contributor_capture_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -704,6 +705,170 @@ func TestContributorCaptureMiddleware_recordsNothingWhenAIBomUploadHasNoRevision
 	require.NoError(t, res.Body.Close())
 
 	assert.Empty(t, sink.Records(), "a missing revision ID must not be recorded as an empty entity")
+}
+
+func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing.T) {
+	const (
+		reportID  = "55555555-5555-4555-8555-555555555555"
+		projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/report/"+reportID, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(`{
+			"status": "COMPLETE",
+			"uploadResult": {
+				"projectId": "` + projectID + `"
+			}
+		}`))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	config := hostConfig(server.URL)
+	sink := newFakeSink()
+	rt := newMiddleware(http.DefaultTransport, config, sinkProviderAlways(sink), &zerolog.Logger{})
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/"+reportID, http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("snyk-interaction-id", "urn:snyk:interaction:deeproxy-1")
+
+	res, err := rt.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	records := sink.Records()
+	require.Len(t, records, 1)
+	assert.Equal(t, projectID, records[0].EntityID)
+	assert.Equal(t, "urn:snyk:interaction:deeproxy-1", records[0].InteractionID)
+}
+
+func TestContributorCaptureMiddleware_capturesGzipEncodedDeeproxyReport(t *testing.T) {
+	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	reportBody := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"}}`)
+
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	_, err := gz.Write(reportBody)
+	require.NoError(t, err)
+	require.NoError(t, gz.Close())
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		_, writeErr := w.Write(compressed.Bytes())
+		require.NoError(t, writeErr)
+	}))
+	t.Cleanup(server.Close)
+
+	config := hostConfig(server.URL)
+	sink := newFakeSink()
+	rt := newMiddleware(http.DefaultTransport, config, sinkProviderAlways(sink), &zerolog.Logger{})
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/55555555-5555-4555-8555-555555555555", http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("snyk-interaction-id", "urn:snyk:interaction:deeproxy-gzip")
+
+	res, err := rt.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	records := sink.Records()
+	require.Len(t, records, 1)
+	assert.Equal(t, projectID, records[0].EntityID)
+}
+
+func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *testing.T) {
+	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	prefix := `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"` + `,"analysisResult":{"type":"sarif","data":"`
+	wantBody := append([]byte(prefix), bytes.Repeat([]byte("x"), 70<<10)...)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	sink := newFakeSink()
+	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(wantBody)),
+			Request:    req,
+		}, nil
+	})
+	rt := newMiddleware(next, config, sinkProviderAlways(sink), &zerolog.Logger{})
+
+	req, err := http.NewRequest(http.MethodGet, "https://api.snyk.io/report/55555555-5555-4555-8555-555555555555", http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("snyk-interaction-id", "urn:snyk:interaction:deeproxy-truncated")
+
+	res, err := rt.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	records := sink.Records()
+	require.Len(t, records, 1)
+	assert.Equal(t, projectID, records[0].EntityID)
+}
+
+func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlowWithLegacyPublishReport(t *testing.T) {
+	t.Cleanup(cc.ResetPendingTests)
+
+	const (
+		orgID     = "77777777-7777-4777-8777-777777777777"
+		testID    = "88888888-8888-4888-8888-888888888888"
+		projectID = "33333333-3333-4333-8333-333333333333"
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/hidden/orgs/"+orgID+"/tests":
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			assert.Contains(t, string(body), `"publish_report":true`)
+			w.WriteHeader(http.StatusAccepted)
+			_, err = w.Write([]byte(`{"data":{"id":"` + testID + `"}}`))
+			require.NoError(t, err)
+		case r.Method == http.MethodGet && r.URL.Path == "/hidden/orgs/"+orgID+"/tests/"+testID+"/components":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{
+				"data": [{
+					"attributes": {
+						"type": "sast",
+						"success": true,
+						"webui": {"project_id": "` + projectID + `"}
+					}
+				}]
+			}`))
+			require.NoError(t, err)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	config := hostConfig(server.URL)
+	sink := newFakeSink()
+	rt := newMiddleware(http.DefaultTransport, config, sinkProviderAlways(sink), &zerolog.Logger{})
+
+	createBody := []byte(`{"data":{"attributes":{"config":{"publish_report":true,"scan_config":{"sast":{}}}}}}`)
+	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
+	require.NoError(t, err)
+	createReq.Header.Set("snyk-interaction-id", "urn:snyk:interaction:create-legacy")
+	createRes, err := rt.RoundTrip(createReq)
+	require.NoError(t, err)
+	require.NoError(t, createRes.Body.Close())
+
+	componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
+	require.NoError(t, err)
+	componentsReq.Header.Set("snyk-interaction-id", "urn:snyk:interaction:components-legacy")
+	componentsRes, err := rt.RoundTrip(componentsReq)
+	require.NoError(t, err)
+	require.NoError(t, componentsRes.Body.Close())
+
+	records := sink.Records()
+	require.Len(t, records, 1)
+	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

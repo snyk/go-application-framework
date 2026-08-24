@@ -73,6 +73,27 @@ func TestClassifyEndpoint(t *testing.T) {
 			matched:  true,
 		},
 		{
+			name:     "deeproxy legacy code report",
+			method:   "GET",
+			path:     "/report/55555555-5555-4555-8555-555555555555",
+			endpoint: cc.EndpointDeeproxyReport,
+			matched:  true,
+		},
+		{
+			name:     "deeproxy legacy code report trailing slash",
+			method:   "GET",
+			path:     "/report/55555555-5555-4555-8555-555555555555/",
+			endpoint: cc.EndpointDeeproxyReport,
+			matched:  true,
+		},
+		{
+			name:     "deeproxy legacy code report with query",
+			method:   "GET",
+			path:     "/report/55555555-5555-4555-8555-555555555555?poll=1",
+			endpoint: cc.EndpointDeeproxyReport,
+			matched:  true,
+		},
+		{
 			name:    "analytics ignored",
 			method:  "POST",
 			path:    "/v1/analytics/cli",

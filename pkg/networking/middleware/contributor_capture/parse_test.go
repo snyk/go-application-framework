@@ -1,6 +1,7 @@
 package contributor_capture_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,6 +66,52 @@ func TestParseCreateTestPublishReport_requiresPublishReportFlag(t *testing.T) {
 		}
 	}`)
 	assert.True(t, cc.ParseCreateTestPublishReport(body))
+}
+
+func TestParseCreateTestPublishReport_legacyPublishReportFlag(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"data": {
+			"attributes": {
+				"config": {
+					"publish_report": true
+				}
+			}
+		}
+	}`)
+	assert.True(t, cc.ParseCreateTestPublishReport(body))
+}
+
+func TestParseCreateTestPublishReport_rejectsMonitorOnly(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"data": {
+			"attributes": {
+				"config": {
+					"monitor": true,
+					"scan_config": {"sca": {}}
+				}
+			}
+		}
+	}`)
+	assert.False(t, cc.ParseCreateTestPublishReport(body))
+}
+
+func TestParseCreateTestPublishReport_rejectsPublishReportFalse(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"data": {
+			"attributes": {
+				"config": {
+					"publish_report": false
+				}
+			}
+		}
+	}`)
+	assert.False(t, cc.ParseCreateTestPublishReport(body))
 }
 
 func TestParseCreateTestPublishReport_handlesInvalidJSON(t *testing.T) {
@@ -165,4 +212,53 @@ func TestParseAIBomUploadRevisionIDs(t *testing.T) {
 			assert.Equal(t, tc.want, cc.ParseAIBomUploadRevisionID([]byte(tc.body)))
 		})
 	}
+}
+
+func TestParseDeeproxyReportProjectID_completeUploadResult(t *testing.T) {
+	t.Parallel()
+
+	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	body := []byte(`{
+		"status": "COMPLETE",
+		"uploadResult": {
+			"projectId": "` + projectID + `",
+			"snapshotId": "28831237-953d-4baa-ba5f-2a6b01ba5b94"
+		}
+	}`)
+
+	assert.Equal(t, projectID, cc.ParseDeeproxyReportProjectID(body))
+}
+
+func TestParseDeeproxyReportProjectID_ignoresIncompleteStatus(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"status": "IN_PROGRESS",
+		"uploadResult": {"projectId": "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"}
+	}`)
+
+	assert.Empty(t, cc.ParseDeeproxyReportProjectID(body))
+}
+
+func TestParseDeeproxyReportProjectID_projectIDSnakeCase(t *testing.T) {
+	t.Parallel()
+
+	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	body := []byte(`{
+		"status": "COMPLETE",
+		"uploadResult": {
+			"project_id": "` + projectID + `"
+		}
+	}`)
+
+	assert.Equal(t, projectID, cc.ParseDeeproxyReportProjectID(body))
+}
+
+func TestParseDeeproxyReportProjectID_truncatedBodyPrefix(t *testing.T) {
+	t.Parallel()
+
+	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
+	body := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"` + `,"analysisResult":{"type":"sarif","data":"` + strings.Repeat("x", 100) + `"`)
+
+	assert.Equal(t, projectID, cc.ParseDeeproxyReportProjectID(body))
 }

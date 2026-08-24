@@ -9,6 +9,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/contributors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	parentmiddleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
 
 // interactionIDHeader carries the CLI's per-command interaction ID on outbound requests.
@@ -107,12 +108,6 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 // classifyRequest decides whether req is one contributor-capture cares
 // about and, if so, what kind it is.
 func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (EndpointKind, bool) {
-	apiURL, err := url.Parse(m.config.GetString(configuration.API_URL))
-
-	if err != nil || req.URL.Hostname() != apiURL.Hostname() {
-		return EndpointNone, false
-	}
-
 	if req.Header.Get(interactionIDHeader) == "" {
 		return EndpointNone, false
 	}
@@ -122,7 +117,38 @@ func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (Endpo
 		return EndpointNone, false
 	}
 
+	if kind == EndpointDeeproxyReport {
+		return m.classifyDeeproxyRequest(req)
+	}
+
+	apiURL, err := url.Parse(m.config.GetString(configuration.API_URL))
+	if err != nil || req.URL.Hostname() != apiURL.Hostname() {
+		return EndpointNone, false
+	}
+
 	return kind, true
+}
+
+func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request) (EndpointKind, bool) {
+	apiURL := m.config.GetString(configuration.API_URL)
+	additionalSubdomains := m.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
+	additionalURLs := m.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+
+	isKnownHost, err := parentmiddleware.ShouldRequireAuthentication(apiURL, req.URL, additionalSubdomains, additionalURLs)
+	if !isKnownHost || err != nil {
+		if m.logger != nil {
+			m.logger.Debug().
+				Str("path", req.URL.Path).
+				Str("host", req.URL.Host).
+				Str("api_url", apiURL).
+				Err(err).
+				Bool("known_host", isKnownHost).
+				Msg("contributor capture: deeproxy report host not recognized")
+		}
+		return EndpointNone, false
+	}
+
+	return EndpointDeeproxyReport, true
 }
 
 // requestBody peeks req's body for parsing, yielding nil if it cannot be read.
@@ -147,39 +173,83 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 		return
 	}
 
-	bodyBytes, err := readResponseBody(res, maxCaptureBodyBytes)
+	parseBytes, ok := m.responseCaptureBytes(req, res, state.kind)
+	if !ok {
+		return
+	}
+
+	if state.kind == EndpointTestCreate {
+		m.markTestPending(parseBytes, state.publishReportRequested)
+		return
+	}
+
+	projectIDs := m.projectIDsFromResponse(state.kind, req.URL.Path, parseBytes)
+	m.record(contributors.EntityTypeProject, state.interactionID, projectIDs...)
+}
+
+func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind EndpointKind) ([]byte, bool) {
+	bodyBytes, fullyRead, err := readResponseBodyForParse(res, maxCaptureBodyBytes)
 	if err != nil {
 		if m.logger != nil {
 			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
 		}
-		return
+		return nil, false
+	}
+	if !fullyRead && !captureAllowsTruncatedBodyParse(kind) {
+		if m.logger != nil {
+			m.logger.Debug().
+				Int("body_bytes", len(bodyBytes)).
+				Str("path", req.URL.Path).
+				Msg("contributor capture: skipping parse for oversized response body")
+		}
+		return nil, false
 	}
 
-	var projectIDs []string
-	switch state.kind {
-	case EndpointTestCreate:
-		m.markTestPending(bodyBytes, state.publishReportRequested)
-		return
+	parseBytes := bodyBytes
+	if encoding := res.Header.Get("Content-Encoding"); encoding != "" {
+		decoded, decodeErr := decodeCaptureBody(bodyBytes, encoding)
+		if decodeErr != nil {
+			if m.logger != nil {
+				m.logger.Debug().
+					Err(decodeErr).
+					Str("path", req.URL.Path).
+					Str("content_encoding", encoding).
+					Msg("contributor capture: failed to decode response body, using raw bytes")
+			}
+		} else {
+			parseBytes = decoded
+		}
+	}
+
+	return parseBytes, true
+}
+
+func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind EndpointKind, path string, parseBytes []byte) []string {
+	switch kind {
 	case EndpointRegistryMonitor:
-		projectIDs = []string{parseMonitorProjectID(bodyBytes)}
+		return []string{parseMonitorProjectID(parseBytes)}
 	case EndpointRegistryIaCShare:
-		// one project per scanned file, so this is the one kind that can yield many
-		projectIDs = parseIaCShareProjectIDs(bodyBytes)
+		return parseIaCShareProjectIDs(parseBytes)
 	case EndpointTestComponents:
-		testID := testIDFromPath(req.URL.Path)
-		if testID == "" || !m.isPendingTest(testID) {
-			return
-		}
-		projectID := parseComponentsProjectID(bodyBytes)
-		if projectID == "" {
-			return // the test is still running; stay pending for the next poll
-		}
-		m.clearPendingTest(testID)
-		projectIDs = []string{projectID}
+		return m.projectIDsFromComponentsResponse(path, parseBytes)
+	case EndpointDeeproxyReport:
+		return []string{parseDeeproxyReportProjectID(parseBytes)}
 	default:
+		return nil
 	}
+}
 
-	m.record(contributors.EntityTypeProject, state.interactionID, projectIDs...)
+func (m *ContributorCaptureMiddleware) projectIDsFromComponentsResponse(path string, parseBytes []byte) []string {
+	testID := testIDFromPath(path)
+	if testID == "" || !m.isPendingTest(testID) {
+		return nil
+	}
+	projectID := parseComponentsProjectID(parseBytes)
+	if projectID == "" {
+		return nil
+	}
+	m.clearPendingTest(testID)
+	return []string{projectID}
 }
 
 // markTestPending records that a test ID asked for publish_report.

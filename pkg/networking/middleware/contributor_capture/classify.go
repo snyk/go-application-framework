@@ -15,6 +15,7 @@ var (
 	createTestPathPattern = regexp.MustCompile(`(?i)^/hidden/orgs/[0-9a-fA-F-]{36}/tests$`)
 	componentsPathPattern = regexp.MustCompile(`(?i)^/hidden/orgs/[0-9a-fA-F-]{36}/tests/([0-9a-fA-F-]{36})/components$`)
 	aiBomUploadPattern    = regexp.MustCompile(`(?i)^/rest/orgs/[0-9a-fA-F-]{36}/ai_boms/upload$`)
+	deeproxyReportPattern = regexp.MustCompile(`(?i)^/report/([0-9a-fA-F-]{36})/?$`)
 )
 
 // EndpointKind identifies which known product-API request/response shape a request matches.
@@ -27,6 +28,7 @@ const (
 	EndpointTestCreate
 	EndpointTestComponents
 	EndpointAIBomUpload
+	EndpointDeeproxyReport
 )
 
 // classifyEndpoint uses a requests path and method to determine if it's a kind
@@ -49,6 +51,9 @@ func classifyEndpoint(method, path string) (EndpointKind, bool) {
 			return EndpointAIBomUpload, true
 		}
 	case http.MethodGet:
+		if deeproxyReportPattern.MatchString(path) {
+			return EndpointDeeproxyReport, true
+		}
 		if componentsPathPattern.MatchString(path) {
 			return EndpointTestComponents, true
 		}
@@ -83,6 +88,9 @@ func parseUUID(value string) string {
 func normalizePath(path string) string {
 	if path == "" {
 		return "/"
+	}
+	if idx := strings.IndexAny(path, "?#"); idx >= 0 {
+		path = path[:idx]
 	}
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

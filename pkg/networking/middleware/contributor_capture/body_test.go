@@ -2,6 +2,7 @@ package contributor_capture_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"net/http"
@@ -169,6 +170,22 @@ func TestReadResponseBody_restoredBodyStaysRewindable(t *testing.T) {
 	got, err := io.ReadAll(seeker)
 	require.NoError(t, err)
 	assert.Equal(t, body, got)
+}
+
+func TestDecodeCaptureBody_gzipDeeproxyReport(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"25bcb5ba-5b16-4f56-8620-4e3a508f67ed"}}`)
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, err := gz.Write(raw)
+	require.NoError(t, err)
+	require.NoError(t, gz.Close())
+
+	decoded, err := cc.DecodeCaptureBody(buf.Bytes(), "gzip")
+	require.NoError(t, err)
+	assert.Equal(t, raw, decoded)
+	assert.Equal(t, "25bcb5ba-5b16-4f56-8620-4e3a508f67ed", cc.ParseDeeproxyReportProjectID(decoded))
 }
 
 type errAfterReadCloser struct {

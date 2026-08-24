@@ -14,6 +14,8 @@ var (
 	ParseIaCShareProjectIDs      = parseIaCShareProjectIDs
 	ParseComponentsProjectID     = parseComponentsProjectID
 	ParseAIBomUploadRevisionID   = parseAIBomUploadRevisionID
+	ParseDeeproxyReportProjectID = parseDeeproxyReportProjectID
+	DecodeCaptureBody            = decodeCaptureBody
 )
 
 // ResetPendingTests clears the package-level pending-test state.

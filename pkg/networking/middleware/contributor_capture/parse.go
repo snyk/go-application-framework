@@ -7,7 +7,9 @@ import (
 )
 
 var (
-	projectIDFromURI = regexp.MustCompile(`/project/([0-9a-fA-F-]{36})(?:/|$)`)
+	projectIDFromURI               = regexp.MustCompile(`/project/([0-9a-fA-F-]{36})(?:/|$)`)
+	deeproxyReportCompletePattern  = regexp.MustCompile(`(?i)"status"\s*:\s*"COMPLETE"`)
+	deeproxyUploadProjectIDPattern = regexp.MustCompile(`"uploadResult"\s*:\s*\{[^}]*"projectId"\s*:\s*"([0-9a-fA-F-]{36})"`)
 
 	iacShareMetadataKeys = map[string]struct{}{
 		"ok":   {},
@@ -27,6 +29,17 @@ type createTestRequestDoc struct {
 					Report bool `json:"report"`
 				} `json:"output"`
 			} `json:"configuration"`
+		} `json:"attributes"`
+	} `json:"data"`
+}
+
+type legacyCreateTestRequestDoc struct {
+	Data struct {
+		Attributes struct {
+			Config *struct {
+				PublishReport *bool `json:"publish_report,omitempty"`
+				Monitor       *bool `json:"monitor,omitempty"`
+			} `json:"config,omitempty"`
 		} `json:"attributes"`
 	} `json:"data"`
 }
@@ -57,13 +70,45 @@ type getComponentsResponseDoc struct {
 	} `json:"data"`
 }
 
-// parseCreateTestPublishReport reports whether a CreateTest request body asked for publish_report.
+type deeproxyReportBody struct {
+	Status       string `json:"status"`
+	UploadResult struct {
+		ProjectID      string `json:"projectId"`
+		ProjectIDSnake string `json:"project_id"`
+	} `json:"uploadResult"`
+}
+
+// parseCreateTestPublishReport reports whether a CreateTest request body asked for
+// publish_report. Supports the Code hidden Test API (configuration.output.report)
+// and OSS/IaC/SCA flows (config.publish_report). Native monitor (config.monitor)
+// is intentionally excluded.
 func parseCreateTestPublishReport(body []byte) bool {
+	if parseLegacyCreateTestPublishReport(body) {
+		return true
+	}
+	return parseCodeCreateTestPublishReport(body)
+}
+
+func parseLegacyCreateTestPublishReport(body []byte) bool {
+	var doc legacyCreateTestRequestDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return false
+	}
+	if doc.Data.Attributes.Config == nil {
+		return false
+	}
+	cfg := doc.Data.Attributes.Config
+	if cfg.Monitor != nil && *cfg.Monitor {
+		return false
+	}
+	return cfg.PublishReport != nil && *cfg.PublishReport
+}
+
+func parseCodeCreateTestPublishReport(body []byte) bool {
 	var doc createTestRequestDoc
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return false
 	}
-
 	return doc.Data.Attributes.Configuration.Output.Report
 }
 
@@ -167,6 +212,47 @@ func parseComponentsProjectID(body []byte) string {
 		}
 		if projectID := parseUUID(*item.Attributes.Webui.ProjectID); projectID != "" {
 			return projectID
+		}
+	}
+	return ""
+}
+
+// parseDeeproxyReportProjectID extracts a project ID from a legacy Code deeproxy
+// report response when status is COMPLETE.
+func parseDeeproxyReportProjectID(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+
+	var doc deeproxyReportBody
+	if err := json.Unmarshal(body, &doc); err == nil {
+		if !isDeeproxyReportComplete(doc.Status) {
+			return ""
+		}
+		if projectID := parseUUID(firstNonEmpty(doc.UploadResult.ProjectID, doc.UploadResult.ProjectIDSnake)); projectID != "" {
+			return projectID
+		}
+	}
+
+	// Fallback for truncated/overlong bodies where only a prefix was read.
+	if !deeproxyReportCompletePattern.Match(body) {
+		return ""
+	}
+	matches := deeproxyUploadProjectIDPattern.FindSubmatch(body)
+	if len(matches) < 2 {
+		return ""
+	}
+	return parseUUID(string(matches[1]))
+}
+
+func isDeeproxyReportComplete(status string) bool {
+	return strings.EqualFold(strings.TrimSpace(status), "COMPLETE")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
 		}
 	}
 	return ""
