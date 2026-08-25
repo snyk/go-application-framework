@@ -16,15 +16,28 @@ const maxCaptureBodyBytes = 64 << 10 // 64 KiB
 // errBodyTooLarge is returned when a body exceeds maxCaptureBodyBytes.
 var errBodyTooLarge = errors.New("contributor capture: body exceeds capture limit")
 
-// readRequestBody peeks up to maxBytes of req.Body for parsing, restoring
-// req.Body so it can still be read normally afterwards regardless of outcome.
-func readRequestBody(req *http.Request, maxBytes int64) ([]byte, error) {
+// readRequestBodyForParse peeks a request body for capture parsing. When the
+// on oversized bodies instead of an error, for callers that can parse from a prefix.
+func readRequestBodyForParse(req *http.Request, maxBytes int64) ([]byte, error) {
 	if req.Body == nil {
 		return nil, nil
 	}
-	peeked, restored, err := peekAndRestoreBody(req.Body, maxBytes)
-	req.Body = restored
-	return peeked, err
+
+	limit := maxBytes + 1
+	buf, readErr := io.ReadAll(io.LimitReader(req.Body, limit))
+	if readErr != nil {
+		req.Body = stitch(buf, req.Body)
+		return nil, readErr
+	}
+
+	if int64(len(buf)) <= maxBytes {
+		req.Body = io.NopCloser(bytes.NewReader(buf))
+		return buf, nil
+	}
+
+	// Oversized body: return truncated prefix for parsing.
+	req.Body = stitch(buf, req.Body)
+	return buf[:maxBytes], nil
 }
 
 // readResponseBody peeks up to maxBytes of res.Body for parsing, restoring

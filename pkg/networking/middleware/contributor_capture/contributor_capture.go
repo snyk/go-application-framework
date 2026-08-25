@@ -22,14 +22,13 @@ type ContributorCaptureMiddleware struct {
 	config       configuration.Configuration
 	sinkProvider SinkProvider
 	logger       *zerolog.Logger
+	pendingTests *pendingTests
 }
 
 type pendingTests struct {
 	mu  sync.Mutex
 	ids map[string]struct{}
 }
-
-var pendingTestsSingleton = &pendingTests{ids: make(map[string]struct{})}
 
 // NewContributorCaptureMiddleware wraps roundTripper with contributor capture logic.
 func NewContributorCaptureMiddleware(
@@ -43,6 +42,7 @@ func NewContributorCaptureMiddleware(
 		config:       config,
 		sinkProvider: sinkProvider,
 		logger:       logger,
+		pendingTests: &pendingTests{ids: make(map[string]struct{})},
 	}
 }
 
@@ -108,6 +108,8 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 // classifyRequest decides whether req is one contributor-capture cares
 // about and, if so, what kind it is.
 func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (EndpointKind, bool) {
+	// Interaction ID is required to track and correlate captured entities.
+	// Skip capture if it's missing.
 	if req.Header.Get(interactionIDHeader) == "" {
 		return EndpointNone, false
 	}
@@ -151,10 +153,12 @@ func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request
 	return EndpointDeeproxyReport, true
 }
 
-// requestBody peeks req's body for parsing, yielding nil if it cannot be read.
+// requestBody peeks req's body for parsing, returning a prefix if needed.
+// For request bodies larger than maxCaptureBodyBytes, a truncated prefix is returned
+// since parsing (e.g. JSON flag extraction) may work with just the start of the body.
 // The body stays readable by whoever gets the request next either way.
 func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
-	bodyBytes, err := readRequestBody(req, maxCaptureBodyBytes)
+	bodyBytes, err := readRequestBodyForParse(req, maxCaptureBodyBytes)
 	if err != nil {
 		if m.logger != nil {
 			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read request body")
@@ -169,7 +173,7 @@ func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
 func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState, req *http.Request, res *http.Response) {
 	defer m.recover(req)
 
-	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
+	if res.StatusCode >= http.StatusBadRequest {
 		return
 	}
 
@@ -262,25 +266,25 @@ func (m *ContributorCaptureMiddleware) markTestPending(bodyBytes []byte, publish
 		return
 	}
 
-	pendingTestsSingleton.mu.Lock()
-	pendingTestsSingleton.ids[testID] = struct{}{}
-	pendingTestsSingleton.mu.Unlock()
+	m.pendingTests.mu.Lock()
+	m.pendingTests.ids[testID] = struct{}{}
+	m.pendingTests.mu.Unlock()
 }
 
 // isPendingTest reports whether testID was previously marked pending.
 func (m *ContributorCaptureMiddleware) isPendingTest(testID string) bool {
-	pendingTestsSingleton.mu.Lock()
-	defer pendingTestsSingleton.mu.Unlock()
-	_, ok := pendingTestsSingleton.ids[testID]
+	m.pendingTests.mu.Lock()
+	defer m.pendingTests.mu.Unlock()
+	_, ok := m.pendingTests.ids[testID]
 	return ok
 }
 
 // clearPendingTest removes testID once it no longer needs tracking, so
 // pendingTests doesn't grow forever with tests that already got captured.
 func (m *ContributorCaptureMiddleware) clearPendingTest(testID string) {
-	pendingTestsSingleton.mu.Lock()
-	delete(pendingTestsSingleton.ids, testID)
-	pendingTestsSingleton.mu.Unlock()
+	m.pendingTests.mu.Lock()
+	delete(m.pendingTests.ids, testID)
+	m.pendingTests.mu.Unlock()
 }
 
 // record reports each captured ID to the sink. An empty ID means the parser

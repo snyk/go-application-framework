@@ -9,7 +9,7 @@ import (
 var (
 	projectIDFromURI               = regexp.MustCompile(`/project/([0-9a-fA-F-]{36})(?:/|$)`)
 	deeproxyReportCompletePattern  = regexp.MustCompile(`(?i)"status"\s*:\s*"COMPLETE"`)
-	deeproxyUploadProjectIDPattern = regexp.MustCompile(`"uploadResult"\s*:\s*\{[^}]*"projectId"\s*:\s*"([0-9a-fA-F-]{36})"`)
+	deeproxyUploadProjectIDPattern = regexp.MustCompile(`"uploadResult"\s*:\s*\{[^}]*"(?:projectId|project_id)"\s*:\s*"([0-9a-fA-F-]{36})"`)
 
 	iacShareMetadataKeys = map[string]struct{}{
 		"ok":   {},
