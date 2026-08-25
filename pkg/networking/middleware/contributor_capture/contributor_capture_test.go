@@ -18,86 +18,85 @@ import (
 	cc "github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 )
 
-func TestContributorCaptureMiddleware_capturesMonitorProjectID(t *testing.T) {
-	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *testing.T) {
+	tests := []struct {
+		name              string
+		method            string
+		path              string
+		responseBody      func(ids ...string) string
+		interactionID     string
+		expectedProjectID []string
+	}{
+		{
+			name:          "monitor",
+			method:        http.MethodPut,
+			path:          "/v1/monitor/npm",
+			interactionID: "urn:snyk:interaction:monitor-1",
+			responseBody: func(ids ...string) string {
+				return `{
+					"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+					"uri": "https://app.snyk.io/org/acme/project/` + ids[0] + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+				}`
+			},
+			expectedProjectID: []string{"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"},
+		},
+		{
+			name:          "iac share",
+			method:        http.MethodPost,
+			path:          "/v1/iac-cli-share-results",
+			interactionID: "urn:snyk:interaction:iac-1",
+			responseBody: func(ids ...string) string {
+				return `{
+					"./main.tf": "` + ids[0] + `",
+					"./other.tf": "` + ids[1] + `",
+					"ok": true
+				}`
+			},
+			expectedProjectID: []string{"dddddddd-dddd-4ddd-8ddd-dddddddddddd", "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"},
+		},
+	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method)
-		assert.Equal(t, "/v1/monitor/npm", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{
-			"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-			"uri": "https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-		}`))
-		require.NoError(t, err)
-	}))
-	t.Cleanup(server.Close)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, tt.method, r.Method)
+				assert.Equal(t, tt.path, r.URL.Path)
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write([]byte(tt.responseBody(tt.expectedProjectID...)))
+				require.NoError(t, err)
+			}))
+			t.Cleanup(server.Close)
 
-	config := hostConfig(server.URL)
-	sink := newFakeSink()
-	logger := zerolog.Nop()
-	provider := sinkProviderAlways(sink)
-	rt := newMiddleware(http.DefaultTransport, config, provider, &logger)
+			config := hostConfig(server.URL)
+			sink := newFakeSink()
+			logger := zerolog.Nop()
+			provider := sinkProviderAlways(sink)
+			rt := newMiddleware(http.DefaultTransport, config, provider, &logger)
 
-	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
-	require.NoError(t, err)
-	req.Header.Set("snyk-interaction-id", "urn:snyk:interaction:monitor-1")
+			req, err := http.NewRequest(tt.method, server.URL+tt.path, http.NoBody)
+			require.NoError(t, err)
+			req.Header.Set("snyk-interaction-id", tt.interactionID)
 
-	res, err := rt.RoundTrip(req)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.Equal(t, http.StatusOK, res.StatusCode)
+			res, err := rt.RoundTrip(req)
+			require.NoError(t, err)
+			require.NotNil(t, res)
+			require.Equal(t, http.StatusOK, res.StatusCode)
 
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	require.NotEmpty(t, body)
-	require.NoError(t, res.Body.Close())
+			body, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+			require.NotEmpty(t, body)
+			require.NoError(t, res.Body.Close())
 
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, contributors.EntityTypeProject, records[0].EntityType)
-	assert.Equal(t, projectID, records[0].EntityID)
-	assert.Equal(t, "urn:snyk:interaction:monitor-1", records[0].InteractionID)
-}
-
-func TestContributorCaptureMiddleware_capturesIaCShareProjectIDs(t *testing.T) {
-	const (
-		projectIDOne = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
-		projectIDTwo = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
-	)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/iac-cli-share-results", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{
-			"./main.tf": "` + projectIDOne + `",
-			"./other.tf": "` + projectIDTwo + `",
-			"ok": true
-		}`))
-		require.NoError(t, err)
-	}))
-	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
-	sink := newFakeSink()
-	logger := zerolog.Nop()
-	provider := sinkProviderAlways(sink)
-	rt := newMiddleware(http.DefaultTransport, config, provider, &logger)
-
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/iac-cli-share-results", http.NoBody)
-	require.NoError(t, err)
-	req.Header.Set("snyk-interaction-id", "urn:snyk:interaction:iac-1")
-
-	res, err := rt.RoundTrip(req)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.Equal(t, http.StatusOK, res.StatusCode)
-	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 2)
-	assert.ElementsMatch(t, []string{projectIDOne, projectIDTwo}, []string{records[0].EntityID, records[1].EntityID})
+			records := sink.Records()
+			require.Len(t, records, len(tt.expectedProjectID))
+			assert.Equal(t, contributors.EntityTypeProject, records[0].EntityType)
+			if len(records) == 1 {
+				assert.Equal(t, tt.expectedProjectID[0], records[0].EntityID)
+			} else {
+				assert.ElementsMatch(t, tt.expectedProjectID, []string{records[0].EntityID, records[1].EntityID})
+			}
+		})
+	}
 }
 
 func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
@@ -151,10 +150,17 @@ func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
 func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 	monitorBody := `{"uri":"https://app.snyk.io/org/acme/project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`
 
-	for _, statusCode := range []int{http.StatusNotFound, http.StatusInternalServerError} {
-		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+	tests := []struct {
+		statusCode int
+	}{
+		{statusCode: http.StatusNotFound},
+		{statusCode: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(http.StatusText(tt.statusCode), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(statusCode)
+				w.WriteHeader(tt.statusCode)
 				_, err := w.Write([]byte(monitorBody))
 				require.NoError(t, err)
 			}))
@@ -173,7 +179,7 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 			res, err := rt.RoundTrip(req)
 			require.NoError(t, err)
 			require.NotNil(t, res)
-			require.Equal(t, statusCode, res.StatusCode)
+			require.Equal(t, tt.statusCode, res.StatusCode)
 			require.NoError(t, res.Body.Close())
 
 			assert.Empty(t, sink.Records())

@@ -2,21 +2,16 @@ package contributor_capture
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-var (
-	monitorPathPattern    = regexp.MustCompile(`(?i)^/v1/monitor(?:/|$)`)
-	monitorDepsPattern    = regexp.MustCompile(`(?i)^/v1/monitor-dependencies(?:/|$)`)
-	iacSharePattern       = regexp.MustCompile(`(?i)^/v1/iac-cli-share-results(?:/|$)`)
-	createTestPathPattern = regexp.MustCompile(`(?i)^/hidden/orgs/[0-9a-fA-F-]{36}/tests$`)
-	componentsPathPattern = regexp.MustCompile(`(?i)^/hidden/orgs/[0-9a-fA-F-]{36}/tests/([0-9a-fA-F-]{36})/components$`)
-	aiBomUploadPattern    = regexp.MustCompile(`(?i)^/rest/orgs/[0-9a-fA-F-]{36}/ai_boms/upload$`)
-	deeproxyReportPattern = regexp.MustCompile(`(?i)^/report/([0-9a-fA-F-]{36})/?$`)
-)
+// isValidUUID checks if a string is a valid UUID without allocating.
+func isValidUUID(s string) bool {
+	_, err := uuid.Parse(s)
+	return err == nil
+}
 
 // EndpointKind identifies which known product-API request/response shape a request matches.
 type EndpointKind int
@@ -37,24 +32,24 @@ func classifyEndpoint(method, path string) (EndpointKind, bool) {
 	path = normalizePath(path)
 	switch method {
 	case http.MethodPut:
-		if monitorPathPattern.MatchString(path) || monitorDepsPattern.MatchString(path) {
+		if isMonitorPath(path) || isMonitorDepsPath(path) {
 			return EndpointRegistryMonitor, true
 		}
 	case http.MethodPost:
-		if iacSharePattern.MatchString(path) {
+		if isIaCSharePath(path) {
 			return EndpointRegistryIaCShare, true
 		}
-		if createTestPathPattern.MatchString(path) {
+		if isCreateTestPath(path) {
 			return EndpointTestCreate, true
 		}
-		if aiBomUploadPattern.MatchString(path) {
+		if isAIBomUploadPath(path) {
 			return EndpointAIBomUpload, true
 		}
 	case http.MethodGet:
-		if deeproxyReportPattern.MatchString(path) {
+		if isDeeproxyReportPath(path) {
 			return EndpointDeeproxyReport, true
 		}
-		if componentsPathPattern.MatchString(path) {
+		if isComponentsPath(path) {
 			return EndpointTestComponents, true
 		}
 	}
@@ -62,19 +57,129 @@ func classifyEndpoint(method, path string) (EndpointKind, bool) {
 	return EndpointNone, false
 }
 
+// isMonitorPath matches PUT /v1/monitor or /v1/monitor/{any-path}.
+func isMonitorPath(p string) bool {
+	return hasPrefixCaseInsensitive(p, "/v1/monitor") && isPathEnd(p, len("/v1/monitor"))
+}
+
+// isMonitorDepsPath matches PUT /v1/monitor-dependencies or /v1/monitor-dependencies/{any-path}.
+func isMonitorDepsPath(p string) bool {
+	return hasPrefixCaseInsensitive(p, "/v1/monitor-dependencies") && isPathEnd(p, len("/v1/monitor-dependencies"))
+}
+
+// isIaCSharePath matches POST /v1/iac-cli-share-results or /v1/iac-cli-share-results/{any-path}.
+func isIaCSharePath(p string) bool {
+	return hasPrefixCaseInsensitive(p, "/v1/iac-cli-share-results") && isPathEnd(p, len("/v1/iac-cli-share-results"))
+}
+
+// isCreateTestPath matches POST /hidden/orgs/{uuid}/tests (exactly).
+func isCreateTestPath(p string) bool {
+	return isOrgTestPath(p, "/tests", false)
+}
+
+// isComponentsPath matches GET /hidden/orgs/{uuid}/tests/{uuid}/components (exactly).
+func isComponentsPath(p string) bool {
+	return isOrgTestPath(p, "/components", true)
+}
+
+// isAIBomUploadPath matches POST /rest/orgs/{uuid}/ai_boms/upload (exactly).
+func isAIBomUploadPath(p string) bool {
+	const prefix = "/rest/orgs/"
+	const suffix = "/ai_boms/upload"
+	if !hasPrefixCaseInsensitive(p, prefix) {
+		return false
+	}
+	uuidEnd := len(prefix) + 36
+	if len(p) != len(prefix)+36+len(suffix) {
+		return false
+	}
+	if !hasSuffixCaseInsensitive(p[uuidEnd:], suffix) {
+		return false
+	}
+	return isValidUUID(p[len(prefix):uuidEnd])
+}
+
+// isDeeproxyReportPath matches GET /report/{uuid} or /report/{uuid}/ (exactly, ignoring trailing slash).
+func isDeeproxyReportPath(p string) bool {
+	const prefix = "/report/"
+	if !hasPrefixCaseInsensitive(p, prefix) {
+		return false
+	}
+	remaining := p[len(prefix):]
+	if remaining == "" {
+		return false
+	}
+	if remaining[len(remaining)-1] == '/' {
+		remaining = remaining[:len(remaining)-1]
+	}
+	return isValidUUID(remaining)
+}
+
+// isOrgTestPath checks for /hidden/orgs/{uuid}/tests{suffix} pattern
+func isOrgTestPath(p string, suffix string, capturesUUID bool) bool {
+	const prefix = "/hidden/orgs/"
+	if !hasPrefixCaseInsensitive(p, prefix) {
+		return false
+	}
+	uuidEnd := len(prefix) + 36
+	if len(p) < uuidEnd+len(suffix) {
+		return false
+	}
+	if !isValidUUID(p[len(prefix):uuidEnd]) {
+		return false
+	}
+	if !hasSuffixCaseInsensitive(p[uuidEnd:], suffix) {
+		return false
+	}
+	if capturesUUID {
+		componentsStart := uuidEnd + len("/tests/")
+		if len(p) <= componentsStart+36 {
+			return false
+		}
+		if !isValidUUID(p[componentsStart : componentsStart+36]) {
+			return false
+		}
+		return hasSuffixCaseInsensitive(p[componentsStart+36:], "/components")
+	}
+	return len(p) == uuidEnd+len(suffix)
+}
+
+func isPathEnd(p string, idx int) bool {
+	return len(p) == idx || (len(p) > idx && p[idx] == '/')
+}
+
+func hasPrefixCaseInsensitive(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	return strings.EqualFold(s[:len(prefix)], prefix)
+}
+
+func hasSuffixCaseInsensitive(s, suffix string) bool {
+	if len(s) < len(suffix) {
+		return false
+	}
+	return strings.EqualFold(s[len(s)-len(suffix):], suffix)
+}
+
 // testIDFromPath extracts the test UUID from a GET .../tests/{id}/components
 // path, given the EndpointKind already determined by classifyEndpoint.
 func testIDFromPath(path string) string {
 	path = normalizePath(path)
-	return firstSubmatchUUID(componentsPathPattern, path)
-}
-
-func firstSubmatchUUID(pattern *regexp.Regexp, path string) string {
-	matches := pattern.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	const prefix = "/hidden/orgs/"
+	if !hasPrefixCaseInsensitive(path, prefix) {
 		return ""
 	}
-	return parseUUID(matches[1])
+	uuidEnd := len(prefix) + 36
+	if len(path) <= uuidEnd+len("/tests/") {
+		return ""
+	}
+	componentsStart := uuidEnd + len("/tests/")
+	if componentsStart+36 > len(path) {
+		return ""
+	}
+	testUUID := path[componentsStart : componentsStart+36]
+	return parseUUID(testUUID)
 }
 
 func parseUUID(value string) string {

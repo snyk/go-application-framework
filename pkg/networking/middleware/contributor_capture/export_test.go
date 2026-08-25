@@ -8,12 +8,14 @@ var (
 
 	ClassifyEndpoint = classifyEndpoint
 
+	DecodeCaptureBody = decodeCaptureBody
+
+	ParseMonitorProjectID        = parseMonitorProjectID
 	ParseCreateTestPublishReport = parseCreateTestPublishReport
 	ParseCreateTestID            = parseCreateTestID
-	ParseMonitorProjectID        = parseMonitorProjectID
-	ParseIaCShareProjectIDs      = parseIaCShareProjectIDs
 	ParseComponentsProjectID     = parseComponentsProjectID
+	ParseIaCShareProjectIDs      = parseIaCShareProjectIDs
 	ParseAIBomUploadRevisionID   = parseAIBomUploadRevisionID
 	ParseDeeproxyReportProjectID = parseDeeproxyReportProjectID
-	DecodeCaptureBody            = decodeCaptureBody
+	ProjectIDFromMonitorURI      = projectIDFromMonitorURI
 )

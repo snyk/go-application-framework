@@ -7,7 +7,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// resetForTesting clears the enabled flag and sink state for test isolation.
+// Tests that call Enable() should call this in cleanup to allow other tests to run concurrently.
+func resetForTesting() {
+	captureEnabled.Store(false)
+	singleton.mu.Lock()
+	singleton.recordsByInteractionID = make(map[string]entityRecord)
+	singleton.mu.Unlock()
+}
+
 func TestGetSink(t *testing.T) {
+	t.Cleanup(resetForTesting)
+
 	assert.Nil(t, GetSink(), "capture must be disabled until Enable is called")
 
 	Enable()
@@ -20,6 +31,7 @@ func TestGetSink(t *testing.T) {
 }
 
 func TestContributorSink_RecordEntity_oneEntityPerInteractionID(t *testing.T) {
+	t.Parallel()
 	sink := &contributorSink{recordsByInteractionID: make(map[string]entityRecord)}
 
 	sink.RecordEntity(EntityTypeProject, "11111111-1111-4111-8111-111111111111", "urn:snyk:interaction:one")
@@ -32,6 +44,7 @@ func TestContributorSink_RecordEntity_oneEntityPerInteractionID(t *testing.T) {
 }
 
 func TestContributorSink_Get_missingInteractionID(t *testing.T) {
+	t.Parallel()
 	sink := &contributorSink{recordsByInteractionID: make(map[string]entityRecord)}
 
 	_, _, ok := sink.Get("urn:snyk:interaction:unknown")
@@ -39,6 +52,7 @@ func TestContributorSink_Get_missingInteractionID(t *testing.T) {
 }
 
 func TestContributorSink_Get_removesEntryAfterRead(t *testing.T) {
+	t.Parallel()
 	sink := &contributorSink{recordsByInteractionID: make(map[string]entityRecord)}
 	sink.RecordEntity(EntityTypeProject, "11111111-1111-4111-8111-111111111111", "urn:snyk:interaction:one")
 

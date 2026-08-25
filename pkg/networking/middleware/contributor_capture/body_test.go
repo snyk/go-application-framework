@@ -91,39 +91,59 @@ func TestReadResponseBody_restoredBodyStaysRewindable(t *testing.T) {
 	assert.Equal(t, body, got)
 }
 
-func TestReadRequestBodyForParse_returnsFullBodyWhenSmall(t *testing.T) {
+func TestReadRequestBodyForParse(t *testing.T) {
 	t.Parallel()
-
-	body := []byte(`{"publish_report":true}`)
-	req := &http.Request{Body: io.NopCloser(bytes.NewReader(body))}
-
-	got, err := cc.ReadRequestBodyForParse(req, 64<<10)
-	require.NoError(t, err)
-	assert.Equal(t, body, got)
-
-	downstream, err := io.ReadAll(req.Body)
-	require.NoError(t, err)
-	assert.Equal(t, body, downstream)
-}
-
-func TestReadRequestBodyForParse_returnsTruncatedOnOversized(t *testing.T) {
-	t.Parallel()
-
-	prefix := []byte(`{"publish_report":true`)
-	padding := make([]byte, 70<<10) // above the 64 KiB limit
-	for i := range padding {
-		padding[i] = 'x'
+	tests := []struct {
+		name           string
+		maxBytes       int64
+		bodySetup      func() []byte
+		expectFullBody bool
+		expectLen      int64
+	}{
+		{
+			name:           "full body when small",
+			maxBytes:       64 << 10,
+			bodySetup:      func() []byte { return []byte(`{"publish_report":true}`) },
+			expectFullBody: true,
+			expectLen:      23,
+		},
+		{
+			name:     "truncated on oversized",
+			maxBytes: 64 << 10,
+			bodySetup: func() []byte {
+				prefix := []byte(`{"publish_report":true`)
+				padding := make([]byte, 70<<10)
+				for i := range padding {
+					padding[i] = 'x'
+				}
+				return append(append([]byte(nil), prefix...), padding...)
+			},
+			expectFullBody: false,
+			expectLen:      64 << 10,
+		},
 	}
-	wantBody := append(append([]byte(nil), prefix...), padding...)
 
-	req := &http.Request{Body: io.NopCloser(bytes.NewReader(wantBody))}
-	got, err := cc.ReadRequestBodyForParse(req, 64<<10)
-	require.NoError(t, err)
-	assert.Equal(t, 64<<10, len(got), "should return truncated prefix")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	downstream, err := io.ReadAll(req.Body)
-	require.NoError(t, err)
-	assert.Equal(t, wantBody, downstream, "full body still readable")
+			body := tt.bodySetup()
+			req := &http.Request{Body: io.NopCloser(bytes.NewReader(body))}
+
+			got, err := cc.ReadRequestBodyForParse(req, tt.maxBytes)
+			require.NoError(t, err)
+
+			if tt.expectFullBody {
+				assert.Equal(t, body, got)
+			} else {
+				assert.Equal(t, tt.expectLen, int64(len(got)), "should return truncated prefix")
+			}
+
+			downstream, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			assert.Equal(t, body, downstream, "full body still readable")
+		})
+	}
 }
 
 func TestDecodeCaptureBody_gzipDeeproxyReport(t *testing.T) {

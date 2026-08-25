@@ -2,163 +2,93 @@ package contributor_capture
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 )
-
-var (
-	projectIDFromURI               = regexp.MustCompile(`/project/([0-9a-fA-F-]{36})(?:/|$)`)
-	deeproxyReportCompletePattern  = regexp.MustCompile(`(?i)"status"\s*:\s*"COMPLETE"`)
-	deeproxyUploadProjectIDPattern = regexp.MustCompile(`"uploadResult"\s*:\s*\{[^}]*"(?:projectId|project_id)"\s*:\s*"([0-9a-fA-F-]{36})"`)
-
-	iacShareMetadataKeys = map[string]struct{}{
-		"ok":   {},
-		"meta": {},
-	}
-)
-
-type monitorResult struct {
-	URI string `json:"uri"`
-}
-
-type createTestRequestDoc struct {
-	Data struct {
-		Attributes struct {
-			Configuration struct {
-				Output struct {
-					Report bool `json:"report"`
-				} `json:"output"`
-			} `json:"configuration"`
-		} `json:"attributes"`
-	} `json:"data"`
-}
-
-type legacyCreateTestRequestDoc struct {
-	Data struct {
-		Attributes struct {
-			Config *struct {
-				PublishReport *bool `json:"publish_report,omitempty"`
-				Monitor       *bool `json:"monitor,omitempty"`
-			} `json:"config,omitempty"`
-		} `json:"attributes"`
-	} `json:"data"`
-}
-
-type createTestResponseDoc struct {
-	Data struct {
-		ID string `json:"id"`
-	} `json:"data"`
-}
-
-type aiBomUploadRequestDoc struct {
-	Data struct {
-		Attributes struct {
-			UploadRevisionID string `json:"upload_revision_id"`
-		} `json:"attributes"`
-	} `json:"data"`
-}
-
-type getComponentsResponseDoc struct {
-	Data []struct {
-		Attributes struct {
-			Type    string `json:"type"`
-			Success bool   `json:"success"`
-			Webui   *struct {
-				ProjectID *string `json:"project_id,omitempty"`
-			} `json:"webui,omitempty"`
-		} `json:"attributes"`
-	} `json:"data"`
-}
-
-type deeproxyReportBody struct {
-	Status       string `json:"status"`
-	UploadResult struct {
-		ProjectID      string `json:"projectId"`
-		ProjectIDSnake string `json:"project_id"`
-	} `json:"uploadResult"`
-}
 
 // parseCreateTestPublishReport reports whether a CreateTest request body asked for
 // publish_report. Supports the Code hidden Test API (configuration.output.report)
 // and OSS/IaC/SCA flows (config.publish_report). Native monitor (config.monitor)
 // is intentionally excluded.
 func parseCreateTestPublishReport(body []byte) bool {
-	if parseLegacyCreateTestPublishReport(body) {
-		return true
+	// Try legacy format first (OSS/IaC/SCA)
+	var legacyReq struct {
+		Data struct {
+			Attributes struct {
+				Config *struct {
+					PublishReport *bool `json:"publish_report,omitempty"`
+					Monitor       *bool `json:"monitor,omitempty"`
+				} `json:"config,omitempty"`
+			} `json:"attributes"`
+		} `json:"data"`
 	}
-	return parseCodeCreateTestPublishReport(body)
-}
+	if err := json.Unmarshal(body, &legacyReq); err == nil {
+		if legacyReq.Data.Attributes.Config != nil {
+			cfg := legacyReq.Data.Attributes.Config
+			if cfg.Monitor != nil && *cfg.Monitor {
+				return false
+			}
+			if cfg.PublishReport != nil && *cfg.PublishReport {
+				return true
+			}
+		}
+	}
 
-func parseLegacyCreateTestPublishReport(body []byte) bool {
-	var doc legacyCreateTestRequestDoc
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return false
+	// Try new format (Code API)
+	var newReq struct {
+		Data struct {
+			Attributes struct {
+				Configuration struct {
+					Output struct {
+						Report bool `json:"report"`
+					} `json:"output"`
+				} `json:"configuration"`
+			} `json:"attributes"`
+		} `json:"data"`
 	}
-	if doc.Data.Attributes.Config == nil {
-		return false
+	if err := json.Unmarshal(body, &newReq); err == nil {
+		return newReq.Data.Attributes.Configuration.Output.Report
 	}
-	cfg := doc.Data.Attributes.Config
-	if cfg.Monitor != nil && *cfg.Monitor {
-		return false
-	}
-	return cfg.PublishReport != nil && *cfg.PublishReport
-}
 
-func parseCodeCreateTestPublishReport(body []byte) bool {
-	var doc createTestRequestDoc
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return false
-	}
-	return doc.Data.Attributes.Configuration.Output.Report
+	return false
 }
 
 // parseCreateTestID extracts the test ID from a successful CreateTest response.
 func parseCreateTestID(body []byte) string {
-	var doc createTestResponseDoc
-	if err := json.Unmarshal(body, &doc); err != nil {
+	var resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return ""
 	}
-	return parseUUID(doc.Data.ID)
+	return parseUUID(resp.Data.ID)
 }
 
-// parseAIBomUploadRevisionID extracts the upload revision ID from an AI-BOM
-// upload request body.
+// parseAIBomUploadRevisionID extracts the upload revision ID from an AI-BOM upload request body.
 func parseAIBomUploadRevisionID(body []byte) string {
-	var doc aiBomUploadRequestDoc
-	if err := json.Unmarshal(body, &doc); err != nil {
+	var req struct {
+		Data struct {
+			Attributes struct {
+				UploadRevisionID string `json:"upload_revision_id"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
 		return ""
 	}
-	if revisionID := parseUUID(doc.Data.Attributes.UploadRevisionID); revisionID != "" {
-		return revisionID
-	}
-	return ""
+	return parseUUID(req.Data.Attributes.UploadRevisionID)
 }
 
 // parseMonitorProjectID extracts a project ID from a monitor/monitor-dependencies response.
 func parseMonitorProjectID(body []byte) string {
-	var result monitorResult
-	if err := json.Unmarshal(body, &result); err != nil {
+	var resp struct {
+		URI string `json:"uri"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return ""
 	}
-
-	if projectID := projectIDFromMonitorURI(result.URI); projectID != "" {
-		return projectID
-	}
-
-	return ""
-}
-
-func projectIDFromMonitorURI(uri string) string {
-	if uri == "" {
-		return ""
-	}
-
-	matches := projectIDFromURI.FindStringSubmatch(uri)
-	if len(matches) < 2 {
-		return ""
-	}
-
-	return parseUUID(matches[1])
+	return projectIDFromMonitorURI(resp.URI)
 }
 
 // parseIaCShareProjectIDs extracts project IDs from an iac-cli-share-results response.
@@ -172,7 +102,8 @@ func parseIaCShareProjectIDs(body []byte) []string {
 	var projectIDs []string
 
 	for key, value := range raw {
-		if isIaCShareMetadataKey(key) {
+		// Skip metadata keys
+		if _, isMetadata := map[string]struct{}{"ok": {}, "meta": {}}[strings.ToLower(key)]; isMetadata {
 			continue
 		}
 
@@ -198,12 +129,22 @@ func parseIaCShareProjectIDs(body []byte) []string {
 
 // parseComponentsProjectID extracts the project ID from a successful SAST component in a GetComponents response.
 func parseComponentsProjectID(body []byte) string {
-	var doc getComponentsResponseDoc
-	if err := json.Unmarshal(body, &doc); err != nil {
+	var resp struct {
+		Data []struct {
+			Attributes struct {
+				Type    string `json:"type"`
+				Success bool   `json:"success"`
+				Webui   *struct {
+					ProjectID *string `json:"project_id,omitempty"`
+				} `json:"webui,omitempty"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return ""
 	}
 
-	for _, item := range doc.Data {
+	for _, item := range resp.Data {
 		if !strings.EqualFold(item.Attributes.Type, "sast") || !item.Attributes.Success {
 			continue
 		}
@@ -224,41 +165,101 @@ func parseDeeproxyReportProjectID(body []byte) string {
 		return ""
 	}
 
-	var doc deeproxyReportBody
-	if err := json.Unmarshal(body, &doc); err == nil {
-		if !isDeeproxyReportComplete(doc.Status) {
+	// Try full JSON unmarshal first
+	var resp struct {
+		Status       string `json:"status"`
+		UploadResult struct {
+			ProjectID      string `json:"projectId"`
+			ProjectIDSnake string `json:"project_id"`
+		} `json:"uploadResult"`
+	}
+	if err := json.Unmarshal(body, &resp); err == nil {
+		if !strings.EqualFold(strings.TrimSpace(resp.Status), "COMPLETE") {
 			return ""
 		}
-		if projectID := parseUUID(firstNonEmpty(doc.UploadResult.ProjectID, doc.UploadResult.ProjectIDSnake)); projectID != "" {
+		// Try projectId first, fall back to project_id
+		if pid := resp.UploadResult.ProjectID; strings.TrimSpace(pid) != "" {
+			return parseUUID(pid)
+		}
+		if pid := resp.UploadResult.ProjectIDSnake; strings.TrimSpace(pid) != "" {
+			return parseUUID(pid)
+		}
+	}
+
+	// Fallback for truncated bodies where JSON unmarshal failed
+	return extractDeeproxyProjectIDFromTruncated(body)
+}
+
+// projectIDFromMonitorURI extracts a project ID from a monitor API response URI.
+// Handles URIs like https://app.snyk.io/org/{org}/project/{uuid}/history/{id}.
+func projectIDFromMonitorURI(uri string) string {
+	if uri == "" {
+		return ""
+	}
+
+	const projectPrefix = "/project/"
+	idx := strings.Index(uri, projectPrefix)
+	if idx < 0 {
+		return ""
+	}
+
+	uuidStart := idx + len(projectPrefix)
+	if uuidStart+36 > len(uri) {
+		return ""
+	}
+
+	// Verify UUID is followed by / or end of string
+	uuidCandidate := uri[uuidStart : uuidStart+36]
+	if uuidStart+36 < len(uri) && uri[uuidStart+36] != '/' {
+		return ""
+	}
+
+	return parseUUID(uuidCandidate)
+}
+
+// extractDeeproxyProjectIDFromTruncated extracts project ID from truncated/malformed JSON.
+func extractDeeproxyProjectIDFromTruncated(body []byte) string {
+	s := string(body)
+
+	// Check for COMPLETE status
+	if !strings.Contains(strings.ToUpper(s), `"COMPLETE"`) {
+		return ""
+	}
+
+	// Find uploadResult and extract projectId/project_id
+	uploadIdx := strings.Index(s, `"uploadResult"`)
+	if uploadIdx < 0 {
+		return ""
+	}
+
+	searchFrom := uploadIdx
+	for _, fieldName := range []string{`"projectId"`, `"project_id"`} {
+		fieldIdx := strings.Index(s[searchFrom:], fieldName)
+		if fieldIdx < 0 {
+			continue
+		}
+
+		// Find the value after the field
+		valueStart := searchFrom + fieldIdx + len(fieldName)
+		colonIdx := strings.Index(s[valueStart:], ":")
+		if colonIdx < 0 || colonIdx > 10 {
+			continue
+		}
+
+		quoteIdx := strings.Index(s[valueStart+colonIdx:], `"`)
+		if quoteIdx < 0 || quoteIdx > 5 {
+			continue
+		}
+
+		uuidStart := valueStart + colonIdx + quoteIdx + 1
+		if uuidStart+36 > len(s) || s[uuidStart+36] != '"' {
+			continue
+		}
+
+		if projectID := parseUUID(s[uuidStart : uuidStart+36]); projectID != "" {
 			return projectID
 		}
 	}
 
-	// Fallback for truncated/overlong bodies where only a prefix was read.
-	if !deeproxyReportCompletePattern.Match(body) {
-		return ""
-	}
-	matches := deeproxyUploadProjectIDPattern.FindSubmatch(body)
-	if len(matches) < 2 {
-		return ""
-	}
-	return parseUUID(string(matches[1]))
-}
-
-func isDeeproxyReportComplete(status string) bool {
-	return strings.EqualFold(strings.TrimSpace(status), "COMPLETE")
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
 	return ""
-}
-
-func isIaCShareMetadataKey(key string) bool {
-	_, ok := iacShareMetadataKeys[strings.ToLower(key)]
-	return ok
 }
