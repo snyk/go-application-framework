@@ -384,6 +384,18 @@ func TestAddDefaults(t *testing.T) {
 			input:    `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=john.doe -p=hunter2 --log-level=trace`,
 			expected: `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=*** -p=*** --log-level=trace`,
 		},
+		{
+			name:     "single-quoted key=value short form",
+			input:    `before 'u=john.doe' 'p=hunter2' after`,
+			expected: `before 'u=***' 'p=***' after`,
+		},
+		{
+			// An escaped instance of the value's own bounding quote must not be read as the
+			// value's closing delimiter.
+			name:     "short-form single-quoted value containing an escaped apostrophe",
+			input:    `'u': 'Nick\'s', 'other': 'keepme'`,
+			expected: `'u': '***', 'other': 'keepme'`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -517,6 +529,28 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 			input:    `{"cfg":"-p hun\"ter2","next":"keepme"}`,
 			expected: `{"cfg":"-p ***","next":"keepme"}`,
 			changed:  map[string]any{"cfg": "-p ***"},
+		},
+		{
+			// A `]` inside a quoted dump value used to read as the dump's own closing bracket,
+			// truncating the capture and leaking the rest of the entry unredacted (see CLI-1732).
+			name:     "bracket dump with a `]` inside a quoted value is still redacted as a whole",
+			input:    `{"message":"_: [ 'a]b', 'c' ]","after":"keepme"}`,
+			expected: `{"message":"_: [***]","after":"keepme"}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			// Same as above for `[`: a quoted value containing an unmatched opening bracket must
+			// not be read as the start of a new nested pair.
+			name:     "bracket dump with a `[` inside a quoted value is still redacted as a whole",
+			input:    `{"message":"_: [ 'a[b', 'c' ]","after":"keepme"}`,
+			expected: `{"message":"_: [***]","after":"keepme"}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			name:     "short-form value with no surrounding quotes at all",
+			input:    `{"message":"u: john.doe, next: keepme"}`,
+			expected: `{"message":"u: ***, next: keepme"}`,
+			changed:  map[string]any{"message": "u: ***, next: keepme"},
 		},
 	}
 

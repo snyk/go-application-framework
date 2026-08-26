@@ -278,7 +278,10 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// capture may cross a balanced `[...]` pair (the dump nests one), but never an unpaired
 	// closing bracket, so it always stops at the dump's own `]`. The final `\[` alternative
 	// keeps a stray, unbalanced `[` inside the dump from failing the match altogether.
-	s = `_:\s*\[(?<everything_inside_hard_brackets>(?:\[[^\]]*\]|[^\[\]]|\[)*)\]`
+	// Quoted spans are consumed whole, before the bracket-tracking alternatives get a look —
+	// otherwise a `]` or `[` inside a quoted value (e.g. `'a]b'`) reads as real bracket nesting
+	// and the capture closes early, right at that inner bracket.
+	s = `_:\s*\[(?<everything_inside_hard_brackets>(?:'[^']*'|"[^"]*"|\[[^\]]*\]|[^\[\]]|\[)*)\]`
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
@@ -297,7 +300,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	shortForm := strings.Join(shorts, "")
 	s = fmt.Sprintf(`(?im)'[%s]=(?<value>[^'\n]*)'`, shortForm)
 	dict[s] = scrubStruct{
-		groupToRedact: 2,
+		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
 	}
 
@@ -309,13 +312,25 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// its own quote character. A single pattern bounded by `['"]` needs a greedy `.*` to allow
 	// the opposite quote inside the value, and that greedy run reaches the *last* quote on the
 	// line, swallowing every field that follows it (see CLI-1732). `\n` stays excluded so the
-	// bounded classes keep the line-at-a-time reach the previous `.` had.
+	// bounded classes keep the line-at-a-time reach the previous `.` had. An escaped instance of
+	// the bounding quote (e.g. `Nick\'s`) is kept part of the value via `\\.`, the same idiom the
+	// CLI-argument pattern below uses — without it, the class stops at that escaped quote instead
+	// of the value's real closing one and leaks the remainder of the value.
 	for _, quote := range []string{`'`, `"`} {
-		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?:%s(?<short_form_value>[^%s\n]*)%s|([^,'"\s]+))[,}]?`, shortForm, quote, quote, quote)
+		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*%s(?<short_form_value>(?:[^%s\n\\]|\\.)*)%s[,}]?`, shortForm, quote, quote, quote)
 		dict[s] = scrubStruct{
 			groupToRedact: 2,
 			regex:         regexp.MustCompile(s),
 		}
+	}
+
+	// Same as above, but for values with no surrounding quotes at all, e.g. u: john.doe,
+	// The value class excludes ':' too: without that, a greedy separator backtracking off an
+	// already-redacted 'key': '***' leaves the colon for this group to swallow instead.
+	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s]+)[,}]?`, shortForm)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
 	}
 
 	// CLI argument-style-specific scrubbing
