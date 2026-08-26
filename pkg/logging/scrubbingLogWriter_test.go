@@ -18,6 +18,7 @@ package logging
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os/user"
 	"regexp"
@@ -327,6 +328,13 @@ func TestAddDefaults(t *testing.T) {
 			expected: `_: [***],`,
 		},
 		{
+			// A backslash-escaped bounding quote inside a dump value must not end the quoted
+			// span early — otherwise a later `]` in the dump reads as its closing bracket.
+			name:     "bracket dump with an escaped quote inside a quoted value",
+			input:    `_: [ 'a\'b]c', 'd' ], next`,
+			expected: `_: [***], next`,
+		},
+		{
 			name: "username and password constellations passed in a JSON-ish structure with verbatim output from snyk-config",
 			input: `{
 				unrelated: dont-scrub,
@@ -383,11 +391,184 @@ func TestAddDefaults(t *testing.T) {
 			input:    `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=john.doe -p=hunter2 --log-level=trace`,
 			expected: `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=*** -p=*** --log-level=trace`,
 		},
+		{
+			name:     "single-quoted key=value short form",
+			input:    `before 'u=john.doe' 'p=hunter2' after`,
+			expected: `before 'u=***' 'p=***' after`,
+		},
+		{
+			// An escaped instance of the value's own bounding quote must not be read as the
+			// value's closing delimiter.
+			name:     "short-form single-quoted value containing an escaped apostrophe",
+			input:    `'u': 'Nick\'s', 'other': 'keepme'`,
+			expected: `'u': '***', 'other': 'keepme'`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actual := scrub([]byte(test.input), dict)
 			assert.Equal(t, test.expected, string(actual))
+		})
+	}
+}
+
+// requireOnlyExpectedFieldsChanged decodes input and output as JSON objects and asserts that the
+// only fields whose value differs are the ones named in changed. It is the structural half of the
+// CLI-1732 regression tests: scrubbing has to redact the sensitive field and leave everything
+// around it — other fields, and the JSON framing itself — exactly as it found it.
+func requireOnlyExpectedFieldsChanged(t *testing.T, input, output string, changed map[string]any) {
+	t.Helper()
+
+	var before, after map[string]any
+	require.NoError(t, json.Unmarshal([]byte(input), &before), "test input must be valid JSON to begin with")
+	require.NoError(t, json.Unmarshal([]byte(output), &after),
+		"scrubbed output must still be valid JSON, got: %s", output)
+	require.Len(t, after, len(before), "scrubbing must not add or drop fields")
+
+	for key, originalValue := range before {
+		if expected, ok := changed[key]; ok {
+			assert.Equal(t, expected, after[key], "field %q should have been redacted", key)
+			continue
+		}
+		assert.Equal(t, originalValue, after[key], "field %q should have been left untouched", key)
+	}
+}
+
+// TestScrub_RedactsOnlyTheMatchedSpan covers CLI-1732 bug A: scrub() used to look the captured
+// value back up in the event and replace every occurrence of that text. A sensitive field whose
+// value happens to be a JSON structural character (or any short string that recurs elsewhere)
+// therefore blanked out unrelated parts of the event, up to and including the event's opening
+// brace — which is what produced the customer's
+// "zerolog: could not write event: cannot decode event: invalid character '*'".
+func TestScrub_RedactsOnlyTheMatchedSpan(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		changed  map[string]any
+	}{
+		{
+			name:     "value is an opening brace that also opens the event",
+			input:    `{"level":"debug","tokenHint":"{","message":"scanning"}`,
+			expected: `{"level":"debug","tokenHint":"***","message":"scanning"}`,
+			changed:  map[string]any{"tokenHint": SANITIZE_REPLACEMENT_STRING},
+		},
+		{
+			name:     "value is a comma that also separates fields",
+			input:    `{"level":"debug","userKind":",","message":"a,b,c"}`,
+			expected: `{"level":"debug","userKind":"***","message":"a,b,c"}`,
+			changed:  map[string]any{"userKind": SANITIZE_REPLACEMENT_STRING},
+		},
+		{
+			name:     "value is a closing brace that also closes the event",
+			input:    `{"level":"debug","tokenHint":"}","tail":"end"}`,
+			expected: `{"level":"debug","tokenHint":"***","tail":"end"}`,
+			changed:  map[string]any{"tokenHint": SANITIZE_REPLACEMENT_STRING},
+		},
+		{
+			name:     "single character value that recurs in an unrelated field",
+			input:    `{"level":"debug","apiKey":"a","path":"/a/b/a"}`,
+			expected: `{"level":"debug","apiKey":"***","path":"/a/b/a"}`,
+			changed:  map[string]any{"apiKey": SANITIZE_REPLACEMENT_STRING},
+		},
+		{
+			name:     "value that also appears verbatim inside another field name",
+			input:    `{"userName":"log","logLevel":"debug"}`,
+			expected: `{"userName":"***","logLevel":"debug"}`,
+			changed:  map[string]any{"userName": SANITIZE_REPLACEMENT_STRING},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(scrub([]byte(test.input), dict))
+
+			assert.Equal(t, test.expected, actual)
+			assert.True(t, json.Valid([]byte(actual)),
+				"scrubbed output must remain decodable by zerolog, got: %s", actual)
+			requireOnlyExpectedFieldsChanged(t, test.input, actual, test.changed)
+		})
+	}
+}
+
+// TestScrub_GreedyCapturesStopAtTheirOwnDelimiter covers CLI-1732 bug B: the `_: [...]` and the
+// short-form `u`/`p` patterns captured with an unbounded greedy `.*`, so a match ran on to the
+// last delimiter anywhere in the event and redacted every field in between.
+func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		changed  map[string]any
+	}{
+		{
+			name:     "snyk-config bracket dump followed by more JSON",
+			input:    `{"level":"debug","message":"_: [ 'test', 'monitor' ]","tags":["a","b"],"ok":true}`,
+			expected: `{"level":"debug","message":"_: [***]","tags":["a","b"],"ok":true}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			name:     "bracket dump with a nested bracket group is still redacted as a whole",
+			input:    `{"message":"_: [ 'a', [nested], 'b' ]","after":"keepme"}`,
+			expected: `{"message":"_: [***]","after":"keepme"}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			name:     "short-form CLI arguments followed by more JSON",
+			input:    `{"level":"debug","args":"-u john.doe -p hunter2","org":"acme","ok":true}`,
+			expected: `{"level":"debug","args":"-u *** -p ***","org":"acme","ok":true}`,
+			changed:  map[string]any{"args": "-u *** -p ***"},
+		},
+		{
+			name:     "short-form quoted value followed by more JSON",
+			input:    `{"u": "john.doe", "next": "keepme", "arr": [1,2]}`,
+			expected: `{"u": "***", "next": "keepme", "arr": [1,2]}`,
+			changed:  map[string]any{"u": SANITIZE_REPLACEMENT_STRING},
+		},
+		{
+			// Bounding the value at `"` must not stop at a quote the value itself contains:
+			// the escape belongs to the argument, so the whole secret still has to go.
+			name:     "short-form argument value containing an escaped quote stays fully redacted",
+			input:    `{"cfg":"-p hun\"ter2","next":"keepme"}`,
+			expected: `{"cfg":"-p ***","next":"keepme"}`,
+			changed:  map[string]any{"cfg": "-p ***"},
+		},
+		{
+			// A `]` inside a quoted dump value used to read as the dump's own closing bracket,
+			// truncating the capture and leaking the rest of the entry unredacted (see CLI-1732).
+			name:     "bracket dump with a `]` inside a quoted value is still redacted as a whole",
+			input:    `{"message":"_: [ 'a]b', 'c' ]","after":"keepme"}`,
+			expected: `{"message":"_: [***]","after":"keepme"}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			// Same as above for `[`: a quoted value containing an unmatched opening bracket must
+			// not be read as the start of a new nested pair.
+			name:     "bracket dump with a `[` inside a quoted value is still redacted as a whole",
+			input:    `{"message":"_: [ 'a[b', 'c' ]","after":"keepme"}`,
+			expected: `{"message":"_: [***]","after":"keepme"}`,
+			changed:  map[string]any{"message": "_: [***]"},
+		},
+		{
+			name:     "short-form value with no surrounding quotes at all",
+			input:    `{"message":"u: john.doe, next: keepme"}`,
+			expected: `{"message":"u: ***, next: keepme"}`,
+			changed:  map[string]any{"message": "u: ***, next: keepme"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(scrub([]byte(test.input), dict))
+
+			assert.Equal(t, test.expected, actual)
+			assert.True(t, json.Valid([]byte(actual)),
+				"scrubbed output must remain decodable by zerolog, got: %s", actual)
+			requireOnlyExpectedFieldsChanged(t, test.input, actual, test.changed)
 		})
 	}
 }
