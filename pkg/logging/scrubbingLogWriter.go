@@ -280,8 +280,9 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// keeps a stray, unbalanced `[` inside the dump from failing the match altogether.
 	// Quoted spans are consumed whole, before the bracket-tracking alternatives get a look —
 	// otherwise a `]` or `[` inside a quoted value (e.g. `'a]b'`) reads as real bracket nesting
-	// and the capture closes early, right at that inner bracket.
-	s = `_:\s*\[(?<everything_inside_hard_brackets>(?:'[^']*'|"[^"]*"|\[[^\]]*\]|[^\[\]]|\[)*)\]`
+	// and the capture closes early, right at that inner bracket. `\\.` keeps a backslash-escaped
+	// bounding quote (e.g. `'a\'b]c'`) part of the same span instead of ending it prematurely.
+	s = `_:\s*\[(?<everything_inside_hard_brackets>(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[[^\]]*\]|[^\[\]]|\[)*)\]`
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),

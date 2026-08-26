@@ -328,6 +328,13 @@ func TestAddDefaults(t *testing.T) {
 			expected: `_: [***],`,
 		},
 		{
+			// A backslash-escaped bounding quote inside a dump value must not end the quoted
+			// span early — otherwise a later `]` in the dump reads as its closing bracket.
+			name:     "bracket dump with an escaped quote inside a quoted value",
+			input:    `_: [ 'a\'b]c', 'd' ], next`,
+			expected: `_: [***], next`,
+		},
+		{
 			name: "username and password constellations passed in a JSON-ish structure with verbatim output from snyk-config",
 			input: `{
 				unrelated: dont-scrub,
