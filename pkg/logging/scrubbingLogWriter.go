@@ -273,7 +273,12 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 
 	// The legacy CLI's snyk-config package prints the entire configuration in debug mode.
 	// It begins with some pseudo-JSON structure, which we can redact.
-	s = `(?s)_:\s*\[(?<everything_inside_hard_brackets>.*)\]`
+	// The capture must not be a plain greedy `.*`: that runs to the *last* `]` in the whole
+	// buffer and swallows any structure that follows the dump (see CLI-1732). Instead the
+	// capture may cross a balanced `[...]` pair (the dump nests one), but never an unpaired
+	// closing bracket, so it always stops at the dump's own `]`. The final `\[` alternative
+	// keeps a stray, unbalanced `[` inside the dump from failing the match altogether.
+	s = `_:\s*\[(?<everything_inside_hard_brackets>(?:\[[^\]]*\]|[^\[\]]|\[)*)\]`
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
@@ -290,7 +295,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// Same as above, only with short form
 	shorts := []string{"p", "u"}
 	shortForm := strings.Join(shorts, "")
-	s = fmt.Sprintf(`(?im)'[%s]=(?<value>.*)'`, shortForm)
+	s = fmt.Sprintf(`(?im)'[%s]=(?<value>[^'\n]*)'`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -299,17 +304,28 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// Specific short-form scrubbing of the JSON-ish log structures
 	// Appear in the snyk-config debug logging as various constellations of { 'u': 'john.doe', } with or without quotes,
 	// and values can contain spaces, double and/or single quotes.
-
-	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?:['"](?<short_form_value>.*)['"]|([^,'"\s]+))[,}]?`, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
+	//
+	// Single- and double-quoted values get their own pattern so each value can be bounded by
+	// its own quote character. A single pattern bounded by `['"]` needs a greedy `.*` to allow
+	// the opposite quote inside the value, and that greedy run reaches the *last* quote on the
+	// line, swallowing every field that follows it (see CLI-1732). `\n` stays excluded so the
+	// bounded classes keep the line-at-a-time reach the previous `.` had.
+	for _, quote := range []string{`'`, `"`} {
+		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?:%s(?<short_form_value>[^%s\n]*)%s|([^,'"\s]+))[,}]?`, shortForm, quote, quote, quote)
+		dict[s] = scrubStruct{
+			groupToRedact: 2,
+			regex:         regexp.MustCompile(s),
+		}
 	}
 
 	// CLI argument-style-specific scrubbing
 	// Many cases are already covered by the JSON scrubbing above, thus this might seem incomplete.
 	// Refer to the unit tests for the full set of covered cases.
-	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>\S*)`, shortForm)
+	// An unescaped `"` ends the value: when the argument list is logged inside a JSON string that
+	// quote closes the string, and a plain `\S*` would run on through the rest of the event and
+	// redact every field after it (see CLI-1732). An *escaped* quote is still part of the value,
+	// so `\\.` keeps `-p hun\"ter2` (and Windows paths such as `-p C:\dir\file`) fully redacted.
+	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>(?:[^\s"\\]|\\.)*)`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
@@ -347,15 +363,40 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 			continue
 		}
 		// then scrub from the regex list
-		matches := entry.regex.FindAllStringSubmatch(s, -1)
-		for _, match := range matches {
-			if entry.groupToRedact >= len(match) || match[entry.groupToRedact] == "" {
-				continue
-			}
-			s = strings.Replace(s, match[entry.groupToRedact], SANITIZE_REPLACEMENT_STRING, -1)
-		}
+		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
 	}
 	return []byte(s)
+}
+
+// redactMatchedGroup replaces capture group groupToRedact of every match of regex in s,
+// addressing each occurrence by the position the regex matched it at.
+//
+// Addressing by position matters: looking the captured *text* back up in s and replacing every
+// occurrence of it lets a short or structural capture — a one-character value, or a value that
+// happens to be `{`, `,` or `"` — blank out identical text elsewhere in the same event, which
+// corrupts the surrounding payload (see CLI-1732). Matches returned by FindAll are non-overlapping
+// and in order, so the spans can be stitched back together in a single pass.
+func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) string {
+	matches := regex.FindAllStringSubmatchIndex(s, -1)
+	if len(matches) == 0 {
+		return s
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(s))
+	end := 0
+	for _, match := range matches {
+		lo, hi := 2*groupToRedact, 2*groupToRedact+1
+		// group out of range, or it did not participate in the match, or it matched empty
+		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
+			continue
+		}
+		builder.WriteString(s[end:match[lo]])
+		builder.WriteString(SANITIZE_REPLACEMENT_STRING)
+		end = match[hi]
+	}
+	builder.WriteString(s[end:])
+	return builder.String()
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
