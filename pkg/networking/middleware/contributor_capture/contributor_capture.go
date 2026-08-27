@@ -10,17 +10,15 @@ import (
 	"github.com/snyk/go-application-framework/internal/contributors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	parentmiddleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
-
-// interactionIDHeader carries the CLI's per-command interaction ID on outbound requests.
-const interactionIDHeader = "snyk-interaction-id"
 
 // ContributorCaptureMiddleware inspects product API requests and responses and reports
 // captured entity IDs (currently project IDs) to an injected Sink.
 type ContributorCaptureMiddleware struct {
 	next         http.RoundTripper
 	config       configuration.Configuration
-	sinkProvider SinkProvider
+	sink         Sink
 	logger       *zerolog.Logger
 	pendingTests *pendingTests
 }
@@ -30,36 +28,33 @@ type pendingTests struct {
 	ids map[string]struct{}
 }
 
-// NewContributorCaptureMiddleware wraps roundTripper with contributor capture logic.
+// NewContributorCaptureMiddleware returns a middleware that wraps a round tripper
+// with contributor capture logic, for registration via NetworkAccess.AddMiddleware.
 func NewContributorCaptureMiddleware(
-	roundTripper http.RoundTripper,
 	config configuration.Configuration,
-	sinkProvider SinkProvider,
+	sink Sink,
 	logger *zerolog.Logger,
-) *ContributorCaptureMiddleware {
-	return &ContributorCaptureMiddleware{
-		next:         roundTripper,
-		config:       config,
-		sinkProvider: sinkProvider,
-		logger:       logger,
-		pendingTests: &pendingTests{ids: make(map[string]struct{})},
+) networktypes.MiddlewareFunc {
+	return func(roundTripper http.RoundTripper) http.RoundTripper {
+		return &ContributorCaptureMiddleware{
+			next:         roundTripper,
+			config:       config,
+			sink:         sink,
+			logger:       logger,
+			pendingTests: &pendingTests{ids: make(map[string]struct{})},
+		}
 	}
 }
 
 // captureState carries everything gathered from a matched request before it
 // is sent, needed to capture entities from its response once it returns.
 type captureState struct {
-	kind                   EndpointKind
-	interactionID          string
+	kind                   endpointKind
 	publishReportRequested bool
 }
 
 func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.config == nil || req == nil || req.URL == nil {
-		return m.next.RoundTrip(req)
-	}
-
-	if m.sinkProvider == nil || m.sinkProvider() == nil {
+	if req == nil || req.URL == nil {
 		return m.next.RoundTrip(req)
 	}
 
@@ -81,23 +76,20 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 // beginRequestCapture performs whatever capture the request alone allows and
 // reports whether the response still has to be processed to finish the job.
 func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (state captureState, needsResponse bool) {
+	defer m.recover(req)
+
 	kind, matched := m.classifyRequest(req)
 	if !matched {
 		return captureState{}, false
 	}
 
-	defer m.recover(req)
-
-	state = captureState{
-		kind:          kind,
-		interactionID: req.Header.Get(interactionIDHeader),
-	}
+	state = captureState{kind: kind}
 
 	switch kind {
-	case EndpointAIBomUpload:
-		m.record(contributors.EntityTypeRevision, state.interactionID, parseAIBomUploadRevisionID(m.requestBody(req)))
+	case endpointAIBomUpload:
+		m.record(contributors.EntityTypeRevision, parseAIBomUploadRevisionID(m.requestBody(req)))
 		return state, false
-	case EndpointTestCreate:
+	case endpointTestCreate:
 		state.publishReportRequested = parseCreateTestPublishReport(m.requestBody(req))
 	default:
 	}
@@ -107,31 +99,25 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 
 // classifyRequest decides whether req is one contributor-capture cares
 // about and, if so, what kind it is.
-func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (EndpointKind, bool) {
-	// Interaction ID is required to track and correlate captured entities.
-	// Skip capture if it's missing.
-	if req.Header.Get(interactionIDHeader) == "" {
-		return EndpointNone, false
-	}
-
+func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (endpointKind, bool) {
 	kind, matched := classifyEndpoint(req.Method, req.URL.Path)
 	if !matched {
-		return EndpointNone, false
+		return endpointNone, false
 	}
 
-	if kind == EndpointDeeproxyReport {
+	if kind == endpointDeeproxyReport {
 		return m.classifyDeeproxyRequest(req)
 	}
 
 	apiURL, err := url.Parse(m.config.GetString(configuration.API_URL))
 	if err != nil || req.URL.Hostname() != apiURL.Hostname() {
-		return EndpointNone, false
+		return endpointNone, false
 	}
 
 	return kind, true
 }
 
-func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request) (EndpointKind, bool) {
+func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request) (endpointKind, bool) {
 	apiURL := m.config.GetString(configuration.API_URL)
 	additionalSubdomains := m.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalURLs := m.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
@@ -147,10 +133,10 @@ func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request
 				Bool("known_host", isKnownHost).
 				Msg("contributor capture: deeproxy report host not recognized")
 		}
-		return EndpointNone, false
+		return endpointNone, false
 	}
 
-	return EndpointDeeproxyReport, true
+	return endpointDeeproxyReport, true
 }
 
 // requestBody peeks req's body for parsing, returning a prefix if needed.
@@ -182,16 +168,16 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 		return
 	}
 
-	if state.kind == EndpointTestCreate {
+	if state.kind == endpointTestCreate {
 		m.markTestPending(parseBytes, state.publishReportRequested)
 		return
 	}
 
 	projectIDs := m.projectIDsFromResponse(state.kind, req.URL.Path, parseBytes)
-	m.record(contributors.EntityTypeProject, state.interactionID, projectIDs...)
+	m.record(contributors.EntityTypeProject, projectIDs...)
 }
 
-func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind EndpointKind) ([]byte, bool) {
+func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind endpointKind) ([]byte, bool) {
 	bodyBytes, fullyRead, err := readResponseBodyForParse(res, maxCaptureBodyBytes)
 	if err != nil {
 		if m.logger != nil {
@@ -228,15 +214,15 @@ func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, r
 	return parseBytes, true
 }
 
-func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind EndpointKind, path string, parseBytes []byte) []string {
+func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind endpointKind, path string, parseBytes []byte) []string {
 	switch kind {
-	case EndpointRegistryMonitor:
+	case endpointRegistryMonitor:
 		return []string{parseMonitorProjectID(parseBytes)}
-	case EndpointRegistryIaCShare:
+	case endpointRegistryIaCShare:
 		return parseIaCShareProjectIDs(parseBytes)
-	case EndpointTestComponents:
+	case endpointTestComponents:
 		return m.projectIDsFromComponentsResponse(path, parseBytes)
-	case EndpointDeeproxyReport:
+	case endpointDeeproxyReport:
 		return []string{parseDeeproxyReportProjectID(parseBytes)}
 	default:
 		return nil
@@ -289,13 +275,12 @@ func (m *ContributorCaptureMiddleware) clearPendingTest(testID string) {
 
 // record reports each captured ID to the sink. An empty ID means the parser
 // found nothing, so callers can hand over whatever they extracted unchecked.
-func (m *ContributorCaptureMiddleware) record(entityType contributors.EntityType, interactionID string, entityIDs ...string) {
-	sink := m.sinkProvider()
+func (m *ContributorCaptureMiddleware) record(entityType contributors.EntityType, entityIDs ...string) {
 	for _, entityID := range entityIDs {
 		if entityID == "" {
 			continue
 		}
-		sink.RecordEntity(entityType, entityID, interactionID)
+		m.sink.RecordEntity(entityType, entityID)
 	}
 }
 

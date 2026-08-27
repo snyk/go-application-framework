@@ -14,47 +14,47 @@ func isValidUUID(s string) bool {
 }
 
 // EndpointKind identifies which known product-API request/response shape a request matches.
-type EndpointKind int
+type endpointKind int
 
 const (
-	EndpointNone EndpointKind = iota
-	EndpointRegistryMonitor
-	EndpointRegistryIaCShare
-	EndpointTestCreate
-	EndpointTestComponents
-	EndpointAIBomUpload
-	EndpointDeeproxyReport
+	endpointNone endpointKind = iota
+	endpointRegistryMonitor
+	endpointRegistryIaCShare
+	endpointTestCreate
+	endpointTestComponents
+	endpointAIBomUpload
+	endpointDeeproxyReport
 )
 
 // classifyEndpoint uses a requests path and method to determine if it's a kind
 // that contributor capture needs to run on.
-func classifyEndpoint(method, path string) (EndpointKind, bool) {
+func classifyEndpoint(method, path string) (endpointKind, bool) {
 	path = normalizePath(path)
 	switch method {
 	case http.MethodPut:
 		if isMonitorPath(path) || isMonitorDepsPath(path) {
-			return EndpointRegistryMonitor, true
+			return endpointRegistryMonitor, true
 		}
 	case http.MethodPost:
 		if isIaCSharePath(path) {
-			return EndpointRegistryIaCShare, true
+			return endpointRegistryIaCShare, true
 		}
 		if isCreateTestPath(path) {
-			return EndpointTestCreate, true
+			return endpointTestCreate, true
 		}
 		if isAIBomUploadPath(path) {
-			return EndpointAIBomUpload, true
+			return endpointAIBomUpload, true
 		}
 	case http.MethodGet:
 		if isDeeproxyReportPath(path) {
-			return EndpointDeeproxyReport, true
+			return endpointDeeproxyReport, true
 		}
 		if isComponentsPath(path) {
-			return EndpointTestComponents, true
+			return endpointTestComponents, true
 		}
 	}
 
-	return EndpointNone, false
+	return endpointNone, false
 }
 
 // isMonitorPath matches PUT /v1/monitor or /v1/monitor/{any-path}.

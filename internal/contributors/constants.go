@@ -1,9 +1,12 @@
 package contributors
 
-// FeatureFlagEnableEntityContributorsPublish is the feature flag name for publishing
-// contributor data.
-const FeatureFlagEnableEntityContributorsPublish = "enable-entity-contributors-publish"
+import "github.com/snyk/go-application-framework/internal/apiclients/contributors_ingest"
 
-// ConfigurationKeyCaptureEnabled gates contributor billing HTTP capture. Resolved via
-// feature-flag-service (see FeatureFlagEnableEntityContributorsPublish in app setup).
-const ConfigurationKeyCaptureEnabled = "contributor_billing_capture_enabled"
+// EntityType identifies the kind of Snyk entity a captured ID refers to.
+type EntityType = contributors_ingest.EntityType
+
+// EntityTypeProject identifies a captured ID as a Snyk project ID.
+const EntityTypeProject = contributors_ingest.EntityTypeProject
+
+// EntityTypeRevision identifies a captured ID as a Snyk revision ID.
+const EntityTypeRevision = contributors_ingest.EntityTypeRevision

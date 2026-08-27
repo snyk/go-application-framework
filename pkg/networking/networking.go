@@ -5,17 +5,16 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
-	"github.com/snyk/go-application-framework/internal/contributors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
-	"github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
@@ -52,6 +51,10 @@ type NetworkAccess interface {
 	GetErrorHandler() networktypes.ErrorHandlerFunc
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
+	// AddMiddleware registers a middleware wrapping the underlying http.RoundTripper,
+	// outside all internal middleware. Each registration wraps the previous one, so the
+	// last registered is the outermost: it sees a request first and its response last.
+	AddMiddleware(networktypes.MiddlewareFunc)
 
 	SetLogger(logger *zerolog.Logger)
 	SetConfiguration(configuration configuration.Configuration)
@@ -70,6 +73,7 @@ type networkImpl struct {
 	dynamicHeaders map[string]DynamicHeaderFunc
 	proxy          func(req *http.Request) (*url.URL, error)
 	errorHandler   networktypes.ErrorHandlerFunc
+	middleware     []networktypes.MiddlewareFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
 }
@@ -157,6 +161,13 @@ func (n *networkImpl) GetErrorHandler() networktypes.ErrorHandlerFunc {
 	return n.errorHandler
 }
 
+// AddMiddleware registers a middleware wrapping the underlying http.RoundTripper,
+// outside all internal middleware. Each registration wraps the previous one, so the
+// last registered is the outermost: it sees a request first and its response last.
+func (n *networkImpl) AddMiddleware(m networktypes.MiddlewareFunc) {
+	n.middleware = append(n.middleware, m)
+}
+
 // AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.
 // The function receives a string slice of existing values and should return the final values associated to the header field.
 // This function extends the possibilities that AddHeaderField() offers for static header fields.
@@ -202,14 +213,9 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
 	}
 
-	getSink := func() contributor_capture.Sink {
-		s := contributors.GetSink()
-		if s != nil {
-			return s
-		}
-		return nil
+	for _, m := range n.middleware {
+		crt = m(crt)
 	}
-	crt = contributor_capture.NewContributorCaptureMiddleware(crt, n.config, getSink, n.logger)
 
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
@@ -291,6 +297,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
+		middleware:     slices.Clone(n.middleware),
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {

@@ -98,8 +98,8 @@ func decodeCaptureBody(bodyBytes []byte, contentEncoding string) ([]byte, error)
 	}
 }
 
-func captureAllowsTruncatedBodyParse(kind EndpointKind) bool {
-	return kind == EndpointDeeproxyReport
+func captureAllowsTruncatedBodyParse(kind endpointKind) bool {
+	return kind == endpointDeeproxyReport
 }
 
 func peekAndRestoreBody(body io.ReadCloser, maxBytes int64) (peeked []byte, restored io.ReadCloser, err error) {

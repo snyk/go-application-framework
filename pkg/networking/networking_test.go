@@ -21,12 +21,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 func getConfig() configuration.Configuration {
@@ -556,3 +558,63 @@ func TestNetworkImpl_GetUnauthorizedHttpClient_NetworkStackErrorHandlerMiddlewar
 	expectedDNSError := cli.NewDNSResolutionError("")
 	assert.Equal(t, expectedDNSError.ErrorCode, snykError.ErrorCode)
 }
+
+func Test_AddMiddleware_AppliesInRegistrationOrder(t *testing.T) {
+	appendToHeader := func(value string) networktypes.MiddlewareFunc {
+		return func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				req.Header.Set("X-Order", req.Header.Get("X-Order")+value)
+				return next.RoundTrip(req)
+			})
+		}
+	}
+
+	var gotOrder string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotOrder = r.Header.Get("X-Order")
+	})
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+
+	net := NewNetworkAccess(config)
+	net.AddMiddleware(appendToHeader("a"))
+	net.AddMiddleware(appendToHeader("b"))
+
+	res, err := net.GetUnauthorizedHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.Equal(t, "ba", gotOrder, "the last registered middleware wraps the others, so it runs first")
+}
+
+func Test_AddMiddleware_SurvivesClone(t *testing.T) {
+	var called bool
+	middlewareFunc := func(next http.RoundTripper) http.RoundTripper {
+		return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			called = true
+			return next.RoundTrip(req)
+		})
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+
+	net := NewNetworkAccess(config)
+	net.AddMiddleware(middlewareFunc)
+
+	res, err := net.Clone().GetUnauthorizedHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.True(t, called, "a clone must keep the middleware registered on the original")
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

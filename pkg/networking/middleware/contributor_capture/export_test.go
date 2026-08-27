@@ -19,3 +19,15 @@ var (
 	ParseDeeproxyReportProjectID = parseDeeproxyReportProjectID
 	ProjectIDFromMonitorURI      = projectIDFromMonitorURI
 )
+
+type EndpointKind = endpointKind
+
+const (
+	EndpointNone             = endpointNone
+	EndpointRegistryMonitor  = endpointRegistryMonitor
+	EndpointRegistryIaCShare = endpointRegistryIaCShare
+	EndpointTestCreate       = endpointTestCreate
+	EndpointTestComponents   = endpointTestComponents
+	EndpointAIBomUpload      = endpointAIBomUpload
+	EndpointDeeproxyReport   = endpointDeeproxyReport
+)
