@@ -368,11 +368,20 @@ func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue s
 	return SanitizeStaticValues(valuesToSanitize, replacementValue, content)
 }
 
+// SanitizeStaticValues is exported API, so content isn't guaranteed to be the full, valid JSON its
+// two current callers (GetRequest, GetV2InstrumentationObject) always pass -- both feed it
+// json.Marshal output. RedactStaticTerm's bare-value quoting is only correct against real JSON; a
+// non-JSON snippet falls back to a plain literal replace, the same non-JSON path ScrubValue uses.
 func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, content []byte) ([]byte, error) {
 	contentStr := string(content)
+	jsonAware := json.Valid(content)
 
 	for _, valueToReplace := range valuesToSanitize {
-		contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
+		if jsonAware {
+			contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
+		} else {
+			contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
+		}
 	}
 
 	return []byte(contentStr), nil

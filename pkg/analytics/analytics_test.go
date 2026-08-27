@@ -248,6 +248,17 @@ func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	assert.Equal(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
 }
 
+// Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted covers SanitizeStaticValues being
+// called on a non-JSON snippet, not the full valid JSON its current callers always pass -- it's
+// exported API, so a future caller isn't bound to that. Without gating on content's own validity,
+// a term next to ": "/"," here would get RedactStaticTerm's bare-value quoting even though there's
+// no JSON to protect, injecting stray quotes into plain text.
+func Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted(t *testing.T) {
+	output, err := SanitizeStaticValues([]string{"1000"}, "***", []byte("user: 1000, retry: 2000"))
+	assert.NoError(t, err)
+	assert.Equal(t, "user: ***, retry: 2000", string(output))
+}
+
 // Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload proves the fix survives the real
 // GetRequest() pipeline, not just a hand-built JSON blob: a numeric username embedded in an error
 // message must be redacted without corrupting the rest of the marshaled payload.
