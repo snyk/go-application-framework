@@ -432,7 +432,7 @@ func RedactStaticTerm(s, term, replacement string) string {
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
 		switch {
-		case !quoted && isFusedToAdjacentDigit(s, start, matchEnd):
+		case !quoted && isFusedToAdjacentNumberChar(s, start, matchEnd):
 			builder.WriteString(s[start:matchEnd])
 		case !quoted && isBareJSONValueSpan(s, start, matchEnd):
 			builder.WriteByte('"')
@@ -504,10 +504,10 @@ func isJSONWhitespace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
-// isFusedToAdjacentDigit reports whether s[start:end] touches a digit or other numeric-literal
-// character (`.`, `-`, `+`, `e`, `E`) on either side — i.e. it's a slice of a larger unquoted
-// number, not a complete value.
-func isFusedToAdjacentDigit(s string, start, end int) bool {
+// isFusedToAdjacentNumberChar reports whether s[start:end] touches a digit or other
+// numeric-literal character (`.`, `-`, `+`, `e`, `E`) on either side — i.e. it's a slice of a
+// larger unquoted number, not a complete value.
+func isFusedToAdjacentNumberChar(s string, start, end int) bool {
 	precededByNumberChar := start > 0 && isJSONNumberChar(s[start-1])
 	followedByNumberChar := end < len(s) && isJSONNumberChar(s[end])
 	return precededByNumberChar || followedByNumberChar
