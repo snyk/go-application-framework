@@ -259,6 +259,23 @@ func Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted(t *testing.T) {
 	assert.Equal(t, "user: ***, retry: 2000", string(output))
 }
 
+// Test_SanitizeStaticValues_EmptyValueIsNoop covers both branches of the jsonAware split: unlike
+// RedactStaticTerm, strings.ReplaceAll has no built-in guard against an empty old string -- it
+// inserts replacementValue between every rune instead of leaving the content untouched.
+func Test_SanitizeStaticValues_EmptyValueIsNoop(t *testing.T) {
+	t.Run("non-JSON content", func(t *testing.T) {
+		output, err := SanitizeStaticValues([]string{""}, "***", []byte("plain text"))
+		assert.NoError(t, err)
+		assert.Equal(t, "plain text", string(output))
+	})
+
+	t.Run("JSON content", func(t *testing.T) {
+		output, err := SanitizeStaticValues([]string{""}, "***", []byte(`{"a":1}`))
+		assert.NoError(t, err)
+		assert.Equal(t, `{"a":1}`, string(output))
+	})
+}
+
 // Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload proves the fix survives the real
 // GetRequest() pipeline, not just a hand-built JSON blob: a numeric username embedded in an error
 // message must be redacted without corrupting the rest of the marshaled payload.

@@ -377,6 +377,9 @@ func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, co
 	jsonAware := json.Valid(content)
 
 	for _, valueToReplace := range valuesToSanitize {
+		if valueToReplace == "" {
+			continue // strings.ReplaceAll inserts replacementValue between every rune for an empty old string
+		}
 		if jsonAware {
 			contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
 		} else {
