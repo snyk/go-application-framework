@@ -485,7 +485,7 @@ func (qs quoteState) advance(span string) quoteState {
 // prose as a bare value when that prose sits outside any JSON string and next to a real `:`/`,` —
 // callers that gate jsonAware on the input actually being valid JSON (see internalWrite) rule that
 // out, since prose inside valid JSON is always inside a quoted string, where the `quoted` check in
-// RedactStaticTerm's caller already skips this function entirely.
+// RedactStaticTerm itself already skips this function entirely.
 func isBareJSONValueSpan(s string, start, end int) bool {
 	i := start - 1
 	for i >= 0 && isJSONWhitespace(s[i]) {

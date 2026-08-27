@@ -235,9 +235,9 @@ func Test_SanitizeUsername(t *testing.T) {
 	}
 }
 
-// Test_SanitizeUsername_NumericUsernameCollision guards against a numeric username (os/user.Current
-// falls back to a numeric UID when NSS/cgo lookup fails) colliding with an unrelated bare JSON
-// number and corrupting the payload.
+// Test_SanitizeUsername_NumericUsernameCollision guards against a numeric username -- a realistic
+// value in containerized environments where $USER is set to a raw UID with no matching
+// /etc/passwd entry -- colliding with an unrelated bare JSON number and corrupting the payload.
 func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	input := []byte(`{"durationMs":10001234,"count":1000,"other":"x"}`)
 

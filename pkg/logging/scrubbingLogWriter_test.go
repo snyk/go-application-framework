@@ -254,10 +254,9 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 	assert.Equal(t, "Authorization: Bearer ***", string(actual), "Scrub should redact the token, not just mirror the input")
 }
 
-// TestScrub_NonJSONInputStillRedactsStaticTerms guards against Scrub trusting its own doc comment
-// ("data, treated as a JSON-structured log line") over what data actually is: a static term
-// landing next to a digit in plain, non-JSON text must not be silently skipped by the JSON-only
-// digit-fusion guard, which exists to protect real JSON numbers, not prose.
+// TestScrub_NonJSONInputStillRedactsStaticTerms guards against a static term landing next to a
+// digit in plain, non-JSON text being silently skipped by the JSON-only digit-fusion guard, which
+// exists to protect real JSON numbers, not prose.
 func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(REDACTION_TERMS, []string{"12345"})
@@ -921,7 +920,7 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 // prefix and the match itself as two separate calls to quoteState.advance: a trailing backslash at
 // the very end of one span must still escape the next span's first character, or a quote that was
 // actually already escaped gets freshly toggled as if it were real, and inQuotes desyncs from the
-// text's true state. Flagged during PR review.
+// text's true state.
 func TestQuoteState_CarriesEscapeAcrossSeparateScans(t *testing.T) {
 	var qs quoteState
 	qs = qs.advance(`"X\`) // opens a string, then ends on an unresolved backslash
@@ -933,9 +932,9 @@ func TestQuoteState_CarriesEscapeAcrossSeparateScans(t *testing.T) {
 }
 
 // An empty term must not loop forever: strings.Index(s, "") matches at every position, so without
-// this guard RedactStaticTerm would never advance past index 0. SanitizeUsername/SanitizeStaticValues
-// call RedactStaticTerm per value with no empty-string filter, and an empty HomeDir/Username from
-// os/user.Current() is a real input on some minimal environments.
+// this guard RedactStaticTerm would never advance past index 0. RedactStaticTerm is exported, so a
+// caller isn't guaranteed to filter an empty term before calling it directly, and an empty
+// HomeDir/Username from os/user.Current() is a real input on some minimal environments.
 func TestRedactStaticTerm_EmptyTermIsNoop(t *testing.T) {
 	input := `{"count":12345}`
 	done := make(chan string, 1)
