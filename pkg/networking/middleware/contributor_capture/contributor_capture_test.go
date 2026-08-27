@@ -2,7 +2,6 @@ package contributor_capture_test
 
 import (
 	"bytes"
-	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -664,40 +663,6 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/"+reportID, http.NoBody)
-	require.NoError(t, err)
-
-	res, err := rt.RoundTrip(req)
-	require.NoError(t, err)
-	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
-}
-
-func TestContributorCaptureMiddleware_capturesGzipEncodedDeeproxyReport(t *testing.T) {
-	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
-	reportBody := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"}}`)
-
-	var compressed bytes.Buffer
-	gz := gzip.NewWriter(&compressed)
-	_, err := gz.Write(reportBody)
-	require.NoError(t, err)
-	require.NoError(t, gz.Close())
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Encoding", "gzip")
-		w.WriteHeader(http.StatusOK)
-		_, writeErr := w.Write(compressed.Bytes())
-		require.NoError(t, writeErr)
-	}))
-	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
-	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
-
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/55555555-5555-4555-8555-555555555555", http.NoBody)
 	require.NoError(t, err)
 
 	res, err := rt.RoundTrip(req)

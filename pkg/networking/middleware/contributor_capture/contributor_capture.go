@@ -142,9 +142,8 @@ func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request
 // requestBody peeks req's body for parsing, returning a prefix if needed.
 // For request bodies larger than maxCaptureBodyBytes, a truncated prefix is returned
 // since parsing (e.g. JSON flag extraction) may work with just the start of the body.
-// The body stays readable by whoever gets the request next either way.
 func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
-	bodyBytes, err := readRequestBodyForParse(req, maxCaptureBodyBytes)
+	bodyBytes, err := peekRequestBody(req, maxCaptureBodyBytes)
 	if err != nil {
 		if m.logger != nil {
 			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read request body")
@@ -177,8 +176,11 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 	m.record(contributors.EntityTypeProject, projectIDs...)
 }
 
+// responseCaptureBytes returns the part of res's body worth parsing. Bodies need no
+// content-encoding handling here: this middleware runs above http.Transport, which
+// negotiates and undoes compression before the response reaches us.
 func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind endpointKind) ([]byte, bool) {
-	bodyBytes, fullyRead, err := readResponseBodyForParse(res, maxCaptureBodyBytes)
+	bodyBytes, fullyRead, err := peekResponseBody(res, maxCaptureBodyBytes)
 	if err != nil {
 		if m.logger != nil {
 			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
@@ -195,23 +197,11 @@ func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, r
 		return nil, false
 	}
 
-	parseBytes := bodyBytes
-	if encoding := res.Header.Get("Content-Encoding"); encoding != "" {
-		decoded, decodeErr := decodeCaptureBody(bodyBytes, encoding)
-		if decodeErr != nil {
-			if m.logger != nil {
-				m.logger.Debug().
-					Err(decodeErr).
-					Str("path", req.URL.Path).
-					Str("content_encoding", encoding).
-					Msg("contributor capture: failed to decode response body, using raw bytes")
-			}
-		} else {
-			parseBytes = decoded
-		}
-	}
+	return bodyBytes, true
+}
 
-	return parseBytes, true
+func captureAllowsTruncatedBodyParse(kind endpointKind) bool {
+	return kind == endpointDeeproxyReport
 }
 
 func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind endpointKind, path string, parseBytes []byte) []string {

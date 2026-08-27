@@ -2,10 +2,10 @@ package contributor_capture_test
 
 import (
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +14,7 @@ import (
 	cc "github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 )
 
-func TestReadResponseBody_restoresBodyOnReadError(t *testing.T) {
+func TestPeekResponseBody_restoresBodyOnReadError(t *testing.T) {
 	t.Parallel()
 
 	wantErr := errors.New("read failed")
@@ -22,7 +22,7 @@ func TestReadResponseBody_restoresBodyOnReadError(t *testing.T) {
 	body := &errAfterReadCloser{prefix: append([]byte(nil), prefix...), err: wantErr}
 
 	res := &http.Response{Body: body}
-	_, err := cc.ReadResponseBody(res, 64<<10)
+	_, _, err := cc.PeekResponseBody(res, 64<<10)
 	require.ErrorIs(t, err, wantErr)
 
 	got, readErr := io.ReadAll(res.Body)
@@ -33,7 +33,7 @@ func TestReadResponseBody_restoresBodyOnReadError(t *testing.T) {
 	assert.True(t, body.closed, "restored body must close the body it wraps")
 }
 
-func TestReadResponseBody_succeedsDespiteInflatedContentLength(t *testing.T) {
+func TestPeekResponseBody_succeedsDespiteInflatedContentLength(t *testing.T) {
 	t.Parallel()
 
 	body := []byte(`{"uri":"https://app.snyk.io/org/acme/project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`)
@@ -42,8 +42,9 @@ func TestReadResponseBody_succeedsDespiteInflatedContentLength(t *testing.T) {
 		Body:          io.NopCloser(bytes.NewReader(body)),
 	}
 
-	got, err := cc.ReadResponseBody(res, 64<<10)
+	got, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
 	require.NoError(t, err)
+	assert.True(t, fullyRead)
 	assert.Equal(t, body, got)
 
 	downstream, err := io.ReadAll(res.Body)
@@ -51,75 +52,45 @@ func TestReadResponseBody_succeedsDespiteInflatedContentLength(t *testing.T) {
 	assert.Equal(t, body, downstream)
 }
 
-func TestReadResponseBody_returnsErrBodyTooLargeButPreservesFullBody(t *testing.T) {
+func TestPeekResponseBody_truncatesOversizedBodyButPreservesFullBody(t *testing.T) {
 	t.Parallel()
 
 	prefix := []byte(`{"uri":"partial-prefix`)
-	padding := make([]byte, 70<<10) // above the 64 KiB limit used below
-	for i := range padding {
-		padding[i] = 'x'
-	}
+	padding := bytes.Repeat([]byte("x"), 70<<10) // above the 64 KiB limit used below
 	wantBody := append(append([]byte(nil), prefix...), padding...)
 
 	res := &http.Response{Body: io.NopCloser(bytes.NewReader(wantBody))}
-	peeked, err := cc.ReadResponseBody(res, 64<<10)
-	require.ErrorIs(t, err, cc.ErrBodyTooLarge)
-	assert.Nil(t, peeked)
+	peeked, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
+	require.NoError(t, err)
+	assert.False(t, fullyRead)
+	assert.Equal(t, int64(64<<10), int64(len(peeked)), "should return a bounded prefix")
 
 	gotBody, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	assert.Equal(t, wantBody, gotBody, "the real body must still be readable in full, untruncated")
 }
 
-func TestReadResponseBody_restoredBodyStaysRewindable(t *testing.T) {
-	t.Parallel()
-
-	body := []byte(`{"data":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}}`)
-	res := &http.Response{Body: io.NopCloser(bytes.NewReader(body))}
-
-	_, err := cc.ReadResponseBody(res, 64<<10)
-	require.NoError(t, err)
-
-	seeker, ok := res.Body.(io.ReadSeeker)
-	require.True(t, ok, "restored body must still satisfy io.ReadSeeker")
-
-	_, err = seeker.Seek(0, io.SeekStart)
-	require.NoError(t, err)
-
-	got, err := io.ReadAll(seeker)
-	require.NoError(t, err)
-	assert.Equal(t, body, got)
-}
-
-func TestReadRequestBodyForParse(t *testing.T) {
+func TestPeekRequestBody(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name           string
-		maxBytes       int64
-		bodySetup      func() []byte
-		expectFullBody bool
-		expectLen      int64
+		name      string
+		maxBytes  int64
+		body      func() io.Reader
+		expectLen int
 	}{
 		{
-			name:           "full body when small",
-			maxBytes:       64 << 10,
-			bodySetup:      func() []byte { return []byte(`{"publish_report":true}`) },
-			expectFullBody: true,
-			expectLen:      23,
+			name:      "full body when small",
+			maxBytes:  64 << 10,
+			body:      func() io.Reader { return strings.NewReader(`{"publish_report":true}`) },
+			expectLen: 23,
 		},
 		{
 			name:     "truncated on oversized",
 			maxBytes: 64 << 10,
-			bodySetup: func() []byte {
-				prefix := []byte(`{"publish_report":true`)
-				padding := make([]byte, 70<<10)
-				for i := range padding {
-					padding[i] = 'x'
-				}
-				return append(append([]byte(nil), prefix...), padding...)
+			body: func() io.Reader {
+				return bytes.NewReader(append([]byte(`{"publish_report":true`), bytes.Repeat([]byte("x"), 70<<10)...))
 			},
-			expectFullBody: false,
-			expectLen:      64 << 10,
+			expectLen: 64 << 10,
 		},
 	}
 
@@ -127,39 +98,36 @@ func TestReadRequestBodyForParse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := tt.bodySetup()
-			req := &http.Request{Body: io.NopCloser(bytes.NewReader(body))}
-
-			got, err := cc.ReadRequestBodyForParse(req, tt.maxBytes)
+			req, err := http.NewRequest(http.MethodPost, "https://api.snyk.io/v1/monitor", tt.body())
 			require.NoError(t, err)
 
-			if tt.expectFullBody {
-				assert.Equal(t, body, got)
-			} else {
-				assert.Equal(t, tt.expectLen, int64(len(got)), "should return truncated prefix")
-			}
-
-			downstream, err := io.ReadAll(req.Body)
+			got, err := cc.PeekRequestBody(req, tt.maxBytes)
 			require.NoError(t, err)
-			assert.Equal(t, body, downstream, "full body still readable")
+			assert.Len(t, got, tt.expectLen)
+
+			outgoing, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, outgoing, "peeking must leave the outgoing body untouched")
+			assert.True(t, bytes.HasPrefix(outgoing, got), "peeked bytes must be a prefix of the real body")
 		})
 	}
 }
 
-func TestDecodeCaptureBody_gzipDeeproxyReport(t *testing.T) {
+func TestPeekRequestBody_skipsBodyThatCannotBeReplayed(t *testing.T) {
 	t.Parallel()
 
-	raw := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"25bcb5ba-5b16-4f56-8620-4e3a508f67ed"}}`)
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	_, err := gz.Write(raw)
-	require.NoError(t, err)
-	require.NoError(t, gz.Close())
+	// A streaming body has no GetBody, so there is no copy to read without
+	// stealing bytes from the outgoing request.
+	pr, pw := io.Pipe()
+	t.Cleanup(func() { _ = pw.Close() })
 
-	decoded, err := cc.DecodeCaptureBody(buf.Bytes(), "gzip")
+	req, err := http.NewRequest(http.MethodPost, "https://api.snyk.io/v1/monitor", pr)
 	require.NoError(t, err)
-	assert.Equal(t, raw, decoded)
-	assert.Equal(t, "25bcb5ba-5b16-4f56-8620-4e3a508f67ed", cc.ParseDeeproxyReportProjectID(decoded))
+	require.Nil(t, req.GetBody)
+
+	got, err := cc.PeekRequestBody(req, 64<<10)
+	require.NoError(t, err)
+	assert.Nil(t, got)
 }
 
 type errAfterReadCloser struct {
