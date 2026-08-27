@@ -463,16 +463,31 @@ func advanceQuoteState(inQuotes bool, span string) bool {
 }
 
 // isBareJSONValueSpan reports whether s[start:end] is an unquoted JSON value: preceded by `:`,
-// `,` or `[` and followed by `,`, `}` or `]`, with both neighbors required.
-//
-// No whitespace tolerance (e.g. `: 12345,`): RedactStaticTerm runs on every log line whether or
-// not it's JSON, and zerolog's own encoder never emits such whitespace. Tolerating it would
-// misdetect ordinary prose like "reason: password, retry: token, ..." as a bare value and wrap it
-// in stray quotes.
+// `,` or `[` and followed by `,`, `}` or `]`, with both neighbors required (skipping over any
+// insignificant JSON whitespace — space, tab, CR, LF — in between, so pretty-printed JSON like
+// `: 12345,` is recognized the same as compact `:12345,`). This only risks misreading ordinary
+// prose as a bare value when that prose sits outside any JSON string and next to a real `:`/`,` —
+// callers that gate jsonAware on the input actually being valid JSON (see internalWrite) rule that
+// out, since prose inside valid JSON is always inside a quoted string, where the `quoted` check in
+// RedactStaticTerm's caller already skips this function entirely.
 func isBareJSONValueSpan(s string, start, end int) bool {
-	precededByValueStart := start > 0 && strings.ContainsRune(":,[", rune(s[start-1]))
-	followedByValueEnd := end < len(s) && strings.ContainsRune(",}]", rune(s[end]))
+	i := start - 1
+	for i >= 0 && isJSONWhitespace(s[i]) {
+		i--
+	}
+	precededByValueStart := i >= 0 && strings.ContainsRune(":,[", rune(s[i]))
+
+	j := end
+	for j < len(s) && isJSONWhitespace(s[j]) {
+		j++
+	}
+	followedByValueEnd := j < len(s) && strings.ContainsRune(",}]", rune(s[j]))
+
 	return precededByValueStart && followedByValueEnd
+}
+
+func isJSONWhitespace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
 // isFusedToAdjacentDigit reports whether s[start:end] touches a digit or other numeric-literal

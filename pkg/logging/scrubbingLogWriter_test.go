@@ -822,6 +822,34 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			expected: `{"traceId":"***98765"}`,
 		},
 		{
+			name:     "pretty-printed JSON with spaces around colon and comma is still quoted",
+			input:    `{"count" : 12345 , "ok" : true}`,
+			expected: `{"count" : "***" , "ok" : true}`,
+		},
+		{
+			name:     "whitespace run including a newline and a tab before the boundary is skipped",
+			input:    "{\"count\":\n\t12345,\n\"ok\":true}",
+			expected: "{\"count\":\n\t\"***\",\n\"ok\":true}",
+		},
+		{
+			name:     "space before comma is tolerated",
+			input:    `{"count":12345 ,"ok":true}`,
+			expected: `{"count":"***" ,"ok":true}`,
+		},
+		{
+			name:     "padded array brackets are tolerated",
+			input:    `{"ids": [ 12345, 67890 ]}`,
+			expected: `{"ids": [ "***", 67890 ]}`,
+		},
+		{
+			// Whitespace-tolerant boundary detection could misread this prose's ": " and ", " as
+			// bare-value boundaries -- the `quoted` guard in RedactStaticTerm must still keep it
+			// from ever reaching isBareJSONValueSpan, since it's inside a quoted string value.
+			name:     "term embedded in prose inside a quoted string is not misdetected as bare",
+			input:    `{"msg":"reason: 12345, retry: token"}`,
+			expected: `{"msg":"reason: ***, retry: token"}`,
+		},
+		{
 			// Term sits after an escaped quote, with `:`/`,` neighbors — same shape as a bare
 			// value. A tracker that toggles on escaped quotes too would misread this as
 			// unquoted and inject stray quotes, corrupting the string.
