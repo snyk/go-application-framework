@@ -358,11 +358,24 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 }
 
 // Scrub applies scrubDict's redaction rules to data, the same logic used internally by ScrubbingLogWriter.
+// data is treated as a JSON-structured log line: a static-term match is quoted or skipped as
+// needed to keep the result valid JSON (see RedactStaticTerm). Use ScrubValue instead for a bare
+// value that isn't itself JSON, e.g. a string leaf that a later json.Marshal will quote for you.
 func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
-	return scrub(data, scrubDict)
+	return scrub(data, scrubDict, true)
 }
 
-func scrub(p []byte, scrubDict ScrubbingDict) []byte {
+// ScrubValue applies scrubDict's redaction rules to a value that is not itself JSON-structured,
+// e.g. a single leaf string an AddExtension caller supplied, destined to be embedded as an
+// already-quoted JSON string value by a later json.Marshal. RedactStaticTerm's JSON-value quoting
+// and digit-fusion skip exist only to protect JSON syntax in Scrub's whole-log-line input;
+// applying them to arbitrary leaf text instead injects stray quote characters into unrelated
+// content, or worse, skips redacting a real secret that happens to sit next to a digit.
+func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
+	return scrub(data, scrubDict, false)
+}
+
+func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
 	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
 	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
@@ -375,7 +388,11 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 		entry := scrubDict[key]
 		// scrub from the replacement list first
 		if entry.replace != "" {
-			s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			if jsonAware {
+				s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			} else {
+				s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			}
 			continue
 		}
 		// then scrub from the regex list
@@ -395,15 +412,17 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 // unquoted replacement is not a legal token there — replacing it unquoted produces invalid JSON
 // (see CLI-1732). Quoting the replacement in that position keeps it a valid JSON string instead.
 // A term inside an existing quoted string is left bare, since it is already bounded by quotes
-// that this function did not consume.
+// that this function did not consume — and, being already-quoted text rather than a bare value,
+// it is never treated as digit-fused either: the fusion check below only protects bare numbers.
 //
-// A purely numeric term can also land mid-number — e.g. redacting a numeric username "1000" out
-// of an unrelated "durationMs":10001234 — where one side touches a JSON boundary and the other
-// touches another digit. There, term is a slice of one larger JSON number token, not the whole
-// value: no amount of quoting the replacement keeps the result valid, since splicing "***" into
-// the middle of a number always breaks it into two tokens with no separator. The safe move is to
-// leave that occurrence alone rather than corrupt the surrounding number; the coincidental digit
-// overlap isn't a real exposure of the redacted term as its own value anyway.
+// A purely numeric term can also land mid-number in a *bare* (unquoted) position — e.g. redacting
+// a numeric username "1000" out of an unrelated "durationMs":10001234 — where one side touches a
+// JSON boundary and the other touches another digit or numeric-literal character (`.`, `-`, `+`,
+// `e`/`E`). There, term is a slice of one larger JSON number token, not the whole value: no amount
+// of quoting the replacement keeps the result valid, since splicing "***" into the middle of a
+// number always breaks it into two tokens with no separator. The safe move is to leave that
+// occurrence alone rather than corrupt the surrounding number; the coincidental digit overlap
+// isn't a real exposure of the redacted term as its own value anyway.
 //
 // Exported for reuse by other packages that scrub exact values out of already-marshaled JSON
 // (e.g. pkg/analytics's SanitizeStaticValues), which has the identical corruption risk.
@@ -414,6 +433,7 @@ func RedactStaticTerm(s, term, replacement string) string {
 	var builder strings.Builder
 	builder.Grow(len(s))
 	end := 0
+	quoted := false
 	for {
 		idx := strings.Index(s[end:], term)
 		if idx < 0 {
@@ -421,39 +441,68 @@ func RedactStaticTerm(s, term, replacement string) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
+		quoted = advanceQuoteState(quoted, s[end:start])
 		builder.WriteString(s[end:start])
 		switch {
-		case isFusedToAdjacentDigit(s, start, matchEnd):
+		case !quoted && isFusedToAdjacentDigit(s, start, matchEnd):
 			builder.WriteString(s[start:matchEnd])
-		case isBareJSONValueSpan(s, start, matchEnd):
+		case !quoted && isBareJSONValueSpan(s, start, matchEnd):
 			builder.WriteByte('"')
 			builder.WriteString(replacement)
 			builder.WriteByte('"')
 		default:
 			builder.WriteString(replacement)
 		}
+		quoted = advanceQuoteState(quoted, s[start:matchEnd])
 		end = matchEnd
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
 }
 
+// advanceQuoteState scans span and reports whether s is inside an open, unescaped double-quoted
+// JSON string once span has been consumed, given inQuotes was the state before span. An escaped
+// character (`\"`, `\\`, ...) is skipped whole so it can't toggle the state on its own.
+func advanceQuoteState(inQuotes bool, span string) bool {
+	for i := 0; i < len(span); i++ {
+		switch span[i] {
+		case '\\':
+			i++
+		case '"':
+			inQuotes = !inQuotes
+		}
+	}
+	return inQuotes
+}
+
 // isBareJSONValueSpan reports whether s[start:end] stands alone as an unquoted JSON value —
 // preceded by `:`, `,` or `[` and followed by `,`, `}` or `]`. Both neighbors must actually be
 // present: a term at the very start or end of s has no JSON structure to confirm it's a value
 // rather than plain text, so it is left unquoted.
+//
+// This deliberately does not tolerate whitespace around those neighbors (e.g. `: 12345,`):
+// RedactStaticTerm runs unconditionally on every log line, JSON or not (see internalWrite), and
+// zerolog's own encoder never emits such whitespace in the JSON it actually produces. Tolerating
+// it here would only make ordinary prose — "reason: password, retry: token, ..." — misdetected as
+// a bare JSON value and wrapped in stray quotes.
 func isBareJSONValueSpan(s string, start, end int) bool {
 	precededByValueStart := start > 0 && strings.ContainsRune(":,[", rune(s[start-1]))
 	followedByValueEnd := end < len(s) && strings.ContainsRune(",}]", rune(s[end]))
 	return precededByValueStart && followedByValueEnd
 }
 
-// isFusedToAdjacentDigit reports whether s[start:end] directly touches a digit on either side,
-// meaning it is a slice of a larger unquoted number rather than a complete value on its own.
+// isFusedToAdjacentDigit reports whether s[start:end] directly touches a digit or other
+// numeric-literal character (`.`, `-`, `+`, `e`, `E`) on either side, meaning it is a slice of a
+// larger unquoted number — including a float, negative, or exponent form — rather than a complete
+// value on its own.
 func isFusedToAdjacentDigit(s string, start, end int) bool {
-	precededByDigit := start > 0 && s[start-1] >= '0' && s[start-1] <= '9'
-	followedByDigit := end < len(s) && s[end] >= '0' && s[end] <= '9'
-	return precededByDigit || followedByDigit
+	precededByNumberChar := start > 0 && isJSONNumberChar(s[start-1])
+	followedByNumberChar := end < len(s) && isJSONNumberChar(s[end])
+	return precededByNumberChar || followedByNumberChar
+}
+
+func isJSONNumberChar(b byte) bool {
+	return (b >= '0' && b <= '9') || b == '.' || b == '-' || b == '+' || b == 'e' || b == 'E'
 }
 
 // redactMatchedGroup replaces capture group groupToRedact of every match of regex in s,
@@ -496,7 +545,7 @@ func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
 
 func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, error)) (int, error) {
 	scrubbedDataWritten := 0
-	scrubbedData := scrub(p, dict)
+	scrubbedData := scrub(p, dict, true)
 	var err error
 	var written int
 	for errorsSeen := 0; scrubbedDataWritten < len(scrubbedData); {

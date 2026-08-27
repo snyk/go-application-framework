@@ -188,7 +188,7 @@ func TestScrubFunction(t *testing.T) {
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -197,7 +197,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http://***@host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -206,7 +206,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http://host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 }
@@ -215,7 +215,7 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 	dict := addMandatoryMasking(ScrubbingDict{})
 	input := []byte("Authorization: Bearer sometoken123456")
 
-	expected := scrub(input, dict)
+	expected := scrub(input, dict, true)
 	actual := Scrub(input, dict)
 
 	assert.Equal(t, string(expected), string(actual))
@@ -406,7 +406,7 @@ func TestAddDefaults(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := scrub([]byte(test.input), dict)
+			actual := scrub([]byte(test.input), dict, true)
 			assert.Equal(t, test.expected, string(actual))
 		})
 	}
@@ -483,7 +483,7 @@ func TestScrub_RedactsOnlyTheMatchedSpan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := string(scrub([]byte(test.input), dict))
+			actual := string(scrub([]byte(test.input), dict, true))
 
 			assert.Equal(t, test.expected, actual)
 			assert.True(t, json.Valid([]byte(actual)),
@@ -563,7 +563,7 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := string(scrub([]byte(test.input), dict))
+			actual := string(scrub([]byte(test.input), dict, true))
 
 			assert.Equal(t, test.expected, actual)
 			assert.True(t, json.Valid([]byte(actual)),
@@ -742,7 +742,7 @@ func TestSnykPATScrubbing(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := scrub([]byte(test.input), dict)
+			actual := scrub([]byte(test.input), dict, true)
 			assert.Equal(t, test.expected, string(actual))
 		})
 	}
@@ -774,6 +774,21 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			input:    `{"ids":[12345,67890]}`,
 			expected: `{"ids":["***",67890]}`,
 		},
+		{
+			name:     "static term fused to a decimal point is left alone",
+			input:    `{"ratio":123.12345}`,
+			expected: `{"ratio":123.12345}`,
+		},
+		{
+			name:     "static term fused to a leading minus sign is left alone",
+			input:    `{"delta":-12345}`,
+			expected: `{"delta":-12345}`,
+		},
+		{
+			name:     "digit-adjacent term inside a quoted string is still redacted",
+			input:    `{"traceId":"1234598765"}`,
+			expected: `{"traceId":"***98765"}`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -788,6 +803,40 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 
 			assert.True(t, json.Valid(output.Bytes()), "scrubbing produced invalid JSON: %s", output.Bytes())
 			assert.Equal(t, test.expected, output.String())
+		})
+	}
+}
+
+// TestScrubValue covers callers that scrub a single leaf value which is not itself JSON, e.g.
+// AddExtension's pre-marshal string leaves (pkg/analytics's scrubExtensionValueSeen). Scrub's
+// JSON-value quoting and digit-fusion skip protect JSON syntax in a whole log line; applied to
+// arbitrary leaf text they would instead inject stray quote characters or silently skip a real
+// secret that happens to sit next to a digit, since there is no JSON number token to protect.
+func TestScrubValue(t *testing.T) {
+	dict := ScrubbingDict{}
+	addStaticTermToDict("8080", dict)
+	addStaticTermToDict("12345", dict)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "term adjacent to colon and comma in freeform text is not quoted",
+			input:    "port:8080,timeout:3000",
+			expected: "port:***,timeout:3000",
+		},
+		{
+			name:     "term fused to an adjacent digit in freeform text is still redacted",
+			input:    "id: 123451234",
+			expected: "id: ***1234",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(ScrubValue([]byte(test.input), dict))
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }

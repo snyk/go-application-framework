@@ -264,7 +264,7 @@ func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict,
 func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
 	switch val := v.(type) {
 	case string:
-		return string(logging.Scrub([]byte(val), dict))
+		return string(logging.ScrubValue([]byte(val), dict))
 	case map[string]interface{}:
 		return scrubExtensionMapSeen(val, dict, seen)
 	case []interface{}:
