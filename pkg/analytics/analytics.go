@@ -372,7 +372,7 @@ func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, co
 	contentStr := string(content)
 
 	for _, valueToReplace := range valuesToSanitize {
-		contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
+		contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
 	}
 
 	return []byte(contentStr), nil

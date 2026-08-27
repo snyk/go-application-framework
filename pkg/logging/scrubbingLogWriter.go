@@ -375,13 +375,85 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 		entry := scrubDict[key]
 		// scrub from the replacement list first
 		if entry.replace != "" {
-			s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 			continue
 		}
 		// then scrub from the regex list
 		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
 	}
 	return []byte(s)
+}
+
+// RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
+// replacement when term occupies a bare (unquoted) JSON value position, and leaving an
+// occurrence untouched when it is only a partial, digit-fused slice of a larger bare number.
+//
+// term is an exact secret/token value (e.g. from AddTermsToReplace), so unlike redactMatchedGroup
+// this has no regex capture to bound the match — it can only look at the characters immediately
+// around each occurrence. A term that sits right after a JSON `:`, `,` or `[` and right before a
+// `,`, `}`, `]` or end-of-string is standing in for a bare value (a number, bool, or null), and an
+// unquoted replacement is not a legal token there — replacing it unquoted produces invalid JSON
+// (see CLI-1732). Quoting the replacement in that position keeps it a valid JSON string instead.
+// A term inside an existing quoted string is left bare, since it is already bounded by quotes
+// that this function did not consume.
+//
+// A purely numeric term can also land mid-number — e.g. redacting a numeric username "1000" out
+// of an unrelated "durationMs":10001234 — where one side touches a JSON boundary and the other
+// touches another digit. There, term is a slice of one larger JSON number token, not the whole
+// value: no amount of quoting the replacement keeps the result valid, since splicing "***" into
+// the middle of a number always breaks it into two tokens with no separator. The safe move is to
+// leave that occurrence alone rather than corrupt the surrounding number; the coincidental digit
+// overlap isn't a real exposure of the redacted term as its own value anyway.
+//
+// Exported for reuse by other packages that scrub exact values out of already-marshaled JSON
+// (e.g. pkg/analytics's SanitizeStaticValues), which has the identical corruption risk.
+func RedactStaticTerm(s, term, replacement string) string {
+	if term == "" {
+		return s
+	}
+	var builder strings.Builder
+	builder.Grow(len(s))
+	end := 0
+	for {
+		idx := strings.Index(s[end:], term)
+		if idx < 0 {
+			break
+		}
+		start := end + idx
+		matchEnd := start + len(term)
+		builder.WriteString(s[end:start])
+		switch {
+		case isFusedToAdjacentDigit(s, start, matchEnd):
+			builder.WriteString(s[start:matchEnd])
+		case isBareJSONValueSpan(s, start, matchEnd):
+			builder.WriteByte('"')
+			builder.WriteString(replacement)
+			builder.WriteByte('"')
+		default:
+			builder.WriteString(replacement)
+		}
+		end = matchEnd
+	}
+	builder.WriteString(s[end:])
+	return builder.String()
+}
+
+// isBareJSONValueSpan reports whether s[start:end] stands alone as an unquoted JSON value —
+// preceded by `:`, `,` or `[` and followed by `,`, `}` or `]`. Both neighbors must actually be
+// present: a term at the very start or end of s has no JSON structure to confirm it's a value
+// rather than plain text, so it is left unquoted.
+func isBareJSONValueSpan(s string, start, end int) bool {
+	precededByValueStart := start > 0 && strings.ContainsRune(":,[", rune(s[start-1]))
+	followedByValueEnd := end < len(s) && strings.ContainsRune(",}]", rune(s[end]))
+	return precededByValueStart && followedByValueEnd
+}
+
+// isFusedToAdjacentDigit reports whether s[start:end] directly touches a digit on either side,
+// meaning it is a slice of a larger unquoted number rather than a complete value on its own.
+func isFusedToAdjacentDigit(s string, start, end int) bool {
+	precededByDigit := start > 0 && s[start-1] >= '0' && s[start-1] <= '9'
+	followedByDigit := end < len(s) && s[end] >= '0' && s[end] <= '9'
+	return precededByDigit || followedByDigit
 }
 
 // redactMatchedGroup replaces capture group groupToRedact of every match of regex in s,

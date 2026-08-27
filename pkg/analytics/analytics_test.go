@@ -235,6 +235,19 @@ func Test_SanitizeUsername(t *testing.T) {
 	}
 }
 
+// Test_SanitizeUsername_NumericUsernameCollision covers os/user.Current falling back to a
+// numeric UID as Username (documented behavior when NSS/cgo lookup fails, common in
+// scratch/musl containers). A numeric username can collide with an unrelated bare JSON number
+// elsewhere in the payload; SanitizeStaticValues must not corrupt that number into invalid JSON.
+func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
+	input := []byte(`{"durationMs":10001234,"count":1000,"other":"x"}`)
+
+	output, err := SanitizeUsername("1000", "/home/1000", "***", input)
+	assert.NoError(t, err)
+
+	assert.True(t, json.Valid(output), "sanitizing produced invalid JSON: %s", output)
+}
+
 func newTestAnalytics(t *testing.T) Analytics {
 	t.Helper()
 	a := New()

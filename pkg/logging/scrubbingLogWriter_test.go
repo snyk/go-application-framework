@@ -747,3 +747,47 @@ func TestSnykPATScrubbing(t *testing.T) {
 		})
 	}
 }
+
+func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "static term as bare JSON number value",
+			input:    `{"level":"debug","count":12345,"message":"ok"}`,
+			expected: `{"level":"debug","count":"***","message":"ok"}`,
+		},
+		{
+			name:     "static term inside a quoted JSON string stays unquoted",
+			input:    `{"message":"session id 12345 started"}`,
+			expected: `{"message":"session id *** started"}`,
+		},
+		{
+			name:     "static term as the entire quoted JSON string value",
+			input:    `{"userId":"12345"}`,
+			expected: `{"userId":"***"}`,
+		},
+		{
+			name:     "static term as bare value at start of array",
+			input:    `{"ids":[12345,67890]}`,
+			expected: `{"ids":["***",67890]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			w := NewScrubbingIoWriter(&output, ScrubbingDict{})
+			scrubbingWriter, ok := w.(ScrubbingLogWriter)
+			require.True(t, ok)
+			scrubbingWriter.AddTermsToReplace([]string{"12345"})
+
+			_, err := w.Write([]byte(test.input))
+			require.NoError(t, err)
+
+			assert.True(t, json.Valid(output.Bytes()), "scrubbing produced invalid JSON: %s", output.Bytes())
+			assert.Equal(t, test.expected, output.String())
+		})
+	}
+}
