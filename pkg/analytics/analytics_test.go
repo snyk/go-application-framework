@@ -235,10 +235,9 @@ func Test_SanitizeUsername(t *testing.T) {
 	}
 }
 
-// Test_SanitizeUsername_NumericUsernameCollision covers os/user.Current falling back to a
-// numeric UID as Username (documented behavior when NSS/cgo lookup fails, common in
-// scratch/musl containers). A numeric username can collide with an unrelated bare JSON number
-// elsewhere in the payload; SanitizeStaticValues must not corrupt that number into invalid JSON.
+// Test_SanitizeUsername_NumericUsernameCollision guards against a numeric username (os/user.Current
+// falls back to a numeric UID when NSS/cgo lookup fails) colliding with an unrelated bare JSON
+// number and corrupting the payload.
 func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	input := []byte(`{"durationMs":10001234,"count":1000,"other":"x"}`)
 
@@ -246,6 +245,30 @@ func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, json.Valid(output), "sanitizing produced invalid JSON: %s", output)
+	assert.Equal(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
+}
+
+// Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload proves the fix survives the real
+// GetRequest() pipeline, not just a hand-built JSON blob: a numeric username embedded in an error
+// message must be redacted without corrupting the rest of the marshaled payload.
+func Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload(t *testing.T) {
+	a := New().(*AnalyticsImpl) //nolint:errcheck //in this test, the type is clear
+	a.userCurrent = func() (*user.User, error) {
+		return &user.User{Username: "1000", HomeDir: t.TempDir()}, nil
+	}
+	a.AddError(fmt.Errorf("permission denied for user 1000"))
+
+	req, err := a.GetRequest()
+	assert.NoError(t, err)
+
+	body, err := io.ReadAll(req.Body)
+	assert.NoError(t, err)
+	assert.True(t, json.Valid(body), "GetRequest produced invalid JSON: %s", body)
+
+	var decoded dataOutput
+	assert.NoError(t, json.Unmarshal(body, &decoded))
+	assert.NotContains(t, decoded.Data.Metadata.ErrorMessage, "1000")
+	assert.NotEmpty(t, decoded.Data.Id)
 }
 
 func newTestAnalytics(t *testing.T) Analytics {

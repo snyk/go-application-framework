@@ -298,10 +298,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 	})
 
 	t.Run("it should redact a static term embedded in freeform extension text without corrupting or under-redacting it", func(t *testing.T) {
-		// Extension leaves are scrubbed as plain values, not JSON (ScrubValue, not Scrub): a term
-		// adjacent to `:`/`,` or fused to another digit must still be redacted verbatim, with no
-		// JSON-value quoting or digit-fusion skip injected, since there is no JSON syntax here to
-		// protect and the leaf is properly quoted by json.Marshal regardless of its content.
+		// Extension leaves are scrubbed via ScrubValue, not Scrub: a term adjacent to `:`/`,` or
+		// fused to a digit must still be redacted verbatim, with no JSON-value quoting or digit-fusion skip.
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 

@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os/user"
@@ -357,20 +358,15 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
-// Scrub applies scrubDict's redaction rules to data, the same logic used internally by ScrubbingLogWriter.
-// data is treated as a JSON-structured log line: a static-term match is quoted or skipped as
-// needed to keep the result valid JSON (see RedactStaticTerm). Use ScrubValue instead for a bare
-// value that isn't itself JSON, e.g. a string leaf that a later json.Marshal will quote for you.
+// Scrub applies scrubDict's redaction rules to data, treated as a JSON-structured log line.
+// Use ScrubValue for a bare, non-JSON leaf value.
 func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
 	return scrub(data, scrubDict, true)
 }
 
 // ScrubValue applies scrubDict's redaction rules to a value that is not itself JSON-structured,
-// e.g. a single leaf string an AddExtension caller supplied, destined to be embedded as an
-// already-quoted JSON string value by a later json.Marshal. RedactStaticTerm's JSON-value quoting
-// and digit-fusion skip exist only to protect JSON syntax in Scrub's whole-log-line input;
-// applying them to arbitrary leaf text instead injects stray quote characters into unrelated
-// content, or worse, skips redacting a real secret that happens to sit next to a digit.
+// e.g. a leaf string that a later json.Marshal will quote. Skips Scrub's JSON-value quoting and
+// digit-fusion protections, which would otherwise stray-quote or under-redact plain text.
 func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 	return scrub(data, scrubDict, false)
 }
@@ -402,30 +398,21 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 }
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
-// replacement when term occupies a bare (unquoted) JSON value position, and leaving an
-// occurrence untouched when it is only a partial, digit-fused slice of a larger bare number.
+// replacement when term sits in a bare (unquoted) JSON value position, and leaving an occurrence
+// untouched when it's only a digit-fused slice of a larger bare number.
 //
-// term is an exact secret/token value (e.g. from AddTermsToReplace), so unlike redactMatchedGroup
-// this has no regex capture to bound the match — it can only look at the characters immediately
-// around each occurrence. A term that sits right after a JSON `:`, `,` or `[` and right before a
-// `,`, `}`, `]` or end-of-string is standing in for a bare value (a number, bool, or null), and an
-// unquoted replacement is not a legal token there — replacing it unquoted produces invalid JSON
-// (see CLI-1732). Quoting the replacement in that position keeps it a valid JSON string instead.
-// A term inside an existing quoted string is left bare, since it is already bounded by quotes
-// that this function did not consume — and, being already-quoted text rather than a bare value,
-// it is never treated as digit-fused either: the fusion check below only protects bare numbers.
+// term has no regex capture to bound it, so only the characters immediately around each match are
+// checked. A term preceded by `:`, `,` or `[` and followed by `,`, `}` or `]` is a bare value
+// (number/bool/null); an unquoted replacement there is invalid JSON (see CLI-1732), so the
+// replacement gets quoted instead. A term at the very start or end of s, with no boundary
+// character on that side, is left bare rather than guessed at. A term already inside a quoted
+// string is also left bare, and never treated as digit-fused.
 //
-// A purely numeric term can also land mid-number in a *bare* (unquoted) position — e.g. redacting
-// a numeric username "1000" out of an unrelated "durationMs":10001234 — where one side touches a
-// JSON boundary and the other touches another digit or numeric-literal character (`.`, `-`, `+`,
-// `e`/`E`). There, term is a slice of one larger JSON number token, not the whole value: no amount
-// of quoting the replacement keeps the result valid, since splicing "***" into the middle of a
-// number always breaks it into two tokens with no separator. The safe move is to leave that
-// occurrence alone rather than corrupt the surrounding number; the coincidental digit overlap
-// isn't a real exposure of the redacted term as its own value anyway.
+// A numeric term can also land mid-number in a bare position (e.g. redacting "1000" out of an
+// unrelated "durationMs":10001234) — there it's a slice of a larger number token, and no amount of
+// quoting keeps that valid, so the occurrence is left alone rather than corrupting the number.
 //
-// Exported for reuse by other packages that scrub exact values out of already-marshaled JSON
-// (e.g. pkg/analytics's SanitizeStaticValues), which has the identical corruption risk.
+// Exported for reuse by pkg/analytics's SanitizeStaticValues, which has the same corruption risk.
 func RedactStaticTerm(s, term, replacement string) string {
 	if term == "" {
 		return s
@@ -475,26 +462,22 @@ func advanceQuoteState(inQuotes bool, span string) bool {
 	return inQuotes
 }
 
-// isBareJSONValueSpan reports whether s[start:end] stands alone as an unquoted JSON value —
-// preceded by `:`, `,` or `[` and followed by `,`, `}` or `]`. Both neighbors must actually be
-// present: a term at the very start or end of s has no JSON structure to confirm it's a value
-// rather than plain text, so it is left unquoted.
+// isBareJSONValueSpan reports whether s[start:end] is an unquoted JSON value: preceded by `:`,
+// `,` or `[` and followed by `,`, `}` or `]`, with both neighbors required.
 //
-// This deliberately does not tolerate whitespace around those neighbors (e.g. `: 12345,`):
-// RedactStaticTerm runs unconditionally on every log line, JSON or not (see internalWrite), and
-// zerolog's own encoder never emits such whitespace in the JSON it actually produces. Tolerating
-// it here would only make ordinary prose — "reason: password, retry: token, ..." — misdetected as
-// a bare JSON value and wrapped in stray quotes.
+// No whitespace tolerance (e.g. `: 12345,`): RedactStaticTerm runs on every log line whether or
+// not it's JSON, and zerolog's own encoder never emits such whitespace. Tolerating it would
+// misdetect ordinary prose like "reason: password, retry: token, ..." as a bare value and wrap it
+// in stray quotes.
 func isBareJSONValueSpan(s string, start, end int) bool {
 	precededByValueStart := start > 0 && strings.ContainsRune(":,[", rune(s[start-1]))
 	followedByValueEnd := end < len(s) && strings.ContainsRune(",}]", rune(s[end]))
 	return precededByValueStart && followedByValueEnd
 }
 
-// isFusedToAdjacentDigit reports whether s[start:end] directly touches a digit or other
-// numeric-literal character (`.`, `-`, `+`, `e`, `E`) on either side, meaning it is a slice of a
-// larger unquoted number — including a float, negative, or exponent form — rather than a complete
-// value on its own.
+// isFusedToAdjacentDigit reports whether s[start:end] touches a digit or other numeric-literal
+// character (`.`, `-`, `+`, `e`, `E`) on either side — i.e. it's a slice of a larger unquoted
+// number, not a complete value.
 func isFusedToAdjacentDigit(s string, start, end int) bool {
 	precededByNumberChar := start > 0 && isJSONNumberChar(s[start-1])
 	followedByNumberChar := end < len(s) && isJSONNumberChar(s[end])
@@ -543,9 +526,14 @@ func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
 	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
+// internalWrite scrubs p and writes it out via writeFunc. p is usually the compact JSON zerolog
+// itself encodes, but a writer misconfigured downstream of a non-JSON formatter (e.g. a console
+// writer that reformats JSON into human-readable text before it reaches here) can hand it prose
+// instead — RedactStaticTerm's bare-value quoting is only correct against real JSON, so p's own
+// validity, not the caller's assumption, decides which mode applies.
 func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, error)) (int, error) {
 	scrubbedDataWritten := 0
-	scrubbedData := scrub(p, dict, true)
+	scrubbedData := scrub(p, dict, json.Valid(p))
 	var err error
 	var written int
 	for errorsSeen := 0; scrubbedDataWritten < len(scrubbedData); {
