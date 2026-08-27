@@ -71,3 +71,42 @@ func TestClassifyEndpoint_PathPatterns(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkClassifyEndpoint(b *testing.B) {
+	const (
+		orgID  = "11111111-1111-4111-8111-111111111111"
+		testID = "22222222-2222-4222-8222-222222222222"
+	)
+
+	benchmarks := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		// Matching
+		{"match/monitor", "PUT", "/v1/monitor/npm"},
+		{"match/monitor-deps", "PUT", "/v1/monitor-dependencies/npm"},
+		{"match/iac-share", "POST", "/v1/iac-cli-share-results"},
+		{"match/create-test", "POST", "/hidden/orgs/" + orgID + "/tests"},
+		{"match/components", "GET", "/hidden/orgs/" + orgID + "/tests/" + testID + "/components"},
+		{"match/aibom-upload", "POST", "/rest/orgs/" + orgID + "/ai_boms/upload"},
+		{"match/deeproxy-report", "GET", "/report/55555555-5555-4555-8555-555555555555"},
+
+		// Non-matching
+		{"miss/unknown-method", "DELETE", "/v1/monitor/npm"},
+		{"miss/wrong-method-for-path", "GET", "/v1/monitor/npm"},
+		{"miss/unknown-path", "POST", "/v1/analytics/cli"},
+		{"miss/invalid-uuid", "POST", "/hidden/orgs/not-a-uuid/tests"},
+		{"miss/uuid-parse-then-reject", "GET", "/hidden/orgs/" + orgID + "/tests/" + testID},
+		{"miss/query-string-trimmed", "PUT", "/v1/monitor/npm?foo=bar&baz=qux"},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				cc.ClassifyEndpoint(bm.method, bm.path)
+			}
+		})
+	}
+}
