@@ -220,15 +220,14 @@ func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind endpointKind,
 }
 
 func (m *ContributorCaptureMiddleware) projectIDsFromComponentsResponse(path string, parseBytes []byte) []string {
-	testID := testIDFromPath(path)
-	if testID == "" || !m.isPendingTest(testID) {
-		return nil
-	}
 	projectID := parseComponentsProjectID(parseBytes)
 	if projectID == "" {
 		return nil
 	}
-	m.clearPendingTest(testID)
+	testID := testIDFromPath(path)
+	if testID == "" || !m.takeTestIfPending(testID) {
+		return nil
+	}
 	return []string{projectID}
 }
 
@@ -247,20 +246,16 @@ func (m *ContributorCaptureMiddleware) markTestPending(bodyBytes []byte, publish
 	m.pendingTests.mu.Unlock()
 }
 
-// isPendingTest reports whether testID was previously marked pending.
-func (m *ContributorCaptureMiddleware) isPendingTest(testID string) bool {
+// takeTestIfPending reports whether testID was previously marked pending, and
+// clears it if the result is true.
+func (m *ContributorCaptureMiddleware) takeTestIfPending(testID string) bool {
 	m.pendingTests.mu.Lock()
 	defer m.pendingTests.mu.Unlock()
 	_, ok := m.pendingTests.ids[testID]
+	if ok {
+		delete(m.pendingTests.ids, testID)
+	}
 	return ok
-}
-
-// clearPendingTest removes testID once it no longer needs tracking, so
-// pendingTests doesn't grow forever with tests that already got captured.
-func (m *ContributorCaptureMiddleware) clearPendingTest(testID string) {
-	m.pendingTests.mu.Lock()
-	delete(m.pendingTests.ids, testID)
-	m.pendingTests.mu.Unlock()
 }
 
 // record reports each captured ID to the sink. An empty ID means the parser
