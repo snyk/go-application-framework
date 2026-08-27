@@ -247,11 +247,25 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 	dict := addMandatoryMasking(ScrubbingDict{})
 	input := []byte("Authorization: Bearer sometoken123456")
 
-	expected := scrub(input, dict, true)
+	expected := scrub(input, dict, json.Valid(input))
 	actual := Scrub(input, dict)
 
 	assert.Equal(t, string(expected), string(actual))
 	assert.Equal(t, "Authorization: Bearer ***", string(actual), "Scrub should redact the token, not just mirror the input")
+}
+
+// TestScrub_NonJSONInputStillRedactsStaticTerms guards against Scrub trusting its own doc comment
+// ("data, treated as a JSON-structured log line") over what data actually is: a static term
+// landing next to a digit in plain, non-JSON text must not be silently skipped by the JSON-only
+// digit-fusion guard, which exists to protect real JSON numbers, not prose.
+func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("id: 123451234"), dict)
+
+	assert.Equal(t, "id: ***1234", string(actual))
 }
 
 func TestAddDefaults(t *testing.T) {
@@ -807,6 +821,11 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			expected: `{"ids":["***",67890]}`,
 		},
 		{
+			name:     "static term as bare value at end of array",
+			input:    `{"ids":[67890,12345]}`,
+			expected: `{"ids":[67890,"***"]}`,
+		},
+		{
 			name:     "static term fused to a decimal point is left alone",
 			input:    `{"ratio":123.12345}`,
 			expected: `{"ratio":123.12345}`,
@@ -962,15 +981,16 @@ func TestRedactStaticTerm(t *testing.T) {
 	}
 }
 
-// TestScrub_VsScrubValue contrasts the jsonAware split on identical input: Scrub quotes a bare
-// match to keep JSON syntax valid, ScrubValue leaves it bare since there's no JSON to protect.
+// TestScrub_VsScrubValue contrasts the jsonAware split on identical, valid-JSON input: Scrub
+// detects the input is JSON and quotes a bare match to keep it valid; ScrubValue always treats
+// its input as a non-JSON leaf, so it leaves the same match bare regardless of what it's given.
 func TestScrub_VsScrubValue(t *testing.T) {
 	dict := ScrubbingDict{}
 	addStaticTermToDict("8080", dict)
-	input := "port:8080,timeout:3000"
+	input := `{"port":8080,"timeout":3000}`
 
-	assert.Equal(t, `port:"***",timeout:3000`, string(Scrub([]byte(input), dict)))
-	assert.Equal(t, `port:***,timeout:3000`, string(ScrubValue([]byte(input), dict)))
+	assert.Equal(t, `{"port":"***","timeout":3000}`, string(Scrub([]byte(input), dict)))
+	assert.Equal(t, `{"port":***,"timeout":3000}`, string(ScrubValue([]byte(input), dict)))
 }
 
 // TestScrubValue covers non-JSON leaf values, e.g. AddExtension's pre-marshal string leaves.

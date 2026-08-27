@@ -358,10 +358,12 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
-// Scrub applies scrubDict's redaction rules to data, treated as a JSON-structured log line.
-// Use ScrubValue for a bare, non-JSON leaf value.
+// Scrub applies scrubDict's redaction rules to data. JSON-value quoting and digit-fusion
+// protection apply only when data is itself valid JSON; the caller's intent doesn't override
+// what data actually is (see internalWrite). Use ScrubValue for a value already known to be a
+// bare, non-JSON leaf.
 func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
-	return scrub(data, scrubDict, true)
+	return scrub(data, scrubDict, json.Valid(data))
 }
 
 // ScrubValue applies scrubDict's redaction rules to a value that is not itself JSON-structured,
