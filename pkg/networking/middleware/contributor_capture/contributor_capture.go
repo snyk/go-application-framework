@@ -2,14 +2,11 @@ package contributor_capture
 
 import (
 	"net/http"
-	"net/url"
 	"sync"
 
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/contributors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	parentmiddleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
@@ -17,7 +14,6 @@ import (
 // captured entity IDs (currently project IDs) to an injected Sink.
 type ContributorCaptureMiddleware struct {
 	next         http.RoundTripper
-	config       configuration.Configuration
 	sink         Sink
 	logger       *zerolog.Logger
 	pendingTests *pendingTests
@@ -31,14 +27,12 @@ type pendingTests struct {
 // NewContributorCaptureMiddleware returns a middleware that wraps a round tripper
 // with contributor capture logic, for registration via NetworkAccess.AddMiddleware.
 func NewContributorCaptureMiddleware(
-	config configuration.Configuration,
 	sink Sink,
 	logger *zerolog.Logger,
 ) networktypes.MiddlewareFunc {
 	return func(roundTripper http.RoundTripper) http.RoundTripper {
 		return &ContributorCaptureMiddleware{
 			next:         roundTripper,
-			config:       config,
 			sink:         sink,
 			logger:       logger,
 			pendingTests: &pendingTests{ids: make(map[string]struct{})},
@@ -105,38 +99,7 @@ func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (endpo
 		return endpointNone, false
 	}
 
-	if kind == endpointDeeproxyReport {
-		return m.classifyDeeproxyRequest(req)
-	}
-
-	apiURL, err := url.Parse(m.config.GetString(configuration.API_URL))
-	if err != nil || req.URL.Hostname() != apiURL.Hostname() {
-		return endpointNone, false
-	}
-
 	return kind, true
-}
-
-func (m *ContributorCaptureMiddleware) classifyDeeproxyRequest(req *http.Request) (endpointKind, bool) {
-	apiURL := m.config.GetString(configuration.API_URL)
-	additionalSubdomains := m.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
-	additionalURLs := m.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-
-	isKnownHost, err := parentmiddleware.ShouldRequireAuthentication(apiURL, req.URL, additionalSubdomains, additionalURLs)
-	if !isKnownHost || err != nil {
-		if m.logger != nil {
-			m.logger.Debug().
-				Str("path", req.URL.Path).
-				Str("host", req.URL.Host).
-				Str("api_url", apiURL).
-				Err(err).
-				Bool("known_host", isKnownHost).
-				Msg("contributor capture: deeproxy report host not recognized")
-		}
-		return endpointNone, false
-	}
-
-	return endpointDeeproxyReport, true
 }
 
 // requestBody peeks req's body for parsing, returning a prefix if needed.

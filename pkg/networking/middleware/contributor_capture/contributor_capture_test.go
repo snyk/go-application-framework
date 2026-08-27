@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/contributors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	cc "github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 )
 
@@ -62,11 +61,9 @@ func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *
 				require.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
-
-			config := hostConfig(server.URL)
 			sink := newFakeSink()
 			logger := zerolog.Nop()
-			rt := newMiddleware(http.DefaultTransport, config, sink, &logger)
+			rt := newMiddleware(http.DefaultTransport, sink, &logger)
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.path, http.NoBody)
 			require.NoError(t, err)
@@ -93,48 +90,6 @@ func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *
 	}
 }
 
-func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
-	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-	monitorBody := `{"uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`
-
-	tests := []struct {
-		name   string
-		config func(serverURL string) configuration.Configuration
-	}{
-		{"unknown host", func(string) configuration.Configuration {
-			config := configuration.NewWithOpts()
-			config.Set(configuration.API_URL, "https://api.snyk.io")
-			return config
-		}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, err := w.Write([]byte(monitorBody))
-				require.NoError(t, err)
-			}))
-			t.Cleanup(server.Close)
-
-			sink := newFakeSink()
-			logger := zerolog.Nop()
-			rt := newMiddleware(http.DefaultTransport, tt.config(server.URL), sink, &logger)
-
-			req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
-			require.NoError(t, err)
-
-			res, err := rt.RoundTrip(req)
-			require.NoError(t, err)
-			require.NotNil(t, res)
-			require.Equal(t, http.StatusOK, res.StatusCode)
-			require.NoError(t, res.Body.Close())
-
-			assert.Empty(t, sink.Records())
-		})
-	}
-}
-
 func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 	monitorBody := `{"uri":"https://app.snyk.io/org/acme/project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`
 
@@ -153,11 +108,9 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 				require.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
-
-			config := hostConfig(server.URL)
 			sink := newFakeSink()
 			logger := zerolog.Nop()
-			rt := newMiddleware(http.DefaultTransport, config, sink, &logger)
+			rt := newMiddleware(http.DefaultTransport, sink, &logger)
 
 			req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 			require.NoError(t, err)
@@ -177,9 +130,6 @@ func TestContributorCaptureMiddleware_capturesDespiteInflatedContentLength(t *te
 	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 	monitorBody := []byte(`{"uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`)
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -190,7 +140,7 @@ func TestContributorCaptureMiddleware_capturesDespiteInflatedContentLength(t *te
 			Request:       req,
 		}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -216,11 +166,9 @@ func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutConte
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
 	logger := zerolog.Nop()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &logger)
+	rt := newMiddleware(http.DefaultTransport, sink, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -244,9 +192,6 @@ func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t 
 
 	body := &trackCloseReadCloser{Reader: bytes.NewReader(wantBody)}
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -256,7 +201,7 @@ func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t 
 			Request:    req,
 		}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -277,9 +222,6 @@ func TestContributorCaptureMiddleware_matchesHostIgnoringPort(t *testing.T) {
 	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 	monitorBody := []byte(`{"uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`)
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -289,7 +231,7 @@ func TestContributorCaptureMiddleware_matchesHostIgnoringPort(t *testing.T) {
 			Request:    req,
 		}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io:443/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -337,10 +279,8 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlow(t *testing.T
 		}
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	createBody := []byte(`{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -380,10 +320,8 @@ func TestContributorCaptureMiddleware_doesNotTruncateOversizedCreateTestRequestB
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
 	require.NoError(t, err)
@@ -414,10 +352,8 @@ func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenNeverCreatedW
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	// No create-test call happened for this test ID, so it was never marked pending.
 	componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
@@ -468,10 +404,8 @@ func TestContributorCaptureMiddleware_componentsPollingSurvivesThenStopsAfterSuc
 		}
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	createBody := []byte(`{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -504,10 +438,8 @@ func TestContributorCaptureMiddleware_recoversFromSinkPanic_onResponse(t *testin
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	logger := zerolog.Nop()
-	rt := newMiddleware(http.DefaultTransport, config, panicSink{}, &logger)
+	rt := newMiddleware(http.DefaultTransport, panicSink{}, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -535,11 +467,9 @@ func TestContributorCaptureMiddleware_capturesAIBomUploadRevisionIDFromRequestBo
 		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
 	logger := zerolog.Nop()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &logger)
+	rt := newMiddleware(http.DefaultTransport, sink, &logger)
 
 	url := server.URL + "/rest/orgs/" + orgID + "/ai_boms/upload?version=2024-10-15"
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(uploadBody))
@@ -562,16 +492,13 @@ func TestContributorCaptureMiddleware_leavesAIBomUploadResponseUntouched(t *test
 	const revisionID = "19d7450b-886f-4029-9b60-1b309b85b800"
 	uploadBody := `{"data":{"attributes":{"upload_revision_id":"` + revisionID + `"},"type":"ai_bom_file_upload"}}`
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	body := &trackCloseReadCloser{Reader: strings.NewReader(`{"data":{"id":"ignored"}}`)}
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusCreated, Body: body, Request: req}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	url := "https://api.snyk.io/rest/orgs/d5341082-085f-4458-a223-90c16aae2435/ai_boms/upload"
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(uploadBody))
@@ -591,9 +518,6 @@ func TestContributorCaptureMiddleware_leavesAIBomUploadResponseUntouched(t *test
 }
 
 func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t *testing.T) {
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -603,7 +527,7 @@ func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t
 			Request:    req,
 		}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -616,15 +540,12 @@ func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t
 }
 
 func TestContributorCaptureMiddleware_recordsNothingWhenAIBomUploadHasNoRevisionID(t *testing.T) {
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Request: req}, nil
 	})
-	rt := newMiddleware(next, config, sink, &logger)
+	rt := newMiddleware(next, sink, &logger)
 
 	url := "https://api.snyk.io/rest/orgs/d5341082-085f-4458-a223-90c16aae2435/ai_boms/upload"
 	uploadBody := `{"data":{"attributes":{"repo_name":"acme/app"},"type":"ai_bom_file_upload"}}`
@@ -657,10 +578,8 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/"+reportID, http.NoBody)
 	require.NoError(t, err)
@@ -679,9 +598,6 @@ func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *t
 	prefix := `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"` + `,"analysisResult":{"type":"sarif","data":"`
 	wantBody := append([]byte(prefix), bytes.Repeat([]byte("x"), 70<<10)...)
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.snyk.io")
-
 	sink := newFakeSink()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -690,7 +606,7 @@ func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *t
 			Request:    req,
 		}, nil
 	})
-	rt := newMiddleware(next, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(next, sink, &zerolog.Logger{})
 
 	req, err := http.NewRequest(http.MethodGet, "https://api.snyk.io/report/55555555-5555-4555-8555-555555555555", http.NoBody)
 	require.NoError(t, err)
@@ -737,10 +653,8 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlowWithLegacyPub
 		}
 	}))
 	t.Cleanup(server.Close)
-
-	config := hostConfig(server.URL)
 	sink := newFakeSink()
-	rt := newMiddleware(http.DefaultTransport, config, sink, &zerolog.Logger{})
+	rt := newMiddleware(http.DefaultTransport, sink, &zerolog.Logger{})
 
 	createBody := []byte(`{"data":{"attributes":{"config":{"publish_report":true,"scan_config":{"sast":{}}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -764,14 +678,8 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-func hostConfig(serverURL string) configuration.Configuration {
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, serverURL)
-	return config
-}
-
-func newMiddleware(rt http.RoundTripper, config configuration.Configuration, sink cc.Sink, logger *zerolog.Logger) http.RoundTripper {
-	return cc.NewContributorCaptureMiddleware(config, sink, logger)(rt)
+func newMiddleware(rt http.RoundTripper, sink cc.Sink, logger *zerolog.Logger) http.RoundTripper {
+	return cc.NewContributorCaptureMiddleware(sink, logger)(rt)
 }
 
 type panicSink struct{}
