@@ -875,9 +875,7 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 		},
 		{
 			// A JSON escape (`\n`) mid-string, not adjacent to the closing quote, must still let
-			// the string close normally: advanceQuoteState's `case '\\': i++` skips exactly the
-			// escaped character, and the for loop's own i++ then lands on the next real character
-			// -- it does not also skip that next character.
+			// the string close normally rather than getting stuck treating the rest as escaped.
 			name:     "escaped character in the middle of a string doesn't skip an extra character past it",
 			input:    `{"a":"path\nnext","count":12345}`,
 			expected: `{"a":"path\nnext","count":"***"}`,
@@ -898,6 +896,21 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			assert.Equal(t, test.expected, output.String())
 		})
 	}
+}
+
+// TestQuoteState_CarriesEscapeAcrossSeparateScans covers RedactStaticTerm scanning a match's
+// prefix and the match itself as two separate calls to quoteState.advance: a trailing backslash at
+// the very end of one span must still escape the next span's first character, or a quote that was
+// actually already escaped gets freshly toggled as if it were real, and inQuotes desyncs from the
+// text's true state. Flagged during PR review.
+func TestQuoteState_CarriesEscapeAcrossSeparateScans(t *testing.T) {
+	var qs quoteState
+	qs = qs.advance(`"X\`) // opens a string, then ends on an unresolved backslash
+	require.True(t, qs.inQuotes)
+	require.True(t, qs.escaping)
+
+	qs = qs.advance(`"Y`) // this leading quote is the escaped character, not a fresh one
+	assert.True(t, qs.inQuotes, "an escaped quote arriving in a later scan must not close the string")
 }
 
 // An empty term must not loop forever: strings.Index(s, "") matches at every position, so without

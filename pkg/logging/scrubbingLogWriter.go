@@ -420,7 +420,7 @@ func RedactStaticTerm(s, term, replacement string) string {
 	var builder strings.Builder
 	builder.Grow(len(s))
 	end := 0
-	quoted := false
+	var qs quoteState
 	for {
 		idx := strings.Index(s[end:], term)
 		if idx < 0 {
@@ -428,7 +428,8 @@ func RedactStaticTerm(s, term, replacement string) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
-		quoted = advanceQuoteState(quoted, s[end:start])
+		qs = qs.advance(s[end:start])
+		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
 		switch {
 		case !quoted && isFusedToAdjacentDigit(s, start, matchEnd):
@@ -440,26 +441,39 @@ func RedactStaticTerm(s, term, replacement string) string {
 		default:
 			builder.WriteString(replacement)
 		}
-		quoted = advanceQuoteState(quoted, s[start:matchEnd])
+		qs = qs.advance(s[start:matchEnd])
 		end = matchEnd
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
 }
 
-// advanceQuoteState scans span and reports whether s is inside an open, unescaped double-quoted
-// JSON string once span has been consumed, given inQuotes was the state before span. An escaped
-// character (`\"`, `\\`, ...) is skipped whole so it can't toggle the state on its own.
-func advanceQuoteState(inQuotes bool, span string) bool {
+// quoteState tracks whether a scan position sits inside an open, unescaped double-quoted JSON
+// string, plus whether the most recently scanned span ended on an unresolved backslash. That
+// second field matters because RedactStaticTerm scans in separate pieces (the text before a match,
+// then the match itself) rather than the whole string in one pass: without it, a backslash landing
+// as the very last byte of one piece would have its escaped character re-examined as fresh, unescaped
+// input by the next piece, flipping inQuotes on a quote that was actually just escaped.
+type quoteState struct {
+	inQuotes bool
+	escaping bool
+}
+
+// advance scans span and returns the state after it, given qs was the state before span.
+func (qs quoteState) advance(span string) quoteState {
 	for i := 0; i < len(span); i++ {
+		if qs.escaping {
+			qs.escaping = false
+			continue
+		}
 		switch span[i] {
 		case '\\':
-			i++
+			qs.escaping = true
 		case '"':
-			inQuotes = !inQuotes
+			qs.inQuotes = !qs.inQuotes
 		}
 	}
-	return inQuotes
+	return qs
 }
 
 // isBareJSONValueSpan reports whether s[start:end] is an unquoted JSON value: preceded by `:`,
