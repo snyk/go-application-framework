@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -103,6 +104,37 @@ func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, len("my-literal-secret"), n)
 	require.Equal(t, "***", string(mockWriter.written), "configured redaction term should be scrubbed")
+}
+
+// TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity guards the fix for a real corruption
+// path: a consumer that wraps this writer's output in a non-JSON formatter (e.g. zerolog's
+// ConsoleWriter, which decodes the JSON zerolog encodes and re-emits human-readable prose before
+// forwarding it here) was getting the JSON-aware bare-value quoting applied to that prose, which
+// has no JSON to protect — injecting stray quote characters into a log line whenever a redacted
+// term happened to sit right next to a `:` or `,`. internalWrite now decides jsonAware from p's own
+// validity rather than assuming every Write is JSON.
+func TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	t.Run("valid JSON input still gets bare-value quoting", func(t *testing.T) {
+		mockWriter := &mockWriter{}
+		writer := NewScrubbingWriter(mockWriter, dict)
+
+		_, err := writer.Write([]byte(`{"count":12345}`))
+		assert.NoError(t, err)
+		assert.Equal(t, `{"count":"***"}`, string(mockWriter.written))
+	})
+
+	t.Run("non-JSON input is left bare instead of stray-quoted", func(t *testing.T) {
+		mockWriter := &mockWriter{}
+		writer := NewScrubbingWriter(mockWriter, dict)
+
+		_, err := writer.Write([]byte("count:12345, retrying"))
+		assert.NoError(t, err)
+		assert.Equal(t, "count:***, retrying", string(mockWriter.written))
+	})
 }
 
 func TestScrubbingIoWriter(t *testing.T) {
@@ -188,7 +220,7 @@ func TestScrubFunction(t *testing.T) {
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -197,7 +229,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http://***@host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -206,7 +238,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http://host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict)
+		actual := scrub([]byte(input), dict, true)
 		assert.Equal(t, expected, string(actual))
 	})
 }
@@ -215,11 +247,24 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 	dict := addMandatoryMasking(ScrubbingDict{})
 	input := []byte("Authorization: Bearer sometoken123456")
 
-	expected := scrub(input, dict)
+	expected := scrub(input, dict, json.Valid(input))
 	actual := Scrub(input, dict)
 
 	assert.Equal(t, string(expected), string(actual))
 	assert.Equal(t, "Authorization: Bearer ***", string(actual), "Scrub should redact the token, not just mirror the input")
+}
+
+// TestScrub_NonJSONInputStillRedactsStaticTerms guards against a static term landing next to a
+// digit in plain, non-JSON text being silently skipped by the JSON-only digit-fusion guard, which
+// exists to protect real JSON numbers, not prose.
+func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("id: 123451234"), dict)
+
+	assert.Equal(t, "id: ***1234", string(actual))
 }
 
 func TestAddDefaults(t *testing.T) {
@@ -406,7 +451,7 @@ func TestAddDefaults(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := scrub([]byte(test.input), dict)
+			actual := scrub([]byte(test.input), dict, true)
 			assert.Equal(t, test.expected, string(actual))
 		})
 	}
@@ -483,7 +528,7 @@ func TestScrub_RedactsOnlyTheMatchedSpan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := string(scrub([]byte(test.input), dict))
+			actual := string(scrub([]byte(test.input), dict, true))
 
 			assert.Equal(t, test.expected, actual)
 			assert.True(t, json.Valid([]byte(actual)),
@@ -563,7 +608,7 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := string(scrub([]byte(test.input), dict))
+			actual := string(scrub([]byte(test.input), dict, true))
 
 			assert.Equal(t, test.expected, actual)
 			assert.True(t, json.Valid([]byte(actual)),
@@ -742,8 +787,294 @@ func TestSnykPATScrubbing(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual := scrub([]byte(test.input), dict)
+			actual := scrub([]byte(test.input), dict, true)
 			assert.Equal(t, test.expected, string(actual))
+		})
+	}
+}
+
+func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "static term as bare JSON number value",
+			input:    `{"level":"debug","count":12345,"message":"ok"}`,
+			expected: `{"level":"debug","count":"***","message":"ok"}`,
+		},
+		{
+			name:     "static term inside a quoted JSON string stays unquoted",
+			input:    `{"message":"session id 12345 started"}`,
+			expected: `{"message":"session id *** started"}`,
+		},
+		{
+			name:     "static term as the entire quoted JSON string value",
+			input:    `{"userId":"12345"}`,
+			expected: `{"userId":"***"}`,
+		},
+		{
+			name:     "static term as bare value at start of array",
+			input:    `{"ids":[12345,67890]}`,
+			expected: `{"ids":["***",67890]}`,
+		},
+		{
+			name:     "static term as bare value at end of array",
+			input:    `{"ids":[67890,12345]}`,
+			expected: `{"ids":[67890,"***"]}`,
+		},
+		{
+			name:     "static term fused to a decimal point is left alone",
+			input:    `{"ratio":123.12345}`,
+			expected: `{"ratio":123.12345}`,
+		},
+		{
+			name:     "static term fused to a leading minus sign is left alone",
+			input:    `{"delta":-12345}`,
+			expected: `{"delta":-12345}`,
+		},
+		{
+			name:     "digit-adjacent term inside a quoted string is still redacted",
+			input:    `{"traceId":"1234598765"}`,
+			expected: `{"traceId":"***98765"}`,
+		},
+		{
+			name:     "pretty-printed JSON with spaces around colon and comma is still quoted",
+			input:    `{"count" : 12345 , "ok" : true}`,
+			expected: `{"count" : "***" , "ok" : true}`,
+		},
+		{
+			name:     "whitespace run including a newline and a tab before the boundary is skipped",
+			input:    "{\"count\":\n\t12345,\n\"ok\":true}",
+			expected: "{\"count\":\n\t\"***\",\n\"ok\":true}",
+		},
+		{
+			name:     "space before comma is tolerated",
+			input:    `{"count":12345 ,"ok":true}`,
+			expected: `{"count":"***" ,"ok":true}`,
+		},
+		{
+			name:     "padded array brackets are tolerated",
+			input:    `{"ids": [ 12345, 67890 ]}`,
+			expected: `{"ids": [ "***", 67890 ]}`,
+		},
+		{
+			// Whitespace-tolerant boundary detection could misread this prose's ": " and ", " as
+			// bare-value boundaries -- the `quoted` guard in RedactStaticTerm must still keep it
+			// from ever reaching isBareJSONValueSpan, since it's inside a quoted string value.
+			name:     "term embedded in prose inside a quoted string is not misdetected as bare",
+			input:    `{"msg":"reason: 12345, retry: token"}`,
+			expected: `{"msg":"reason: ***, retry: token"}`,
+		},
+		{
+			// Term sits after an escaped quote, with `:`/`,` neighbors — same shape as a bare
+			// value. A tracker that toggles on escaped quotes too would misread this as
+			// unquoted and inject stray quotes, corrupting the string.
+			name:     "term downstream of an escaped quote in the same string stays unquoted",
+			input:    `{"note":"a\"count:12345,done"}`,
+			expected: `{"note":"a\"count:***,done"}`,
+		},
+		{
+			// Second match must see the quote state left by the first (open string closed at
+			// index 22): a regression that drops the carried `quoted` state between matches
+			// would leave "count" wrongly treated as still-quoted and emit it unquoted.
+			name:     "quote state threads correctly across two matches in one string",
+			input:    `{"a":"has 12345 inside","b":12345}`,
+			expected: `{"a":"has *** inside","b":"***"}`,
+		},
+		{
+			// The escaped backslash right before the closing quote must consume its pair (\\),
+			// not be mistaken for escaping that quote — otherwise the string never closes and
+			// "count" gets wrongly left unquoted.
+			name:     "term after a string ending in an escaped backslash is still recognized as bare",
+			input:    `{"path":"C:\\","count":12345}`,
+			expected: `{"path":"C:\\","count":"***"}`,
+		},
+		{
+			// A JSON escape (`\n`) mid-string, not adjacent to the closing quote, must still let
+			// the string close normally rather than getting stuck treating the rest as escaped.
+			name:     "escaped character in the middle of a string doesn't skip an extra character past it",
+			input:    `{"a":"path\nnext","count":12345}`,
+			expected: `{"a":"path\nnext","count":"***"}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			w := NewScrubbingIoWriter(&output, ScrubbingDict{})
+			scrubbingWriter, ok := w.(ScrubbingLogWriter)
+			require.True(t, ok)
+			scrubbingWriter.AddTermsToReplace([]string{"12345"})
+
+			_, err := w.Write([]byte(test.input))
+			require.NoError(t, err)
+
+			assert.True(t, json.Valid(output.Bytes()), "scrubbing produced invalid JSON: %s", output.Bytes())
+			assert.Equal(t, test.expected, output.String())
+		})
+	}
+}
+
+// TestQuoteState_CarriesEscapeAcrossSeparateScans covers RedactStaticTerm scanning a match's
+// prefix and the match itself as two separate calls to quoteState.advance: a trailing backslash at
+// the very end of one span must still escape the next span's first character, or a quote that was
+// actually already escaped gets freshly toggled as if it were real, and inQuotes desyncs from the
+// text's true state.
+func TestQuoteState_CarriesEscapeAcrossSeparateScans(t *testing.T) {
+	var qs quoteState
+	qs = qs.advance(`"X\`) // opens a string, then ends on an unresolved backslash
+	require.True(t, qs.inQuotes)
+	require.True(t, qs.escaping)
+
+	qs = qs.advance(`"Y`) // this leading quote is the escaped character, not a fresh one
+	assert.True(t, qs.inQuotes, "an escaped quote arriving in a later scan must not close the string")
+}
+
+// An empty term must not loop forever: strings.Index(s, "") matches at every position, so without
+// this guard RedactStaticTerm would never advance past index 0. RedactStaticTerm is exported, so a
+// caller isn't guaranteed to filter an empty term before calling it directly, and an empty
+// HomeDir/Username from os/user.Current() is a real input on some minimal environments.
+func TestRedactStaticTerm_EmptyTermIsNoop(t *testing.T) {
+	input := `{"count":12345}`
+	done := make(chan string, 1)
+	go func() { done <- RedactStaticTerm(input, "", "***") }()
+
+	select {
+	case actual := <-done:
+		assert.Equal(t, input, actual)
+	case <-time.After(time.Second):
+		t.Fatal("RedactStaticTerm did not return for an empty term — possible infinite loop")
+	}
+}
+
+// TestRedactStaticTerm pins the exported function's direct contract, including the start/end
+// boundary case: a term with no boundary character on one side has nothing to confirm it's a
+// bare value, so it's left unquoted rather than guessed at.
+func TestRedactStaticTerm(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "bare value with both boundaries present is quoted",
+			input:    `{"count":12345,"ok":true}`,
+			expected: `{"count":"***","ok":true}`,
+		},
+		{
+			name:     "term at start of s has no left boundary, left bare",
+			input:    `12345,"b":2`,
+			expected: `***,"b":2`,
+		},
+		{
+			name:     "term at end of s has no right boundary, left bare",
+			input:    `{"a":1,"b":12345`,
+			expected: `{"a":1,"b":***`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, RedactStaticTerm(test.input, "12345", "***"))
+		})
+	}
+}
+
+// TestScrub_VsScrubValue contrasts the jsonAware split on identical, valid-JSON input: Scrub
+// detects the input is JSON and quotes a bare match to keep it valid; ScrubValue always treats
+// its input as a non-JSON leaf, so it leaves the same match bare regardless of what it's given.
+func TestScrub_VsScrubValue(t *testing.T) {
+	dict := ScrubbingDict{}
+	addStaticTermToDict("8080", dict)
+	input := `{"port":8080,"timeout":3000}`
+
+	assert.Equal(t, `{"port":"***","timeout":3000}`, string(Scrub([]byte(input), dict)))
+	assert.Equal(t, `{"port":***,"timeout":3000}`, string(ScrubValue([]byte(input), dict)))
+}
+
+// TestScrubValue covers non-JSON leaf values, e.g. AddExtension's pre-marshal string leaves.
+// Scrub's JSON-value quoting and digit-fusion skip don't apply here — there's no JSON to protect.
+func TestScrubValue(t *testing.T) {
+	dict := ScrubbingDict{}
+	addStaticTermToDict("8080", dict)
+	addStaticTermToDict("12345", dict)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "term adjacent to colon and comma in freeform text is not quoted",
+			input:    "port:8080,timeout:3000",
+			expected: "port:***,timeout:3000",
+		},
+		{
+			name:     "term fused to an adjacent digit in freeform text is still redacted",
+			input:    "id: 123451234",
+			expected: "id: ***1234",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(ScrubValue([]byte(test.input), dict))
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		term     string
+		expected string
+	}{
+		{
+			name:     "top-level number",
+			input:    `12345`,
+			term:     "12345",
+			expected: `"***"`,
+		},
+		{
+			name:     "partial true literal",
+			input:    `{"enabled":true}`,
+			term:     "rue",
+			expected: `{"enabled":true}`,
+		},
+		{
+			name:     "partial false literal",
+			input:    `{"enabled":false}`,
+			term:     "alse", //nolint:misspell // substring of "false", not a typo
+			expected: `{"enabled":false}`,
+		},
+		{
+			name:     "partial null literal",
+			input:    `{"value":null}`,
+			term:     "ull",
+			expected: `{"value":null}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			writer := NewScrubbingIoWriter(&output, ScrubbingDict{})
+
+			scrubbingWriter, ok := writer.(ScrubbingLogWriter)
+			require.True(t, ok)
+			scrubbingWriter.AddTermsToReplace([]string{test.term})
+
+			_, err := writer.Write([]byte(test.input))
+			require.NoError(t, err)
+
+			assert.True(
+				t,
+				json.Valid(output.Bytes()),
+				"scrubbing produced invalid JSON: %s",
+				output.Bytes(),
+			)
+			assert.Equal(t, test.expected, output.String())
 		})
 	}
 }

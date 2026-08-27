@@ -188,7 +188,7 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
 	logger := options.logger
 
-	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.Scrub
+	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
 	// does whole-string literal replacement, so running it over raw JSON would let a redacted
 	// value collide with an unrelated field that happens to contain the same substring.
 	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
@@ -264,7 +264,7 @@ func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict,
 func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
 	switch val := v.(type) {
 	case string:
-		return string(logging.Scrub([]byte(val), dict))
+		return string(logging.ScrubValue([]byte(val), dict))
 	case map[string]interface{}:
 		return scrubExtensionMapSeen(val, dict, seen)
 	case []interface{}:
