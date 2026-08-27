@@ -873,6 +873,15 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			input:    `{"path":"C:\\","count":12345}`,
 			expected: `{"path":"C:\\","count":"***"}`,
 		},
+		{
+			// A JSON escape (`\n`) mid-string, not adjacent to the closing quote, must still let
+			// the string close normally: advanceQuoteState's `case '\\': i++` skips exactly the
+			// escaped character, and the for loop's own i++ then lands on the next real character
+			// -- it does not also skip that next character.
+			name:     "escaped character in the middle of a string doesn't skip an extra character past it",
+			input:    `{"a":"path\nnext","count":12345}`,
+			expected: `{"a":"path\nnext","count":"***"}`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
