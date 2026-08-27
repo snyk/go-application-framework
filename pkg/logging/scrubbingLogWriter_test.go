@@ -1022,3 +1022,59 @@ func TestScrubValue(t *testing.T) {
 		})
 	}
 }
+
+func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		term     string
+		expected string
+	}{
+		{
+			name:     "top-level number",
+			input:    `12345`,
+			term:     "12345",
+			expected: `"***"`,
+		},
+		{
+			name:     "partial true literal",
+			input:    `{"enabled":true}`,
+			term:     "rue",
+			expected: `{"enabled":true}`,
+		},
+		{
+			name:     "partial false literal",
+			input:    `{"enabled":false}`,
+			term:     "alse", //nolint:misspell // substring of "false", not a typo
+			expected: `{"enabled":false}`,
+		},
+		{
+			name:     "partial null literal",
+			input:    `{"value":null}`,
+			term:     "ull",
+			expected: `{"value":null}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			writer := NewScrubbingIoWriter(&output, ScrubbingDict{})
+
+			scrubbingWriter, ok := writer.(ScrubbingLogWriter)
+			require.True(t, ok)
+			scrubbingWriter.AddTermsToReplace([]string{test.term})
+
+			_, err := writer.Write([]byte(test.input))
+			require.NoError(t, err)
+
+			assert.True(
+				t,
+				json.Valid(output.Bytes()),
+				"scrubbing produced invalid JSON: %s",
+				output.Bytes(),
+			)
+			assert.Equal(t, test.expected, output.String())
+		})
+	}
+}

@@ -401,18 +401,20 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
 // replacement when term sits in a bare (unquoted) JSON value position, and leaving an occurrence
-// untouched when it's only a digit-fused slice of a larger bare number.
+// untouched when it's only a token-fused slice of a larger bare number/true/false/null.
 //
 // term has no regex capture to bound it, so only the characters immediately around each match are
-// checked. A term preceded by `:`, `,` or `[` and followed by `,`, `}` or `]` is a bare value
+// checked. A term preceded by `:`, `,` or `[` and followed by `,`, `}` or `]` — or with no
+// boundary character on *either* side, i.e. term is the whole document — is a bare value
 // (number/bool/null); an unquoted replacement there is invalid JSON (see CLI-1732), so the
-// replacement gets quoted instead. A term at the very start or end of s, with no boundary
-// character on that side, is left bare rather than guessed at. A term already inside a quoted
-// string is also left bare, and never treated as digit-fused.
+// replacement gets quoted instead. A term missing the boundary character on only one side is an
+// ambiguous fragment and is left bare rather than guessed at. A term already inside a quoted
+// string is also left bare, and never treated as token-fused.
 //
 // A numeric term can also land mid-number in a bare position (e.g. redacting "1000" out of an
-// unrelated "durationMs":10001234) — there it's a slice of a larger number token, and no amount of
-// quoting keeps that valid, so the occurrence is left alone rather than corrupting the number.
+// unrelated "durationMs":10001234), and a term like "rue" can land mid-keyword (inside "true") —
+// in both cases it's a slice of a larger bare token, and no amount of quoting keeps that valid, so
+// the occurrence is left alone rather than corrupting the token.
 //
 // Exported for reuse by pkg/analytics's SanitizeStaticValues, which has the same corruption risk.
 func RedactStaticTerm(s, term, replacement string) string {
@@ -434,7 +436,7 @@ func RedactStaticTerm(s, term, replacement string) string {
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
 		switch {
-		case !quoted && isFusedToAdjacentNumberChar(s, start, matchEnd):
+		case !quoted && isFusedToAdjacentBareTokenChar(s, start, matchEnd):
 			builder.WriteString(s[start:matchEnd])
 		case !quoted && isBareJSONValueSpan(s, start, matchEnd):
 			builder.WriteByte('"')
@@ -486,17 +488,25 @@ func (qs quoteState) advance(span string) quoteState {
 // callers that gate jsonAware on the input actually being valid JSON (see internalWrite) rule that
 // out, since prose inside valid JSON is always inside a quoted string, where the `quoted` check in
 // RedactStaticTerm itself already skips this function entirely.
+//
+// A span with no boundary character on *either* side, once whitespace is skipped, is the entire
+// document by itself — a top-level bare scalar, still a JSON value even though nothing encloses
+// it. A span missing only one side's boundary is an ambiguous fragment (see RedactStaticTerm's
+// start/end-of-s case) and stays unquoted rather than guessed at.
 func isBareJSONValueSpan(s string, start, end int) bool {
 	i := start - 1
 	for i >= 0 && isJSONWhitespace(s[i]) {
 		i--
 	}
-	precededByValueStart := i >= 0 && strings.ContainsRune(":,[", rune(s[i]))
-
 	j := end
 	for j < len(s) && isJSONWhitespace(s[j]) {
 		j++
 	}
+	if i < 0 && j >= len(s) {
+		return true
+	}
+
+	precededByValueStart := i >= 0 && strings.ContainsRune(":,[", rune(s[i]))
 	followedByValueEnd := j < len(s) && strings.ContainsRune(",}]", rune(s[j]))
 
 	return precededByValueStart && followedByValueEnd
@@ -506,13 +516,20 @@ func isJSONWhitespace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
-// isFusedToAdjacentNumberChar reports whether s[start:end] touches a digit or other
-// numeric-literal character (`.`, `-`, `+`, `e`, `E`) on either side — i.e. it's a slice of a
-// larger unquoted number, not a complete value.
-func isFusedToAdjacentNumberChar(s string, start, end int) bool {
-	precededByNumberChar := start > 0 && isJSONNumberChar(s[start-1])
-	followedByNumberChar := end < len(s) && isJSONNumberChar(s[end])
-	return precededByNumberChar || followedByNumberChar
+// isFusedToAdjacentBareTokenChar reports whether s[start:end] touches a character that only ever
+// appears inside a larger unquoted JSON token — a digit or other numeric-literal character (`.`,
+// `-`, `+`, `e`, `E`), or a lowercase letter — on either side, i.e. it's a slice of a bigger bare
+// number/true/false/null, not a complete value by itself. jsonAware callers only reach here once
+// the whole buffer is confirmed valid JSON, so an unquoted letter can only belong to one of those
+// three keywords; there's no other bare token it could be part of.
+func isFusedToAdjacentBareTokenChar(s string, start, end int) bool {
+	precededByTokenChar := start > 0 && isJSONBareTokenChar(s[start-1])
+	followedByTokenChar := end < len(s) && isJSONBareTokenChar(s[end])
+	return precededByTokenChar || followedByTokenChar
+}
+
+func isJSONBareTokenChar(b byte) bool {
+	return isJSONNumberChar(b) || (b >= 'a' && b <= 'z')
 }
 
 func isJSONNumberChar(b byte) bool {
