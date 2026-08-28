@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
@@ -75,7 +76,7 @@ func validateHTMLOutput(t *testing.T, data []byte) {
 	doc, err := html.Parse(bytes.NewReader(data))
 	require.NoError(t, err, "rendered output must parse as HTML")
 
-	var doctypeCount, htmlCount, headCount, bodyCount int
+	var doctypeCount, htmlCount, headCount, bodyCount, mainCount int
 	var walk func(n *html.Node)
 	walk = func(n *html.Node) {
 		switch n.Type {
@@ -91,6 +92,8 @@ func validateHTMLOutput(t *testing.T, data []byte) {
 				headCount++
 			case "body":
 				bodyCount++
+			case "main":
+				mainCount++
 			}
 		default:
 			// other node types (text, comments, etc.) are irrelevant to the structural checks
@@ -101,15 +104,36 @@ func validateHTMLOutput(t *testing.T, data []byte) {
 	}
 	walk(doc)
 
-	// Note html.Parse is a WHATWG error-correcting parser that rarely
-	// errors and synthesizes missing html/head/body elements, so the meaningful
-	// assertions are the doctype and element-uniqueness counts. Extend with XSS
-	// canaries (javascript: hrefs, on* attributes) once the template renders
-	// finding content.
 	assert.Equal(t, 1, doctypeCount, "expected exactly one <!doctype html>")
 	assert.Equal(t, 1, htmlCount, "expected exactly one <html> element")
 	assert.Equal(t, 1, headCount, "expected exactly one <head> element")
 	assert.Equal(t, 1, bodyCount, "expected exactly one <body> element")
+	assert.Equal(t, 1, mainCount, "expected exactly one <main> element")
+
+	// XSS canaries: verify html/template auto-escaping prevents script injection
+	assertNoXSSPatterns(t, doc)
+}
+
+func assertNoXSSPatterns(t *testing.T, doc *html.Node) {
+	t.Helper()
+
+	var walkXSS func(n *html.Node)
+	walkXSS = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			for _, attr := range n.Attr {
+				if strings.HasPrefix(attr.Key, "on") {
+					t.Errorf("XSS canary: found on* attribute %q on <%s>", attr.Key, n.Data)
+				}
+				if attr.Key == "href" && strings.HasPrefix(strings.TrimSpace(strings.ToLower(attr.Val)), "javascript:") {
+					t.Errorf("XSS canary: found javascript: href on <%s>", n.Data)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walkXSS(c)
+		}
+	}
+	walkXSS(doc)
 }
 
 // normalizeAutomationID removes project name and timestamp from automation ID
@@ -1387,12 +1411,46 @@ func Test_UfmPresenter_HTML(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
 	testCases := []struct {
-		name           string
-		testResultPath string
+		name              string
+		testResultPath    string
+		includeIgnores    bool
+		severityThreshold string
+		assertions        func(t *testing.T, output string)
 	}{
 		{
-			name:           "cli",
+			name:           "cli_sca",
 			testResultPath: "testdata/ufm/testresult_cli.json",
+			assertions:     assertCLISCAHTMLContent,
+		},
+		{
+			name:           "secrets",
+			testResultPath: "testdata/ufm/secrets.testresult.json",
+			assertions:     assertSecretsHTMLContent,
+		},
+		{
+			name:           "multi_project",
+			testResultPath: "testdata/ufm/multi_project.testresult.json",
+			assertions:     assertMultiProjectHTMLContent,
+		},
+		{
+			name:           "secrets_0findings",
+			testResultPath: "testdata/ufm/secrets.0findings.testresult.json",
+			assertions: func(t *testing.T, output string) {
+				t.Helper()
+				assert.Contains(t, output, "Snyk Test Report")
+			},
+		},
+		{
+			name:              "webgoat_with_ignores",
+			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "medium",
+			assertions:        assertWebgoatIgnoredHTMLContent,
+		},
+		{
+			name:           "webgoat_without_ignores",
+			testResultPath: "testdata/ufm/webgoat.ignore.testresult.json",
+			assertions:     assertWebgoatNoIgnoresHTMLContent,
 		},
 	}
 
@@ -1407,12 +1465,124 @@ func Test_UfmPresenter_HTML(t *testing.T) {
 			assert.NoError(t, err)
 
 			config := configuration.NewWithOpts()
+			if tc.severityThreshold != "" {
+				config.Set(configuration.FLAG_SEVERITY_THRESHOLD, tc.severityThreshold)
+			}
+			config.Set(configuration.FLAG_INCLUDE_IGNORES, tc.includeIgnores)
 			writer := &bytes.Buffer{}
 
 			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
 			err = presenter.RenderTemplate(presenters.ApplicationHTMLTemplatesUfm, presenters.ApplicationHTMLMimeType)
 			assert.NoError(t, err)
+
 			validateHTMLOutput(t, writer.Bytes())
+
+			if tc.assertions != nil {
+				tc.assertions(t, writer.String())
+			}
+		})
+	}
+}
+
+func Test_UfmPresenter_HTMLSnapshot(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+
+	testCases := []struct {
+		name              string
+		expectedPath      string
+		testResultPath    string
+		includeIgnores    bool
+		severityThreshold string
+	}{
+		{
+			name:              "cli",
+			expectedPath:      "testdata/ufm/cli.html",
+			testResultPath:    "testdata/ufm/testresult_cli.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
+			name:              "webgoat",
+			expectedPath:      "testdata/ufm/webgoat.ignore.html",
+			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "medium",
+		},
+		{
+			name:              "secrets",
+			expectedPath:      "testdata/ufm/secrets.html",
+			testResultPath:    "testdata/ufm/secrets.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
+		{
+			name:              "multi_project",
+			expectedPath:      "testdata/ufm/multi_project.html",
+			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
+			name:              "secrets_duplicated_rules",
+			expectedPath:      "testdata/ufm/secrets.duplicated-sarif-rules.html",
+			testResultPath:    "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
+		{
+			name:              "secrets_with_report",
+			expectedPath:      "testdata/ufm/secrets.with-report.html",
+			testResultPath:    "testdata/ufm/secrets.with-report.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
+
+			expectedBytes, err := os.ReadFile(tc.expectedPath)
+			if os.IsNotExist(err) && regenerateExpectedFiles {
+				expectedBytes = nil
+			} else {
+				assert.NoError(t, err)
+			}
+
+			testResultBytes, err := os.ReadFile(tc.testResultPath)
+			assert.NoError(t, err)
+
+			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			assert.NoError(t, err)
+
+			config := configuration.NewWithOpts()
+			config.Set(configuration.ORGANIZATION_SLUG, "My Org")
+			if tc.severityThreshold != "" {
+				config.Set(configuration.FLAG_SEVERITY_THRESHOLD, tc.severityThreshold)
+			}
+			config.Set(configuration.FLAG_INCLUDE_IGNORES, tc.includeIgnores)
+
+			writer := &bytes.Buffer{}
+
+			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err = presenter.RenderTemplate(presenters.ApplicationHTMLTemplatesUfm, presenters.ApplicationHTMLMimeType)
+			assert.NoError(t, err)
+
+			actualBytes := writer.Bytes()
+
+			validateHTMLOutput(t, actualBytes)
+
+			if regenerateExpectedFiles {
+				if writeErr := os.WriteFile(tc.expectedPath, actualBytes, 0o644); writeErr != nil {
+					t.Fatalf("failed to regenerate %s: %v", tc.expectedPath, writeErr)
+				}
+				t.Skipf("regenerated %s", tc.expectedPath)
+			}
+
+			assert.NotEmpty(t, actualBytes)
+
+			assert.NotEmpty(t, expectedBytes)
+			assert.Equal(t, string(expectedBytes), string(actualBytes))
 		})
 	}
 }
@@ -1695,6 +1865,384 @@ func Test_UfmPresenter_HTMLFromSarifInput(t *testing.T) {
 	err := presenter.RenderTemplate(presenters.ApplicationHTMLTemplatesUfm, presenters.ApplicationHTMLMimeType)
 	require.NoError(t, err)
 	validateHTMLOutput(t, writer.Bytes())
+}
+
+func Test_UfmPresenter_HTMLDataFlow(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+
+	result := sarifToUFM(t, "testdata/3-low-issues.json", nil)
+
+	// Set INPUT_DIRECTORY to the repo root so source lines resolve
+	repoRoot := filepath.Join("..", "..")
+	absRoot, err := filepath.Abs(repoRoot)
+	require.NoError(t, err)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.INPUT_DIRECTORY, absRoot)
+	writer := &bytes.Buffer{}
+
+	presenter := presenters.NewUfmRenderer(
+		[]testapi.TestResult{result},
+		config,
+		writer,
+		presenters.UfmWithRuntimeInfo(ri),
+	)
+	err = presenter.RenderTemplate(presenters.ApplicationHTMLTemplatesUfm, presenters.ApplicationHTMLMimeType)
+	require.NoError(t, err)
+	validateHTMLOutput(t, writer.Bytes())
+
+	output := writer.String()
+
+	assert.Contains(t, output, `class="dataflow"`, "expected data flow section")
+	assert.Contains(t, output, `class="dataflow__filename"`, "expected filename block")
+	assert.Contains(t, output, `class="dataflow__item"`, "expected data flow step items")
+	assert.Contains(t, output, `class="dataflow__step"`, "expected step numbers")
+	assert.Contains(t, output, `class="dataflow__lineno"`, "expected line numbers")
+	assert.Contains(t, output, ">Source</span>", "expected Source badge on first step")
+	assert.Contains(t, output, ">Sink</span>", "expected Sink badge on last step")
+
+	// Verify source code lines are read from disk (text may be split across marker spans)
+	assert.Contains(t, output, "return &amp;use", "expected source code line prefix from pkg/analytics/analytics_test.go:248")
+	assert.Contains(t, output, `class="marker"`, "expected marker highlighting in data flow")
+
+	// Verify scan coverage is rendered
+	assert.Contains(t, output, "Scan coverage", "expected scan coverage label")
+	assert.Contains(t, output, "Go:", "expected Go language in coverage")
+
+	// Verify fix analysis is rendered from help markdown
+	assert.Contains(t, output, `class="fix-analysis"`, "expected fix analysis section")
+	assert.Contains(t, output, "hardcoded credentials", "expected fix analysis content from help markdown")
+
+	// Verify tab toggle is rendered when both data flow and fix analysis exist
+	assert.Contains(t, output, `class="card-tab-radio"`, "expected tab radio inputs")
+	assert.Contains(t, output, `class="card-tab-bar"`, "expected tab bar")
+	assert.Contains(t, output, `>Data Flow</label>`, "expected Data Flow tab label")
+	assert.Contains(t, output, `>Fix Analysis</label>`, "expected Fix Analysis tab label")
+}
+
+func assertCLISCAHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	// Page structure
+	assert.Contains(t, output, "Snyk Test Report")
+	assert.Contains(t, output, "<!doctype html>")
+	assert.Contains(t, output, `<svg width="68" height="35"`, "Snyk logo SVG should be present")
+	assert.Contains(t, output, `href="https://snyk.io"`, "Snyk logo should link to snyk.io")
+	assert.Contains(t, output, `<meta name="description" content="9 open issues.">`, "expected meta description with issue count")
+
+	// Metadata from fixture
+	assert.Contains(t, output, "package.json")
+	assert.Contains(t, output, "552")
+
+	// Known vulnerability IDs must appear
+	expectedIDs := []string{
+		"SNYK-JS-BRACEEXPANSION-9789073",
+		"SNYK-JS-COOKIE-13271683",
+		"SNYK-JS-DEBUG-14214893",
+		"SNYK-JS-GOT-2932019",
+		"SNYK-JS-MARKED-2342082",
+		"SNYK-JS-ASYNC-12239908",
+		"SNYK-JS-LODASH-12239302",
+	}
+	for _, id := range expectedIDs {
+		assert.Contains(t, output, id, "expected vulnerability ID %s in HTML output", id)
+	}
+
+	// Issue titles
+	assert.Contains(t, output, "Directory Traversal")
+	assert.Contains(t, output, "Open Redirect")
+	assert.Contains(t, output, "Arbitrary Code Injection")
+	assert.Contains(t, output, "Denial of Service (DoS)")
+
+	// Severity badges
+	assert.Contains(t, output, "#CE5019", "expected HIGH severity color")
+	assert.Contains(t, output, "#D68000", "expected MEDIUM severity color")
+	assert.Contains(t, output, "#88879E", "expected LOW severity color")
+	assert.Contains(t, output, "HIGH")
+	assert.Contains(t, output, "MEDIUM")
+	assert.Contains(t, output, "LOW")
+
+	// Component names
+	assert.Contains(t, output, "brace-expansion")
+	assert.Contains(t, output, "async")
+	assert.Contains(t, output, "cookie")
+	assert.Contains(t, output, "lodash")
+
+	// Issue card count: 9 unique issues expected
+	cardCount := strings.Count(output, "issue-card")
+	assert.GreaterOrEqual(t, cardCount, 9, "expected at least 9 issue cards (open issues)")
+
+	// Markdown is rendered as HTML, not plaintext
+	assert.Contains(t, output, "<h2>Overview</h2>", "expected markdown headings rendered as HTML")
+	assert.Contains(t, output, "<h2>Remediation</h2>", "expected Remediation heading rendered")
+
+	// CWE identifiers
+	assert.Contains(t, output, "CWE-601", "expected CWE identifier on card")
+
+	// Reachability indicator
+	assert.Contains(t, output, "No Path Found", "expected reachability indicator for no_info")
+
+	// Vulnerability link
+	assert.Contains(t, output, `href="https://snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073"`, "expected snyk.io vuln link")
+	assert.Contains(t, output, "More about this vulnerability", "expected vuln link text")
+}
+
+func assertSecretsHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	assert.Contains(t, output, "Snyk Test Report")
+
+	// Secret finding titles
+	assert.Contains(t, output, "Generic API Key")
+	assert.Contains(t, output, "Generic Secret")
+
+	// Source locations (secrets have file paths, not dependency paths)
+	assert.Contains(t, output, "config.env")
+	assert.Contains(t, output, "aws_keys.txt")
+}
+
+func assertMultiProjectHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	assert.Contains(t, output, "Snyk Test Report")
+
+	// Multiple result sections for 7 test results
+	sectionCount := strings.Count(output, "result-section")
+	assert.Equal(t, 7, sectionCount, "expected 7 result sections for multi-project fixture")
+
+	// Target files from different sub-projects
+	assert.Contains(t, output, "ghost/package.json")
+	assert.Contains(t, output, "golang/go.mod")
+	assert.Contains(t, output, "maven/pom.xml")
+	assert.Contains(t, output, "python/requirements.txt")
+}
+
+func assertWebgoatIgnoredHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	assert.Contains(t, output, "Snyk Test Report")
+
+	// Meta description includes both open and ignored counts
+	assert.Contains(t, output, `open issues, `, "expected open count in meta description")
+	assert.Contains(t, output, ` ignored.`, "expected ignored count in meta description")
+
+	// Open issues should still be present
+	assert.Contains(t, output, "SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458")
+	assert.Contains(t, output, "Deserialization of Untrusted Data")
+
+	// Ignored sections should be rendered as sibling details blocks
+	assert.Contains(t, output, "Ignored Security Issues", "expected ignored security issues header")
+	assert.Contains(t, output, "Ignored License Issues", "expected ignored license issues header")
+
+	// Ignored issue IDs must appear
+	ignoredIDs := []string{
+		"SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330",
+		"SNYK-JAVA-ORGAPACHETOMCATEMBED-13723930",
+		"SNYK-JAVA-ORGBITBUCKETBC-6139942",
+		"SNYK-JAVA-ORGJRUBY-10557729",
+		"snyk:lic:maven:org.hibernate.common:hibernate-commons-annotations:LGPL-2.1",
+	}
+	for _, id := range ignoredIDs {
+		assert.Contains(t, output, id, "expected ignored issue ID %s in HTML output", id)
+	}
+
+	// Ignored badge (rendered as HTML elements, not CSS class definitions)
+	ignoredBadgeCount := strings.Count(output, `<span class="ignored-badge">`)
+	assert.Equal(t, 5, ignoredBadgeCount, "expected 5 ignored badges (4 security + 1 license)")
+
+	// Ignore details metadata
+	assert.Contains(t, output, `<div class="ignore-details">`, "expected ignore details section")
+	assert.Contains(t, output, "Does not apply", "expected ignore justification")
+	assert.Contains(t, output, "False positive", "expected ignore justification")
+	assert.Contains(t, output, "Is not used", "expected ignore justification")
+	assert.Contains(t, output, "None Given", "expected ignore justification")
+	assert.Contains(t, output, "License issue", "expected ignore justification")
+
+	// Ignore reason types (categories)
+	assert.Contains(t, output, "wont-fix", "expected ignore reason type")
+	assert.Contains(t, output, "not-vulnerable", "expected ignore reason type")
+
+	// Ignored by
+	assert.Contains(t, output, "Catalin", "expected ignored-by user name")
+
+	// Expiration dates
+	assert.Contains(t, output, "November 10, 2026", "expected ignore expiration date")
+	assert.Contains(t, output, "December 12, 2026", "expected ignore expiration date")
+	assert.Contains(t, output, "Does not expire", "expected never-expire text")
+
+	// Ignored on dates
+	assert.Contains(t, output, "November 19, 2025", "expected ignored-on date")
+	assert.Contains(t, output, "November 11, 2025", "expected ignored-on date")
+
+	// Summary should show ignored count with severity badges in project summary
+	assert.Contains(t, output, `<span class="summary-label ignored-label">Ignored issues: `, "expected ignored summary row")
+	assert.Contains(t, output, `project-summary`, "expected unified project summary")
+
+	// Issue cards with ignored class
+	ignoredCardCount := strings.Count(output, `issue-card severity--`)
+	assert.GreaterOrEqual(t, ignoredCardCount, 5, "expected at least 5 ignored issue cards plus open cards")
+
+	// License issues use distinct link text
+	assert.Contains(t, output, "More about this license issue", "expected license-specific link text")
+	assert.Contains(t, output, "More about this vulnerability", "expected vulnerability link text for SCA issues")
+}
+
+func assertWebgoatNoIgnoresHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	assert.Contains(t, output, "Snyk Test Report")
+
+	// Open issues should be present
+	assert.Contains(t, output, "SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458")
+
+	// Ignored sections should NOT be rendered as HTML elements (CSS class defs in <style> are OK)
+	assert.NotContains(t, output, "Ignored Security Issues", "ignored security section should not render without include-ignores")
+	assert.NotContains(t, output, "Ignored License Issues", "ignored license section should not render without include-ignores")
+	assert.NotContains(t, output, `<span class="ignored-badge">`, "ignored badge element should not render without include-ignores")
+	assert.NotContains(t, output, `<div class="ignore-details">`, "ignore details element should not render without include-ignores")
+	assert.NotContains(t, output, `<span class="summary-label ignored-label">`, "ignored summary label should not render without include-ignores")
+
+	// Ignored issue IDs should NOT appear as card content (they are suppressed)
+	assert.NotContains(t, output, "SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330",
+		"suppressed issue should not appear without include-ignores")
+}
+
+func Test_HTMLTemplateFunctions(t *testing.T) {
+	t.Run("severityColor", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected string
+		}{
+			{"critical", "#AB1A1A"},
+			{"CRITICAL", "#AB1A1A"},
+			{"high", "#CE5019"},
+			{"HIGH", "#CE5019"},
+			{"medium", "#D68000"},
+			{"low", "#88879E"},
+			{"unknown", "#88879E"},
+			{"", "#88879E"},
+		}
+		for _, tc := range tests {
+			t.Run(tc.input, func(t *testing.T) {
+				assert.Equal(t, tc.expected, presenters.SeverityColor(tc.input))
+			})
+		}
+	})
+
+	t.Run("truncateText", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			maxLen   int
+			expected string
+		}{
+			{"short", 10, "short"},
+			{"exactly10!", 10, "exactly10!"},
+			{"this is a longer string", 10, "this is a ..."},
+			{"", 10, ""},
+		}
+		for _, tc := range tests {
+			t.Run(tc.input, func(t *testing.T) {
+				assert.Equal(t, tc.expected, presenters.TruncateText(tc.input, tc.maxLen))
+			})
+		}
+	})
+
+	t.Run("markdownToHTML", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    string
+			contains []string
+		}{
+			{
+				name:     "heading",
+				input:    "## Overview\nSome text.",
+				contains: []string{"<h2>Overview</h2>", "<p>Some text.</p>"},
+			},
+			{
+				name:     "fenced code block",
+				input:    "Text\n```js\nconst x = 1;\n```\nMore text.",
+				contains: []string{"<pre><code>", "const x = 1;", "</code></pre>", "<p>More text.</p>"},
+			},
+			{
+				name:     "inline code",
+				input:    "Upgrade `got` to version 11.8.5.",
+				contains: []string{"<code>got</code>"},
+			},
+			{
+				name:     "bold",
+				input:    "This is **important** text.",
+				contains: []string{"<strong>important</strong>"},
+			},
+			{
+				name:     "link",
+				input:    "[GitHub](https://github.com)",
+				contains: []string{`<a href="https://github.com"`, `target="_blank"`, ">GitHub</a>"},
+			},
+			{
+				name:     "unordered list",
+				input:    "- Item one\n- Item two",
+				contains: []string{"<ul>", "<li>Item one</li>", "<li>Item two</li>", "</ul>"},
+			},
+			{
+				name:     "ordered list",
+				input:    "1. First\n2. Second\n3. Third",
+				contains: []string{"<ol>", "<li>First</li>", "<li>Second</li>", "<li>Third</li>", "</ol>"},
+			},
+			{
+				name:     "table",
+				input:    "| Name | Value |\n|---|---|\n| foo | bar |\n| baz | qux |",
+				contains: []string{"<table>", "<thead>", "<th>Name</th>", "<th>Value</th>", "</thead>", "<tbody>", "<td>foo</td>", "<td>bar</td>", "<td>baz</td>", "<td>qux</td>", "</tbody>", "</table>"},
+			},
+			{
+				name:     "table without separator",
+				input:    "| A | B |\n| 1 | 2 |",
+				contains: []string{"<table>", "<th>A</th>", "<td>1</td>"},
+			},
+			{
+				name:     "horizontal rule",
+				input:    "Before\n---\nAfter",
+				contains: []string{"<hr>"},
+			},
+			{
+				name:     "XSS prevention",
+				input:    "<script>alert('xss')</script>",
+				contains: []string{"&lt;script&gt;"},
+			},
+			{
+				name:     "link with angle brackets",
+				input:    "[click](javascript:alert(1))",
+				contains: []string{"javascript:alert(1)"},
+			},
+			{
+				name:     "protocol-relative URL blocked",
+				input:    "[click](//evil.com/phish)",
+				contains: []string{"click (//evil.com/phish)"},
+			},
+			{
+				name:     "URL with balanced parentheses",
+				input:    "[info](https://en.wikipedia.org/wiki/SQL_(topic))",
+				contains: []string{`href="https://en.wikipedia.org/wiki/SQL_(topic)"`},
+			},
+			{
+				name:     "bold in link text not in href",
+				input:    "[**bold text**](https://example.com)",
+				contains: []string{`href="https://example.com"`, "<strong>bold text</strong>"},
+			},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				result := string(presenters.MarkdownToHTML(tc.input))
+				for _, expected := range tc.contains {
+					assert.Contains(t, result, expected)
+				}
+			})
+		}
+
+		t.Run("XSS_no_raw_script_tag", func(t *testing.T) {
+			result := string(presenters.MarkdownToHTML("<script>alert('xss')</script>"))
+			assert.NotContains(t, result, "<script>")
+		})
+	})
 }
 
 func Test_UfmPresenter_RegisterMimeType(t *testing.T) {
