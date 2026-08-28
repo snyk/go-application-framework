@@ -7,6 +7,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/contributors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	parentmiddleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
@@ -14,6 +16,7 @@ import (
 // captured entity IDs (currently project IDs) to an injected Sink.
 type ContributorCaptureMiddleware struct {
 	next         http.RoundTripper
+	config       configuration.Configuration
 	sink         Sink
 	logger       *zerolog.Logger
 	pendingTests *pendingTests
@@ -27,15 +30,21 @@ type pendingTests struct {
 // NewContributorCaptureMiddleware returns a middleware that wraps a round tripper
 // with contributor capture logic, for registration via NetworkAccess.AddMiddleware.
 func NewContributorCaptureMiddleware(
+	config configuration.Configuration,
 	sink Sink,
 	logger *zerolog.Logger,
 ) networktypes.MiddlewareFunc {
+	pt := pendingTests{ids: make(map[string]struct{})}
+	if logger == nil {
+		logger = new(zerolog.Nop())
+	}
 	return func(roundTripper http.RoundTripper) http.RoundTripper {
 		return &ContributorCaptureMiddleware{
 			next:         roundTripper,
+			config:       config,
 			sink:         sink,
 			logger:       logger,
-			pendingTests: &pendingTests{ids: make(map[string]struct{})},
+			pendingTests: &pt,
 		}
 	}
 }
@@ -92,14 +101,45 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 }
 
 // classifyRequest decides whether req is one contributor-capture cares
-// about and, if so, what kind it is.
+// about and, if so, what kind it is. Requests to hosts outside the configured
+// Snyk API and its authenticated subdomains are never captured.
 func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (endpointKind, bool) {
 	kind, matched := classifyEndpoint(req.Method, req.URL.Path)
 	if !matched {
 		return endpointNone, false
 	}
 
+	if !m.isKnownHost(req) {
+		return endpointNone, false
+	}
+
 	return kind, true
+}
+
+// isKnownHost reports whether req is addressed to the configured Snyk API. It
+// reuses the gate that decides whether to attach credentials, so capture can
+// never reach a host the client would not authenticate against.
+func (m *ContributorCaptureMiddleware) isKnownHost(req *http.Request) bool {
+	apiURL := m.config.GetString(configuration.API_URL)
+
+	known, err := parentmiddleware.ShouldRequireAuthentication(
+		apiURL,
+		req.URL,
+		m.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS),
+		m.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS),
+	)
+	if known && err == nil {
+		return true
+	}
+
+	m.logger.Debug().
+		Str("path", req.URL.Path).
+		Str("host", req.URL.Host).
+		Str("api_url", apiURL).
+		Err(err).
+		Bool("known_host", known).
+		Msg("contributor capture: host not recognized")
+	return false
 }
 
 // requestBody peeks req's body for parsing, returning a prefix if needed.
@@ -108,9 +148,7 @@ func (m *ContributorCaptureMiddleware) classifyRequest(req *http.Request) (endpo
 func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
 	bodyBytes, err := peekRequestBody(req, maxCaptureBodyBytes)
 	if err != nil {
-		if m.logger != nil {
-			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read request body")
-		}
+		m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read request body")
 		return nil
 	}
 	return bodyBytes
@@ -145,18 +183,14 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind endpointKind) ([]byte, bool) {
 	bodyBytes, fullyRead, err := peekResponseBody(res, maxCaptureBodyBytes)
 	if err != nil {
-		if m.logger != nil {
-			m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
-		}
+		m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
 		return nil, false
 	}
 	if !fullyRead && !captureAllowsTruncatedBodyParse(kind) {
-		if m.logger != nil {
-			m.logger.Debug().
-				Int("body_bytes", len(bodyBytes)).
-				Str("path", req.URL.Path).
-				Msg("contributor capture: skipping parse for oversized response body")
-		}
+		m.logger.Debug().
+			Int("body_bytes", len(bodyBytes)).
+			Str("path", req.URL.Path).
+			Msg("contributor capture: skipping parse for oversized response body")
 		return nil, false
 	}
 
@@ -233,7 +267,7 @@ func (m *ContributorCaptureMiddleware) record(entityType contributors.EntityType
 }
 
 func (m *ContributorCaptureMiddleware) recover(req *http.Request) {
-	if recovered := recover(); recovered != nil && m.logger != nil {
+	if recovered := recover(); recovered != nil {
 		path := ""
 		if req != nil && req.URL != nil {
 			path = req.URL.Path

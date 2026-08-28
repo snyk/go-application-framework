@@ -45,6 +45,10 @@ func TestClassifyEndpoint_PathPatterns(t *testing.T) {
 		{"get test without components", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/tests/22222222-2222-4222-8222-222222222222", cc.EndpointNone, false},
 		{"components with invalid uuid", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/tests/not-a-uuid/components", cc.EndpointNone, false},
 		{"components without hidden prefix", "GET", "/orgs/11111111-1111-4111-8111-111111111111/tests/22222222-2222-4222-8222-222222222222/components", cc.EndpointNone, false},
+		{"components with extra segment", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/tests/22222222-2222-4222-8222-222222222222/anything/components", cc.EndpointNone, false},
+		{"components with trailing segment", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/tests/22222222-2222-4222-8222-222222222222/components/extra", cc.EndpointNone, false},
+		{"components with wrong mid segment", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/xxxxxx/22222222-2222-4222-8222-222222222222/components", cc.EndpointNone, false},
+		{"create test with trailing segment", "GET", "/hidden/orgs/11111111-1111-4111-8111-111111111111/tests/extra", cc.EndpointNone, false},
 
 		// AI BOM upload pattern: POST /rest/orgs/{uuid}/ai_boms/upload (exactly)
 		{"ai bom upload", "POST", "/rest/orgs/11111111-1111-4111-8111-111111111111/ai_boms/upload", cc.EndpointAIBomUpload, true},

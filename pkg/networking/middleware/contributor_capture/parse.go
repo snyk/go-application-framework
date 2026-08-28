@@ -14,22 +14,20 @@ func parseCreateTestPublishReport(body []byte) bool {
 	var legacyReq struct {
 		Data struct {
 			Attributes struct {
-				Config *struct {
-					PublishReport *bool `json:"publish_report,omitempty"`
-					Monitor       *bool `json:"monitor,omitempty"`
-				} `json:"config,omitempty"`
+				Config struct {
+					PublishReport bool `json:"publish_report"`
+					Monitor       bool `json:"monitor"`
+				} `json:"config"`
 			} `json:"attributes"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &legacyReq); err == nil {
-		if legacyReq.Data.Attributes.Config != nil {
-			cfg := legacyReq.Data.Attributes.Config
-			if cfg.Monitor != nil && *cfg.Monitor {
-				return false
-			}
-			if cfg.PublishReport != nil && *cfg.PublishReport {
-				return true
-			}
+		cfg := legacyReq.Data.Attributes.Config
+		if cfg.Monitor {
+			return false
+		}
+		if cfg.PublishReport {
+			return true
 		}
 	}
 
@@ -134,9 +132,9 @@ func parseComponentsProjectID(body []byte) string {
 			Attributes struct {
 				Type    string `json:"type"`
 				Success bool   `json:"success"`
-				Webui   *struct {
-					ProjectID *string `json:"project_id,omitempty"`
-				} `json:"webui,omitempty"`
+				Webui   struct {
+					ProjectID string `json:"project_id"`
+				} `json:"webui"`
 			} `json:"attributes"`
 		} `json:"data"`
 	}
@@ -148,10 +146,7 @@ func parseComponentsProjectID(body []byte) string {
 		if !strings.EqualFold(item.Attributes.Type, "sast") || !item.Attributes.Success {
 			continue
 		}
-		if item.Attributes.Webui == nil || item.Attributes.Webui.ProjectID == nil {
-			continue
-		}
-		if projectID := parseUUID(*item.Attributes.Webui.ProjectID); projectID != "" {
+		if projectID := parseUUID(item.Attributes.Webui.ProjectID); projectID != "" {
 			return projectID
 		}
 	}

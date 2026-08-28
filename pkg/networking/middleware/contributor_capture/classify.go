@@ -7,6 +7,13 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	orgPathPrefix     = "/hidden/orgs/"
+	testsSegment      = "/tests"
+	componentsSegment = "/components"
+	uuidLen           = 36
+)
+
 // isValidUUID checks if a string is a valid UUID without allocating.
 func isValidUUID(s string) bool {
 	_, err := uuid.Parse(s)
@@ -74,12 +81,35 @@ func isIaCSharePath(p string) bool {
 
 // isCreateTestPath matches POST /hidden/orgs/{uuid}/tests (exactly).
 func isCreateTestPath(p string) bool {
-	return isOrgTestPath(p, "/tests", false)
+	if len(p) != len(orgPathPrefix)+uuidLen+len(testsSegment) {
+		return false
+	}
+	return hasOrgUUIDPrefix(p) && hasSuffixCaseInsensitive(p, testsSegment)
 }
 
 // isComponentsPath matches GET /hidden/orgs/{uuid}/tests/{uuid}/components (exactly).
 func isComponentsPath(p string) bool {
-	return isOrgTestPath(p, "/components", true)
+	if len(p) != len(orgPathPrefix)+uuidLen+len(testsSegment)+1+uuidLen+len(componentsSegment) {
+		return false
+	}
+	if !hasOrgUUIDPrefix(p) {
+		return false
+	}
+	rest := p[len(orgPathPrefix)+uuidLen:]
+	if !hasPrefixCaseInsensitive(rest, testsSegment+"/") {
+		return false
+	}
+	testIDStart := len(testsSegment) + 1
+	return isValidUUID(rest[testIDStart:testIDStart+uuidLen]) &&
+		hasSuffixCaseInsensitive(rest, componentsSegment)
+}
+
+// hasOrgUUIDPrefix reports whether p starts with /hidden/orgs/{uuid}.
+func hasOrgUUIDPrefix(p string) bool {
+	if !hasPrefixCaseInsensitive(p, orgPathPrefix) {
+		return false
+	}
+	return isValidUUID(p[len(orgPathPrefix) : len(orgPathPrefix)+uuidLen])
 }
 
 // isAIBomUploadPath matches POST /rest/orgs/{uuid}/ai_boms/upload (exactly).
@@ -115,35 +145,6 @@ func isDeeproxyReportPath(p string) bool {
 	return isValidUUID(remaining)
 }
 
-// isOrgTestPath checks for /hidden/orgs/{uuid}/tests{suffix} pattern
-func isOrgTestPath(p string, suffix string, capturesUUID bool) bool {
-	const prefix = "/hidden/orgs/"
-	if !hasPrefixCaseInsensitive(p, prefix) {
-		return false
-	}
-	uuidEnd := len(prefix) + 36
-	if len(p) < uuidEnd+len(suffix) {
-		return false
-	}
-	if !isValidUUID(p[len(prefix):uuidEnd]) {
-		return false
-	}
-	if !hasSuffixCaseInsensitive(p[uuidEnd:], suffix) {
-		return false
-	}
-	if capturesUUID {
-		componentsStart := uuidEnd + len("/tests/")
-		if len(p) <= componentsStart+36 {
-			return false
-		}
-		if !isValidUUID(p[componentsStart : componentsStart+36]) {
-			return false
-		}
-		return hasSuffixCaseInsensitive(p[componentsStart+36:], "/components")
-	}
-	return len(p) == uuidEnd+len(suffix)
-}
-
 func isPathEnd(p string, idx int) bool {
 	return len(p) == idx || (len(p) > idx && p[idx] == '/')
 }
@@ -166,20 +167,11 @@ func hasSuffixCaseInsensitive(s, suffix string) bool {
 // path, given the EndpointKind already determined by classifyEndpoint.
 func testIDFromPath(path string) string {
 	path = normalizePath(path)
-	const prefix = "/hidden/orgs/"
-	if !hasPrefixCaseInsensitive(path, prefix) {
+	if !isComponentsPath(path) {
 		return ""
 	}
-	uuidEnd := len(prefix) + 36
-	if len(path) <= uuidEnd+len("/tests/") {
-		return ""
-	}
-	componentsStart := uuidEnd + len("/tests/")
-	if componentsStart+36 > len(path) {
-		return ""
-	}
-	testUUID := path[componentsStart : componentsStart+36]
-	return parseUUID(testUUID)
+	testIDStart := len(orgPathPrefix) + uuidLen + len(testsSegment) + 1
+	return parseUUID(path[testIDStart : testIDStart+uuidLen])
 }
 
 func parseUUID(value string) string {

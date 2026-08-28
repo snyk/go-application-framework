@@ -33,41 +33,54 @@ func TestPeekResponseBody_restoresBodyOnReadError(t *testing.T) {
 	assert.True(t, body.closed, "restored body must close the body it wraps")
 }
 
-func TestPeekResponseBody_succeedsDespiteInflatedContentLength(t *testing.T) {
+func TestPeekResponseBody(t *testing.T) {
 	t.Parallel()
 
-	body := []byte(`{"uri":"https://app.snyk.io/org/acme/project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`)
-	res := &http.Response{
-		ContentLength: 70000,
-		Body:          io.NopCloser(bytes.NewReader(body)),
+	small := []byte(`{"uri":"https://app.snyk.io/org/acme/project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`)
+	oversized := append([]byte(`{"uri":"partial-prefix`), bytes.Repeat([]byte("x"), 70<<10)...)
+
+	tests := []struct {
+		name          string
+		contentLength int64
+		body          []byte
+		wantFullyRead bool
+		wantPeekedLen int
+	}{
+		{
+			name:          "full body despite inflated content length",
+			contentLength: 70000,
+			body:          small,
+			wantFullyRead: true,
+			wantPeekedLen: len(small),
+		},
+		{
+			name:          "bounded prefix when oversized",
+			body:          oversized,
+			wantFullyRead: false,
+			wantPeekedLen: 64 << 10,
+		},
 	}
 
-	got, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
-	require.NoError(t, err)
-	assert.True(t, fullyRead)
-	assert.Equal(t, body, got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	downstream, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	assert.Equal(t, body, downstream)
-}
+			res := &http.Response{
+				ContentLength: tt.contentLength,
+				Body:          io.NopCloser(bytes.NewReader(tt.body)),
+			}
 
-func TestPeekResponseBody_truncatesOversizedBodyButPreservesFullBody(t *testing.T) {
-	t.Parallel()
+			peeked, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFullyRead, fullyRead)
+			assert.Len(t, peeked, tt.wantPeekedLen)
+			assert.True(t, bytes.HasPrefix(tt.body, peeked), "peeked bytes must be a prefix of the real body")
 
-	prefix := []byte(`{"uri":"partial-prefix`)
-	padding := bytes.Repeat([]byte("x"), 70<<10) // above the 64 KiB limit used below
-	wantBody := append(append([]byte(nil), prefix...), padding...)
-
-	res := &http.Response{Body: io.NopCloser(bytes.NewReader(wantBody))}
-	peeked, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
-	require.NoError(t, err)
-	assert.False(t, fullyRead)
-	assert.Equal(t, int64(64<<10), int64(len(peeked)), "should return a bounded prefix")
-
-	gotBody, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	assert.Equal(t, wantBody, gotBody, "the real body must still be readable in full, untruncated")
+			downstream, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+			assert.Equal(t, tt.body, downstream, "the real body must still be readable in full, untruncated")
+		})
+	}
 }
 
 func TestPeekRequestBody(t *testing.T) {
