@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -20,6 +25,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	testOrgID       = "00000000-0000-0000-0000-000000000001"
+	testAPIEndpoint = "https://api.snyk.io"
+)
+
+func newFlagsResponse(evals []v20241015.FeatureFlagAttributes) *v20241015.ListFeatureFlagsResponse {
+	return &v20241015.ListFeatureFlagsResponse{
+		ApplicationvndApiJSON200: &struct {
+			Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
+			Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
+		}{
+			Data: &v20241015.FeatureFlagsDataItem{
+				Attributes: v20241015.FeatureFlagAttributesList{Evaluations: evals},
+			},
+		},
+	}
+}
 
 func Test_AddFeatureFlagGatewayToConfig_CacheDependentOnOrg(t *testing.T) {
 	testConfigKey := "test_feature_flag"
@@ -59,9 +82,6 @@ func Test_AddFeatureFlagGatewayToConfig_CacheDependentOnOrg(t *testing.T) {
 }
 
 func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
-	globalOrg := "00000000-0000-0000-0000-000000000001"
-	globalAPIEndpoint := "https://api.snyk.io"
-
 	testConfigKey := "test_feature_flag"
 	testFeatureFlagName := "testFeatureFlag"
 
@@ -71,7 +91,6 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
 		requestedAPIs = append(requestedAPIs, "https://"+req.Host)
 
-		// Extract org from path: /hidden/orgs/<org>/feature_flags/evaluation
 		parts := strings.Split(req.URL.Path, "/")
 		org := ""
 		for i := 0; i < len(parts)-1; i++ {
@@ -82,7 +101,7 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 		}
 		requestedOrgs = append(requestedOrgs, org)
 
-		enabled := org == globalOrg
+		enabled := org == testOrgID
 		response := struct {
 			Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
 			Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
@@ -117,8 +136,9 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	logger := zerolog.Logger{}
 
 	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, globalAPIEndpoint)
-	config.Set(configuration.ORGANIZATION, globalOrg)
+	config.Set(configuration.API_URL, testAPIEndpoint)
+	config.Set(configuration.ORGANIZATION, testOrgID)
+	t.Cleanup(func() { registries.Delete(config) })
 
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
@@ -132,15 +152,161 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	assert.Len(t, requestedOrgs, 0)
 	assert.Len(t, requestedAPIs, 0)
 
-	// Fetch from global config
 	result1 := config.GetBool(testConfigKey)
 	assert.True(t, result1)
-	assert.Equal(t, []string{globalOrg}, requestedOrgs)
-	assert.Equal(t, []string{globalAPIEndpoint}, requestedAPIs)
+	assert.Equal(t, []string{testOrgID}, requestedOrgs)
+	assert.Equal(t, []string{testAPIEndpoint}, requestedAPIs)
+}
+
+func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T) {
+	flagCount := 50
+
+	var apiCallCount int32
+	var capturedFlags []string
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		org uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		atomic.AddInt32(&apiCallCount, 1)
+		capturedFlags = flags
+		trueVal := true
+		evals := make([]v20241015.FeatureFlagAttributes, len(flags))
+		for i, f := range flags {
+			evals[i] = v20241015.FeatureFlagAttributes{Key: f, Value: &trueVal}
+		}
+		return newFlagsResponse(evals), nil
+	}
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	logger := zerolog.Logger{}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, testAPIEndpoint)
+	config.Set(configuration.ORGANIZATION, testOrgID)
+	t.Cleanup(func() { registries.Delete(config) })
+
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+
+	var wg sync.WaitGroup
+	for i := 0; i < flagCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			configKey := fmt.Sprintf("concurrent_key_%d", i)
+			flagName := fmt.Sprintf("concurrent-flag-%d", i)
+			AddFeatureFlagsToConfig(mockEngine, map[string]string{configKey: flagName})
+		}(i)
+	}
+	wg.Wait()
+
+	registry := getFlagRegistry(config)
+	require.NotNil(t, registry, "registry must exist after registration")
+	registry.mu.Lock()
+	registeredCount := len(registry.flags)
+	registry.mu.Unlock()
+	assert.Equal(t, flagCount, registeredCount,
+		"all concurrently registered flags must be present in the registry")
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&apiCallCount),
+		"no API call before any flag is read")
+
+	result := config.GetBool("concurrent_key_0")
+	assert.True(t, result)
+
+	for i := 1; i < flagCount; i++ {
+		configKey := fmt.Sprintf("concurrent_key_%d", i)
+		assert.True(t, config.GetBool(configKey), "flag %s should be resolvable", configKey)
+	}
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&apiCallCount),
+		"all registered flags must resolve from a single batched API call")
+
+	expectedFlags := make([]string, flagCount)
+	for i := 0; i < flagCount; i++ {
+		expectedFlags[i] = fmt.Sprintf("concurrent-flag-%d", i)
+	}
+	slices.Sort(expectedFlags)
+	assert.Equal(t, expectedFlags, capturedFlags,
+		"batch request must contain all registered flag names")
+}
+
+func Test_AddFeatureFlagsToConfig_ConcurrentReads(t *testing.T) {
+	flagCount := 10
+
+	var apiCallCount int32
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		org uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		atomic.AddInt32(&apiCallCount, 1)
+		time.Sleep(20 * time.Millisecond)
+		trueVal := true
+		evals := make([]v20241015.FeatureFlagAttributes, len(flags))
+		for i, f := range flags {
+			evals[i] = v20241015.FeatureFlagAttributes{Key: f, Value: &trueVal}
+		}
+		return newFlagsResponse(evals), nil
+	}
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	logger := zerolog.Logger{}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, testAPIEndpoint)
+	config.Set(configuration.ORGANIZATION, testOrgID)
+	t.Cleanup(func() { registries.Delete(config) })
+
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+
+	for i := 0; i < flagCount; i++ {
+		configKey := fmt.Sprintf("concurrent_read_key_%d", i)
+		flagName := fmt.Sprintf("concurrent-read-flag-%d", i)
+		AddFeatureFlagsToConfig(mockEngine, map[string]string{configKey: flagName})
+	}
+
+	var wg sync.WaitGroup
+	results := make([]bool, flagCount)
+	for i := 0; i < flagCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			configKey := fmt.Sprintf("concurrent_read_key_%d", i)
+			results[i] = config.GetBool(configKey)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, r := range results {
+		assert.True(t, r, "flag concurrent_read_key_%d should be true", i)
+	}
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&apiCallCount),
+		"concurrent reads for the same org should coalesce into a single API call")
 }
 
 func TestAreFeaturesEnabled_PartialAndNilValue(t *testing.T) {
 	orgID := uuid.NewString()
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
 
 	tests := []struct {
 		name        string
@@ -195,18 +361,7 @@ func TestAreFeaturesEnabled_PartialAndNilValue(t *testing.T) {
 				flags []string,
 				orgID uuid.UUID,
 			) (*v20241015.ListFeatureFlagsResponse, error) {
-				return &v20241015.ListFeatureFlagsResponse{
-					ApplicationvndApiJSON200: &struct {
-						Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
-						Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
-					}{
-						Data: &v20241015.FeatureFlagsDataItem{
-							Attributes: v20241015.FeatureFlagAttributesList{
-								Evaluations: tc.evaluations,
-							},
-						},
-					},
-				}, nil
+				return newFlagsResponse(tc.evaluations), nil
 			}
 
 			got, err := areFeaturesEnabled(nil, nil, orgID, tc.requested...)
@@ -234,6 +389,10 @@ func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
 	flag := "my-flag"
 	orgID := uuid.NewString()
 	expectedErr := errors.New("gateway blew up")
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
+
 	evaluateFlags = func(
 		config configuration.Configuration, engine workflow.Engine, flags []string, orgID uuid.UUID,
 	) (featureFlagsResponse *v20241015.ListFeatureFlagsResponse, retErr error) {
@@ -248,6 +407,9 @@ func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
 func TestIsFeatureEnabled_Error_InvalidEvaluateFlagsResponse(t *testing.T) {
 	flag := "my-flag"
 	orgID := uuid.NewString()
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
 
 	evaluateFlags = func(
 		config configuration.Configuration,
