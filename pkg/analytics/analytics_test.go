@@ -254,6 +254,142 @@ func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	assert.JSONEq(t, `{"durationMs":10001234,"count":1000,"note":"ran as *** here","other":"x"}`, string(output))
 }
 
+// Test_SanitizeUsername_WordBoundary pins the matching rule the username pass shares with the
+// scrub dictionary (logging.UsernameScrubPattern): whole words only, in string leaf values only.
+func Test_SanitizeUsername_WordBoundary(t *testing.T) {
+	t.Run("a standalone occurrence is redacted", func(t *testing.T) {
+		output, err := SanitizeUsername("app", "/home/app", "***", []byte(`{"note":"ran as app here"}`))
+		assert.NoError(t, err)
+		assert.JSONEq(t, `{"note":"ran as *** here"}`, string(output))
+	})
+
+	t.Run("an occurrence inside a longer word is left alone", func(t *testing.T) {
+		input := []byte(`{"mood":"happy","plural":"apps","path":"/happ/appy"}`)
+
+		output, err := SanitizeUsername("app", "/home/app", "***", input)
+		assert.NoError(t, err)
+		assert.Equal(t, string(input), string(output))
+	})
+
+	// A hyphen is a word boundary, so a hostname built out of the username still gets redacted.
+	// That is intended: such a hostname does leak the username (CLI-1819).
+	t.Run("a hyphen counts as a word boundary", func(t *testing.T) {
+		output, err := SanitizeUsername("app", "/home/app", "***", []byte(`{"host":"app-runner"}`))
+		assert.NoError(t, err)
+		assert.JSONEq(t, `{"host":"***-runner"}`, string(output))
+	})
+
+	t.Run("an object key is left alone", func(t *testing.T) {
+		input := []byte(`{"gaf.app.defaultfunc.organization.lookup":"env"}`)
+
+		output, err := SanitizeUsername("app", "/home/app", "***", input)
+		assert.NoError(t, err)
+		assert.Equal(t, string(input), string(output))
+	})
+}
+
+// Test_SanitizeUsername_UnmatchedContentIsReturnedVerbatim covers the payload this function sees
+// most of the time: one carrying no username at all. Decoding and re-marshaling such a payload
+// would sort its object keys and re-escape its strings for no gain, so content nothing matched
+// comes back byte for byte instead.
+func Test_SanitizeUsername_UnmatchedContentIsReturnedVerbatim(t *testing.T) {
+	input := []byte(`{"zeta":1,"alpha":"a","nested":{"yankee":true,"bravo":"b"}}`)
+
+	output, err := SanitizeUsername("app", "/home/app", "***", input)
+	assert.NoError(t, err)
+	assert.Equal(t, string(input), string(output))
+}
+
+// Test_SanitizeUsername_DoesNotEscapeHTMLCharacters guards the wire format. json.Marshal rewrites
+// `<`, `>` and `&` as \u003c, \u003e and \u0026; this function is a redaction pass over a payload
+// someone else built, so it must not silently re-encode characters it was never asked to touch.
+func Test_SanitizeUsername_DoesNotEscapeHTMLCharacters(t *testing.T) {
+	t.Run("content with no match", func(t *testing.T) {
+		input := []byte(`{"url":"https://x/?a=1&b=2<tag>"}`)
+
+		output, err := SanitizeUsername("app", "/home/app", "***", input)
+		assert.NoError(t, err)
+		assert.Equal(t, string(input), string(output))
+	})
+
+	t.Run("content that is redacted", func(t *testing.T) {
+		input := []byte(`{"url":"https://x/?a=1&b=2<tag>&user=app"}`)
+
+		output, err := SanitizeUsername("app", "/home/app", "***", input)
+		assert.NoError(t, err)
+		assert.Equal(t, `{"url":"https://x/?a=1&b=2<tag>&user=***"}`, string(output))
+	})
+}
+
+// Test_SanitizeUsername_BareScalarDocument covers a whole document that is a single scalar. There
+// is no string leaf to walk, but the document is still a value rather than a key, so a username
+// standing there is redacted -- as text, quoted, so the result stays parseable.
+func Test_SanitizeUsername_BareScalarDocument(t *testing.T) {
+	t.Run("a bare number that is the username", func(t *testing.T) {
+		output, err := SanitizeUsername("1000", "/home/1000", "***", []byte("1000"))
+		assert.NoError(t, err)
+		assert.Equal(t, `"***"`, string(output))
+	})
+
+	t.Run("a bare number that only contains the username", func(t *testing.T) {
+		output, err := SanitizeUsername("1000", "/home/1000", "***", []byte("10001234"))
+		assert.NoError(t, err)
+		assert.Equal(t, "10001234", string(output))
+	})
+
+	t.Run("a bare string that is the username", func(t *testing.T) {
+		output, err := SanitizeUsername("app", "/home/app", "***", []byte(`"app"`))
+		assert.NoError(t, err)
+		assert.Equal(t, `"***"`, string(output))
+	})
+
+	t.Run("a bare boolean", func(t *testing.T) {
+		output, err := SanitizeUsername("app", "/home/app", "***", []byte("true"))
+		assert.NoError(t, err)
+		assert.Equal(t, "true", string(output))
+	})
+}
+
+// Test_SanitizeUsername_JSONArrayDocument covers a valid JSON document that is not an object: the
+// walk has to reach string leaves through arrays too.
+//
+// The home directory comes out as `/home/***` rather than `***` because the username pass runs
+// first and takes its own name out of the path, leaving nothing for the home directory literal to
+// match. That ordering predates CLI-1819 and is left as it is; either way the username is gone.
+func Test_SanitizeUsername_JSONArrayDocument(t *testing.T) {
+	output, err := SanitizeUsername("app", "/home/app", "***", []byte(`["ran as app",1000,["/home/app/x"]]`))
+	assert.NoError(t, err)
+	assert.JSONEq(t, `["ran as ***",1000,["/home/***/x"]]`, string(output))
+}
+
+// Test_SanitizeUsername_EmptyUserNameAndHomeDir covers a caller with nothing to redact -- an
+// unresolvable user record leaves both fields empty. The redaction is then the identity, so the
+// content must come back untouched rather than round-tripped through the JSON decoder.
+func Test_SanitizeUsername_EmptyUserNameAndHomeDir(t *testing.T) {
+	t.Run("both empty is a no-op", func(t *testing.T) {
+		input := []byte(`{"zeta":1,"alpha":"app"}`)
+
+		output, err := SanitizeUsername("", "", "***", input)
+		assert.NoError(t, err)
+		assert.Equal(t, string(input), string(output))
+	})
+
+	t.Run("an empty username still redacts the home directory", func(t *testing.T) {
+		output, err := SanitizeUsername("", "/home/app", "***", []byte(`{"path":"/home/app/project"}`))
+		assert.NoError(t, err)
+		assert.JSONEq(t, `{"path":"***/project"}`, string(output))
+	})
+}
+
+// Test_SanitizeUsername_NonJSONContent covers content that isn't valid JSON at all. It's exported
+// API, so a caller isn't bound to the marshaled payloads the callers in this package pass, and a
+// plain-text snippet still has to get the username taken out of it.
+func Test_SanitizeUsername_NonJSONContent(t *testing.T) {
+	output, err := SanitizeUsername("app", "/home/app", "***", []byte("ran as app from /home/app/project, apps untouched"))
+	assert.NoError(t, err)
+	assert.Equal(t, "ran as *** from /home/***/project, apps untouched", string(output))
+}
+
 // Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted covers SanitizeStaticValues being
 // called on a non-JSON snippet, not the full valid JSON its current callers always pass -- it's
 // exported API, so a future caller isn't bound to that. Without gating on content's own validity,
