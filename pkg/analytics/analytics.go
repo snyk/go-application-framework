@@ -346,26 +346,90 @@ func SanitizeValuesByKey(keysToFilter []string, replacementValue string, content
 	return content, nil
 }
 
-// SanitizeUsername sanitizes the given content by replacing the given username with the replacement string.
+// SanitizeUsername sanitizes the given content by replacing the given username with the
+// replacement string.
+//
+// The username matches on a word boundary, the same rule the shape-based username pattern in the
+// scrub dictionary already applies (see addMandatoryMasking in pkg/logging). The home directory is
+// a full path rather than a bare word, so it stays a plain substring match.
+//
+// When content is valid JSON the replacement runs over string leaf values only. Object keys, and
+// numbers, booleans and null, pass through untouched. Replacing the username as a plain literal
+// across marshaled JSON used to rewrite keys too, so on a host running as user `app` the key
+// `gaf.app.defaultfunc.organization.lookup` arrived as `gaf.***.defaultfunc.organization.lookup`,
+// minting a fresh field path per user and fragmenting the analytics facet space (CLI-1819).
 func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue string, content []byte) ([]byte, error) {
-	valuesToSanitize := []string{rawUserName, strings.ReplaceAll(userHomeDir, "\\", "\\\\")}
+	userNames := []string{rawUserName}
 
 	if strings.Contains(rawUserName, "\\") {
 		segments := strings.Split(rawUserName, "\\")
-		segmentsLen := len(segments)
-		if segmentsLen < 2 {
-			// this should never happen because we already checked for the existence of a backslash
-			return nil, fmt.Errorf("could not sanitize username")
-		} else if segmentsLen == 2 {
-			valuesToSanitize = append(valuesToSanitize, segments[1])
-		} else {
+		if len(segments) != 2 {
 			// don't recognize this format
-			fmt.Println(segments)
 			return nil, fmt.Errorf("could not sanitize username - unrecognized format")
 		}
+		userNames = append(userNames, segments[1])
 	}
 
-	return SanitizeStaticValues(valuesToSanitize, replacementValue, content)
+	// QuoteMeta guarantees the pattern compiles, so MustCompile can't panic here.
+	patterns := make([]*regexp.Regexp, 0, len(userNames))
+	for _, userName := range userNames {
+		if userName == "" {
+			continue
+		}
+		patterns = append(patterns, regexp.MustCompile(`\b`+regexp.QuoteMeta(userName)+`\b`))
+	}
+
+	redact := func(value string) string {
+		for _, pattern := range patterns {
+			value = pattern.ReplaceAllLiteralString(value, replacementValue)
+		}
+		if userHomeDir != "" {
+			value = strings.ReplaceAll(value, userHomeDir, replacementValue)
+		}
+		return value
+	}
+
+	if !json.Valid(content) {
+		return []byte(redact(string(content))), nil
+	}
+
+	return redactJSONStringLeaves(content, redact)
+}
+
+// redactJSONStringLeaves applies redact to every string leaf of content, leaving object keys
+// alone. Numbers decode as json.Number so re-marshaling reproduces them verbatim instead of
+// reformatting them through float64.
+func redactJSONStringLeaves(content []byte, redact func(string) string) ([]byte, error) {
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.UseNumber()
+
+	var document interface{}
+	if err := decoder.Decode(&document); err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(redactJSONValue(document, redact))
+}
+
+// redactJSONValue mutates document in place; it was decoded by redactJSONStringLeaves and so is a
+// fresh tree with no cycles and no other references into it.
+func redactJSONValue(document interface{}, redact func(string) string) interface{} {
+	switch value := document.(type) {
+	case string:
+		return redact(value)
+	case map[string]interface{}:
+		for key, item := range value {
+			value[key] = redactJSONValue(item, redact)
+		}
+		return value
+	case []interface{}:
+		for i, item := range value {
+			value[i] = redactJSONValue(item, redact)
+		}
+		return value
+	default:
+		return document
+	}
 }
 
 // SanitizeStaticValues replaces every occurrence of each valuesToSanitize entry in content with

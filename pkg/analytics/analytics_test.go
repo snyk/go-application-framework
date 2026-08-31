@@ -238,14 +238,20 @@ func Test_SanitizeUsername(t *testing.T) {
 // Test_SanitizeUsername_NumericUsernameCollision guards against a numeric username -- a realistic
 // value in containerized environments where $USER is set to a raw UID with no matching
 // /etc/passwd entry -- colliding with an unrelated bare JSON number and corrupting the payload.
+//
+// The assertion on "count" was reversed for CLI-1819. It used to expect `"count":"***"`, because
+// the username was replaced as a plain literal across the whole marshaled payload and a bare
+// number that happened to read the same got rewritten (and quoted, to keep the JSON parseable).
+// Redaction now runs over string leaf values only, so an unrelated number keeps its own value
+// instead of being replaced by a redaction marker of a different type.
 func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
-	input := []byte(`{"durationMs":10001234,"count":1000,"other":"x"}`)
+	input := []byte(`{"durationMs":10001234,"count":1000,"note":"ran as 1000 here","other":"x"}`)
 
 	output, err := SanitizeUsername("1000", "/home/1000", "***", input)
 	assert.NoError(t, err)
 
 	assert.True(t, json.Valid(output), "sanitizing produced invalid JSON: %s", output)
-	assert.Equal(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
+	assert.JSONEq(t, `{"durationMs":10001234,"count":1000,"note":"ran as *** here","other":"x"}`, string(output))
 }
 
 // Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted covers SanitizeStaticValues being
