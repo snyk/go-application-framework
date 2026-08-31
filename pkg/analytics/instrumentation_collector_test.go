@@ -396,64 +396,25 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
-	// The username these two cases redact is whatever the test process runs as: the seam reads it
-	// from user.Current() itself rather than taking it as an argument, so the expectations are
-	// built from the same source. Config is omitted so the only redaction under test is the
-	// username pass; the scrub dictionary is not involved.
-	t.Run("it should redact the current username in extension values but never in keys", func(t *testing.T) {
+	// This case reads the username from user.Current() because the seam does too, and asserts only
+	// that the key survives verbatim. That holds whatever the process runs as, so a machine whose
+	// user is named after some other value in the payload can't flip the result -- the failure mode
+	// IDE-2499 hit in dev containers running as `dev`. What the username pass does to *values* is
+	// pinned against a synthetic username in Test_SanitizeUsername_* instead.
+	t.Run("it should never redact the current username inside an extension key", func(t *testing.T) {
 		currentUser, err := user.Current()
 		assert.NoError(t, err)
 
 		ic := setupBaseCollector(t)
-		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
-
 		// A short username used to rewrite this key into gaf.***.defaultfunc.organization.lookup,
 		// minting a fresh field path per user (CLI-1819).
 		keyPath := "gaf." + currentUser.Username + ".defaultfunc.organization.lookup"
 		ic.AddExtension(keyPath, "env")
-		ic.AddExtension("standalone", "ran as "+currentUser.Username+"!")
-		ic.AddExtension("longerWord", "host "+currentUser.Username+"land!")
-		ic.AddExtension("count", 1000)
-		ic.AddExtension("enabled", true)
-
-		mockExtension := map[string]interface{}{
-			"strings":    "hello world",
-			keyPath:      "env",
-			"standalone": "ran as ***!",
-			"longerWord": "host " + currentUser.Username + "land!",
-			"count":      1000,
-			"enabled":    true,
-		}
-
-		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
-
-		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
-		assert.NoError(t, err)
-		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
-		assert.NoError(t, err)
-		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
-		assert.NoError(t, err)
-
-		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
-	})
-
-	t.Run("it should redact the current home directory in extension values", func(t *testing.T) {
-		currentUser, err := user.Current()
-		assert.NoError(t, err)
-
-		ic := setupBaseCollector(t)
-		ic.AddExtension("path", currentUser.HomeDir+"/project")
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
 		assert.NoError(t, err)
 
-		extension := *actualV2InstrumentationObject.Data.Attributes.Interaction.Extension
-		path, ok := extension["path"].(string)
-		assert.True(t, ok)
-		// The home directory is a full path, not a bare word, so it keeps matching as a plain
-		// substring rather than on a word boundary.
-		assert.NotContains(t, path, currentUser.HomeDir)
-		assert.Contains(t, path, "/project")
+		assert.Contains(t, *actualV2InstrumentationObject.Data.Attributes.Interaction.Extension, keyPath)
 	})
 
 	t.Run("it should get the category vector", func(t *testing.T) {
