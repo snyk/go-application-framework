@@ -268,7 +268,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// Hide whatever is the current username
 	u, err := user.Current()
 	if err == nil {
-		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
+		s = UsernameScrubPattern(u.Username)
 		addRegexTermToDict(s, 0, dict)
 	}
 
@@ -397,6 +397,17 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
 	}
 	return []byte(s)
+}
+
+// UsernameScrubPattern returns the regular expression source matching username as a whole word.
+//
+// This is the one definition of how a username is recognized for redaction. The mandatory scrub
+// dictionary above and analytics.SanitizeUsername both compile it, so the boundary rule can't
+// drift between the log path and the analytics path. Without the boundary an occurrence inside a
+// longer word is rewritten too, which is how a short username came to corrupt unrelated analytics
+// field paths (CLI-1819).
+func UsernameScrubPattern(username string) string {
+	return fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(username))
 }
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the

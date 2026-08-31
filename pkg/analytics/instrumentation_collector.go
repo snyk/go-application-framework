@@ -235,18 +235,27 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	return result
 }
 
-// scrubExtensionMap and scrubExtensionValue redact string leaves of an arbitrary
-// AddExtension payload without ever serializing it to JSON bytes first, so a redaction
-// can't run past the field it matched in and corrupt or bleed into a sibling field.
+// scrubExtensionMap redacts the string leaves of an arbitrary AddExtension payload against the
+// scrub dictionary without ever serializing it to JSON bytes first, so a redaction can't run past
+// the field it matched in and corrupt or bleed into a sibling field.
 func scrubExtensionMap(m map[string]interface{}, dict logging.ScrubbingDict) map[string]interface{} {
-	return scrubExtensionMapSeen(m, dict, map[uintptr]bool{})
+	return redactMapStringLeaves(m, func(value string) string {
+		return string(logging.ScrubValue([]byte(value), dict))
+	}, map[uintptr]bool{})
 }
 
-// seen tracks map/slice pointers on the current recursion path, guarding against
-// cycles a caller of AddExtension could construct (e.g. a map containing itself).
-// It is deleted on the way back up so a value referenced from two non-cyclic
-// branches (a diamond, not a cycle) is still scrubbed both times.
-func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) map[string]interface{} {
+// redactStringLeaves returns a copy of value with redact applied to every string leaf. Map keys
+// are left alone: they name the field rather than carry its content, and rewriting one mints a
+// fresh analytics field path (CLI-1819).
+//
+// Shared by scrubExtensionMap, which walks a live extension payload, and by SanitizeUsername,
+// which walks a decoded JSON document -- one walk, so the two can't disagree about what counts as
+// a leaf.
+func redactStringLeaves(value interface{}, redact func(string) string) interface{} {
+	return redactStringLeavesSeen(value, redact, map[uintptr]bool{})
+}
+
+func redactMapStringLeaves(m map[string]interface{}, redact func(string) string, seen map[uintptr]bool) map[string]interface{} {
 	ptr := reflect.ValueOf(m).Pointer()
 	if seen[ptr] {
 		return nil
@@ -254,19 +263,23 @@ func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict,
 	seen[ptr] = true
 	defer delete(seen, ptr)
 
-	scrubbed := make(map[string]interface{}, len(m))
+	redacted := make(map[string]interface{}, len(m))
 	for k, v := range m {
-		scrubbed[k] = scrubExtensionValueSeen(v, dict, seen)
+		redacted[k] = redactStringLeavesSeen(v, redact, seen)
 	}
-	return scrubbed
+	return redacted
 }
 
-func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
-	switch val := v.(type) {
+// seen tracks map/slice pointers on the current recursion path, guarding against
+// cycles a caller of AddExtension could construct (e.g. a map containing itself).
+// It is deleted on the way back up so a value referenced from two non-cyclic
+// branches (a diamond, not a cycle) is still redacted both times.
+func redactStringLeavesSeen(value interface{}, redact func(string) string, seen map[uintptr]bool) interface{} {
+	switch val := value.(type) {
 	case string:
-		return string(logging.ScrubValue([]byte(val), dict))
+		return redact(val)
 	case map[string]interface{}:
-		return scrubExtensionMapSeen(val, dict, seen)
+		return redactMapStringLeaves(val, redact, seen)
 	case []interface{}:
 		ptr := reflect.ValueOf(val).Pointer()
 		if ptr != 0 && seen[ptr] {
@@ -276,13 +289,13 @@ func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map
 			seen[ptr] = true
 			defer delete(seen, ptr)
 		}
-		scrubbed := make([]interface{}, len(val))
+		redacted := make([]interface{}, len(val))
 		for i, item := range val {
-			scrubbed[i] = scrubExtensionValueSeen(item, dict, seen)
+			redacted[i] = redactStringLeavesSeen(item, redact, seen)
 		}
-		return scrubbed
+		return redacted
 	default:
-		return v
+		return value
 	}
 }
 
