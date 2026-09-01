@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,6 +64,9 @@ func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *
 			}))
 			t.Cleanup(server.Close)
 			rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+			for _, id := range tt.expectedProjectID {
+				sink.EXPECT().RecordEntity(contributors.EntityTypeProject, id)
+			}
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.path, http.NoBody)
 			require.NoError(t, err)
@@ -76,15 +80,6 @@ func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *
 			require.NoError(t, err)
 			require.NotEmpty(t, body)
 			require.NoError(t, res.Body.Close())
-
-			records := sink.Records()
-			require.Len(t, records, len(tt.expectedProjectID))
-			assert.Equal(t, contributors.EntityTypeProject, records[0].EntityType)
-			if len(records) == 1 {
-				assert.Equal(t, tt.expectedProjectID[0], records[0].EntityID)
-			} else {
-				assert.ElementsMatch(t, tt.expectedProjectID, []string{records[0].EntityID, records[1].EntityID})
-			}
 		})
 	}
 }
@@ -122,7 +117,8 @@ func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
 				require.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
-			rt, sink := newTestMiddleware(t, http.DefaultTransport, "https://api.snyk.io")
+			// Anything reaching the sink here is the leak we're guarding against.
+			rt, _ := newTestMiddleware(t, http.DefaultTransport, "https://api.snyk.io")
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.path, http.NoBody)
 			require.NoError(t, err)
@@ -132,8 +128,6 @@ func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
 			require.NotNil(t, res)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 			require.NoError(t, res.Body.Close())
-
-			assert.Empty(t, sink.Records())
 		})
 	}
 }
@@ -145,7 +139,8 @@ func TestContributorCaptureMiddleware_capturesOnAuthenticatedSubdomain(t *testin
 	config := hostConfig("https://api.snyk.io")
 	config.Set(configuration.AUTHENTICATION_SUBDOMAINS, []string{"deeproxy"})
 
-	sink := newFakeSink()
+	sink := NewMockSink(gomock.NewController(t))
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 	logger := zerolog.Nop()
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -162,10 +157,6 @@ func TestContributorCaptureMiddleware_capturesOnAuthenticatedSubdomain(t *testin
 	res, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
@@ -186,7 +177,7 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 				require.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
-			rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+			rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
 
 			req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 			require.NoError(t, err)
@@ -196,8 +187,6 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 			require.NotNil(t, res)
 			require.Equal(t, tt.statusCode, res.StatusCode)
 			require.NoError(t, res.Body.Close())
-
-			assert.Empty(t, sink.Records())
 		})
 	}
 }
@@ -215,6 +204,7 @@ func TestContributorCaptureMiddleware_capturesDespiteInflatedContentLength(t *te
 		}, nil
 	})
 	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -223,10 +213,6 @@ func TestContributorCaptureMiddleware_capturesDespiteInflatedContentLength(t *te
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutContentLength(t *testing.T) {
@@ -240,7 +226,7 @@ func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutConte
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -254,7 +240,6 @@ func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutConte
 	require.NoError(t, res.Body.Close())
 
 	assert.Equal(t, wantBody, gotBody)
-	assert.Empty(t, sink.Records())
 }
 
 func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t *testing.T) {
@@ -271,7 +256,7 @@ func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t 
 			Request:    req,
 		}, nil
 	})
-	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -285,7 +270,6 @@ func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t 
 	require.NoError(t, res.Body.Close())
 
 	assert.True(t, body.closed)
-	assert.Empty(t, sink.Records())
 }
 
 func TestContributorCaptureMiddleware_matchesHostIgnoringPort(t *testing.T) {
@@ -300,6 +284,7 @@ func TestContributorCaptureMiddleware_matchesHostIgnoringPort(t *testing.T) {
 		}, nil
 	})
 	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io:443/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -308,10 +293,6 @@ func TestContributorCaptureMiddleware_matchesHostIgnoringPort(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlow(t *testing.T) {
@@ -336,7 +317,9 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlow(t *testing.T
 	require.Equal(t, http.StatusAccepted, createRes.StatusCode)
 	require.NoError(t, createRes.Body.Close())
 
-	assert.Empty(t, sink.Records(), "create-test response has no project ID and must not reach the sink")
+	// Set after the create round trip on purpose. Create carries no project ID,
+	// so anything reaching the sink before now should blow up.
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
 	require.NoError(t, err)
@@ -344,10 +327,6 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlow(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, componentsRes.StatusCode)
 	require.NoError(t, componentsRes.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_doesNotTruncateOversizedCreateTestRequestBody(t *testing.T) {
@@ -388,7 +367,7 @@ func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenNeverCreatedW
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
 
 	// No create-test call happened for this test ID, so it was never marked pending.
 	componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
@@ -396,8 +375,6 @@ func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenNeverCreatedW
 	componentsRes, err := rt.RoundTrip(componentsReq)
 	require.NoError(t, err)
 	require.NoError(t, componentsRes.Body.Close())
-
-	assert.Empty(t, sink.Records())
 }
 
 func TestContributorCaptureMiddleware_componentsPollingSurvivesThenStopsAfterSuccess(t *testing.T) {
@@ -412,6 +389,7 @@ func TestContributorCaptureMiddleware_componentsPollingSurvivesThenStopsAfterSuc
 		emptyPolls: 2,
 	})
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID).Times(1)
 
 	createBody := []byte(`{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -429,10 +407,6 @@ func TestContributorCaptureMiddleware_componentsPollingSurvivesThenStopsAfterSuc
 		require.NoError(t, err)
 		require.NoError(t, componentsRes.Body.Close())
 	}
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_recoversFromSinkPanic_onRequest(t *testing.T) {
@@ -455,7 +429,7 @@ func TestContributorCaptureMiddleware_recoversFromSinkPanic_onRequest(t *testing
 	}))
 	t.Cleanup(server.Close)
 	logger := zerolog.Nop()
-	rt := newMiddleware(http.DefaultTransport, hostConfig(server.URL), panicSink{}, &logger)
+	rt := newMiddleware(http.DefaultTransport, hostConfig(server.URL), panickingSink(t), &logger)
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/rest/orgs/"+orgID+"/ai_boms/upload", strings.NewReader(uploadBody))
 	require.NoError(t, err)
@@ -486,7 +460,7 @@ func TestContributorCaptureMiddleware_recoversFromSinkPanic_onResponse(t *testin
 	}))
 	t.Cleanup(server.Close)
 	logger := zerolog.Nop()
-	rt := newMiddleware(http.DefaultTransport, hostConfig(server.URL), panicSink{}, &logger)
+	rt := newMiddleware(http.DefaultTransport, hostConfig(server.URL), panickingSink(t), &logger)
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -515,6 +489,7 @@ func TestContributorCaptureMiddleware_capturesAIBomUploadRevisionIDFromRequestBo
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	sink.EXPECT().RecordEntity(contributors.EntityTypeRevision, revisionID)
 
 	url := server.URL + "/rest/orgs/" + orgID + "/ai_boms/upload?version=2024-10-15"
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(uploadBody))
@@ -526,11 +501,6 @@ func TestContributorCaptureMiddleware_capturesAIBomUploadRevisionIDFromRequestBo
 	require.NoError(t, res.Body.Close())
 
 	assert.Equal(t, uploadBody, string(gotRequestBody), "peeking the body must not stop it reaching the server")
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, contributors.EntityTypeRevision, records[0].EntityType)
-	assert.Equal(t, revisionID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_leavesAIBomUploadResponseUntouched(t *testing.T) {
@@ -542,6 +512,7 @@ func TestContributorCaptureMiddleware_leavesAIBomUploadResponseUntouched(t *test
 		return &http.Response{StatusCode: http.StatusCreated, Body: body, Request: req}, nil
 	})
 	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordEntity(contributors.EntityTypeRevision, revisionID)
 
 	url := "https://api.snyk.io/rest/orgs/d5341082-085f-4458-a223-90c16aae2435/ai_boms/upload"
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(uploadBody))
@@ -554,8 +525,6 @@ func TestContributorCaptureMiddleware_leavesAIBomUploadResponseUntouched(t *test
 	// capture completes from the request alone, so the response must pass
 	// through unread and unclosed
 	assert.False(t, body.closed, "response body must not be consumed for a request-only capture")
-	require.Len(t, sink.Records(), 1)
-	assert.Equal(t, revisionID, sink.Records()[0].EntityID)
 
 	require.NoError(t, res.Body.Close())
 }
@@ -568,7 +537,8 @@ func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t
 			Request:    req,
 		}, nil
 	})
-	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	// A junk ID should be dropped, not recorded as an empty entity.
+	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -576,15 +546,14 @@ func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t
 	res, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-
-	assert.Empty(t, sink.Records(), "an unparseable ID must not be recorded as an empty entity")
 }
 
 func TestContributorCaptureMiddleware_recordsNothingWhenAIBomUploadHasNoRevisionID(t *testing.T) {
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Request: req}, nil
 	})
-	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	// A missing revision ID should be dropped too, not recorded empty.
+	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
 
 	url := "https://api.snyk.io/rest/orgs/d5341082-085f-4458-a223-90c16aae2435/ai_boms/upload"
 	uploadBody := `{"data":{"attributes":{"repo_name":"acme/app"},"type":"ai_bom_file_upload"}}`
@@ -594,8 +563,6 @@ func TestContributorCaptureMiddleware_recordsNothingWhenAIBomUploadHasNoRevision
 	res, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-
-	assert.Empty(t, sink.Records(), "a missing revision ID must not be recorded as an empty entity")
 }
 
 func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing.T) {
@@ -618,6 +585,7 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/report/"+reportID, http.NoBody)
 	require.NoError(t, err)
@@ -625,10 +593,6 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 	res, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *testing.T) {
@@ -644,6 +608,7 @@ func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *t
 		}, nil
 	})
 	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	req, err := http.NewRequest(http.MethodGet, "https://api.snyk.io/report/55555555-5555-4555-8555-555555555555", http.NoBody)
 	require.NoError(t, err)
@@ -651,10 +616,6 @@ func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *t
 	res, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlowWithLegacyPublishReport(t *testing.T) {
@@ -669,6 +630,7 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlowWithLegacyPub
 		wantCreateBodyContains: `"publish_report":true`,
 	})
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID)
 
 	createBody := []byte(`{"data":{"attributes":{"config":{"publish_report":true,"scan_config":{"sast":{}}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -682,10 +644,6 @@ func TestContributorCaptureMiddleware_capturesTestAPIComponentsFlowWithLegacyPub
 	componentsRes, err := rt.RoundTrip(componentsReq)
 	require.NoError(t, err)
 	require.NoError(t, componentsRes.Body.Close())
-
-	records := sink.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, projectID, records[0].EntityID)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -702,12 +660,23 @@ func hostConfig(apiURL string) configuration.Configuration {
 	return config
 }
 
-// newTestMiddleware wires the middleware to a fake sink, scoped to apiURL as the known host.
-func newTestMiddleware(t *testing.T, next http.RoundTripper, apiURL string) (http.RoundTripper, *fakeSink) {
+// newTestMiddleware wires the middleware to a mock sink, scoped to apiURL as the known host.
+func newTestMiddleware(t *testing.T, next http.RoundTripper, apiURL string) (http.RoundTripper, *MockSink) {
 	t.Helper()
-	sink := newFakeSink()
+	sink := NewMockSink(gomock.NewController(t))
 	logger := zerolog.Nop()
 	return newMiddleware(next, hostConfig(apiURL), sink, &logger), sink
+}
+
+// Times(1) rather than AnyTimes. If the sink never gets called at all, the
+// recovery path silently goes untested.
+func panickingSink(t *testing.T) *MockSink {
+	t.Helper()
+	sink := NewMockSink(gomock.NewController(t))
+	sink.EXPECT().RecordEntity(gomock.Any(), gomock.Any()).
+		Do(func(contributors.EntityType, string) { panic("boom") }).
+		Times(1)
+	return sink
 }
 
 func componentsSuccessBody(projectID string) []byte {
@@ -761,12 +730,6 @@ func newTestComponentsServer(t *testing.T, opts componentsServerOpts) *httptest.
 	}))
 	t.Cleanup(server.Close)
 	return server
-}
-
-type panicSink struct{}
-
-func (panicSink) RecordEntity(_ contributors.EntityType, _ string) {
-	panic("boom")
 }
 
 type trackCloseReadCloser struct {
