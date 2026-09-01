@@ -247,7 +247,7 @@ func extractDeeproxyProjectIDFromTruncated(body []byte) string {
 		}
 
 		uuidStart := valueStart + colonIdx + quoteIdx + 1
-		if uuidStart+36 > len(s) || s[uuidStart+36] != '"' {
+		if uuidStart+37 > len(s) || s[uuidStart+36] != '"' {
 			continue
 		}
 

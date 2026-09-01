@@ -250,6 +250,16 @@ func TestParseDeeproxyReportProjectID(t *testing.T) {
 			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","analysisResult":{"type":"sarif","data":"` + strings.Repeat("x", 100),
 			expected: projectID,
 		},
+		{
+			name:     "truncated mid project id",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID[:20],
+			expected: "",
+		},
+		{
+			name:     "truncated at end of project id",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID,
+			expected: "",
+		},
 	}
 
 	for _, tt := range tests {
