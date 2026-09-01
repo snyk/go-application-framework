@@ -181,7 +181,7 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 // content-encoding handling here: this middleware runs above http.Transport, which
 // negotiates and undoes compression before the response reaches us.
 func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind endpointKind) ([]byte, bool) {
-	bodyBytes, fullyRead, err := peekResponseBody(res, maxCaptureBodyBytes)
+	bodyBytes, fullyRead, err := peekResponseBody(res, kind, maxCaptureBodyBytes)
 	if err != nil {
 		m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
 		return nil, false
