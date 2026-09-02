@@ -99,7 +99,7 @@ func TestCollectContributors_SortsByEmail(t *testing.T) {
 
 func TestCollectContributors_ReturnsNothingForNonRepository(t *testing.T) {
 	contributors, err := collectContributors(t.Context(), t.TempDir(), time.Now())
-	require.NoError(t, err, "scanning a directory that is not a repository is normal, not an error")
+	require.ErrorIs(t, err, ErrNotAGitRepository, "scanning a directory that is not a repository is normal, but callers must be able to tell")
 	assert.Empty(t, contributors)
 }
 
@@ -139,11 +139,13 @@ func TestCollectContributors_ExcludesCommitWhoseCommitterDateEndsIterationButAut
 	assert.Empty(t, contributors, "the committer-time early stop excludes this commit before its author date is checked")
 }
 
-func TestCollectContributors_ReturnsNothingForBareRepositoryWithoutCommits(t *testing.T) {
+func TestCollectContributors_ReportsBareRepositoryAsNoRepository(t *testing.T) {
 	repo := newEmptyTestRepo(t, "--bare")
 
+	// Detecting a repository by its .git directory, which is how a scan target is
+	// resolved, finds nothing in a bare repository. We have never read one.
 	contributors, err := collectContributors(t.Context(), repo.path(), time.Now())
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrNotAGitRepository)
 	assert.Empty(t, contributors)
 }
 
@@ -266,7 +268,7 @@ func TestCollectContributors_ReturnsNothingForWorktreeWithoutItsRepository(t *te
 	source.remove()
 
 	contributors, err := collectContributors(t.Context(), worktree.path(), now)
-	require.NoError(t, err, "an unusable repository is a contributor count of 0, not an error")
+	require.ErrorIs(t, err, ErrNotAGitRepository, "a worktree cut off from its objects reads as no repository at all")
 	assert.Empty(t, contributors)
 }
 

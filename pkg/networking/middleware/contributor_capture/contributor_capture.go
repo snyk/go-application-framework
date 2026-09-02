@@ -22,9 +22,26 @@ type ContributorCaptureMiddleware struct {
 	pendingTests *pendingTests
 }
 
+// testState encodes ongoing test's state.
+type testState int
+
+const (
+	// testUnknown is a test whose creation the middleware never saw.
+	testUnknown testState = iota
+
+	// testNotPublishing is a test created without publish_report.
+	testNotPublishing
+
+	// testPending is a publishing test where a project ID has not yet been recorded.
+	testPending
+
+	// testCaptured is a publishing test whose project ID has been recorded.
+	testCaptured
+)
+
 type pendingTests struct {
-	mu  sync.Mutex
-	ids map[string]struct{}
+	mu     sync.Mutex
+	states map[string]testState
 }
 
 // NewContributorCaptureMiddleware returns a middleware that wraps a round tripper
@@ -34,7 +51,7 @@ func NewContributorCaptureMiddleware(
 	sink Sink,
 	logger *zerolog.Logger,
 ) networktypes.MiddlewareFunc {
-	pt := pendingTests{ids: make(map[string]struct{})}
+	pt := pendingTests{states: make(map[string]testState)}
 	if logger == nil {
 		logger = new(zerolog.Nop())
 	}
@@ -52,8 +69,13 @@ func NewContributorCaptureMiddleware(
 // captureState carries everything gathered from a matched request before it
 // is sent, needed to capture entities from its response once it returns.
 type captureState struct {
-	kind                   endpointKind
-	publishReportRequested bool
+	kind endpointKind
+
+	// publishReport is true when a create test request asks to publish a report.
+	publishReport bool
+
+	// publishReportKnown is true if the value of publishReport was read successfully.
+	publishReportKnown bool
 }
 
 func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -79,7 +101,7 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 // beginRequestCapture performs whatever capture the request alone allows and
 // reports whether the response still has to be processed to finish the job.
 func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (state captureState, needsResponse bool) {
-	defer m.recover(req)
+	defer m.recover()
 
 	kind, matched := m.classifyRequest(req)
 	if !matched {
@@ -93,7 +115,7 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 		m.record(contributors.EntityTypeRevision, parseAIBomUploadRevisionID(m.requestBody(req)))
 		return state, false
 	case endpointTestCreate:
-		state.publishReportRequested = parseCreateTestPublishReport(m.requestBody(req))
+		state.publishReport, state.publishReportKnown = parseCreateTestPublishReport(m.requestBody(req))
 	default:
 	}
 
@@ -132,13 +154,6 @@ func (m *ContributorCaptureMiddleware) isKnownHost(req *http.Request) bool {
 		return true
 	}
 
-	m.logger.Debug().
-		Str("path", req.URL.Path).
-		Str("host", req.URL.Host).
-		Str("api_url", apiURL).
-		Err(err).
-		Bool("known_host", known).
-		Msg("contributor capture: host not recognized")
 	return false
 }
 
@@ -148,7 +163,7 @@ func (m *ContributorCaptureMiddleware) isKnownHost(req *http.Request) bool {
 func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
 	bodyBytes, err := peekRequestBody(req, maxCaptureBodyBytes)
 	if err != nil {
-		m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read request body")
+		m.sink.RecordMiss(contributors.MissBodyUnreadable)
 		return nil
 	}
 	return bodyBytes
@@ -157,40 +172,43 @@ func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
 // completeRequestCapture extracts and records entities from a matched
 // request's response, using the state beginRequestCapture gathered.
 func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState, req *http.Request, res *http.Response) {
-	defer m.recover(req)
+	defer m.recover()
 
 	if res.StatusCode >= http.StatusBadRequest {
+		m.sink.RecordMiss(contributors.MissErrorStatus)
 		return
 	}
 
-	parseBytes, ok := m.responseCaptureBytes(req, res, state.kind)
+	parseBytes, ok := m.responseCaptureBytes(res, state.kind)
 	if !ok {
 		return
 	}
 
-	if state.kind == endpointTestCreate {
-		m.markTestPending(parseBytes, state.publishReportRequested)
+	switch state.kind {
+	case endpointTestCreate:
+		m.recordCreatedTest(parseBytes, state.publishReport, state.publishReportKnown)
 		return
+	case endpointTestComponents:
+		m.captureComponents(req.URL.Path, parseBytes)
+		return
+	default:
 	}
 
-	projectIDs := m.projectIDsFromResponse(state.kind, req.URL.Path, parseBytes)
+	projectIDs := projectIDsFromResponse(state.kind, parseBytes)
 	m.record(contributors.EntityTypeProject, projectIDs...)
 }
 
 // responseCaptureBytes returns the part of res's body worth parsing. Bodies need no
 // content-encoding handling here: this middleware runs above http.Transport, which
 // negotiates and undoes compression before the response reaches us.
-func (m *ContributorCaptureMiddleware) responseCaptureBytes(req *http.Request, res *http.Response, kind endpointKind) ([]byte, bool) {
+func (m *ContributorCaptureMiddleware) responseCaptureBytes(res *http.Response, kind endpointKind) ([]byte, bool) {
 	bodyBytes, fullyRead, err := peekResponseBody(res, kind, maxCaptureBodyBytes)
 	if err != nil {
-		m.logger.Debug().Err(err).Str("path", req.URL.Path).Msg("contributor capture: could not read response body")
+		m.sink.RecordMiss(contributors.MissBodyUnreadable)
 		return nil, false
 	}
 	if !fullyRead && !captureAllowsTruncatedBodyParse(kind) {
-		m.logger.Debug().
-			Int("body_bytes", len(bodyBytes)).
-			Str("path", req.URL.Path).
-			Msg("contributor capture: skipping parse for oversized response body")
+		m.sink.RecordMiss(contributors.MissBodyTooLarge)
 		return nil, false
 	}
 
@@ -201,14 +219,12 @@ func captureAllowsTruncatedBodyParse(kind endpointKind) bool {
 	return kind == endpointDeeproxyReport
 }
 
-func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind endpointKind, path string, parseBytes []byte) []string {
+func projectIDsFromResponse(kind endpointKind, parseBytes []byte) []string {
 	switch kind {
 	case endpointRegistryMonitor:
 		return []string{parseMonitorProjectID(parseBytes)}
 	case endpointRegistryIaCShare:
 		return parseIaCShareProjectIDs(parseBytes)
-	case endpointTestComponents:
-		return m.projectIDsFromComponentsResponse(path, parseBytes)
 	case endpointDeeproxyReport:
 		return []string{parseDeeproxyReportProjectID(parseBytes)}
 	default:
@@ -216,65 +232,83 @@ func (m *ContributorCaptureMiddleware) projectIDsFromResponse(kind endpointKind,
 	}
 }
 
-func (m *ContributorCaptureMiddleware) projectIDsFromComponentsResponse(path string, parseBytes []byte) []string {
+// captureComponents records the project ID a components response carries, for a
+// test that is still waiting to yield one.
+func (m *ContributorCaptureMiddleware) captureComponents(path string, parseBytes []byte) {
+	testID := testIDFromPath(path)
+
+	switch m.testState(testID) {
+	case testNotPublishing, testCaptured:
+		return
+	case testUnknown:
+		m.sink.RecordMiss(contributors.MissNoEntity)
+		return
+	case testPending:
+	}
+
 	projectID := parseComponentsProjectID(parseBytes)
 	if projectID == "" {
-		return nil
-	}
-	testID := testIDFromPath(path)
-	if testID == "" || !m.takeTestIfPending(testID) {
-		return nil
-	}
-	return []string{projectID}
-}
-
-// markTestPending records that a test ID asked for publish_report.
-func (m *ContributorCaptureMiddleware) markTestPending(bodyBytes []byte, publishReportRequested bool) {
-	if !publishReportRequested {
+		m.sink.RecordMiss(contributors.MissNoEntity)
 		return
 	}
+
+	m.setTestState(testID, testCaptured)
+	m.sink.RecordEntity(contributors.EntityTypeProject, projectID)
+}
+
+// recordCreatedTest notes what a create-test response means for the components
+// polls that follow it.
+func (m *ContributorCaptureMiddleware) recordCreatedTest(bodyBytes []byte, publishReport, publishReportKnown bool) {
+	if !publishReportKnown {
+		m.sink.RecordMiss(contributors.MissBodyUnreadable)
+		return
+	}
+
 	testID := parseCreateTestID(bodyBytes)
 	if testID == "" {
+		if publishReport {
+			m.sink.RecordMiss(contributors.MissNoEntity)
+		}
 		return
 	}
 
-	m.pendingTests.mu.Lock()
-	m.pendingTests.ids[testID] = struct{}{}
-	m.pendingTests.mu.Unlock()
+	if publishReport {
+		m.setTestState(testID, testPending)
+		return
+	}
+	m.setTestState(testID, testNotPublishing)
 }
 
-// takeTestIfPending reports whether testID was previously marked pending, and
-// clears it if the result is true.
-func (m *ContributorCaptureMiddleware) takeTestIfPending(testID string) bool {
+func (m *ContributorCaptureMiddleware) setTestState(testID string, state testState) {
 	m.pendingTests.mu.Lock()
 	defer m.pendingTests.mu.Unlock()
-	_, ok := m.pendingTests.ids[testID]
-	if ok {
-		delete(m.pendingTests.ids, testID)
-	}
-	return ok
+	m.pendingTests.states[testID] = state
 }
 
-// record reports each captured ID to the sink. An empty ID means the parser
-// found nothing, so callers can hand over whatever they extracted unchecked.
+func (m *ContributorCaptureMiddleware) testState(testID string) testState {
+	m.pendingTests.mu.Lock()
+	defer m.pendingTests.mu.Unlock()
+	return m.pendingTests.states[testID]
+}
+
+// record reports each captured ID to the sink.
 func (m *ContributorCaptureMiddleware) record(entityType contributors.EntityType, entityIDs ...string) {
+	recorded := false
 	for _, entityID := range entityIDs {
 		if entityID == "" {
 			continue
 		}
 		m.sink.RecordEntity(entityType, entityID)
+		recorded = true
+	}
+
+	if !recorded {
+		m.sink.RecordMiss(contributors.MissNoEntity)
 	}
 }
 
-func (m *ContributorCaptureMiddleware) recover(req *http.Request) {
+func (m *ContributorCaptureMiddleware) recover() {
 	if recovered := recover(); recovered != nil {
-		path := ""
-		if req != nil && req.URL != nil {
-			path = req.URL.Path
-		}
-		m.logger.Debug().
-			Interface("panic", recovered).
-			Str("path", path).
-			Msg("contributor capture: recovered from panic")
+		m.sink.RecordMiss(contributors.MissPanic)
 	}
 }
