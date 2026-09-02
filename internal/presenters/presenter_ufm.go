@@ -86,7 +86,7 @@ func NewUfmRenderer(results []testapi.TestResult, config configuration.Configura
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getHTMLTemplateFuncMap()
+				functionMapMimeType := getHTMLTemplateFuncMap(config)
 				return ufmTemplate, functionMapMimeType, nil
 			},
 		},
