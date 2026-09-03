@@ -2,6 +2,7 @@ package contributor_capture_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"net/http"
@@ -22,7 +23,7 @@ func TestPeekResponseBody_restoresBodyOnReadError(t *testing.T) {
 	body := &errAfterReadCloser{prefix: append([]byte(nil), prefix...), err: wantErr}
 
 	res := &http.Response{Body: body}
-	_, _, err := cc.PeekResponseBody(res, 64<<10)
+	_, _, err := cc.PeekResponseBody(res, cc.EndpointNone, 64<<10)
 	require.ErrorIs(t, err, wantErr)
 
 	got, readErr := io.ReadAll(res.Body)
@@ -70,7 +71,7 @@ func TestPeekResponseBody(t *testing.T) {
 				Body:          io.NopCloser(bytes.NewReader(tt.body)),
 			}
 
-			peeked, fullyRead, err := cc.PeekResponseBody(res, 64<<10)
+			peeked, fullyRead, err := cc.PeekResponseBody(res, cc.EndpointNone, 64<<10)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantFullyRead, fullyRead)
 			assert.Len(t, peeked, tt.wantPeekedLen)
@@ -164,4 +165,26 @@ func (r *errAfterReadCloser) Read(p []byte) (int, error) {
 func (r *errAfterReadCloser) Close() error {
 	r.closed = true
 	return nil
+}
+
+func TestPeekResponseBody_decodesGzippedDeeproxyBody(t *testing.T) {
+	t.Parallel()
+
+	plain := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}}`)
+	var gzipped bytes.Buffer
+	writer := gzip.NewWriter(&gzipped)
+	_, err := writer.Write(plain)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	compressed := gzipped.Bytes()
+
+	res := &http.Response{Body: io.NopCloser(bytes.NewReader(compressed))}
+	peeked, fullyRead, err := cc.PeekResponseBody(res, cc.EndpointDeeproxyReport, 64<<10)
+	require.NoError(t, err)
+	assert.True(t, fullyRead)
+	assert.Equal(t, plain, peeked)
+
+	rest, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	assert.Equal(t, compressed, rest)
 }

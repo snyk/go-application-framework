@@ -2,6 +2,7 @@ package contributor_capture
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"net/http"
 )
@@ -28,8 +29,10 @@ func peekRequestBody(req *http.Request, maxBytes int64) ([]byte, error) {
 
 // peekResponseBody returns up to maxBytes of res.Body for parsing and splices what
 // it read back in front of the remainder, so res.Body still yields the whole body.
+// Deeproxy bodies arrive gzipped, so for that kind the peeked prefix is decoded
+// before it is returned.
 // fullyRead reports whether the body fit within maxBytes.
-func peekResponseBody(res *http.Response, maxBytes int64) (peeked []byte, fullyRead bool, err error) {
+func peekResponseBody(res *http.Response, kind endpointKind, maxBytes int64) (peeked []byte, fullyRead bool, err error) {
 	if res.Body == nil {
 		return nil, false, nil
 	}
@@ -43,10 +46,35 @@ func peekResponseBody(res *http.Response, maxBytes int64) (peeked []byte, fullyR
 		return nil, false, err
 	}
 
-	if int64(len(buf)) > maxBytes {
-		return buf[:maxBytes], false, nil
+	fullyRead = int64(len(buf)) <= maxBytes
+	if !fullyRead {
+		buf = buf[:maxBytes]
 	}
-	return buf, true, nil
+
+	if kind == endpointDeeproxyReport {
+		buf, err = gunzip(buf, fullyRead)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	return buf, fullyRead, nil
+}
+
+// gunzip decodes a gzip stream. A truncated stream still yields everything that
+// could be decoded.
+func gunzip(buf []byte, complete bool) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(buf))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	decoded, err := io.ReadAll(reader)
+	if err != nil && complete {
+		return nil, err
+	}
+	return decoded, nil
 }
 
 type stitchedReadCloser struct {

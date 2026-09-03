@@ -231,24 +231,34 @@ func TestParseDeeproxyReportProjectID(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "complete with projectId",
-			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"}}`,
+			name:     "complete body",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","snapshotId":"abc"},"analysisResults":{}}`,
 			expected: projectID,
 		},
 		{
-			name:     "complete with project_id",
-			body:     `{"status":"COMPLETE","uploadResult":{"project_id":"` + projectID + `"}}`,
+			name:     "truncated in a later sibling",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"},"analysisResults":{"files":[{"data":"` + strings.Repeat("x", 100),
 			expected: projectID,
 		},
 		{
-			name:     "incomplete status",
-			body:     `{"status":"IN_PROGRESS","uploadResult":{"projectId":"` + projectID + `"}}`,
+			name:     "truncated at top level after uploadResult",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"},"analysisRes`,
+			expected: projectID,
+		},
+		{
+			name:     "projectId not first key in uploadResult",
+			body:     `{"status":"COMPLETE","uploadResult":{"bundleHash":"abc","projectId":"` + projectID + `"}}`,
+			expected: projectID,
+		},
+		{
+			name:     "nested uploadResult ignored",
+			body:     `{"status":"COMPLETE","analysisResults":{"uploadResult":{"projectId":"` + projectID + `"}}}`,
 			expected: "",
 		},
 		{
-			name:     "truncated body (fallback parsing)",
-			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","analysisResult":{"type":"sarif","data":"` + strings.Repeat("x", 100),
-			expected: projectID,
+			name:     "truncated inside uploadResult",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","snapshotId"`,
+			expected: "",
 		},
 		{
 			name:     "truncated mid project id",
@@ -256,8 +266,38 @@ func TestParseDeeproxyReportProjectID(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "truncated at end of project id",
-			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID,
+			name:     "no uploadResult",
+			body:     `{"status":"WAITING","progress":0.5}`,
+			expected: "",
+		},
+		{
+			name:     "uploadResult without projectId",
+			body:     `{"status":"COMPLETE","uploadResult":{"bundleHash":"abc"}}`,
+			expected: "",
+		},
+		{
+			name:     "uploadResult is not an object",
+			body:     `{"status":"COMPLETE","uploadResult":"nope"}`,
+			expected: "",
+		},
+		{
+			name:     "projectId is not a uuid",
+			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"not-a-uuid"}}`,
+			expected: "",
+		},
+		{
+			name:     "invalid json",
+			body:     `{invalid}`,
+			expected: "",
+		},
+		{
+			name:     "empty body",
+			body:     ``,
+			expected: "",
+		},
+		{
+			name:     "top level array",
+			body:     `[1,2,3]`,
 			expected: "",
 		},
 	}

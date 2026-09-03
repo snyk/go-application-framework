@@ -2,7 +2,9 @@ package contributor_capture_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -134,7 +136,7 @@ func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
 
 func TestContributorCaptureMiddleware_capturesOnAuthenticatedSubdomain(t *testing.T) {
 	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
-	reportBody := []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"}}`)
+	reportBody := gzipBody(t, []byte(`{"status":"COMPLETE","uploadResult":{"projectId":"`+projectID+`"}}`))
 
 	config := hostConfig("https://api.snyk.io")
 	config.Set(configuration.AUTHENTICATION_SUBDOMAINS, []string{"deeproxy"})
@@ -575,12 +577,12 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/report/"+reportID, r.URL.Path)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{
+		_, err := w.Write(gzipBody(t, []byte(`{
 			"status": "COMPLETE",
 			"uploadResult": {
-				"projectId": "` + projectID + `"
+				"projectId": "`+projectID+`"
 			}
-		}`))
+		}`)))
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
@@ -597,8 +599,10 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 
 func TestContributorCaptureMiddleware_capturesTruncatedDeeproxyReportPrefix(t *testing.T) {
 	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
-	prefix := `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"` + `,"analysisResult":{"type":"sarif","data":"`
-	wantBody := append([]byte(prefix), bytes.Repeat([]byte("x"), 70<<10)...)
+	prefix := `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `"},"analysisResult":{"type":"sarif","data":"`
+	// The padding is incompressible so the body still exceeds maxCaptureBodyBytes
+	// once gzipped.
+	wantBody := gzipBody(t, append([]byte(prefix), incompressiblePadding(200<<10)...))
 
 	next := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -740,4 +744,26 @@ type trackCloseReadCloser struct {
 func (r *trackCloseReadCloser) Close() error {
 	r.closed = true
 	return nil
+}
+
+func gzipBody(t *testing.T, plain []byte) []byte {
+	t.Helper()
+
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, err := writer.Write(plain)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return compressed.Bytes()
+}
+
+// incompressiblePadding returns padding which gzip cannot shrink.
+func incompressiblePadding(size int) []byte {
+	rng := rand.New(rand.NewPCG(1, 2))
+
+	padding := make([]byte, size)
+	for i := range padding {
+		padding[i] = byte(rng.Uint32())
+	}
+	return padding
 }
