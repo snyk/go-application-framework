@@ -1,9 +1,6 @@
 package output_workflow
 
-import (
-	"github.com/snyk/go-application-framework/internal/presenters"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-)
+import "github.com/snyk/go-application-framework/internal/presenters"
 
 const (
 	OUTPUT_CONFIG_KEY_JSON               = "json"
@@ -23,7 +20,7 @@ const (
 	SARIF_MIME_TYPE                      = presenters.ApplicationSarifMimeType
 	JSON_MIME_TYPE                       = presenters.ApplicationJSONMimeType
 	HTML_MIME_TYPE                       = presenters.ApplicationHTMLMimeType
-	TOON_MIME_TYPE                       = content_type.TOON
+	TOON_MIME_TYPE                       = presenters.ApplicationTOONMimeType
 )
 
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
