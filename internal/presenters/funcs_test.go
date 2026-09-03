@@ -342,6 +342,27 @@ func TestMarkdownToHTMLInHTMLTemplateDoesNotBypassHrefSanitization(t *testing.T)
 	assert.Contains(t, rendered, "click")
 }
 
+func TestMarkdownToHTMLDoesNotTreatCodeSpanBracketsAsLinks(t *testing.T) {
+	// Regression test: a regex character class such as `[[\]()#;?]*` inside
+	// an inline code span (e.g. the ansi-regex ReDoS advisory text) must not
+	// be misinterpreted as markdown link syntax. Link matching used to run
+	// before code spans were protected from further inline processing, so
+	// the `[` ... `]` ... `(` ... `)` sequence inside the code span was
+	// parsed as a `[text](href)` link with an empty href.
+	input := "the sub-patterns`[[\\]()#;?]*` and `(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*`."
+	result := string(MarkdownToHTML(input))
+
+	assert.NotContains(t, result, `<a href="`)
+	assert.Contains(t, result, "<code>[[\\]()#;?]*</code>")
+	assert.Contains(t, result, "<code>(?:;[-a-zA-Z\\d\\/#&amp;.:=?%@~_]*)*</code>")
+}
+
+func TestMarkdownToHTMLPreservesCodeSpansInsideLinkText(t *testing.T) {
+	result := string(MarkdownToHTML("[npm `ws` package](https://snyk.io/vuln/npm:ws:20171108)"))
+
+	assert.Contains(t, result, `<a href="https://snyk.io/vuln/npm:ws:20171108" target="_blank" rel="noopener noreferrer">npm <code>ws</code> package</a>`)
+}
+
 func TestMarkdownToHTMLNormalizesLineEndings(t *testing.T) {
 	rendered := string(MarkdownToHTML("line one\r\n```\nline two  \n   \n```\rline three"))
 

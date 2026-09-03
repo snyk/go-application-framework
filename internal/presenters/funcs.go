@@ -883,6 +883,16 @@ func isAllowedSchemelessHref(href string) bool {
 }
 
 func applyInlineMarkdown(s string) string {
+	// Extract inline code spans first and replace them with placeholders, so
+	// their content - which often contains regex-like `[...]`/`(...)` text -
+	// is never misinterpreted as markdown link or bold syntax below.
+	var codeSpans []string
+	s = mdInlineCodeRegexp.ReplaceAllStringFunc(s, func(match string) string {
+		parts := mdInlineCodeRegexp.FindStringSubmatch(match)
+		codeSpans = append(codeSpans, parts[1])
+		return fmt.Sprintf("\x00CODE_SPAN_%d\x00", len(codeSpans)-1)
+	})
+
 	s = mdLinkRegexp.ReplaceAllStringFunc(s, func(match string) string {
 		parts := mdLinkRegexp.FindStringSubmatch(match)
 		if len(parts) != 3 {
@@ -895,10 +905,13 @@ func applyInlineMarkdown(s string) string {
 		return "\x00LINK_START\x00" + href + "\x00LINK_MID\x00" + text + "\x00LINK_END\x00"
 	})
 	s = mdBoldRegexp.ReplaceAllString(s, `<strong>$1</strong>`)
-	s = mdInlineCodeRegexp.ReplaceAllString(s, `<code>$1</code>`)
 	s = strings.ReplaceAll(s, "\x00LINK_START\x00", `<a href="`)
 	s = strings.ReplaceAll(s, "\x00LINK_MID\x00", `" target="_blank" rel="noopener noreferrer">`)
 	s = strings.ReplaceAll(s, "\x00LINK_END\x00", `</a>`)
+
+	for i, code := range codeSpans {
+		s = strings.ReplaceAll(s, fmt.Sprintf("\x00CODE_SPAN_%d\x00", i), "<code>"+code+"</code>")
+	}
 	return s
 }
 
