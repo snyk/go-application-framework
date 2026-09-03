@@ -1,6 +1,7 @@
 package contributor_capture
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 )
@@ -154,35 +155,37 @@ func parseComponentsProjectID(body []byte) string {
 }
 
 // parseDeeproxyReportProjectID extracts a project ID from a legacy Code deeproxy
-// report response when status is COMPLETE.
+// report response. It handles truncated JSON, as long as the project ID and the
+// surrounding object are present.
 func parseDeeproxyReportProjectID(body []byte) string {
-	if len(body) == 0 {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
 		return ""
 	}
 
-	// Try full JSON unmarshal first
-	var resp struct {
-		Status       string `json:"status"`
-		UploadResult struct {
-			ProjectID      string `json:"projectId"`
-			ProjectIDSnake string `json:"project_id"`
-		} `json:"uploadResult"`
-	}
-	if err := json.Unmarshal(body, &resp); err == nil {
-		if !strings.EqualFold(strings.TrimSpace(resp.Status), "COMPLETE") {
+	for {
+		tok, err := dec.Token()
+		key, isKey := tok.(string)
+		if err != nil || !isKey {
 			return ""
 		}
-		// Try projectId first, fall back to project_id
-		if pid := resp.UploadResult.ProjectID; strings.TrimSpace(pid) != "" {
-			return parseUUID(pid)
-		}
-		if pid := resp.UploadResult.ProjectIDSnake; strings.TrimSpace(pid) != "" {
-			return parseUUID(pid)
-		}
-	}
 
-	// Fallback for truncated bodies where JSON unmarshal failed
-	return extractDeeproxyProjectIDFromTruncated(body)
+		if key != "uploadResult" {
+			var skipped json.RawMessage
+			if err := dec.Decode(&skipped); err != nil {
+				return ""
+			}
+			continue
+		}
+
+		var uploadResult struct {
+			ProjectID string `json:"projectId"`
+		}
+		if err := dec.Decode(&uploadResult); err != nil {
+			return ""
+		}
+		return parseUUID(uploadResult.ProjectID)
+	}
 }
 
 // projectIDFromMonitorURI extracts a project ID from a monitor API response URI.
@@ -210,51 +213,4 @@ func projectIDFromMonitorURI(uri string) string {
 	}
 
 	return parseUUID(uuidCandidate)
-}
-
-// extractDeeproxyProjectIDFromTruncated extracts project ID from truncated/malformed JSON.
-func extractDeeproxyProjectIDFromTruncated(body []byte) string {
-	s := string(body)
-
-	// Check for COMPLETE status
-	if !strings.Contains(strings.ToUpper(s), `"COMPLETE"`) {
-		return ""
-	}
-
-	// Find uploadResult and extract projectId/project_id
-	uploadIdx := strings.Index(s, `"uploadResult"`)
-	if uploadIdx < 0 {
-		return ""
-	}
-
-	searchFrom := uploadIdx
-	for _, fieldName := range []string{`"projectId"`, `"project_id"`} {
-		fieldIdx := strings.Index(s[searchFrom:], fieldName)
-		if fieldIdx < 0 {
-			continue
-		}
-
-		// Find the value after the field
-		valueStart := searchFrom + fieldIdx + len(fieldName)
-		colonIdx := strings.Index(s[valueStart:], ":")
-		if colonIdx < 0 || colonIdx > 10 {
-			continue
-		}
-
-		quoteIdx := strings.Index(s[valueStart+colonIdx:], `"`)
-		if quoteIdx < 0 || quoteIdx > 5 {
-			continue
-		}
-
-		uuidStart := valueStart + colonIdx + quoteIdx + 1
-		if uuidStart+37 > len(s) || s[uuidStart+36] != '"' {
-			continue
-		}
-
-		if projectID := parseUUID(s[uuidStart : uuidStart+36]); projectID != "" {
-			return projectID
-		}
-	}
-
-	return ""
 }
