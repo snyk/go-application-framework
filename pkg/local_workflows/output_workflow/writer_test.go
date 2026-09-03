@@ -93,6 +93,55 @@ func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
 	})
 }
 
+func Test_ValidateOutputConfiguration(t *testing.T) {
+	for _, output := range []string{OUTPUT_CONFIG_KEY_JSON, OUTPUT_CONFIG_KEY_SARIF, OUTPUT_CONFIG_KEY_HTML} {
+		t.Run("toon conflicts with "+output+" stdout", func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(OUTPUT_CONFIG_KEY_TOON, true)
+			config.Set(output, true)
+
+			assert.EqualError(t, ValidateOutputConfiguration(config), "toon output cannot be combined with "+output+" output")
+		})
+	}
+
+	t.Run("toon reports all stdout conflicts", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
+		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
+		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
+		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
+
+		assert.EqualError(t, ValidateOutputConfiguration(config), "toon output cannot be combined with json, sarif, html output")
+	})
+
+	t.Run("toon alone", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
+
+		assert.NoError(t, ValidateOutputConfiguration(config))
+	})
+
+	t.Run("toon with file outputs", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
+		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "output.toon")
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, "output.json")
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, "output.sarif")
+		config.Set(OUTPUT_CONFIG_KEY_HTML_FILE, "output.html")
+
+		assert.NoError(t, ValidateOutputConfiguration(config))
+	})
+
+	t.Run("existing stdout selections retain precedence", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
+		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
+		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
+
+		assert.NoError(t, ValidateOutputConfiguration(config))
+	})
+}
+
 func Test_getDefaultWriterMimeType(t *testing.T) {
 	testCases := []struct {
 		name             string

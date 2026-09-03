@@ -40,6 +40,10 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	var finalError error
 	config := invocation.GetConfiguration()
+	if err := output_workflow.ValidateOutputConfiguration(config); err != nil {
+		return output, cli.NewDataRenderingError(err.Error(), snyk_errors.WithCause(err))
+	}
+
 	debugLogger := invocation.GetEnhancedLogger()
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())

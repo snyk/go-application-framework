@@ -173,6 +173,25 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 	return writerMap
 }
 
+// ValidateOutputConfiguration rejects incompatible output selections.
+func ValidateOutputConfiguration(config configuration.Configuration) error {
+	if !config.GetBool(OUTPUT_CONFIG_KEY_TOON) {
+		return nil
+	}
+
+	var conflicts []string
+	for _, output := range []string{OUTPUT_CONFIG_KEY_JSON, OUTPUT_CONFIG_KEY_SARIF, OUTPUT_CONFIG_KEY_HTML} {
+		if config.GetBool(output) {
+			conflicts = append(conflicts, output)
+		}
+	}
+	if len(conflicts) > 0 {
+		return fmt.Errorf("%s output cannot be combined with %s output", OUTPUT_CONFIG_KEY_TOON, strings.Join(conflicts, ", "))
+	}
+
+	return nil
+}
+
 func applyTemplatesToWriters(supportedMimeTypes []MimeType2Template, writers WriterMap) map[string]*WriterEntry {
 	writerMap := map[string]*WriterEntry{}
 	for _, supported := range supportedMimeTypes {
