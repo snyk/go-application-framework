@@ -1,0 +1,5 @@
+sca[3]{id,severity,pkg,fixable}:
+  SNYK-JS-EJS-6689533,medium,ejs@1.0.0,yes
+  SNYK-JS-LODASH-1018905,high,lodash@4.17.4,no
+  SNYK-JS-QS-3153490,low,qs@0.0.6,yes
+sca_summary: 3 unique vulns (4 paths) | 1 high 1 medium 1 low | 2 fixable
