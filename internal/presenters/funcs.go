@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	htmlTemplate "html/template"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -508,6 +510,10 @@ func (c *sourceLineCache) loadFile(filePath string) []string {
 	for scanner.Scan() {
 		fileLines = append(fileLines, scanner.Text())
 	}
+	if err := scanner.Err(); err != nil {
+		c.lines[filePath] = nil
+		return nil
+	}
 
 	c.lines[filePath] = fileLines
 	return fileLines
@@ -536,7 +542,12 @@ func (c *sourceLineCache) ReadLineMarked(filePath string, line int, fromCol, toC
 
 	tc := len(fullLine)
 	if toCol != nil {
-		tc = *toCol // toCol is exclusive end
+		// from_column is 1-based start; to_column is 1-based exclusive end (SARIF-style).
+		if *toCol == *fromCol {
+			tc = fc + 1
+		} else {
+			tc = *toCol - 1
+		}
 		if tc > len(fullLine) {
 			tc = len(fullLine)
 		}
@@ -826,15 +837,49 @@ func parseHeading(line string) (string, int) {
 	return "", 0
 }
 
+func decodeHrefEntities(href string) string {
+	decoded := strings.TrimSpace(href)
+	for range 5 {
+		next := strings.TrimSpace(html.UnescapeString(decoded))
+		if next == decoded {
+			break
+		}
+		decoded = next
+	}
+	return decoded
+}
+
 func isAllowedHref(href string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(href))
-	if strings.HasPrefix(normalized, "javascript:") || strings.HasPrefix(normalized, "data:") || strings.HasPrefix(normalized, "vbscript:") {
+	decoded := decodeHrefEntities(href)
+	trimmed := strings.TrimSpace(decoded)
+	if trimmed == "" {
 		return false
 	}
-	if strings.HasPrefix(normalized, "//") {
+	if strings.HasPrefix(strings.ToLower(trimmed), "//") {
 		return false
 	}
-	return true
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme == "" {
+		return isAllowedSchemelessHref(trimmed)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https", "npm", "patch":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedSchemelessHref(href string) bool {
+	if strings.HasPrefix(href, "#") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToUpper(href), "SNYK-")
 }
 
 func applyInlineMarkdown(s string) string {

@@ -116,8 +116,11 @@ func assertNoXSSPatterns(t *testing.T, doc *html.Node) {
 				if strings.HasPrefix(attr.Key, "on") {
 					t.Errorf("XSS canary: found on* attribute %q on <%s>", attr.Key, n.Data)
 				}
-				if attr.Key == "href" && strings.HasPrefix(strings.TrimSpace(strings.ToLower(attr.Val)), "javascript:") {
-					t.Errorf("XSS canary: found javascript: href on <%s>", n.Data)
+				if attr.Key == "href" {
+					href := strings.TrimSpace(strings.ToLower(html.UnescapeString(attr.Val)))
+					if strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "data:") || strings.HasPrefix(href, "vbscript:") {
+						t.Errorf("XSS canary: found dangerous href %q on <%s>", attr.Val, n.Data)
+					}
 				}
 			}
 		}
@@ -1770,6 +1773,7 @@ func Test_HTMLTemplateFunctions(t *testing.T) {
 			name     string
 			input    string
 			contains []string
+			excludes []string
 		}{
 			{
 				name:     "heading",
@@ -1832,6 +1836,12 @@ func Test_HTMLTemplateFunctions(t *testing.T) {
 				contains: []string{"javascript:alert(1)"},
 			},
 			{
+				name:     "entity-encoded javascript link blocked",
+				input:    "[click](javascript&amp;colon;alert(1))",
+				contains: []string{"click", "javascript&amp;amp;colon;alert(1)"},
+				excludes: []string{`<a href="`},
+			},
+			{
 				name:     "protocol-relative URL blocked",
 				input:    "[click](//evil.com/phish)",
 				contains: []string{"click (//evil.com/phish)"},
@@ -1852,6 +1862,9 @@ func Test_HTMLTemplateFunctions(t *testing.T) {
 				result := string(presenters.MarkdownToHTML(tc.input))
 				for _, expected := range tc.contains {
 					assert.Contains(t, result, expected)
+				}
+				for _, unexpected := range tc.excludes {
+					assert.NotContains(t, result, unexpected)
 				}
 			})
 		}

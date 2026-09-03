@@ -1,8 +1,11 @@
 package presenters
 
 import (
+	"bytes"
+	htmlTemplate "html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -142,7 +145,7 @@ func TestReadLineMarked(t *testing.T) {
 			file:    testFileName,
 			line:    1,
 			fromCol: intPtr(1),
-			toCol:   intPtr(6),
+			toCol:   intPtr(7),
 			want:    [3]string{"", "hello ", "world"},
 		},
 		{
@@ -174,7 +177,7 @@ func TestReadLineMarked(t *testing.T) {
 			file:    testFileName,
 			line:    2,
 			fromCol: intPtr(2),
-			toCol:   intPtr(14),
+			toCol:   intPtr(15),
 			want:    [3]string{"\t", "fmt.Println(x", ")"},
 		},
 		{
@@ -209,6 +212,14 @@ func TestReadLineMarked(t *testing.T) {
 			toCol:   intPtr(100),
 			want:    [3]string{"hello ", "world", ""},
 		},
+		{
+			desc:    "SARIF exclusive end column does not include extra character",
+			file:    testFileName,
+			line:    3,
+			fromCol: intPtr(3),
+			toCol:   intPtr(6),
+			want:    [3]string{"ab", "cde", "fghij"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -230,6 +241,105 @@ func TestSourceLineCacheRejectsFilesOutsideBaseDirectory(t *testing.T) {
 	cache := newSourceLineCache([]string{baseDir})
 	assert.Empty(t, cache.ReadLine(filepath.Join("..", "outside.go"), 1))
 	assert.Empty(t, cache.ReadLine(outsideFile, 1))
+}
+
+func TestSourceLineCacheRejectsOversizedLines(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "minified.js")
+	longLine := strings.Repeat("x", 70*1024)
+	require.NoError(t, os.WriteFile(testFile, []byte(longLine+"\nsecond\n"), 0o600))
+
+	cache := newSourceLineCache([]string{tmpDir})
+	assert.Empty(t, cache.ReadLine("minified.js", 1))
+	assert.Empty(t, cache.ReadLine("minified.js", 2))
+}
+
+func TestIsAllowedHref(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		href  string
+		allow bool
+	}{
+		{desc: "https URL", href: "https://example.com", allow: true},
+		{desc: "http URL", href: "http://search.maven.org/#foo", allow: true},
+		{desc: "npm vulnerability id", href: "npm:ws:20171108", allow: true},
+		{desc: "patch vulnerability id", href: "patch:npm:hoek:20180212:1", allow: true},
+		{desc: "snyk vulnerability id without scheme", href: "SNYK-JAVA-COMMONSFILEUPLOAD-30082", allow: true},
+		{desc: "fragment only", href: "#section", allow: true},
+		{desc: "mailto URL", href: "mailto:user@example.com", allow: false},
+		{desc: "relative path", href: "./docs/page.html", allow: false},
+		{desc: "ftp URL", href: "ftp://example.com/file", allow: false},
+		{desc: "javascript scheme", href: "javascript:alert(1)", allow: false},
+		{desc: "entity-encoded javascript scheme", href: "javascript&colon;alert(1)", allow: false},
+		{desc: "double entity-encoded javascript scheme", href: "javascript&amp;colon;alert(1)", allow: false},
+		{desc: "numeric entity javascript scheme", href: "javascript&#58;alert(1)", allow: false},
+		{desc: "data scheme", href: "data:text/html,<script>alert(1)</script>", allow: false},
+		{desc: "vbscript scheme", href: "vbscript:alert(1)", allow: false},
+		{desc: "protocol-relative URL", href: "//evil.example/phish", allow: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.allow, isAllowedHref(tc.href))
+		})
+	}
+}
+
+func TestMarkdownToHTMLBlocksEncodedJavascriptLinks(t *testing.T) {
+	payloads := []string{
+		"[click](javascript&colon;alert(1))",
+		"[click](javascript&amp;colon;alert(1))",
+		"[click](javascript&#58;alert(1))",
+		"[click](javascript:alert(1))",
+	}
+
+	for _, input := range payloads {
+		result := string(MarkdownToHTML(input))
+		assert.NotContains(t, result, `<a href="javascript`)
+		assert.NotContains(t, result, `<a href="javascript&colon;`)
+		assert.NotContains(t, result, `<a href="javascript&#58;`)
+		assert.Contains(t, result, "click")
+	}
+}
+
+func TestMarkdownToHTMLAllowsSnykToHTMLLinkShapes(t *testing.T) {
+	testCases := []struct {
+		input    string
+		contains []string
+	}{
+		{
+			input:    "[maven](http://search.maven.org/#foo)",
+			contains: []string{`href="http://search.maven.org/#foo"`},
+		},
+		{
+			input:    "[ws](npm:ws:20171108)",
+			contains: []string{`href="npm:ws:20171108"`},
+		},
+		{
+			input:    "[commons-fileupload:commons-fileupload](SNYK-JAVA-COMMONSFILEUPLOAD-30082)",
+			contains: []string{`href="SNYK-JAVA-COMMONSFILEUPLOAD-30082"`},
+		},
+	}
+
+	for _, tc := range testCases {
+		result := string(MarkdownToHTML(tc.input))
+		for _, expected := range tc.contains {
+			assert.Contains(t, result, expected)
+		}
+	}
+}
+
+func TestMarkdownToHTMLInHTMLTemplateDoesNotBypassHrefSanitization(t *testing.T) {
+	tmpl := htmlTemplate.Must(htmlTemplate.New("report").Funcs(htmlTemplate.FuncMap{
+		"markdownToHTML": MarkdownToHTML,
+	}).Parse(`<div class="issue-description">{{ markdownToHTML . }}</div>`))
+
+	var buf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&buf, "[click](javascript&colon;alert(1))"))
+
+	rendered := buf.String()
+	assert.NotContains(t, rendered, `<a href="javascript`)
+	assert.Contains(t, rendered, "click")
 }
 
 func TestMarkdownToHTMLNormalizesLineEndings(t *testing.T) {
