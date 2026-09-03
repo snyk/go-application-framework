@@ -1,6 +1,9 @@
 package output_workflow
 
-import "github.com/snyk/go-application-framework/internal/presenters"
+import (
+	"github.com/snyk/go-application-framework/internal/presenters"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+)
 
 const (
 	OUTPUT_CONFIG_KEY_JSON               = "json"
@@ -9,6 +12,8 @@ const (
 	OUTPUT_CONFIG_KEY_SARIF_FILE         = "sarif-file-output"
 	OUTPUT_CONFIG_KEY_HTML               = "html"
 	OUTPUT_CONFIG_KEY_HTML_FILE          = "html-file-output"
+	OUTPUT_CONFIG_KEY_TOON               = "toon"
+	OUTPUT_CONFIG_KEY_TOON_FILE          = "toon-file-output"
 	OUTPUT_CONFIG_TEMPLATE_FILE          = "internal_template_file"
 	OUTPUT_CONFIG_KEY_FILE_WRITERS       = "internal_output_file_writers"
 	OUTPUT_CONFIG_KEY_DEFAULT_WRITER_LUT = "internal_default_writer_mimetype_lut"
@@ -18,6 +23,7 @@ const (
 	SARIF_MIME_TYPE                      = presenters.ApplicationSarifMimeType
 	JSON_MIME_TYPE                       = presenters.ApplicationJSONMimeType
 	HTML_MIME_TYPE                       = presenters.ApplicationHTMLMimeType
+	TOON_MIME_TYPE                       = content_type.TOON
 )
 
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
@@ -25,4 +31,4 @@ var DefaultTemplateFiles = presenters.DefaultTemplateFiles
 var ApplicationSarifTemplates = presenters.ApplicationSarifTemplates
 var ApplicationSarifTemplatesUfm = presenters.ApplicationSarifTemplatesUfm
 var ApplicationHTMLTemplatesUfm = presenters.ApplicationHTMLTemplatesUfm
-var structuredContent = []string{SARIF_MIME_TYPE, JSON_MIME_TYPE, HTML_MIME_TYPE}
+var structuredContent = []string{SARIF_MIME_TYPE, JSON_MIME_TYPE, HTML_MIME_TYPE, TOON_MIME_TYPE}
