@@ -138,6 +138,12 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 			[]string{},
 			true,
 		},
+		{
+			OUTPUT_CONFIG_KEY_TOON_FILE,
+			TOON_MIME_TYPE,
+			[]string{},
+			true,
+		},
 	}
 
 	// use configured file writers if available
@@ -197,6 +203,10 @@ func getDefaultWriterMimeType(config configuration.Configuration) string {
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_HTML) {
 		return HTML_MIME_TYPE
+	}
+
+	if config.GetBool(OUTPUT_CONFIG_KEY_TOON) {
+		return TOON_MIME_TYPE
 	}
 
 	return DEFAULT_MIME_TYPE

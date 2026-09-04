@@ -42,8 +42,9 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	var finalError error
 	config := invocation.GetConfiguration()
-	debugLogger := invocation.GetEnhancedLogger()
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+
+	debugLogger := invocation.GetEnhancedLogger()
 	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())
 	debugLogger.Info().Msg(writers.String())
 

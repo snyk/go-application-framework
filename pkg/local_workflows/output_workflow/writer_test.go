@@ -59,6 +59,40 @@ func Test_GetWritersFromConfiguration_HTMLFileWriter(t *testing.T) {
 	})
 }
 
+func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
+	t.Run("toon-file-output creates a TOON file writer", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
+
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
+
+		toonWriters := writerMap.PopWritersByMimetype(TOON_MIME_TYPE)
+		assert.Len(t, toonWriters, 1)
+		assert.Equal(t, OUTPUT_CONFIG_KEY_TOON_FILE, toonWriters[0].name)
+	})
+
+	t.Run("toon stdout and file output coexist", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
+		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
+
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
+
+		assert.Len(t, writerMap.PopWritersByMimetype(TOON_MIME_TYPE), 2)
+	})
+
+	t.Run("toon and HTML file output coexist", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
+		config.Set(OUTPUT_CONFIG_KEY_HTML_FILE, "/tmp/x.html")
+
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
+
+		assert.Len(t, writerMap.PopWritersByMimetype(TOON_MIME_TYPE), 1)
+		assert.Len(t, writerMap.PopWritersByMimetype(HTML_MIME_TYPE), 1)
+	})
+}
+
 func Test_getDefaultWriterMimeType(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -84,6 +118,11 @@ func Test_getDefaultWriterMimeType(t *testing.T) {
 			name:             "html",
 			configKeys:       []string{OUTPUT_CONFIG_KEY_HTML},
 			expectedMimeType: HTML_MIME_TYPE,
+		},
+		{
+			name:             "toon",
+			configKeys:       []string{OUTPUT_CONFIG_KEY_TOON},
+			expectedMimeType: TOON_MIME_TYPE,
 		},
 		{
 			name:             "sarif takes precedence over html",
