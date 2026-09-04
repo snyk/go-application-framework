@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/go-application-framework/internal/presenters/toon"
 	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -282,6 +283,49 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
 	return fnMap
+}
+
+func getToonTemplateFuncMap() template.FuncMap {
+	fnMap := template.FuncMap{}
+	fnMap["projectSCA"] = func(results []testapi.TestResult) toon.SCAView {
+		view, err := toon.ProjectSCA(results)
+		if err != nil {
+			panic(fmt.Sprintf("project SCA: %v", err))
+		}
+		return view
+	}
+	fnMap["projectSecrets"] = func(results []testapi.TestResult) toon.SecretsView {
+		view, err := toon.ProjectSecrets(results)
+		if err != nil {
+			panic(fmt.Sprintf("project secrets: %v", err))
+		}
+		return view
+	}
+	fnMap["toonTabularField"] = func(value string) string {
+		formatted, err := toon.FormatTabularField(value)
+		if err != nil {
+			panic(fmt.Sprintf("format TOON tabular field: %v", err))
+		}
+		return formatted
+	}
+	fnMap["toonScalar"] = func(value string) string {
+		formatted, err := toon.FormatScalarValue(value)
+		if err != nil {
+			panic(fmt.Sprintf("format TOON scalar: %v", err))
+		}
+		return formatted
+	}
+	fnMap["containsFindingType"] = containsFindingType
+	return fnMap
+}
+
+func containsFindingType(types []testapi.FindingType, want testapi.FindingType) bool {
+	for _, findingType := range types {
+		if findingType == want {
+			return true
+		}
+	}
+	return false
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
