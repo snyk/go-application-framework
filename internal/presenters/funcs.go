@@ -1,13 +1,19 @@
 package presenters
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"html"
 	htmlTemplate "html/template"
 	"maps"
+	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -317,13 +323,596 @@ func getUnionValue(input interface{}) interface{} {
 	return result
 }
 
-func getHTMLTemplateFuncMap() htmlTemplate.FuncMap {
+func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
+	var flows []testapi.ExecutionFlowEvidence
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, evidence := range finding.Attributes.Evidence {
+			discriminator, err := evidence.Discriminator()
+			if err != nil || discriminator != "execution_flow" {
+				continue
+			}
+			executionFlow, err := evidence.AsExecutionFlowEvidence()
+			if err == nil {
+				flows = append(flows, executionFlow)
+			}
+		}
+	}
+	return flows
+}
+
+// findingExtraLocal mirrors finding metadata after a TestResult JSON round trip.
+// Importing pkg/utils/ufm here would create an import cycle.
+type findingExtraLocal struct {
+	Arguments   []string `json:"arguments,omitempty"`
+	MessageText string   `json:"messageText,omitempty"`
+}
+
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) interface{} {
+	extras, ok := testResult.GetMetadataValue("finding-extras").(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for _, finding := range issue.GetFindings() {
+		if finding.Id == nil {
+			continue
+		}
+		extra, found := extras[finding.Id.String()]
+		if !found {
+			continue
+		}
+		if value, isMap := extra.(map[string]interface{}); isMap {
+			return findingExtraFromMap(value)
+		}
+		return extra
+	}
+	return nil
+}
+
+func findingExtraFromMap(value map[string]interface{}) findingExtraLocal {
+	extra := findingExtraLocal{}
+	if arguments, ok := value["arguments"].([]interface{}); ok {
+		extra.Arguments = make([]string, len(arguments))
+		for index, argument := range arguments {
+			extra.Arguments[index] = fmt.Sprintf("%v", argument)
+		}
+	}
+	if messageText, ok := value["messageText"].(string); ok {
+		extra.MessageText = messageText
+	}
+	return extra
+}
+
+type coverageLocal struct {
+	Files       int    `json:"files"`
+	IsSupported bool   `json:"isSupported"`
+	Lang        string `json:"lang"`
+	Type        string `json:"type"`
+}
+
+func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
+	raw := testResult.GetMetadataValue("coverage")
+	if raw == nil {
+		return nil
+	}
+
+	if values, ok := raw.([]interface{}); ok {
+		data, err := json.Marshal(values)
+		if err != nil {
+			return nil
+		}
+		var coverage []coverageLocal
+		if err := json.Unmarshal(data, &coverage); err != nil {
+			return nil
+		}
+		return coverage
+	}
+
+	return raw
+}
+
+func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, problem := range finding.Attributes.Problems {
+			discriminator, err := problem.Discriminator()
+			if err != nil || discriminator != "snyk_code_rule" {
+				continue
+			}
+			codeRule, err := problem.AsSnykCodeRuleProblem()
+			if err == nil {
+				return &codeRule
+			}
+		}
+	}
+	return nil
+}
+
+type sourceLineCache struct {
+	lines    map[string][]string
+	baseDirs []string
+}
+
+const maxSourceFileSize = 10 * 1024 * 1024 // 10 MB
+
+func newSourceLineCache(baseDirs []string) *sourceLineCache {
+	return &sourceLineCache{
+		lines:    make(map[string][]string),
+		baseDirs: baseDirs,
+	}
+}
+
+func (c *sourceLineCache) resolveFile(filePath string) string {
+	for _, base := range c.baseDirs {
+		basePath, err := filepath.Abs(base)
+		if err != nil {
+			continue
+		}
+		basePath, err = filepath.EvalSymlinks(basePath)
+		if err != nil {
+			continue
+		}
+
+		candidate := filePath
+		if !filepath.IsAbs(candidate) {
+			candidate = filepath.Join(basePath, candidate)
+		}
+		candidate, err = filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		candidate, err = filepath.EvalSymlinks(candidate)
+		if err != nil {
+			continue
+		}
+
+		relativePath, err := filepath.Rel(basePath, candidate)
+		if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+			continue
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (c *sourceLineCache) loadFile(filePath string) []string {
+	if cached, ok := c.lines[filePath]; ok {
+		return cached
+	}
+
+	resolved := c.resolveFile(filePath)
+	if resolved == "" {
+		c.lines[filePath] = nil
+		return nil
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil || info.Size() > maxSourceFileSize {
+		c.lines[filePath] = nil
+		return nil
+	}
+
+	f, err := os.Open(resolved)
+	if err != nil {
+		c.lines[filePath] = nil
+		return nil
+	}
+	defer f.Close()
+
+	var fileLines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		fileLines = append(fileLines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		c.lines[filePath] = nil
+		return nil
+	}
+
+	c.lines[filePath] = fileLines
+	return fileLines
+}
+
+func (c *sourceLineCache) ReadLine(filePath string, line int) string {
+	fileLines := c.loadFile(filePath)
+	if line < 1 || line > len(fileLines) {
+		return ""
+	}
+	return strings.TrimRight(fileLines[line-1], " \t")
+}
+
+func (c *sourceLineCache) ReadLineMarked(filePath string, line int, fromCol, toCol *int) [3]string {
+	fullLine := c.ReadLine(filePath, line)
+	if fullLine == "" || fromCol == nil {
+		return [3]string{fullLine, "", ""}
+	}
+	fc := *fromCol - 1 // convert to 0-based
+	if fc < 0 {
+		fc = 0
+	}
+	if fc > len(fullLine) {
+		fc = len(fullLine)
+	}
+
+	tc := len(fullLine)
+	if toCol != nil {
+		// from_column is 1-based start; to_column is 1-based exclusive end (SARIF-style).
+		if *toCol == *fromCol {
+			tc = fc + 1
+		} else {
+			tc = *toCol - 1
+		}
+		if tc > len(fullLine) {
+			tc = len(fullLine)
+		}
+	}
+	if tc <= fc {
+		tc = fc
+	}
+
+	return [3]string{fullLine[:fc], fullLine[fc:tc], fullLine[tc:]}
+}
+
+func resolveMessageArgs(text string, args []string) string {
+	for i, arg := range args {
+		text = strings.ReplaceAll(text, fmt.Sprintf("{%d}", i), arg)
+	}
+	return text
+}
+
+func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.FuncMap {
+	baseDirs := config.GetStringSlice(configuration.INPUT_DIRECTORY)
+	cache := newSourceLineCache(baseDirs)
+
 	fnMap := htmlTemplate.FuncMap{}
-	// render simple HTML hello world in red
-	fnMap["helloworld"] = func() htmlTemplate.HTML {
-		return htmlTemplate.HTML("<h1 style='color: red;'>Hello World</h1>")
+	fnMap["severityColor"] = SeverityColor
+	fnMap["severityLetter"] = SeverityLetter
+	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["toLowerCase"] = strings.ToLower
+	fnMap["truncateText"] = TruncateText
+	fnMap["markdownToHTML"] = MarkdownToHTML
+	fnMap["sub"] = sub
+	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
+	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
+	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
+	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
+	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
+	fnMap["readSourceLine"] = cache.ReadLine
+	fnMap["readSourceLineMarked"] = cache.ReadLineMarked
+	fnMap["resolveMessageArgs"] = resolveMessageArgs
+	fnMap["dict"] = func(pairs ...interface{}) map[string]interface{} {
+		m := make(map[string]interface{}, len(pairs)/2)
+		for i := 0; i+1 < len(pairs); i += 2 {
+			key, ok := pairs[i].(string)
+			if ok {
+				m[key] = pairs[i+1]
+			}
+		}
+		return m
+	}
+	fnMap["index3"] = func(arr [3]string, i int) string { return arr[i] }
+	fnMap["int"] = func(v interface{}) int {
+		if p, ok := v.(*int); ok && p != nil {
+			return *p
+		}
+		return toInt(v)
+	}
+	fnMap["reportTimestamp"] = func(testResults []testapi.TestResult) string {
+		for _, tr := range testResults {
+			if t := tr.GetCreatedAt(); t != nil {
+				return t.Format("January 02, 2006 15:04 UTC")
+			}
+		}
+		return time.Now().UTC().Format("January 02, 2006 15:04 UTC")
+	}
+	fnMap["getSortedIssuesDesc"] = func(summary *testapi.IssueSummary) []testapi.Issue {
+		if summary == nil {
+			return []testapi.Issue{}
+		}
+		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
+		slices.Reverse(sorting)
+		return summary.GetSortedIssues(sorting)
 	}
 	return fnMap
+}
+
+func SeverityColor(severity string) string {
+	switch strings.ToLower(severity) {
+	case "critical":
+		return "#AB1A1A"
+	case "high":
+		return "#CE5019"
+	case "medium":
+		return "#D68000"
+	case "low":
+		return "#88879E"
+	default:
+		return "#88879E"
+	}
+}
+
+func SeverityLetter(severity string) string {
+	s := strings.ToUpper(strings.TrimSpace(severity))
+	if len(s) == 0 {
+		return "?"
+	}
+	return s[:1]
+}
+
+func TruncateText(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
+var (
+	mdLinkRegexp          = regexp.MustCompile(`\[([^\]]+)\]\(((?:[^()\s]|\([^()]*\))*)\)`)
+	mdBoldRegexp          = regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	mdInlineCodeRegexp    = regexp.MustCompile("`([^`]+)`")
+	mdOrderedListRegexp   = regexp.MustCompile(`^\d+\.\s+(.*)`)
+	mdTableSeparatorRegex = regexp.MustCompile(`^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|?$`)
+)
+
+func MarkdownToHTML(input string) htmlTemplate.HTML {
+	input = strings.ReplaceAll(input, "\r\n", "\n")
+	input = strings.ReplaceAll(input, "\r", "\n")
+	escaped := htmlTemplate.HTMLEscapeString(input)
+	lines := strings.Split(escaped, "\n")
+
+	var result strings.Builder
+	inCodeBlock := false
+	listTag := ""
+	closeList := func() {
+		if listTag != "" {
+			result.WriteString("</" + listTag + ">")
+			listTag = ""
+		}
+	}
+	openList := func(tag string) {
+		if listTag != tag {
+			closeList()
+			result.WriteString("<" + tag + ">")
+			listTag = tag
+		}
+	}
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "```") {
+			closeList()
+			if inCodeBlock {
+				result.WriteString("</code></pre>")
+			} else {
+				result.WriteString("<pre><code>")
+			}
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		if inCodeBlock {
+			result.WriteString(strings.TrimRight(line, " \t"))
+			result.WriteString("\n")
+			continue
+		}
+
+		if trimmed == "" {
+			closeList()
+			continue
+		}
+
+		if isHorizontalRule(trimmed) {
+			closeList()
+			result.WriteString("<hr>")
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+			openList("ul")
+			result.WriteString("<li>")
+			result.WriteString(applyInlineMarkdown(trimmed[2:]))
+			result.WriteString("</li>")
+			continue
+		}
+
+		if m := mdOrderedListRegexp.FindStringSubmatch(trimmed); m != nil {
+			openList("ol")
+			result.WriteString("<li>")
+			result.WriteString(applyInlineMarkdown(m[1]))
+			result.WriteString("</li>")
+			continue
+		}
+
+		if isTableRow(trimmed) {
+			closeList()
+			i = renderTable(&result, lines, i)
+			continue
+		}
+
+		closeList()
+		renderBlockLine(&result, trimmed)
+	}
+
+	closeList()
+	if inCodeBlock {
+		result.WriteString("</code></pre>")
+	}
+
+	return htmlTemplate.HTML(result.String()) //nolint:gosec // input is HTML-escaped above before markdown conversion
+}
+
+func isHorizontalRule(s string) bool {
+	return s == "---" || s == "***" || s == "___"
+}
+
+func isTableRow(s string) bool {
+	return strings.HasPrefix(s, "|")
+}
+
+func parseTableCells(row string) []string {
+	row = strings.TrimSpace(row)
+	row = strings.TrimPrefix(row, "|")
+	row = strings.TrimSuffix(row, "|")
+	parts := strings.Split(row, "|")
+	cells := make([]string, 0, len(parts))
+	for _, p := range parts {
+		cells = append(cells, strings.TrimSpace(p))
+	}
+	return cells
+}
+
+func renderTable(result *strings.Builder, lines []string, startIndex int) int {
+	i := startIndex
+	headerCells := parseTableCells(lines[i])
+	i++
+
+	hasSeparator := i < len(lines) && mdTableSeparatorRegex.MatchString(strings.TrimSpace(lines[i]))
+	if hasSeparator {
+		i++
+	}
+
+	result.WriteString("<table><thead><tr>")
+	for _, cell := range headerCells {
+		result.WriteString("<th>")
+		result.WriteString(applyInlineMarkdown(cell))
+		result.WriteString("</th>")
+	}
+	result.WriteString("</tr></thead><tbody>")
+
+	for i < len(lines) && isTableRow(strings.TrimSpace(lines[i])) {
+		trimmed := strings.TrimSpace(lines[i])
+		if mdTableSeparatorRegex.MatchString(trimmed) {
+			i++
+			continue
+		}
+		cells := parseTableCells(trimmed)
+		result.WriteString("<tr>")
+		for _, cell := range cells {
+			result.WriteString("<td>")
+			result.WriteString(applyInlineMarkdown(cell))
+			result.WriteString("</td>")
+		}
+		result.WriteString("</tr>")
+		i++
+	}
+
+	result.WriteString("</tbody></table>")
+	return i - 1
+}
+
+func renderBlockLine(result *strings.Builder, trimmed string) {
+	if heading, level := parseHeading(trimmed); heading != "" {
+		tag := fmt.Sprintf("h%d", level)
+		result.WriteString("<" + tag + ">")
+		result.WriteString(applyInlineMarkdown(heading))
+		result.WriteString("</" + tag + ">")
+		return
+	}
+	result.WriteString("<p>")
+	result.WriteString(applyInlineMarkdown(trimmed))
+	result.WriteString("</p>")
+}
+
+func parseHeading(line string) (string, int) {
+	level := 0
+	for _, c := range line {
+		if c == '#' {
+			level++
+		} else {
+			break
+		}
+	}
+	if level > 0 && level <= 6 && len(line) > level && line[level] == ' ' {
+		return strings.TrimSpace(line[level+1:]), level
+	}
+	return "", 0
+}
+
+func decodeHrefEntities(href string) string {
+	decoded := strings.TrimSpace(href)
+	for range 5 {
+		next := strings.TrimSpace(html.UnescapeString(decoded))
+		if next == decoded {
+			break
+		}
+		decoded = next
+	}
+	return decoded
+}
+
+func isAllowedHref(href string) bool {
+	decoded := decodeHrefEntities(href)
+	trimmed := strings.TrimSpace(decoded)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(strings.ToLower(trimmed), "//") {
+		return false
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme == "" {
+		return isAllowedSchemelessHref(trimmed)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https", "npm", "patch":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedSchemelessHref(href string) bool {
+	if strings.HasPrefix(href, "#") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToUpper(href), "SNYK-")
+}
+
+func applyInlineMarkdown(s string) string {
+	// Extract inline code spans first and replace them with placeholders, so
+	// their content - which often contains regex-like `[...]`/`(...)` text -
+	// is never misinterpreted as markdown link or bold syntax below.
+	var codeSpans []string
+	s = mdInlineCodeRegexp.ReplaceAllStringFunc(s, func(match string) string {
+		parts := mdInlineCodeRegexp.FindStringSubmatch(match)
+		codeSpans = append(codeSpans, parts[1])
+		return fmt.Sprintf("\x00CODE_SPAN_%d\x00", len(codeSpans)-1)
+	})
+
+	s = mdLinkRegexp.ReplaceAllStringFunc(s, func(match string) string {
+		parts := mdLinkRegexp.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		text, href := parts[1], parts[2]
+		if !isAllowedHref(href) {
+			return text + " (" + href + ")"
+		}
+		return "\x00LINK_START\x00" + href + "\x00LINK_MID\x00" + text + "\x00LINK_END\x00"
+	})
+	s = mdBoldRegexp.ReplaceAllString(s, `<strong>$1</strong>`)
+	s = strings.ReplaceAll(s, "\x00LINK_START\x00", `<a href="`)
+	s = strings.ReplaceAll(s, "\x00LINK_MID\x00", `" target="_blank" rel="noopener noreferrer">`)
+	s = strings.ReplaceAll(s, "\x00LINK_END\x00", `</a>`)
+
+	for i, code := range codeSpans {
+		s = strings.ReplaceAll(s, fmt.Sprintf("\x00CODE_SPAN_%d\x00", i), "<code>"+code+"</code>")
+	}
+	return s
 }
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
