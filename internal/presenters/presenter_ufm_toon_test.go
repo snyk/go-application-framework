@@ -80,7 +80,7 @@ func TestRenderTemplate_TOON_goldens(t *testing.T) {
 			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 
 			got := bytes.TrimSuffix(writer.Bytes(), []byte("\n"))
-			assert.Equal(t, string(expected), string(got))
+			require.Equal(t, string(expected), string(got))
 		})
 	}
 }
