@@ -21,7 +21,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-//nolint:unparam // path should be kept configurable
 func loadTestResults(t *testing.T, path string) []testapi.TestResult {
 	t.Helper()
 	testResultBytes, err := os.ReadFile(path)
