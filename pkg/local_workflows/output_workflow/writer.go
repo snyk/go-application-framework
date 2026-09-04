@@ -107,11 +107,7 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 	return writer
 }
 
-func GetWritersFromConfiguration(config configuration.Configuration, outputDestination iUtils.OutputDestination) (WriterMap, error) {
-	if err := validateOutputConfiguration(config); err != nil {
-		return nil, err
-	}
-
+func GetWritersFromConfiguration(config configuration.Configuration, outputDestination iUtils.OutputDestination) WriterMap {
 	// resulting map of writers and their templates
 	writerMap := &writerMapImpl{
 		writers: map[string][]*WriterEntry{},
@@ -174,25 +170,7 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 		}
 	}
 
-	return writerMap, nil
-}
-
-func validateOutputConfiguration(config configuration.Configuration) error {
-	if !config.GetBool(OUTPUT_CONFIG_KEY_TOON) {
-		return nil
-	}
-
-	var conflicts []string
-	for _, output := range []string{OUTPUT_CONFIG_KEY_JSON, OUTPUT_CONFIG_KEY_SARIF, OUTPUT_CONFIG_KEY_HTML} {
-		if config.GetBool(output) {
-			conflicts = append(conflicts, output)
-		}
-	}
-	if len(conflicts) > 0 {
-		return fmt.Errorf("%s output cannot be combined with %s output", OUTPUT_CONFIG_KEY_TOON, strings.Join(conflicts, ", "))
-	}
-
-	return nil
+	return writerMap
 }
 
 func applyTemplatesToWriters(supportedMimeTypes []MimeType2Template, writers WriterMap) map[string]*WriterEntry {

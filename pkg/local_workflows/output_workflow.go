@@ -40,17 +40,14 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	var finalError error
 	config := invocation.GetConfiguration()
-	writers, err := output_workflow.GetWritersFromConfiguration(config, outputDestination)
-	if err != nil {
-		return output, cli.NewDataRenderingError(err.Error(), snyk_errors.WithCause(err))
-	}
+	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 
 	debugLogger := invocation.GetEnhancedLogger()
 	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())
 	debugLogger.Info().Msg(writers.String())
 
 	// Handle UFM models, if none found, continue with the rest
-	input, err = output_workflow.HandleContentTypeUnifiedModel(input, invocation, writers)
+	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, writers)
 	if err != nil {
 		finalError = errors.Join(finalError, err)
 	}

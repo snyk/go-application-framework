@@ -12,7 +12,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -207,8 +206,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
-		writers, err := GetWritersFromConfiguration(fileConfig, &stubOutputDestination{})
-		require.NoError(t, err)
+		writers := GetWritersFromConfiguration(fileConfig, &stubOutputDestination{})
 
 		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
 		assert.NoError(t, err)
@@ -242,8 +240,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		input := []workflow.Data{workflowData}
 
 		outputDestination := &stubOutputDestination{}
-		writers, err := GetWritersFromConfiguration(stdoutConfig, outputDestination)
-		require.NoError(t, err)
+		writers := GetWritersFromConfiguration(stdoutConfig, outputDestination)
 
 		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
 		assert.NoError(t, err)

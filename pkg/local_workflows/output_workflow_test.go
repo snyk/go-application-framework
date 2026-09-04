@@ -293,24 +293,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, "", setup.writer.String())
 	})
 
-	t.Run("should reject conflicting toon output configuration", func(t *testing.T) {
-		setup := setupTest(t)
-		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON, true)
-		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON, true)
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, content_type.TOON, []byte("result"))
-
-		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
-
-		assert.Equal(t, []workflow.Data{}, output)
-		require.Error(t, err)
-		errCatalogError := snyk_errors.Error{}
-		require.ErrorAs(t, err, &errCatalogError)
-		assert.Equal(t, cli.NewDataRenderingError("").ErrorCode, errCatalogError.ErrorCode)
-		assert.Equal(t, "toon output cannot be combined with json output", errCatalogError.Detail)
-		assert.Empty(t, setup.writer.String())
-	})
-
 	t.Run("should not output anything for test summary mimeType", func(t *testing.T) {
 		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
@@ -671,8 +653,7 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
 	input := []workflow.Data{randomData1, findingData, randomData2}
 
-	writers, err := output_workflow.GetWritersFromConfiguration(config, outputDestination)
-	require.NoError(t, err)
+	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 
 	// invoking method under test
 	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, writers)

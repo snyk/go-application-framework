@@ -7,7 +7,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -277,8 +276,7 @@ func Test_HandleContentTypeOther(t *testing.T) {
 		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
 
 		out := &stubOutputDestination{}
-		writers, err := GetWritersFromConfiguration(config, out)
-		require.NoError(t, err)
+		writers := GetWritersFromConfiguration(config, out)
 
 		data := workflow.NewData(workflowID, content_type.HTML, []byte(`<!doctype html><html>report</html>`))
 		remaining, err := HandleContentTypeOther([]workflow.Data{data}, ctx, writers)

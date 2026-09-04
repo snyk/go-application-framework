@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -42,8 +41,7 @@ func Test_GetWritersFromConfiguration_HTMLFileWriter(t *testing.T) {
 		config := configuration.NewWithOpts()
 		config.Set(OUTPUT_CONFIG_KEY_HTML_FILE, "/tmp/x.html")
 
-		writerMap, err := GetWritersFromConfiguration(config, &stubOutputDestination{})
-		require.NoError(t, err)
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
 
 		htmlWriters := writerMap.PopWritersByMimetype(HTML_MIME_TYPE)
 		assert.Len(t, htmlWriters, 1)
@@ -54,8 +52,7 @@ func Test_GetWritersFromConfiguration_HTMLFileWriter(t *testing.T) {
 	t.Run("html-file-output unset creates no HTML writer", func(t *testing.T) {
 		config := configuration.NewWithOpts()
 
-		writerMap, err := GetWritersFromConfiguration(config, &stubOutputDestination{})
-		require.NoError(t, err)
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
 
 		htmlWriters := writerMap.PopWritersByMimetype(HTML_MIME_TYPE)
 		assert.Empty(t, htmlWriters)
@@ -67,8 +64,7 @@ func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
 		config := configuration.NewWithOpts()
 		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
 
-		writerMap, err := GetWritersFromConfiguration(config, &stubOutputDestination{})
-		require.NoError(t, err)
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
 
 		toonWriters := writerMap.PopWritersByMimetype(TOON_MIME_TYPE)
 		assert.Len(t, toonWriters, 1)
@@ -80,8 +76,7 @@ func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
 		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
 		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
 
-		writerMap, err := GetWritersFromConfiguration(config, &stubOutputDestination{})
-		require.NoError(t, err)
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
 
 		assert.Len(t, writerMap.PopWritersByMimetype(TOON_MIME_TYPE), 2)
 	})
@@ -91,60 +86,10 @@ func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
 		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
 		config.Set(OUTPUT_CONFIG_KEY_HTML_FILE, "/tmp/x.html")
 
-		writerMap, err := GetWritersFromConfiguration(config, &stubOutputDestination{})
-		require.NoError(t, err)
+		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
 
 		assert.Len(t, writerMap.PopWritersByMimetype(TOON_MIME_TYPE), 1)
 		assert.Len(t, writerMap.PopWritersByMimetype(HTML_MIME_TYPE), 1)
-	})
-}
-
-func Test_validateOutputConfiguration(t *testing.T) {
-	for _, output := range []string{OUTPUT_CONFIG_KEY_JSON, OUTPUT_CONFIG_KEY_SARIF, OUTPUT_CONFIG_KEY_HTML} {
-		t.Run("toon conflicts with "+output+" stdout", func(t *testing.T) {
-			config := configuration.NewWithOpts()
-			config.Set(OUTPUT_CONFIG_KEY_TOON, true)
-			config.Set(output, true)
-
-			assert.EqualError(t, validateOutputConfiguration(config), "toon output cannot be combined with "+output+" output")
-		})
-	}
-
-	t.Run("toon reports all stdout conflicts", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
-		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
-		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
-		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
-
-		assert.EqualError(t, validateOutputConfiguration(config), "toon output cannot be combined with json, sarif, html output")
-	})
-
-	t.Run("toon alone", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
-
-		assert.NoError(t, validateOutputConfiguration(config))
-	})
-
-	t.Run("toon with file outputs", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
-		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "output.toon")
-		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, "output.json")
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, "output.sarif")
-		config.Set(OUTPUT_CONFIG_KEY_HTML_FILE, "output.html")
-
-		assert.NoError(t, validateOutputConfiguration(config))
-	})
-
-	t.Run("existing stdout selections retain precedence", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
-		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
-		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
-
-		assert.NoError(t, validateOutputConfiguration(config))
 	})
 }
 
