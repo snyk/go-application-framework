@@ -7,10 +7,8 @@ import (
 )
 
 // parseCreateTestPublishReport reports whether a CreateTest request body asked for
-// publish_report. Supports the Code hidden Test API (configuration.output.report)
-// and OSS/IaC/SCA flows (config.publish_report). Native monitor (config.monitor)
-// is intentionally excluded.
-func parseCreateTestPublishReport(body []byte) bool {
+// publish_report, and whether the body was read successfully.
+func parseCreateTestPublishReport(body []byte) (report bool, known bool) {
 	// Try legacy format first (OSS/IaC/SCA)
 	var legacyReq struct {
 		Data struct {
@@ -25,10 +23,10 @@ func parseCreateTestPublishReport(body []byte) bool {
 	if err := json.Unmarshal(body, &legacyReq); err == nil {
 		cfg := legacyReq.Data.Attributes.Config
 		if cfg.Monitor {
-			return false
+			return false, true
 		}
 		if cfg.PublishReport {
-			return true
+			return true, true
 		}
 	}
 
@@ -45,10 +43,10 @@ func parseCreateTestPublishReport(body []byte) bool {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &newReq); err == nil {
-		return newReq.Data.Attributes.Configuration.Output.Report
+		return newReq.Data.Attributes.Configuration.Output.Report, true
 	}
 
-	return false
+	return false, false
 }
 
 // parseCreateTestID extracts the test ID from a successful CreateTest response.

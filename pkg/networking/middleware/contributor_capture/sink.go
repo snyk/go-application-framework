@@ -9,4 +9,5 @@ import "github.com/snyk/go-application-framework/internal/contributors"
 // non-blocking.
 type Sink interface {
 	RecordEntity(entityType contributors.EntityType, entityID string)
+	RecordMiss(reason contributors.MissReason)
 }

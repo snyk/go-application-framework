@@ -179,7 +179,8 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 				require.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
-			rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
+			rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+			sink.EXPECT().RecordMiss(contributors.MissErrorStatus)
 
 			req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 			require.NoError(t, err)
@@ -228,7 +229,8 @@ func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutConte
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	sink.EXPECT().RecordMiss(contributors.MissBodyTooLarge)
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -258,7 +260,8 @@ func TestContributorCaptureMiddleware_closesUnderlyingBodyOnOversizedResponse(t 
 			Request:    req,
 		}, nil
 	})
-	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
+	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordMiss(contributors.MissBodyTooLarge)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -346,7 +349,10 @@ func TestContributorCaptureMiddleware_doesNotTruncateOversizedCreateTestRequestB
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	// The truncated peek loses the report flag, leaving us unable to say whether
+	// this test was one we should have followed.
+	sink.EXPECT().RecordMiss(contributors.MissBodyUnreadable)
 
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
 	require.NoError(t, err)
@@ -356,7 +362,37 @@ func TestContributorCaptureMiddleware_doesNotTruncateOversizedCreateTestRequestB
 	require.NoError(t, createRes.Body.Close())
 }
 
-func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenNeverCreatedWithPublishReport(t *testing.T) {
+// A test created without publish_report can never yield an entity, so neither it
+// nor the polls that follow it are capture failures. Every non-reporting scan
+// takes this path, so reporting them would drown the failures worth seeing.
+func TestContributorCaptureMiddleware_reportsNoMissForATestThatDeclinedToPublish(t *testing.T) {
+	const (
+		orgID     = "77777777-7777-4777-8777-777777777777"
+		testID    = "77777777-7777-4777-8777-777777777777"
+		projectID = "33333333-3333-4333-8333-333333333333"
+	)
+
+	server := newTestComponentsServer(t, componentsServerOpts{orgID: orgID, testID: testID, projectID: projectID})
+	// A strict mock with no expectations: any call at all fails the test.
+	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
+
+	createBody := []byte(`{"data":{"attributes":{"configuration":{"output":{"report":false}}}}}`)
+	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
+	require.NoError(t, err)
+	createRes, err := rt.RoundTrip(createReq)
+	require.NoError(t, err)
+	require.NoError(t, createRes.Body.Close())
+
+	for range 2 {
+		componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
+		require.NoError(t, err)
+		componentsRes, err := rt.RoundTrip(componentsReq)
+		require.NoError(t, err)
+		require.NoError(t, componentsRes.Body.Close())
+	}
+}
+
+func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenTheTestWasNeverCreated(t *testing.T) {
 	const (
 		orgID     = "55555555-5555-4555-8555-555555555555"
 		testID    = "55555555-5555-4555-8555-555555555555"
@@ -369,7 +405,9 @@ func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenNeverCreatedW
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
-	rt, _ := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
+	// Never having seen the create means we lost a test we should have followed.
+	sink.EXPECT().RecordMiss(contributors.MissNoEntity)
 
 	// No create-test call happened for this test ID, so it was never marked pending.
 	componentsReq, err := http.NewRequest(http.MethodGet, server.URL+"/hidden/orgs/"+orgID+"/tests/"+testID+"/components", http.NoBody)
@@ -392,6 +430,9 @@ func TestContributorCaptureMiddleware_componentsPollingSurvivesThenStopsAfterSuc
 	})
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
 	sink.EXPECT().RecordEntity(contributors.EntityTypeProject, projectID).Times(1)
+	// Polls 1-2 carry no project ID while the test is still pending. Poll 4 arrives
+	// after the capture, which is expected rather than a failure.
+	sink.EXPECT().RecordMiss(contributors.MissNoEntity).Times(2)
 
 	createBody := []byte(`{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`)
 	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/hidden/orgs/"+orgID+"/tests", bytes.NewReader(createBody))
@@ -540,7 +581,8 @@ func TestContributorCaptureMiddleware_recordsNothingWhenResponseHasNoProjectID(t
 		}, nil
 	})
 	// A junk ID should be dropped, not recorded as an empty entity.
-	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
+	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordMiss(contributors.MissNoEntity)
 
 	req, err := http.NewRequest(http.MethodPut, "https://api.snyk.io/v1/monitor/npm", http.NoBody)
 	require.NoError(t, err)
@@ -555,7 +597,8 @@ func TestContributorCaptureMiddleware_recordsNothingWhenAIBomUploadHasNoRevision
 		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Request: req}, nil
 	})
 	// A missing revision ID should be dropped too, not recorded empty.
-	rt, _ := newTestMiddleware(t, next, "https://api.snyk.io")
+	rt, sink := newTestMiddleware(t, next, "https://api.snyk.io")
+	sink.EXPECT().RecordMiss(contributors.MissNoEntity)
 
 	url := "https://api.snyk.io/rest/orgs/d5341082-085f-4458-a223-90c16aae2435/ai_boms/upload"
 	uploadBody := `{"data":{"attributes":{"repo_name":"acme/app"},"type":"ai_bom_file_upload"}}`
@@ -680,6 +723,7 @@ func panickingSink(t *testing.T) *MockSink {
 	sink.EXPECT().RecordEntity(gomock.Any(), gomock.Any()).
 		Do(func(contributors.EntityType, string) { panic("boom") }).
 		Times(1)
+	sink.EXPECT().RecordMiss(contributors.MissPanic).Times(1)
 	return sink
 }
 

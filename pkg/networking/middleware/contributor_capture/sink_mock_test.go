@@ -45,3 +45,15 @@ func (mr *MockSinkMockRecorder) RecordEntity(entityType, entityID interface{}) *
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordEntity", reflect.TypeOf((*MockSink)(nil).RecordEntity), entityType, entityID)
 }
+
+// RecordMiss mocks base method.
+func (m *MockSink) RecordMiss(reason contributors.MissReason) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RecordMiss", reason)
+}
+
+// RecordMiss indicates an expected call of RecordMiss.
+func (mr *MockSinkMockRecorder) RecordMiss(reason interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordMiss", reflect.TypeOf((*MockSink)(nil).RecordMiss), reason)
+}
