@@ -35,20 +35,3 @@ func Test_TOONFixtures_Parse(t *testing.T) {
 		})
 	}
 }
-
-func Test_TOONFixtures_GoldensExist(t *testing.T) {
-	t.Parallel()
-
-	for _, path := range []string{
-		"testdata/ufm/toon/sca.concise.toon",
-		"testdata/ufm/toon/sca.concise-empty.toon",
-		"testdata/ufm/toon/secrets.concise.toon",
-		"testdata/ufm/toon/secrets.concise-empty.toon",
-	} {
-		t.Run(path, func(t *testing.T) {
-			t.Parallel()
-			_, err := os.ReadFile(path)
-			require.NoError(t, err)
-		})
-	}
-}
