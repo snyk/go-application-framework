@@ -38,6 +38,14 @@ type IssueIgnoreDetails interface {
 	// GetIgnoredBy returns the user who created the ignore action.
 	GetIgnoredBy() *IgnoredBy
 
+	// GetReviewedOn returns when the policy rule behind this ignore was reviewed.
+	// It is nil for rules which have not been through a review.
+	GetReviewedOn() *time.Time
+
+	// GetReviewedBy returns the user who reviewed the policy rule behind this ignore.
+	// It is nil for rules which have not been through a review.
+	GetReviewedBy() *PolicyRuleReviewer
+
 	IsActive() bool
 }
 
@@ -126,6 +134,22 @@ func (id *issueIgnoreDetailsImpl) GetIgnoredBy() *IgnoredBy {
 		return nil
 	}
 	return id.ignoreData.Ignore.IgnoredBy
+}
+
+// GetReviewedOn returns when the policy rule behind this ignore was reviewed.
+func (id *issueIgnoreDetailsImpl) GetReviewedOn() *time.Time {
+	if id.ignoreData == nil || id.ignoreData.Rule == nil {
+		return nil
+	}
+	return id.ignoreData.Rule.ReviewedAt
+}
+
+// GetReviewedBy returns the user who reviewed the policy rule behind this ignore.
+func (id *issueIgnoreDetailsImpl) GetReviewedBy() *PolicyRuleReviewer {
+	if id.ignoreData == nil || id.ignoreData.Rule == nil {
+		return nil
+	}
+	return id.ignoreData.Rule.ReviewedBy
 }
 
 func (id *issueIgnoreDetailsImpl) IsActive() bool {

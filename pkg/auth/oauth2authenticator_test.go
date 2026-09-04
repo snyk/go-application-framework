@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -389,18 +392,33 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
-		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", tokenServer.URL))
+		// Redirect to a host that is valid per the CONFIG_KEY_ALLOWED_HOSTS
+		// allowlist below. The actual network call is routed to tokenServer's
+		// real address via the custom httpClient's DialContext, since
+		// "api.example.snyk.io" doesn't actually resolve.
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", "api.example.snyk.io"))
 		initialAuthServer := httptest.NewServer(mux)
 		defer initialAuthServer.Close()
 
 		config := configuration.NewWithOpts()
-		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, ".*")
+		config.Set(CONFIG_KEY_ALLOWED_HOSTS, []string{"snyk.io", "snykgov.io"})
 		config.Set(configuration.API_URL, initialAuthServer.URL)
 		config.Set(configuration.WEB_APP_URL, initialAuthServer.URL)
+
+		tokenServerAddr := tokenServer.Listener.Addr().String()
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+					var dialer net.Dialer
+					return dialer.DialContext(ctx, network, tokenServerAddr)
+				},
+			},
+		}
 
 		authenticator := NewOAuth2AuthenticatorWithOpts(
 			config,
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+			WithHttpClient(httpClient),
 		)
 
 		err := authenticator.Authenticate()
@@ -410,11 +428,34 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 	t.Run("does not redirect to invalid instance", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP)
+		config.Set(CONFIG_KEY_ALLOWED_HOSTS, constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS)
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
 		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", "api.malicioussnyk.io"))
+		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		config.Set(configuration.WEB_APP_URL, ts.URL)
+		config.Set(configuration.API_URL, ts.URL)
+		authenticator := NewOAuth2AuthenticatorWithOpts(
+			config,
+			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		)
+
+		err := authenticator.Authenticate()
+		assert.ErrorContains(t, err, "invalid host")
+	})
+
+	t.Run("does not redirect to attacker-controlled instance", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(CONFIG_KEY_ALLOWED_HOSTS, constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS)
+
+		// Create mock server for successful oauth2 flow
+		mux := http.NewServeMux()
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", "api.attacker-site.com"))
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
 
 		ts := httptest.NewServer(mux)
@@ -565,4 +606,49 @@ func Test_Authenticate_UTMSource_EmptyIntegrationName(t *testing.T) {
 
 	assert.NotContains(t, capturedURL, "utm_source",
 		"Expected utm_source to not be present when INTEGRATION_NAME is empty")
+}
+
+func Test_modifyTokenUrl(t *testing.T) {
+	newAuthenticator := func() *oAuth2Authenticator {
+		conf := configuration.NewWithOpts()
+		conf.Set(CONFIG_KEY_ALLOWED_HOSTS, constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS)
+		logger := zerolog.Nop()
+		return &oAuth2Authenticator{
+			config: conf,
+			logger: &logger,
+			oauthConfig: &oauth2.Config{
+				Endpoint: oauth2.Endpoint{TokenURL: "https://api.snyk.io/oauth2/token"},
+			},
+		}
+	}
+
+	t.Run("rewrites token url host for a valid instance", func(t *testing.T) {
+		o := newAuthenticator()
+
+		err := o.modifyTokenUrl("api.example.snyk.io")
+		require.NoError(t, err)
+
+		got, perr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
+		require.NoError(t, perr)
+		assert.Equal(t, "api.example.snyk.io", got.Host, "token url host should be rewritten to the valid instance")
+		assert.Equal(t, "/oauth2/token", got.Path, "token url path must be preserved")
+	})
+
+	t.Run("rejects an attacker-controlled instance and leaves the token url unchanged", func(t *testing.T) {
+		o := newAuthenticator()
+		original := o.oauthConfig.Endpoint.TokenURL
+
+		err := o.modifyTokenUrl("api.attacker-site.com")
+		require.ErrorContains(t, err, "invalid host")
+		assert.Equal(t, original, o.oauthConfig.Endpoint.TokenURL, "token url must not change for a rejected instance")
+	})
+
+	t.Run("empty instance is a no-op", func(t *testing.T) {
+		o := newAuthenticator()
+		original := o.oauthConfig.Endpoint.TokenURL
+
+		err := o.modifyTokenUrl("")
+		require.NoError(t, err)
+		assert.Equal(t, original, o.oauthConfig.Endpoint.TokenURL)
+	})
 }

@@ -14,7 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
@@ -216,6 +218,149 @@ func Test_InstrumentationCollector(t *testing.T) {
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
 			"password": "***",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should shape-scrub secret-shaped extension values when WithConfiguration is supplied", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("note", "Bearer abcdef123456")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"note":    "Bearer ***",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should not stack-overflow when a shape-scrubbed extension value contains a cycle", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+
+		cyclic := map[string]interface{}{"note": "Bearer abcdef123456"}
+		cyclic["self"] = cyclic
+		ic.AddExtension("cyclic", cyclic)
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+
+		extension := *actualV2InstrumentationObject.Data.Attributes.Interaction.Extension
+		cyclicResult, ok := extension["cyclic"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, "Bearer ***", cyclicResult["note"])
+		assert.Nil(t, cyclicResult["self"])
+	})
+
+	t.Run("it should not redact unrelated extension values that merely share a substring with a scrubbed secret", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("detail", "Bearer abcdef123456")
+		ic.AddExtension("note", "unrelated log message mentioning abcdef123456 in passing")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"detail":  "Bearer ***",
+			"note":    "unrelated log message mentioning abcdef123456 in passing",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should redact a static term embedded in freeform extension text without corrupting or under-redacting it", func(t *testing.T) {
+		// Extension leaves are scrubbed via ScrubValue, not Scrub: a term adjacent to `:`/`,` or
+		// fused to a digit must still be redacted verbatim, with no JSON-value quoting or digit-fusion skip.
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		cfg := configuration.NewInMemory()
+		cfg.Set(logging.REDACTION_TERMS, []string{"1000"})
+
+		ic.AddExtension("note", "port:1000,timeout:3000")
+		ic.AddExtension("adjacent", "trace id 10001234 seen")
+
+		mockExtension := map[string]interface{}{
+			"strings":  "hello world",
+			"note":     "port:***,timeout:3000",
+			"adjacent": "trace id ***1234 seen",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(cfg))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should not corrupt sibling fields when a short-form-keyed extension value is a nested object", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("p", map[string]interface{}{"nested": "obj"})
+		ic.AddExtension("tail", "keep")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"p":       map[string]interface{}{"nested": "obj"},
+			"tail":    "keep",
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(configuration.NewInMemory()))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should leave secret-shaped extension values untouched when WithConfiguration is omitted", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		ic.AddExtension("note", "Bearer abcdef123456")
+
+		mockExtension := map[string]interface{}{
+			"strings": "hello world",
+			"note":    "Bearer abcdef123456",
 		}
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension

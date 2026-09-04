@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
@@ -468,6 +469,221 @@ func TestJsonWriter(t *testing.T) {
 		assert.Equal(t, len(input), bytesWritten)
 		assert.Equal(t, input, buffer.Bytes())
 	})
+}
+
+func TestPresenterLocalFinding_ComponentReviewDetails(t *testing.T) {
+	tests := []struct {
+		name               string
+		reviewedBy         *local_models.TypesReviewer
+		reviewedOn         *string
+		expectedReviewedBy *string
+		expectedReviewedOn *string
+	}{
+		{
+			name:               "name and email renders the name only",
+			reviewedBy:         &local_models.TypesReviewer{Name: "Jane Reviewer", Email: utils.Ptr("jane@example.com")},
+			reviewedOn:         utils.Ptr("2023-02-02T10:30:00Z"),
+			expectedReviewedBy: utils.Ptr("Reviewed by: Jane Reviewer"),
+			expectedReviewedOn: utils.Ptr("Reviewed on: February 02, 2023"),
+		},
+		{
+			name:               "name only, nil email",
+			reviewedBy:         &local_models.TypesReviewer{Name: "John Reviewer", Email: nil},
+			expectedReviewedBy: utils.Ptr("Reviewed by: John Reviewer"),
+		},
+		{
+			name:               "unparsable reviewedOn is rendered verbatim",
+			reviewedOn:         utils.Ptr("not-a-timestamp"),
+			expectedReviewedOn: utils.Ptr("Reviewed on: not-a-timestamp"),
+		},
+		{
+			name: "nil reviewedBy and reviewedOn",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := sarifToLocalFinding(t, "testdata/with-ignores-with-status-accepted.json")
+			require.NoError(t, err)
+
+			suppressedCount := 0
+			for i := range input.Findings {
+				suppression := input.Findings[i].Attributes.Suppression
+				if suppression == nil || suppression.Details == nil {
+					continue
+				}
+				suppression.Details.ReviewedBy = tc.reviewedBy
+				suppression.Details.ReviewedOn = tc.reviewedOn
+				suppressedCount++
+			}
+			require.Positive(t, suppressedCount, "test fixture must contain suppressed findings with details")
+
+			lipgloss.SetColorProfile(termenv.Ascii)
+			config := configuration.NewInMemory()
+			config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+			config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
+			writer := new(bytes.Buffer)
+
+			p := presenters.NewLocalFindingsRenderer(
+				[]*local_models.LocalFinding{input},
+				config,
+				writer,
+			)
+
+			err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
+			require.NoError(t, err)
+
+			result := writer.String()
+			require.Contains(t, result, "Ignored Issues")
+
+			if tc.expectedReviewedBy != nil {
+				assert.Contains(t, result, *tc.expectedReviewedBy)
+			} else {
+				assert.NotContains(t, result, "Reviewed by:")
+			}
+
+			if tc.expectedReviewedOn != nil {
+				assert.Contains(t, result, *tc.expectedReviewedOn)
+			} else {
+				assert.NotContains(t, result, "Reviewed on:")
+			}
+
+			if tc.reviewedBy != nil && tc.reviewedBy.Email != nil {
+				assert.NotContains(t, result, *tc.reviewedBy.Email, "the plain text output must not expose the reviewer email")
+			}
+		})
+	}
+}
+
+func TestPresenterLocalFinding_SarifReviewDetails(t *testing.T) {
+	type sarifReviewedBy struct {
+		Name  *string `json:"name"`
+		Email *string `json:"email"`
+	}
+	type sarifSuppressionProperties struct {
+		ReviewedBy *sarifReviewedBy `json:"reviewedBy"`
+		ReviewedOn *string          `json:"reviewedOn"`
+	}
+	type sarifSuppression struct {
+		Properties *sarifSuppressionProperties `json:"properties"`
+	}
+	type sarifResult struct {
+		Suppressions []sarifSuppression `json:"suppressions"`
+	}
+	type sarifRun struct {
+		Results []sarifResult `json:"results"`
+	}
+	type sarifDocument struct {
+		Runs []sarifRun `json:"runs"`
+	}
+
+	tests := []struct {
+		name               string
+		reviewedBy         *local_models.TypesReviewer
+		reviewedOn         *string
+		expectedName       *string
+		expectedEmail      *string
+		expectedReviewedOn *string
+	}{
+		{
+			name:               "name, email and reviewedOn",
+			reviewedBy:         &local_models.TypesReviewer{Name: "Jane Reviewer", Email: utils.Ptr("jane@example.com")},
+			reviewedOn:         utils.Ptr("2023-02-02T10:30:00Z"),
+			expectedName:       utils.Ptr("Jane Reviewer"),
+			expectedEmail:      utils.Ptr("jane@example.com"),
+			expectedReviewedOn: utils.Ptr("2023-02-02T10:30:00Z"),
+		},
+		{
+			name:          "name only, nil email",
+			reviewedBy:    &local_models.TypesReviewer{Name: "John Reviewer", Email: nil},
+			expectedName:  utils.Ptr("John Reviewer"),
+			expectedEmail: utils.Ptr(""),
+		},
+		{
+			name:          "name with special characters",
+			reviewedBy:    &local_models.TypesReviewer{Name: `O'Brien "The Reviewer"`, Email: utils.Ptr("obrien@example.com")},
+			expectedName:  utils.Ptr(`O'Brien "The Reviewer"`),
+			expectedEmail: utils.Ptr("obrien@example.com"),
+		},
+		{
+			name:          "empty name",
+			reviewedBy:    &local_models.TypesReviewer{Name: "", Email: utils.Ptr("empty@example.com")},
+			expectedName:  utils.Ptr(""),
+			expectedEmail: utils.Ptr("empty@example.com"),
+		},
+		{
+			name:       "nil reviewedBy and reviewedOn",
+			reviewedBy: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := sarifToLocalFinding(t, "testdata/with-ignores-with-status-accepted.json")
+			require.NoError(t, err)
+
+			suppressedCount := 0
+			for i := range input.Findings {
+				suppression := input.Findings[i].Attributes.Suppression
+				if suppression == nil || suppression.Details == nil {
+					continue
+				}
+				suppression.Details.ReviewedBy = tc.reviewedBy
+				suppression.Details.ReviewedOn = tc.reviewedOn
+				suppressedCount++
+			}
+			require.Positive(t, suppressedCount, "test fixture must contain suppressed findings with details")
+
+			config := configuration.NewInMemory()
+			config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+			writer := new(bytes.Buffer)
+
+			p := presenters.NewLocalFindingsRenderer(
+				[]*local_models.LocalFinding{input},
+				config,
+				writer,
+			)
+
+			err = p.RenderTemplate(presenters.ApplicationSarifTemplates, presenters.ApplicationSarifMimeType)
+			require.NoError(t, err)
+
+			output := writer.Bytes()
+			require.True(t, json.Valid(output), "rendered SARIF must be valid JSON: %s", output)
+
+			var doc sarifDocument
+			require.NoError(t, json.Unmarshal(output, &doc))
+			require.NotEmpty(t, doc.Runs)
+
+			checked := 0
+			for _, run := range doc.Runs {
+				for _, result := range run.Results {
+					for _, suppression := range result.Suppressions {
+						require.NotNil(t, suppression.Properties)
+						checked++
+
+						if tc.expectedReviewedOn == nil {
+							assert.Nil(t, suppression.Properties.ReviewedOn)
+						} else {
+							require.NotNil(t, suppression.Properties.ReviewedOn)
+							assert.Equal(t, *tc.expectedReviewedOn, *suppression.Properties.ReviewedOn)
+						}
+
+						if tc.expectedName == nil {
+							assert.Nil(t, suppression.Properties.ReviewedBy)
+							continue
+						}
+						require.NotNil(t, suppression.Properties.ReviewedBy)
+						require.NotNil(t, suppression.Properties.ReviewedBy.Name)
+						assert.Equal(t, *tc.expectedName, *suppression.Properties.ReviewedBy.Name)
+						require.NotNil(t, suppression.Properties.ReviewedBy.Email)
+						require.NotNil(t, tc.expectedEmail)
+						assert.Equal(t, *tc.expectedEmail, *suppression.Properties.ReviewedBy.Email)
+					}
+				}
+			}
+			require.Positive(t, checked, "rendered SARIF must contain suppressions")
+		})
+	}
 }
 
 func TestSarifAutomationDetailsId(t *testing.T) {

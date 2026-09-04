@@ -1978,12 +1978,33 @@ components:
           - not-required
           - unknown
           type: string
+        reviewed_at:
+          format: date-time
+          type: string
+        reviewed_by:
+          $ref: '#/components/schemas/PolicyRuleReviewer'
       required:
       - id
       - name
       - modified
       - created
       - review
+      type: object
+    PolicyRuleReviewer:
+      properties:
+        email:
+          description: Email of the reviewer
+          type: string
+        id:
+          description: User ID of the reviewer
+          format: uuid
+          type: string
+        name:
+          description: Name of the reviewer
+          type: string
+      required:
+      - id
+      - name
       type: object
     Problem:
       description: |-
@@ -2777,6 +2798,10 @@ components:
           items:
             type: string
           type: array
+        insights:
+          allOf:
+          - $ref: '#/components/schemas/snykvulndb.VulnInsights'
+          description: Insights to be used when triaging the vulnerability.
         is_disputed:
           default: false
           description: |-
@@ -2826,6 +2851,10 @@ components:
             from typo to version change). When the vulnerability is first added, this
             field and published will be (almost) identical.
           format: date-time
+          type: string
+        module_name:
+          description: The module within the dependency.
+          example: ansi-regex
           type: string
         package_full_name:
           description: |-
@@ -2889,6 +2918,14 @@ components:
             $ref: '#/components/schemas/snykvulndb.VulnerableFunction'
           description: Known vulnerable functions in software packages.
           type: object
+        vulnerable_functions_list:
+          description: |-
+            Known vulnerable functions in software packages.
+            New version of the vulnerable_functions field to match
+            using an array in upstream services.
+          items:
+            $ref: '#/components/schemas/snykvulndb.VulnerableFunction'
+          type: array
       required:
       - source
       - id
@@ -3599,11 +3636,11 @@ components:
           description: |-
             Content present in the Upload Revision.
 
-            Currently only SBOMs and Source files are accepted
-            content types.
+            Accepted content types are SBOMs, Source files, and container analysis.
           enum:
           - sbom
           - source
+          - container_analysis
           type: string
         file_patterns:
           description: |-
@@ -4176,6 +4213,13 @@ components:
       - title
       - url
       type: object
+    snykvulndb.VulnInsights:
+      description: Insights to be used when triaging a vulnerability.
+      properties:
+        triage_advice:
+          description: Advice for triaging this vulnerability.
+          type: string
+      type: object
     snykvulndb.VulnerableFunction:
       description: Information about a function known to be vulnerable in a software
         package.
@@ -4198,6 +4242,9 @@ components:
       properties:
         class_name:
           description: Class containing the function.
+          type: string
+        file_path:
+          description: Vulnerable File Path
           type: string
         function_name:
           description: Vulnerable function name.
@@ -4427,9 +4474,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4570,9 +4619,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4692,9 +4743,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4811,9 +4864,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
