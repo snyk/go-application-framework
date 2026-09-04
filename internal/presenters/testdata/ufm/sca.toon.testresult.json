@@ -1,0 +1,210 @@
+[
+  {
+    "testId": "11111111-2222-3333-4444-555555555555",
+    "testConfiguration": {
+      "local_policy": {
+        "fail_on_upgradable": false,
+        "severity_threshold": "low",
+        "suppress_pending_ignores": false
+      },
+      "scan_config": {
+        "sca": {}
+      },
+      "timeout": {
+        "outcome": "fail",
+        "seconds": 1200
+      }
+    },
+    "createdAt": "2025-12-12T09:07:21.538667Z",
+    "executionState": "finished",
+    "passFail": "fail",
+    "outcomeReason": "policy_breach",
+    "effectiveSummary": {
+      "count": 4,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 4,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 1,
+          "medium": 2,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "rawSummary": {
+      "count": 4,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 4,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 1,
+          "medium": 2,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "findingsComplete": true,
+    "problemStore": {},
+    "_problemRefs": {},
+    "findings": [
+      {
+        "attributes": {
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000001",
+          "title": "Improper Control of Dynamically-Managed Code Resources",
+          "locations": [
+            {
+              "package": {
+                "name": "ejs",
+                "version": "1.0.0"
+              },
+              "type": "package"
+            }
+          ],
+          "problems": [
+            {
+              "created_at": "2022-01-01T00:00:00Z",
+              "credits": ["Unknown"],
+              "cvss_base_score": 5.3,
+              "id": "SNYK-JS-EJS-6689533",
+              "is_fixable": true,
+              "package_name": "ejs",
+              "severity": "medium",
+              "source": "snyk_vuln"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          }
+        },
+        "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000002",
+          "title": "Improper Control of Dynamically-Managed Code Resources",
+          "locations": [
+            {
+              "package": {
+                "name": "ejs",
+                "version": "1.0.0"
+              },
+              "type": "package"
+            }
+          ],
+          "problems": [
+            {
+              "created_at": "2022-01-01T00:00:00Z",
+              "credits": ["Unknown"],
+              "cvss_base_score": 5.3,
+              "id": "SNYK-JS-EJS-6689533",
+              "is_fixable": true,
+              "package_name": "ejs",
+              "severity": "medium",
+              "source": "snyk_vuln"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          }
+        },
+        "id": "aaaaaaab-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000003",
+          "title": "Prototype Pollution in lodash that has an extremely long title exceeding sixty characters total here",
+          "locations": [
+            {
+              "package": {
+                "name": "lodash",
+                "version": "4.17.4"
+              },
+              "type": "package"
+            }
+          ],
+          "problems": [
+            {
+              "created_at": "2022-01-01T00:00:00Z",
+              "credits": ["Unknown"],
+              "cvss_base_score": 7.3,
+              "id": "SNYK-JS-LODASH-1018905",
+              "is_fixable": false,
+              "package_name": "lodash",
+              "severity": "high",
+              "source": "snyk_vuln"
+            }
+          ],
+          "rating": {
+            "severity": "high"
+          }
+        },
+        "id": "aaaaaaac-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000004",
+          "title": "Denial of Service (DoS)",
+          "locations": [
+            {
+              "package": {
+                "name": "qs",
+                "version": "0.0.6"
+              },
+              "type": "package"
+            }
+          ],
+          "problems": [
+            {
+              "created_at": "2022-01-01T00:00:00Z",
+              "credits": ["Unknown"],
+              "cvss_base_score": 2.0,
+              "id": "SNYK-JS-QS-3153490",
+              "is_fixable": true,
+              "package_name": "qs",
+              "severity": "low",
+              "source": "snyk_vuln"
+            }
+          ],
+          "rating": {
+            "severity": "low"
+          }
+        },
+        "id": "aaaaaaad-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      }
+    ]
+  }
+]
