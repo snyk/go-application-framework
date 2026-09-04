@@ -1,0 +1,32 @@
+{{- define "main" -}}
+{{- $types := getFindingTypesFromMultipleTestResults .TestResults -}}
+{{- $wroteSCA := false -}}
+{{- if containsFindingType $types "sca" -}}
+{{- $sca := projectSCA .TestResults -}}
+{{- if gt (len $sca.Rows) 0 -}}
+sca[{{len $sca.Rows}}]{id,severity,pkg,fixable}:
+{{- range $sca.Rows }}
+  {{toonTabularField .ID}},{{toonTabularField .Severity}},{{toonTabularField .Pkg}},{{toonTabularField .Fixable}}
+{{- end }}
+{{- else -}}
+sca[0]:
+{{- end }}
+sca_summary: {{toonScalar $sca.Summary}}
+{{- $wroteSCA = true -}}
+{{- end -}}
+{{- if containsFindingType $types "secrets" -}}
+{{- $secrets := projectSecrets .TestResults -}}
+{{- if $wroteSCA }}
+
+{{- end -}}
+{{- if gt (len $secrets.Rows) 0 -}}
+secrets[{{len $secrets.Rows}}]{rule,severity,file,line}:
+{{- range $secrets.Rows }}
+  {{toonTabularField .Rule}},{{toonTabularField .Severity}},{{toonTabularField .File}},{{.Line}}
+{{- end }}
+{{- else -}}
+secrets[0]:
+{{- end }}
+secrets_summary: {{toonScalar $secrets.Summary}}
+{{- end -}}
+{{- end -}}
