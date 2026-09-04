@@ -48,41 +48,55 @@ func TestParseCreateTestPublishReport(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		body     string
-		expected bool
+		name      string
+		body      string
+		expected  bool
+		wantKnown bool
 	}{
 		{
-			name:     "new style report true",
-			body:     `{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`,
-			expected: true,
+			name:      "new style report true",
+			body:      `{"data":{"attributes":{"configuration":{"output":{"report":true}}}}}`,
+			expected:  true,
+			wantKnown: true,
 		},
 		{
-			name:     "new style report false",
-			body:     `{"data":{"attributes":{"configuration":{"output":{"report":false}}}}}`,
-			expected: false,
+			name:      "new style report false",
+			body:      `{"data":{"attributes":{"configuration":{"output":{"report":false}}}}}`,
+			expected:  false,
+			wantKnown: true,
 		},
 		{
-			name:     "legacy publish_report true",
-			body:     `{"data":{"attributes":{"config":{"publish_report":true}}}}`,
-			expected: true,
+			name:      "legacy publish_report true",
+			body:      `{"data":{"attributes":{"config":{"publish_report":true}}}}`,
+			expected:  true,
+			wantKnown: true,
 		},
 		{
-			name:     "legacy monitor only (rejected)",
-			body:     `{"data":{"attributes":{"config":{"monitor":true,"scan_config":{"sca":{}}}}}}`,
-			expected: false,
+			name:      "legacy monitor only (rejected)",
+			body:      `{"data":{"attributes":{"config":{"monitor":true,"scan_config":{"sca":{}}}}}}`,
+			expected:  false,
+			wantKnown: true,
 		},
 		{
-			name:     "invalid json",
-			body:     `{invalid}`,
-			expected: false,
+			name:      "invalid json",
+			body:      `{invalid}`,
+			expected:  false,
+			wantKnown: false,
+		},
+		{
+			name:      "truncated json",
+			body:      `{"data":{"attributes":{"configuration":{"output":{"rep`,
+			expected:  false,
+			wantKnown: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseCreateTestPublishReport([]byte(tt.body)))
+			report, known := cc.ParseCreateTestPublishReport([]byte(tt.body))
+			assert.Equal(t, tt.expected, report)
+			assert.Equal(t, tt.wantKnown, known, "an unreadable body must not read as a declined report")
 		})
 	}
 }
