@@ -124,6 +124,11 @@ type Issue interface {
 	// Returns empty string if not available.
 	GetEffectiveSeverity() string
 
+	// GetOriginalSeverity returns the severity before any policy modifications.
+	// When a policy has overridden the severity, this returns the prior value.
+	// Returns empty string if no severity override has occurred.
+	GetOriginalSeverity() string
+
 	// GetReachability returns the reachability assessment for this issue.
 	// Indicates whether vulnerable code is reachable in the application.
 	// Returns nil if reachability information is not available.
@@ -341,6 +346,7 @@ type issue struct {
 	problemID         string
 	severity          string
 	effectiveSeverity string
+	originalSeverity  string
 	cwes              []string
 	cves              []string
 	title             string
@@ -440,6 +446,11 @@ func (i *issue) GetEffectiveSeverity() string {
 	return i.severity
 }
 
+// GetOriginalSeverity returns the severity before any policy modifications.
+func (i *issue) GetOriginalSeverity() string {
+	return i.originalSeverity
+}
+
 // GetReachability returns the reachability assessment for this issue.
 func (i *issue) GetReachability() *ReachabilityEvidence {
 	return i.reachability
@@ -479,6 +490,7 @@ type issueBuilder struct {
 	id                   string
 	severity             string
 	effectiveSeverity    string
+	originalSeverity     string
 	ecosystem            string
 	title                string
 	description          string
@@ -569,15 +581,32 @@ func (b *issueBuilder) extractSeverityAndRisk(finding *FindingData) {
 	}
 }
 
-// extractEffectiveSeverity extracts effective severity from policy modifications
+// extractEffectiveSeverity extracts effective severity from policy modifications.
+// It also extracts the original (pre-policy) severity from the "prior" field of
+// the policy modification, which is used to render the snykPolicy/v1 block in
+// SARIF output (see ufm.sarif.tmpl).
+//
+// TODO(CLI-1330): The originalSeverity extraction from mod.Prior is currently
+// untested — no existing test data includes a policy_modifications entry with
+// a "prior" value. Add a test case with a severity override that includes
+// "prior": "<original severity>" to cover the snykPolicy/v1 SARIF rendering.
+// Also verify which pointer the API actually uses ("/rating/severity" per the
+// spec example vs "/attributes/rating/severity" seen in some test data).
 func (b *issueBuilder) extractEffectiveSeverity(finding *FindingData) {
 	if finding.Attributes.PolicyModifications == nil {
 		return
 	}
 	for _, mod := range *finding.Attributes.PolicyModifications {
-		if mod.Pointer == "/rating/severity" && mod.Prior != nil {
-			if b.effectiveSeverity == "" && finding.Attributes.Rating.Severity != "" {
-				b.effectiveSeverity = string(finding.Attributes.Rating.Severity)
+		isSeverityMod := mod.Pointer == "/rating/severity" || mod.Pointer == "/attributes/rating/severity"
+		if !isSeverityMod {
+			continue
+		}
+		if b.effectiveSeverity == "" && finding.Attributes.Rating.Severity != "" {
+			b.effectiveSeverity = string(finding.Attributes.Rating.Severity)
+		}
+		if b.originalSeverity == "" && mod.Prior != nil {
+			if prior, ok := (*mod.Prior).(string); ok {
+				b.originalSeverity = prior
 			}
 		}
 	}
@@ -817,6 +846,7 @@ func (b *issueBuilder) build() *issue {
 		problemID:         b.problemID,
 		severity:          b.severity,
 		effectiveSeverity: b.effectiveSeverity,
+		originalSeverity:  b.originalSeverity,
 		cwes:              b.cwes,
 		cves:              b.cves,
 		title:             b.title,
