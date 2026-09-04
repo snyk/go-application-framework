@@ -107,7 +107,11 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 	return writer
 }
 
-func GetWritersFromConfiguration(config configuration.Configuration, outputDestination iUtils.OutputDestination) WriterMap {
+func GetWritersFromConfiguration(config configuration.Configuration, outputDestination iUtils.OutputDestination) (WriterMap, error) {
+	if err := validateOutputConfiguration(config); err != nil {
+		return nil, err
+	}
+
 	// resulting map of writers and their templates
 	writerMap := &writerMapImpl{
 		writers: map[string][]*WriterEntry{},
@@ -170,11 +174,10 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 		}
 	}
 
-	return writerMap
+	return writerMap, nil
 }
 
-// ValidateOutputConfiguration rejects incompatible output selections.
-func ValidateOutputConfiguration(config configuration.Configuration) error {
+func validateOutputConfiguration(config configuration.Configuration) error {
 	if !config.GetBool(OUTPUT_CONFIG_KEY_TOON) {
 		return nil
 	}

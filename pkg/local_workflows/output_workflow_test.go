@@ -671,7 +671,8 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
 	input := []workflow.Data{randomData1, findingData, randomData2}
 
-	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+	writers, err := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+	require.NoError(t, err)
 
 	// invoking method under test
 	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, writers)
