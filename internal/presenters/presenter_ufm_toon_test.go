@@ -49,13 +49,13 @@ func TestRenderTemplate_TOON_goldens(t *testing.T) {
 			golden:  "testdata/ufm/toon/secrets.concise.toon",
 		},
 		{
-			name:   "SCA empty",
-			golden: "testdata/ufm/toon/sca.concise-empty.toon",
+			name:       "SCA empty",
+			golden:     "testdata/ufm/toon/sca.concise-empty.toon",
 			testResult: emptySCATestResults,
 		},
 		{
-			name:   "Secrets empty",
-			golden: "testdata/ufm/toon/secrets.concise-empty.toon",
+			name:       "Secrets empty",
+			golden:     "testdata/ufm/toon/secrets.concise-empty.toon",
 			testResult: emptySecretsTestResults,
 		},
 	}
@@ -80,7 +80,7 @@ func TestRenderTemplate_TOON_goldens(t *testing.T) {
 			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 
 			got := bytes.TrimSuffix(writer.Bytes(), []byte("\n"))
-			assert.Equal(t, string(expected), string(got))
+			require.Equal(t, string(expected), string(got))
 		})
 	}
 }
