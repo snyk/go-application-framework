@@ -44,18 +44,25 @@ var registries sync.Map
 
 func getFlagRegistry(config configuration.Configuration) *flagRegistry {
 	if r, ok := registries.Load(config); ok {
-		return r.(*flagRegistry)
+		if reg, ok := r.(*flagRegistry); ok {
+			return reg
+		}
 	}
 	return nil
 }
 
 func getOrCreateFlagRegistry(config configuration.Configuration) *flagRegistry {
 	if r, ok := registries.Load(config); ok {
-		return r.(*flagRegistry)
+		if reg, ok := r.(*flagRegistry); ok {
+			return reg
+		}
 	}
 	created := &flagRegistry{flags: make(map[string]struct{})}
 	actual, _ := registries.LoadOrStore(config, created)
-	return actual.(*flagRegistry)
+	if reg, ok := actual.(*flagRegistry); ok {
+		return reg
+	}
+	return created
 }
 
 func AddFeatureFlagsToConfig(
@@ -109,7 +116,10 @@ func AddFeatureFlagsToConfig(
 				return false, fmt.Errorf("check feature flags batch: %w", err)
 			}
 
-			res := result.(map[string]bool)
+			res, ok := result.(map[string]bool)
+			if !ok {
+				return false, fmt.Errorf("check feature flags batch: unexpected result type")
+			}
 			return res[flagName], nil
 		}
 		config.AddDefaultValue(configKey, callback)
