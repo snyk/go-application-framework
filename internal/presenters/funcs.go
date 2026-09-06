@@ -287,19 +287,12 @@ func getSarifTemplateFuncMap() template.FuncMap {
 
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["projectSCA"] = func(results []testapi.TestResult) toon.SCAView {
-		view, err := toon.ProjectSCA(results)
+	fnMap["projectTOONSections"] = func(results []testapi.TestResult, types []testapi.FindingType) []toon.Section {
+		sections, err := toon.ProjectSections(results, types)
 		if err != nil {
-			panic(fmt.Sprintf("project SCA: %v", err))
+			panic(fmt.Sprintf("project TOON sections: %v", err))
 		}
-		return view
-	}
-	fnMap["projectSecrets"] = func(results []testapi.TestResult) toon.SecretsView {
-		view, err := toon.ProjectSecrets(results)
-		if err != nil {
-			panic(fmt.Sprintf("project secrets: %v", err))
-		}
-		return view
+		return sections
 	}
 	fnMap["toonTabularField"] = func(value string) string {
 		formatted, err := toon.FormatTabularField(value)
@@ -315,17 +308,7 @@ func getToonTemplateFuncMap() template.FuncMap {
 		}
 		return formatted
 	}
-	fnMap["containsFindingType"] = containsFindingType
 	return fnMap
-}
-
-func containsFindingType(types []testapi.FindingType, want testapi.FindingType) bool {
-	for _, findingType := range types {
-		if findingType == want {
-			return true
-		}
-	}
-	return false
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {

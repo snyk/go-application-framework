@@ -1,32 +1,20 @@
 {{- define "main" -}}
 {{- $types := getFindingTypesFromMultipleTestResults .TestResults -}}
-{{- $wroteSCA := false -}}
-{{- if containsFindingType $types "sca" -}}
-{{- $sca := projectSCA .TestResults -}}
-{{- if gt (len $sca.Rows) 0 -}}
-sca[{{len $sca.Rows}}]{id,severity,pkg,fixable}:
-{{- range $sca.Rows }}
-  {{toonTabularField .ID}},{{toonTabularField .Severity}},{{toonTabularField .Pkg}},{{toonTabularField .Fixable}}
-{{- end }}
-{{- else -}}
-sca[0]:
-{{- end }}
-sca_summary: {{toonScalar $sca.Summary}}
-{{- $wroteSCA = true -}}
-{{- end -}}
-{{- if containsFindingType $types "secrets" -}}
-{{- $secrets := projectSecrets .TestResults -}}
-{{- if $wroteSCA }}
+{{- $sections := projectTOONSections .TestResults $types -}}
+{{- $wroteSection := false -}}
+{{- range $section := $sections -}}
+{{- if $wroteSection }}
 
 {{- end -}}
-{{- if gt (len $secrets.Rows) 0 -}}
-secrets[{{len $secrets.Rows}}]{rule,severity,file,line}:
-{{- range $secrets.Rows }}
-  {{toonTabularField .Rule}},{{toonTabularField .Severity}},{{toonTabularField .File}},{{.Line}}
+{{- if gt (len $section.Rows) 0 -}}
+{{$section.Name}}[{{len $section.Rows}}]{ {{- range $j, $col := $section.Columns -}}{{- if $j }},{{ end -}}{{$col.Name}}{{- end -}}}:
+{{- range $section.Rows }}
+  {{range $j, $value := .}}{{if $j}},{{end}}{{ $col := index $section.Columns $j }}{{if $col.Quoted}}{{toonTabularField $value}}{{else}}{{$value}}{{end}}{{end}}
 {{- end }}
 {{- else -}}
-secrets[0]:
+{{$section.Name}}[0]:
 {{- end }}
-secrets_summary: {{toonScalar $secrets.Summary}}
+{{$section.Name}}_summary: {{toonScalar $section.Summary}}
+{{- $wroteSection = true -}}
 {{- end -}}
 {{- end -}}
