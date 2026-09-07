@@ -28,10 +28,10 @@ order before rendering; never sort arrays.
 
 From the repository root:
 
-```fish
+```bash
 go test ./internal/presenters -run '^Test_UfmTOONContract$' -count=1
 
-set toon_reference (mktemp -d)
+toon_reference=$(mktemp -d)
 npm pack @toon-format/toon@4.1.1 --pack-destination "$toon_reference"
 tar -xzf "$toon_reference/toon-format-toon-4.1.1.tgz" -C "$toon_reference"
 node internal/presenters/testdata/ufm/toon/verify.mjs "$toon_reference/package/dist/index.mjs"
@@ -42,4 +42,12 @@ The checks compare UFM extraction with expected JSON, exact TOON bytes and
 strictly decoded JSON. Do not trim whitespace. The verifier rejects integers
 outside JavaScript's safe range; cover those in the template renderer tests.
 
-To regenerate, add `--write` to the Node command, review the diff and rerun both checks.
+## Regenerate
+
+After the setup above, regenerate `.toon` files from the expected `.json` files:
+
+```bash
+node internal/presenters/testdata/ufm/toon/verify.mjs "$toon_reference/package/dist/index.mjs" --write
+```
+
+This only updates `.toon` files. Review the diff and rerun both checks.
