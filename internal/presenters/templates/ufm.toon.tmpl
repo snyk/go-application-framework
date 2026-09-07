@@ -1,20 +1,2 @@
 {{- define "main" -}}
-{{- $types := getFindingTypesFromMultipleTestResults .TestResults -}}
-{{- $sections := projectTOONSections .TestResults $types -}}
-{{- $wroteSection := false -}}
-{{- range $section := $sections -}}
-{{- if $wroteSection }}
-
-{{- end -}}
-{{- if gt (len $section.Rows) 0 -}}
-{{$section.Name}}[{{len $section.Rows}}]{ {{- range $j, $col := $section.Columns -}}{{- if $j }},{{ end -}}{{$col.Name}}{{- end -}}}:
-{{- range $section.Rows }}
-  {{range $j, $value := .}}{{if $j}},{{end}}{{ $col := index $section.Columns $j }}{{if $col.Quoted}}{{toonTabularField $value}}{{else}}{{$value}}{{end}}{{end}}
-{{- end }}
-{{- else -}}
-{{$section.Name}}[0]:
-{{- end }}
-{{$section.Name}}_summary: {{toonScalar $section.Summary}}
-{{- $wroteSection = true -}}
-{{- end -}}
 {{- end -}}
