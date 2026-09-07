@@ -24,6 +24,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
 	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
+	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_HTML, false, "Print html output to console")
+	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_HTML_FILE, "", "Write html output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
@@ -40,8 +42,9 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	var finalError error
 	config := invocation.GetConfiguration()
-	debugLogger := invocation.GetEnhancedLogger()
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+
+	debugLogger := invocation.GetEnhancedLogger()
 	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())
 	debugLogger.Info().Msg(writers.String())
 

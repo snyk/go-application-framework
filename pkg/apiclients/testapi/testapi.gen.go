@@ -1986,6 +1986,9 @@ type SnykVulnProblem struct {
 	// a given version is vulnerable.
 	InitiallyFixedInVersions []string `json:"initially_fixed_in_versions"`
 
+	// Insights Insights to be used when triaging the vulnerability.
+	Insights *SnykvulndbVulnInsights `json:"insights,omitempty"`
+
 	// IsDisputed Indicates if the vulnerability is formally disputed.
 	// A vulnerability's claim (e.g., that it's a security flaw, or the scope/impact) is
 	// **disputed** when one party, often the vendor or a security professional, formally
@@ -2023,6 +2026,9 @@ type SnykVulnProblem struct {
 	// from typo to version change). When the vulnerability is first added, this
 	// field and published will be (almost) identical.
 	ModifiedAt time.Time `json:"modified_at"`
+
+	// ModuleName The module within the dependency.
+	ModuleName *string `json:"module_name,omitempty"`
 
 	// PackageFullName The full name of the vulnerable software package.
 	// It's achieved by combining the packageName and packageNamespace
@@ -2065,6 +2071,11 @@ type SnykVulnProblem struct {
 
 	// VulnerableFunctions Known vulnerable functions in software packages.
 	VulnerableFunctions *map[string]SnykvulndbVulnerableFunction `json:"vulnerable_functions,omitempty"`
+
+	// VulnerableFunctionsList Known vulnerable functions in software packages.
+	// New version of the vulnerable_functions field to match
+	// using an array in upstream services.
+	VulnerableFunctionsList *[]SnykvulndbVulnerableFunction `json:"vulnerable_functions_list,omitempty"`
 }
 
 // SnykVulnProblemSource defines model for SnykVulnProblem.Source.
@@ -2855,6 +2866,12 @@ type SnykvulndbReferenceLinks struct {
 	Url string `json:"url"`
 }
 
+// SnykvulndbVulnInsights Insights to be used when triaging a vulnerability.
+type SnykvulndbVulnInsights struct {
+	// TriageAdvice Advice for triaging this vulnerability.
+	TriageAdvice *string `json:"triage_advice,omitempty"`
+}
+
 // SnykvulndbVulnerableFunction Information about a function known to be vulnerable in a software package.
 type SnykvulndbVulnerableFunction struct {
 	// FunctionId Vulnerable function.
@@ -2868,6 +2885,9 @@ type SnykvulndbVulnerableFunction struct {
 type SnykvulndbVulnerableFunctionId struct {
 	// ClassName Class containing the function.
 	ClassName *string `json:"class_name,omitempty"`
+
+	// FilePath Vulnerable File Path
+	FilePath *string `json:"file_path,omitempty"`
 
 	// FunctionName Vulnerable function name.
 	FunctionName string `json:"function_name"`

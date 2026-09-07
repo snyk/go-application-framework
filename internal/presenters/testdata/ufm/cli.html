@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="9 open issues.">
+<title>Snyk Test Report</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{scrollbar-gutter:stable}
+body{font-family:-apple-system,BlinkMacSystemFont,avenir next,avenir,segoe ui,helvetica neue,helvetica,Ubuntu,roboto,noto,arial,sans-serif;background:#F5F5F5;color:#393842;line-height:1.5;font-size:100%}
+h1,h2,h3,h4,h5,h6{font-weight:500}
+a,a:link,a:visited{color:#4b45a9;text-decoration:none;border-bottom:1px solid #4b45a9}
+a:hover,a:focus,a:active{opacity:.8}
+a[href^="http://"]:after,a[href^="https://"]:after{background-image:linear-gradient(transparent,transparent),url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20112%20109%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%3E%3Cg%3E%3Cpath%20stroke%3D%22%234B45A9%22%20stroke-width%3D%2215%22%20d%3D%22M88.5%2021l-43%2042.5%22%20stroke-linecap%3D%22square%22%2F%3E%3Cpath%20fill%3D%22%234B45A9%22%20d%3D%22M111.2%200v50L61%200z%22%2F%3E%3C%2Fg%3E%3Cpath%20fill%3D%22%234B45A9%22%20d%3D%22M66%2015H0v94h94V44L79%2059v35H15V30h36z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");background-repeat:no-repeat;background-size:.75rem;content:"";display:inline-block;height:.75rem;margin-left:.25rem;width:.75rem}
+hr{border:none;margin:1em 0;border-top:1px solid #d3d3d9}
+code{background-color:#EEE;color:#333;padding:0.25em 0.5em;border-radius:0.25em}
+pre{font-size:14px}
+pre code{padding:10px;font-family:monospace;background-color:#393842;border-radius:4px;color:#fff;display:block;white-space:pre-wrap;overflow-x:auto}
+a code{border-radius:.125rem .125rem 0 0;padding-bottom:0;color:#4b45a9}
+.brand,.brand:link,.brand:visited{display:inline-block;border:none}
+.brand::after{background:none !important;width:0 !important;height:0 !important;content:none !important}
+.report-header{background:#030328;color:#fff;padding:20px 0}
+.report-header .header-inner{max-width:71.25rem;margin:0 auto;padding:0 20px}
+.report-header .header-top{display:flex;justify-content:space-between;align-items:flex-start}
+.report-header .brand svg{display:block}
+.report-header .brand:hover{opacity:.8}
+.report-header h1{font-size:24px;font-weight:500;margin:16px 0 12px}
+.report-header .test-meta{text-align:right;font-size:12px;opacity:.75;max-width:500px}
+.report-header .test-meta .timestamp{margin:0 0 6px}
+.report-header .meta-counts{display:flex;flex-wrap:wrap;gap:4px 0}
+.report-header .meta-count{display:inline-block;margin:0 12px 6px 0;padding-right:12px;border-right:2px solid rgba(255,255,255,.3);font-size:14px}
+.report-header .meta-count:last-child{border-right:none;padding-right:0}
+.container{max-width:71.25rem;margin:0 auto;padding:20px}.container + .container{padding-top:8px;margin-top:20px;border-top:1px solid #e8e8ec}
+.project-summary{background:#fff;border:1px solid #d3d3d9;border-left:5px solid #4B45A9;border-radius:0 4px 4px 0;margin-bottom:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.project-summary .summary-meta{padding:14px 20px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;color:#393842}
+.project-summary .meta-label{color:#727184;white-space:nowrap}
+.project-summary .meta-value{color:#393842;word-break:break-word}
+.project-summary .summary-counts{padding:14px 20px;border-top:1px solid #e8e8ec;display:grid;grid-template-columns:auto repeat(4,auto);gap:8px 6px;align-items:center}
+.project-summary .summary-counts .summary-label{font-weight:700;font-size:14px;white-space:nowrap;color:#393842}
+.project-summary .summary-counts .summary-label.ignored-label{color:#727184}
+.severity-badge{padding:4px 10px;border-radius:3px;font-size:12px;font-weight:700;color:#fff;display:inline-block;text-align:center;min-width:70px}
+.severity-badge--zero{background:transparent !important;border:1px solid #d3d3d9;color:#a0a0a0}
+.severity-badge--ignored{opacity:.55}
+.finding-type-section{margin-bottom:32px}
+.finding-type-section[open]{border-bottom:2px solid #e0e0e0}
+.finding-type-section summary{cursor:pointer;list-style:none;padding-bottom:8px}
+.finding-type-section summary::-webkit-details-marker{display:none}
+.finding-type-header{font-size:18px;font-weight:600;margin:0;color:#333;display:flex;align-items:center}
+.finding-type-header .chevron{width:1em;height:1em;margin-right:6px;flex-shrink:0;transition:transform .15s ease}
+.finding-type-header .chevron path{fill:#586069}
+.finding-type-section[open] .finding-type-header .chevron{transform:rotate(90deg)}
+.issue-card{background:#fff;border:1px solid #d3d3d9;border-radius:4px;border-top-width:4px;margin-bottom:20px;position:relative;overflow:hidden}
+.issue-card.severity--critical{border-top-color:#AB1A1A}
+.issue-card.severity--high{border-top-color:#CE5019}
+.issue-card.severity--medium{border-top-color:#D68000}
+.issue-card.severity--low{border-top-color:#88879E}
+.issue-card .card-header{padding:24px}
+.issue-card .card-header-main{display:flex;align-items:flex-start}
+.issue-card .severity-icon{flex-shrink:0;width:32px;height:32px;border-radius:4px;margin-right:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
+.issue-card h3{display:inline;font-size:22px;font-weight:600;color:#393842;vertical-align:top;margin:0}
+.issue-card .card-meta{display:flex;flex-wrap:wrap;align-items:flex-start;margin:10px 0 0;padding:0;list-style:none}
+.issue-card .card-meta-item{display:inline-block;padding-right:8px;border-right:1px solid #eee;margin-right:8px;font-size:12px;color:#727184}
+.issue-card .card-meta-item:last-child{border-right:none;padding-right:0;margin-right:0}
+.issue-card .risk-score{position:absolute;top:24px;right:24px;text-align:right}
+.issue-card .risk-score__label{font-size:11px;font-weight:700;color:#586069;text-transform:uppercase;line-height:1;margin-bottom:3px}
+.issue-card .risk-score__value{font-size:30px;font-weight:600;color:#24292e;line-height:1}
+.issue-card .card-section{padding:24px;border-top:1px solid #d3d3d9;background-color:#faf9fa}
+.issue-card .card-detail{font-size:14px;color:#586069;margin-bottom:8px}
+.issue-card .card-detail .detail-label{font-weight:600;color:#393842}
+.dep-path{margin:2px 0 2px 16px;font-size:13px}
+.dep-paths-toggle{margin:4px 0 0 0;font-size:13px}
+.dep-paths-toggle summary{cursor:pointer;color:#4b45a9;font-size:12px;margin:2px 0 2px 16px;list-style:none}
+.dep-paths-toggle summary::-webkit-details-marker{display:none}
+.dep-paths-toggle summary::before{content:"▸ "}
+.dep-paths-toggle[open] summary::before{content:"▾ "}
+.dep-paths-toggle .toggle-less{display:none}
+.dep-paths-toggle[open] .toggle-more{display:none}
+.dep-paths-toggle[open] .toggle-less{display:inline}
+.issue-card .vuln-link{margin-top:16px;font-size:13px}
+.issue-description{font-size:14px;color:#393842;margin-top:16px;line-height:1.6}
+.issue-description h2{font-size:18px;font-weight:600;margin:16px 0 8px;color:#393842}
+.issue-description h3{font-size:16px;font-weight:600;margin:14px 0 6px;color:#393842}
+.issue-description p{margin:0 0 12px}
+.issue-description ul,.issue-description ol{margin:6px 0 12px 20px}
+.issue-description li{margin:2px 0}
+.issue-description code{background:#eee;color:#333;padding:1px 4px;border-radius:3px;font-size:13px}
+.issue-description pre{margin:8px 0}
+.issue-description pre code{font-size:13px}
+.issue-description hr{border:none;border-top:1px solid #e0e0e0;margin:12px 0}
+.issue-description table{border-collapse:collapse;margin:8px 0;width:100%;border:1px solid #d3d3d9;border-radius:3px}
+.issue-description th,.issue-description td{border:1px solid #d3d3d9;padding:6px 10px;text-align:left;font-size:13px}
+.issue-description th{background:#f5f5f5;font-weight:600}
+.issue-description td{background:#fff}
+.issue-description a{color:#4b45a9}
+.issue-summary{position:relative;padding:16px 24px;border:1px solid #d3d3d9;border-left-width:4px;border-radius:2px;background-color:#fff;color:#393842;word-break:break-word;margin-top:16px}
+.issue-summary.severity--critical{border-left-color:#AB1A1A}
+.issue-summary.severity--high{border-left-color:#CE5019}
+.issue-summary.severity--medium{border-left-color:#D68000}
+.issue-summary.severity--low{border-left-color:#88879E}
+.issue-summary .issue-description{margin-top:0}
+.issue-summary .file-location{margin-top:10px;font-size:13px;color:#727184}
+.issue-summary .file-location + .file-location{margin-top:4px}
+.card-section > .issue-summary:first-child{margin-top:0}
+.issue-summary .issue-description h2{font-size:15px;margin:12px 0 6px}
+.issue-summary .issue-description h3{font-size:14px;margin:10px 0 4px}
+.issue-summary a[href^="http://"]:after,.issue-summary a[href^="https://"]:after{display:none}
+.no-issues{font-size:15px;color:#586069;padding:12px 0}
+.issue-card.ignored{opacity:.75}
+.issue-card.ignored .card-header{background:#faf9fa}
+.ignored-badge{display:inline-block;background:#727184;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;margin-left:10px;vertical-align:middle;text-transform:uppercase;letter-spacing:.5px}
+.ignore-details{background:#f0eff4;padding:16px 24px;border-top:1px solid #d3d3d9;font-size:13px;color:#586069}
+.ignore-details .ignore-detail{margin-bottom:4px}
+.ignore-details .ignore-label{font-weight:600;color:#393842;display:inline-block;min-width:100px}
+.ignored-section{margin-top:20px;padding-top:14px;border-top:1px solid #e8e8ec}
+.ignored-section-header{font-size:16px;font-weight:600;margin:0 0 12px;color:#727184}
+.dataflow{margin:16px 0 0;border-top:1px solid #e0e0e0;padding-top:12px}
+.dataflow__heading{font-size:15px;font-weight:600;color:#393842;margin:0 0 8px;display:flex;align-items:center}
+.dataflow__heading .heading-char{margin-right:6px;font-size:18px}
+.dataflow__filename{padding:6px 12px;border:1px solid #eee;border-radius:4px;margin:12px 0 6px;font-size:13px;color:#393842;background-color:#fff}
+.dataflow__item{display:flex;align-items:center;padding:4px 8px;font-family:monospace;color:#393842;font-size:14px;border:1px solid transparent;border-width:1px 0}
+.dataflow__item:hover{border-color:#eee;background-color:#fff}
+.dataflow__step{flex:0 0 30px;width:30px;text-align:right;color:#727184;font-size:12px}
+.dataflow__lineno{flex:0 0 60px;padding:0 12px 0 8px;text-align:right;color:#727184;font-size:12px}
+.dataflow__code{flex:1;font-family:monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dataflow__code .marker{padding:2px 6px;border-radius:4px;background-color:rgba(0,0,0,.1);white-space:nowrap}
+.dataflow__item:hover .marker{background-color:#ffc905}
+.dataflow__badge{padding:2px 3px;border:1px solid #d3d3d9;border-radius:2px;margin-left:8px;background-color:#f4f4f6;font-size:11px;line-height:1;font-family:sans-serif;text-transform:uppercase;color:#646374}
+.card-tab-radio{display:none}
+.card-tab-bar{display:flex;padding:6px 24px;border-top:1px solid #d3d3d9;background:#f5f5f5;gap:4px}
+.card-tab-label{padding:5px 15px;font-size:14px;cursor:pointer;border-radius:20px;border:1px solid #d3d3d9;background:#fff;transition:all .2s}
+.card-tab-label:hover{color:#4b45a1}
+.issue-card .card-tab-radio[id^="tab-df"]:checked ~ .card-section .dataflow{display:block}
+.issue-card .card-tab-radio[id^="tab-df"]:checked ~ .card-section .fix-analysis{display:none}
+.issue-card .card-tab-radio[id^="tab-df"]:checked ~ .card-tab-bar label[for^="tab-df"]{background:#4b45a1;color:#fff;border-color:#4b45a1}
+.issue-card .card-tab-radio[id^="tab-fa"]:checked ~ .card-section .fix-analysis{display:block}
+.issue-card .card-tab-radio[id^="tab-fa"]:checked ~ .card-section .dataflow{display:none}
+.issue-card .card-tab-radio[id^="tab-fa"]:checked ~ .card-tab-bar label[for^="tab-fa"]{background:#4b45a1;color:#fff;border-color:#4b45a1}
+.fix-analysis{margin:16px 0 0;border-top:1px solid #e0e0e0;padding-top:12px}
+.card-tab-bar ~ .card-section .dataflow{border-top:none;padding-top:0}
+.card-tab-bar ~ .card-section .fix-analysis{border-top:none;padding-top:0}
+.dataflow__filename:first-child{margin-top:0}
+.fix-analysis__heading{font-size:15px;font-weight:600;color:#393842;margin:0 0 8px;display:flex;align-items:center}
+.fix-analysis__heading .heading-char{margin-right:6px;font-size:18px;color:#2a7b3f}
+@media print{.report-header,.card-tab-bar{display:none}.fix-analysis,.dataflow{display:block !important}.issue-card .card-section{background:none}.marker{border:1px solid #555;background:transparent}.project-summary{border-left-color:#000;border-left-width:3px;box-shadow:none}.project-summary .severity-badge{border:1px solid #999;color:#000;background:transparent !important}}
+</style>
+</head>
+<body><header class="report-header">
+  <div class="header-inner">
+    <div class="header-top">
+      <a class="brand" href="https://snyk.io" title="Snyk - Open Source Security" target="_blank" rel="noopener noreferrer">
+        <svg width="68" height="35" viewBox="0 0 68 35" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Snyk logo">
+          <g fill="#fff" fill-rule="evenodd">
+            <path d="M5.732,27.278 C3.445,27.278 1.589,26.885 0,26.124 L0.483,22.472 C2.163,23.296 4.056,23.689 5.643,23.689 C6.801,23.689 7.563,23.295 7.563,22.599 C7.563,20.594 0.333,21.076 0.333,15.839 C0.333,12.491 3.407,10.729 7.259,10.729 C9.179,10.729 11.161,11.249 12.444,11.704 L11.924,15.294 C10.577,14.774 8.747,14.291 7.222,14.291 C6.282,14.291 5.518,14.621 5.518,15.231 C5.518,17.208 12.903,16.815 12.903,21.925 C12.903,25.325 9.877,27.277 5.733,27.277 L5.732,27.278 Z M25.726,26.936 L25.726,17.894 C25.726,15.827 24.811,14.85 23.069,14.85 C22.219,14.85 21.329,15.09 20.719,15.46 L20.719,26.936 L15.352,26.936 L15.352,11.262 L20.602,10.83 L20.474,13.392 L20.652,13.392 C21.784,11.87 23.702,10.716 25.992,10.716 C28.736,10.716 31.112,12.416 31.112,16.436 L31.112,26.936 L25.724,26.936 L25.726,26.936 Z M61.175,26.936 L56.879,19.479 L56.446,19.479 L56.446,26.935 L51.082,26.935 L51.082,8.37 L56.447,0 L56.447,17.323 C57.515,16.017 61.112,11.059 61.112,11.059 L67.732,11.059 L61.454,17.689 L67.949,26.95 L61.175,26.95 L61.175,26.938 L61.175,26.936 Z M44.13,11.11 L41.93,18.262 C41.5,19.606 41.08,22.079 41.08,22.079 C41.08,22.079 40.75,19.516 40.292,18.172 L37.94,11.108 L31.928,11.108 L38.462,26.935 C37.572,29.04 36.199,30.815 34.369,30.815 C34.039,30.815 33.709,30.802 33.389,30.765 L31.255,34.061 C31.928,34.441 33.212,34.835 34.737,34.835 C38.703,34.835 41.359,31.627 43.215,26.885 L49.443,11.108 L44.132,11.108 L44.13,11.11 Z"/>
+          </g>
+        </svg>
+      </a>
+      <div class="test-meta"><p class="timestamp">October 28, 2025 15:42 UTC</p></div>
+    </div>
+    <h1>Snyk Test Report</h1>
+  </div>
+</header>
+<main>
+<div class="container"><div class="project-summary">
+  <div class="summary-meta">
+    <span class="meta-label">Organization</span><span class="meta-value">My Org</span>
+    <span class="meta-label">Test type</span><span class="meta-value">Software Composition Analysis</span>
+    <span class="meta-label">Project path</span><span class="meta-value">test-project</span>
+    <span class="meta-label">Project</span><span class="meta-value">snyk</span>
+    <span class="meta-label">Target file</span><span class="meta-value">package.json (552 dependencies)</span>
+  </div>
+  <div class="summary-counts">
+    <span class="summary-label">Open issues: 9</span>
+    <span class="severity-badge severity-badge--zero">0 CRITICAL</span>
+    <span class="severity-badge" style="background:#CE5019">2 HIGH</span>
+    <span class="severity-badge" style="background:#D68000">6 MEDIUM</span>
+    <span class="severity-badge" style="background:#88879E">1 LOW</span>
+  </div>
+</div><section class="result-section">
+    <details class="finding-type-section" open>
+      <summary><h2 class="finding-type-header"><svg class="chevron" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M6 3l5 5-5 5z"/></svg>Open Security Issues (9)</h2></summary>
+      <div class="issue-card severity--high">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#CE5019">H</div>
+      <h3>Directory Traversal</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-ASYNC-12239908</li>
+      <li class="card-meta-item">CWE-22</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> async@3.2.4</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-config@5.2.0 &#x203A; async@3.2.4</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 3 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; async@3.2.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; async@3.2.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-nodejs-lockfile-parser@1.58.19 &#x203A; snyk-config@5.2.0 &#x203A; async@3.2.4</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--high">
+      <div class="issue-description"><h2>Overview</h2><p>Affected versions of this package are vulnerable to Directory Traversal. Async &lt;= 2.6.4 and &lt;= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function.</p><h2>Details</h2><p>A Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with &#34;dot-dot-slash (../)&#34; sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.</p><p>Directory Traversal vulnerabilities can be generally divided into two types:</p><ul><li><strong>Information Disclosure</strong>: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.</li></ul><p><code>st</code> is a module for serving static files on web pages, and contains a <a href="https://snyk.io/vuln/npm:st:20140206" target="_blank" rel="noopener noreferrer">vulnerability of this type</a>. In our example, we will serve files from the <code>public</code> route.</p><p>If an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.</p><pre><code>curl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa
+</code></pre><p><strong>Note</strong> <code>%2e</code> is the URL encoded version of <code>.</code> (dot).</p><ul><li><strong>Writing arbitrary files</strong>: Allows the attacker to create or replace existing files. This type of vulnerability is also known as <code>Zip-Slip</code>.</li></ul><p>One way to achieve this is by using a malicious <code>zip</code> archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.</p><p>The following is an example of a <code>zip</code> archive with one benign file and one malicious file. Extracting the malicious file will result in traversing out of the target folder, ending up in <code>/root/.ssh/</code> overwriting the <code>authorized_keys</code> file:</p><pre><code>2018-04-15 22:04:29 .....           19           19  good.txt
+2018-04-15 22:04:42 .....           20           20  ../../../../../../root/.ssh/authorized_keys
+</code></pre><h2>Remediation</h2><p>Upgrade <code>async</code> to version  or higher.</p><h2>References</h2><ul><li><a href="https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L41" target="_blank" rel="noopener noreferrer">Vulnerable Code</a></li><li><a href="https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L6" target="_blank" rel="noopener noreferrer">Vulnerable Code</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-ASYNC-12239908" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--high">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#CE5019">H</div>
+      <h3>Denial of Service (DoS)</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-LODASH-12239302</li>
+      <li class="card-meta-item">CWE-400</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> lodash@4.17.21</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; lodash@4.17.21</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 10 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nuget-plugin@2.12.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; @yarnpkg/core@4.4.1 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-python-plugin@3.1.2 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nuget-plugin@2.12.0 &#x203A; dotnet-deps-parser@6.1.0 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; @yarnpkg/core@4.4.1 &#x203A; lodash@4.17.21</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-nodejs-lockfile-parser@1.58.19 &#x203A; @yarnpkg/core@2.4.0 &#x203A; lodash@4.17.21</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--high">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://www.npmjs.com/package/lodash" target="_blank" rel="noopener noreferrer">lodash</a> is a modern JavaScript utility library delivering modularity, performance, &amp; extras.</p><p>Affected versions of this package are vulnerable to Denial of Service (DoS). An issue was discovered in Juju that resulted in the leak of the sensitive context ID, which allows a local unprivileged attacker to access other sensitive data or relation accessible to the local charm.</p><h2>Details</h2><p>Denial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its intended and legitimate users.</p><p>Unlike other vulnerabilities, DoS attacks usually do not aim at breaching security. Rather, they are focused on making websites and services unavailable to genuine users resulting in downtime.</p><p>One popular Denial of Service vulnerability is DDoS (a Distributed Denial of Service), an attack that attempts to clog network pipes to the system by generating a large volume of traffic from many machines.</p><p>When it comes to open source libraries, DoS vulnerabilities allow attackers to trigger such a crash or crippling of the service by using a flaw either in the application code or from the use of open source libraries.</p><p>Two common types of DoS vulnerabilities:</p><ul><li>High CPU/Memory Consumption- An attacker sending crafted requests that could cause the system to take a disproportionate amount of time to process. For example, <a href="SNYK-JAVA-COMMONSFILEUPLOAD-30082" target="_blank" rel="noopener noreferrer">commons-fileupload:commons-fileupload</a>.</li></ul><ul><li>Crash - An attacker sending crafted requests that could cause the system to crash. For Example,  <a href="https://snyk.io/vuln/npm:ws:20171108" target="_blank" rel="noopener noreferrer">npm <code>ws</code> package</a></li></ul><h2>Remediation</h2><p>Upgrade <code>lodash</code> to version  or higher.</p><h2>References</h2><ul><li><a href="https://www.cve.org/CVERecord?id=CVE-2024-6984" target="_blank" rel="noopener noreferrer">AAAA</a></li><li><a href="https://github.com/juju/juju/security/advisories/GHSA-6vjm-54vp-mxhx" target="_blank" rel="noopener noreferrer">GitHub Advisory</a></li><li><a href="https://github.com/juju/juju/commit/da929676853092a29ddf8d589468cf85ba3efaf2" target="_blank" rel="noopener noreferrer">GitHub Commit</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-LODASH-12239302" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Arbitrary Code Injection</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-COOKIE-13271683</li>
+      <li class="card-meta-item">CWE-74</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> cookie@0.4.2</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @sentry/node@7.34.0 &#x203A; cookie@0.4.2</div>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p>Affected versions of this package are vulnerable to Arbitrary Code Injection cookie is a basic HTTP cookie parser and serializer for HTTP servers. The cookie name could be used to set other fields of the cookie, resulting in an unexpected cookie value. A similar escape can be used for path and domain, which could be abused to alter other fields of the cookie. Upgrade to 0.7.0, which updates the validation for name, path, and domain.</p><h2>Remediation</h2><p>Upgrade <code>cookie</code> to version 1.0.0 or higher.</p><h2>References</h2><ul><li><a href="https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x" target="_blank" rel="noopener noreferrer">GitHub Advisory</a></li><li><a href="https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c" target="_blank" rel="noopener noreferrer">GitHub Commit</a></li><li><a href="https://github.com/jshttp/cookie/pull/167" target="_blank" rel="noopener noreferrer">GitHub PR</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-COOKIE-13271683" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Regular Expression Denial of Service (ReDoS)</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-DEBUG-13283909</li>
+      <li class="card-meta-item">CWE-1333</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> debug@4.3.4</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; debug@4.3.4</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 40 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/snyk-hex-plugin@2.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-cpp-plugin@2.24.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-go-plugin@1.23.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-gradle-plugin@5.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-module@3.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-mvn-plugin@4.3.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nuget-plugin@2.12.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-sbt-plugin@3.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @sentry/node@7.34.0 &#x203A; https-proxy-agent@5.0.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-pipenv-pipfile@0.7.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-poetry@0.9.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; docker-modem@3.0.8 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-python-plugin@3.1.2 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-module@3.3.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @sentry/node@7.34.0 &#x203A; https-proxy-agent@5.0.1 &#x203A; agent-base@6.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-pipenv-pipfile@0.7.1 &#x203A; @snyk/child-process@0.4.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-poetry@0.9.1 &#x203A; @snyk/child-process@0.4.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-nodejs-lockfile-parser@1.58.19 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; @snyk/rpm-parser@3.4.0 &#x203A; debug@4.4.1</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; debug@4.4.3</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://github.com/visionmedia/debug" target="_blank" rel="noopener noreferrer">debug</a> is a small debugging utility.</p><p>Affected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test</p><h2>Details</h2><p>Denial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.</p><p>The Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren&#39;t very intuitive and can ultimately end up making it easy for attackers to take your site down.</p><p>Let’s take the following regular expression as an example:</p><pre><code>regex = /A(B|C+)+D/
+</code></pre><p>This regular expression accomplishes the following:</p><ul><li><code>A</code> The string must start with the letter &#39;A&#39;</li><li><code>(B|C+)+</code> The string must then follow the letter A with either the letter &#39;B&#39; or some number of occurrences of the letter &#39;C&#39; (the <code>+</code> matches one or more times). The <code>+</code> at the end of this section states that we can look for one or more matches of this section.</li><li><code>D</code> Finally, we ensure this section of the string ends with a &#39;D&#39;</li></ul><p>The expression would match inputs such as <code>ABBD</code>, <code>ABCCCCD</code>, <code>ABCBCCCD</code> and <code>ACCCCCD</code></p><p>It most cases, it doesn&#39;t take very long for a regex engine to find a match:</p><pre><code>$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD&#34;)&#39;
+0.04s user 0.01s system 95% cpu 0.052 total
+
+$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX&#34;)&#39;
+1.79s user 0.02s system 99% cpu 1.812 total
+</code></pre><p>The entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.</p><p>Most Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.</p><p>Let&#39;s look at how our expression runs into this problem, using a shorter string: &#34;ACCCX&#34;. While it seems fairly straightforward, there are still four different ways that the engine could match those three C&#39;s:</p><ol><li>CCC</li><li>CC+C</li><li>C+CC</li><li>C+C+C.</li></ol><p>The engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use <a href="https://regex101.com/debugger" target="_blank" rel="noopener noreferrer">RegEx 101 debugger</a> to see the engine has to take a total of 38 steps before it can determine the string doesn&#39;t match.</p><p>From there, the number of steps the engine must use to validate a string just continues to grow.</p><table><thead><tr><th>String</th><th>Number of C&#39;s</th><th>Number of steps</th></tr></thead><tbody><tr><td>ACCCX</td><td>3</td><td>38</td></tr><tr><td>ACCCCX</td><td>4</td><td>71</td></tr><tr><td>ACCCCCX</td><td>5</td><td>136</td></tr><tr><td>ACCCCCCCCCCCCCCX</td><td>14</td><td>65,553</td></tr></tbody></table><p>By the time the string includes 14 C&#39;s, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.</p><h2>Remediation</h2><p>A fix was pushed into the <code>master</code> branch but not yet published.</p><h2>References</h2><ul><li><a href="https://github.com/debug-js/debug/issues/957#issuecomment-2523030187" target="_blank" rel="noopener noreferrer">GitHub Issue</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-DEBUG-13283909" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-DEBUG-14214893</li>
+      <li class="card-meta-item">CWE-109</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> debug@4.3.4</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; debug@4.3.4</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 40 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/snyk-hex-plugin@2.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-cpp-plugin@2.24.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-go-plugin@1.23.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-gradle-plugin@5.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-module@3.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-mvn-plugin@4.3.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nuget-plugin@2.12.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-sbt-plugin@3.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @sentry/node@7.34.0 &#x203A; https-proxy-agent@5.0.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-pipenv-pipfile@0.7.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-poetry@0.9.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; docker-modem@3.0.8 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-python-plugin@3.1.2 &#x203A; snyk-poetry-lockfile-parser@1.9.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-policy@4.1.6 &#x203A; snyk-module@3.3.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @sentry/node@7.34.0 &#x203A; https-proxy-agent@5.0.1 &#x203A; agent-base@6.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-pipenv-pipfile@0.7.1 &#x203A; @snyk/child-process@0.4.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/fix@1.0.0-monorepo &#x203A; @snyk/fix-poetry@0.9.1 &#x203A; @snyk/child-process@0.4.1 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-nodejs-lockfile-parser@1.58.19 &#x203A; snyk-config@5.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-module@3.2.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-resolve-deps@4.9.1 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-resolve@1.1.0 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-resolve-deps@4.8.0 &#x203A; snyk-try-require@2.0.2 &#x203A; debug@4.3.4</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; @snyk/rpm-parser@3.4.0 &#x203A; debug@4.4.1</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; debug@4.4.3</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://github.com/visionmedia/debug" target="_blank" rel="noopener noreferrer">debug</a> is a small debugging utility.</p><p>Affected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None</p><h2>Remediation</h2><p>There is no fixed version for <code>debug</code>.</p><h2>References</h2><ul><li><a href="https://github.com/debug-js/debug/issues/957" target="_blank" rel="noopener noreferrer">GitHub Issue</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-DEBUG-14214893" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Open Redirect</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-GOT-2932019</li>
+      <li class="card-meta-item">CWE-601</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> got@11.8.2</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; @yarnpkg/core@4.4.1 &#x203A; got@11.8.2</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 2 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; snyk-nodejs-lockfile-parser@2.3.1 &#x203A; @yarnpkg/core@4.4.1 &#x203A; got@11.8.2</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-nodejs-plugin@1.4.4 &#x203A; snyk-nodejs-lockfile-parser@1.58.19 &#x203A; @yarnpkg/core@2.4.0 &#x203A; got@11.8.2</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p>Affected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.</p><h2>Remediation</h2><p>Upgrade <code>got</code> to version 11.8.5, 12.1.0 or higher.</p><h2>References</h2><ul><li><a href="https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0" target="_blank" rel="noopener noreferrer">GitHub Diff</a></li><li><a href="https://github.com/sindresorhus/got/pull/2047" target="_blank" rel="noopener noreferrer">GitHub PR</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-GOT-2932019" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Regular Expression Denial of Service (ReDoS)</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-MARKED-2342073</li>
+      <li class="card-meta-item">CWE-1333</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item" style="color:#AB1A1A;font-weight:600">Reachable</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> marked@4.0.1</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; marked@4.0.1</div>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://marked.js.org/" target="_blank" rel="noopener noreferrer">marked</a> is a low-level compiler for parsing markdown without caching or blocking for long periods of time.</p><p>Affected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when passing unsanitized user input to <code>inline.reflinkSearch</code>, if it is not being parsed by a time-limited worker thread.</p><h2>PoC</h2><pre><code>import * as marked from &#39;marked&#39;;
+
+console.log(marked.parse(`[x]: x
+
+\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](\\[\\](`));
+</code></pre><h2>Details</h2><p>Denial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.</p><p>The Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren&#39;t very intuitive and can ultimately end up making it easy for attackers to take your site down.</p><p>Let’s take the following regular expression as an example:</p><pre><code>regex = /A(B|C+)+D/
+</code></pre><p>This regular expression accomplishes the following:</p><ul><li><code>A</code> The string must start with the letter &#39;A&#39;</li><li><code>(B|C+)+</code> The string must then follow the letter A with either the letter &#39;B&#39; or some number of occurrences of the letter &#39;C&#39; (the <code>+</code> matches one or more times). The <code>+</code> at the end of this section states that we can look for one or more matches of this section.</li><li><code>D</code> Finally, we ensure this section of the string ends with a &#39;D&#39;</li></ul><p>The expression would match inputs such as <code>ABBD</code>, <code>ABCCCCD</code>, <code>ABCBCCCD</code> and <code>ACCCCCD</code></p><p>It most cases, it doesn&#39;t take very long for a regex engine to find a match:</p><pre><code>$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD&#34;)&#39;
+0.04s user 0.01s system 95% cpu 0.052 total
+
+$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX&#34;)&#39;
+1.79s user 0.02s system 99% cpu 1.812 total
+</code></pre><p>The entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.</p><p>Most Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.</p><p>Let&#39;s look at how our expression runs into this problem, using a shorter string: &#34;ACCCX&#34;. While it seems fairly straightforward, there are still four different ways that the engine could match those three C&#39;s:</p><ol><li>CCC</li><li>CC+C</li><li>C+CC</li><li>C+C+C.</li></ol><p>The engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use <a href="https://regex101.com/debugger" target="_blank" rel="noopener noreferrer">RegEx 101 debugger</a> to see the engine has to take a total of 38 steps before it can determine the string doesn&#39;t match.</p><p>From there, the number of steps the engine must use to validate a string just continues to grow.</p><table><thead><tr><th>String</th><th>Number of C&#39;s</th><th>Number of steps</th></tr></thead><tbody><tr><td>ACCCX</td><td>3</td><td>38</td></tr><tr><td>ACCCCX</td><td>4</td><td>71</td></tr><tr><td>ACCCCCX</td><td>5</td><td>136</td></tr><tr><td>ACCCCCCCCCCCCCCX</td><td>14</td><td>65,553</td></tr></tbody></table><p>By the time the string includes 14 C&#39;s, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.</p><h2>Remediation</h2><p>Upgrade <code>marked</code> to version 4.0.10 or higher.</p><h2>References</h2><ul><li><a href="https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0" target="_blank" rel="noopener noreferrer">GitHub Commit</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-MARKED-2342073" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--medium">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#D68000">M</div>
+      <h3>Regular Expression Denial of Service (ReDoS)</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-MARKED-2342082</li>
+      <li class="card-meta-item">CWE-1333</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item" style="color:#AB1A1A;font-weight:600">Reachable</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> marked@4.0.1</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; marked@4.0.1</div>
+    </div>
+    <div class="issue-summary severity--medium">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://marked.js.org/" target="_blank" rel="noopener noreferrer">marked</a> is a low-level compiler for parsing markdown without caching or blocking for long periods of time.</p><p>Affected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when unsanitized user input is passed to <code>block.def</code>.</p><h2>PoC</h2><pre><code>import * as marked from &#34;marked&#34;;
+marked.parse(`[x]:${&#39; &#39;.repeat(1500)}x ${&#39; &#39;.repeat(1500)} x`);
+</code></pre><h2>Details</h2><p>Denial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.</p><p>The Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren&#39;t very intuitive and can ultimately end up making it easy for attackers to take your site down.</p><p>Let’s take the following regular expression as an example:</p><pre><code>regex = /A(B|C+)+D/
+</code></pre><p>This regular expression accomplishes the following:</p><ul><li><code>A</code> The string must start with the letter &#39;A&#39;</li><li><code>(B|C+)+</code> The string must then follow the letter A with either the letter &#39;B&#39; or some number of occurrences of the letter &#39;C&#39; (the <code>+</code> matches one or more times). The <code>+</code> at the end of this section states that we can look for one or more matches of this section.</li><li><code>D</code> Finally, we ensure this section of the string ends with a &#39;D&#39;</li></ul><p>The expression would match inputs such as <code>ABBD</code>, <code>ABCCCCD</code>, <code>ABCBCCCD</code> and <code>ACCCCCD</code></p><p>It most cases, it doesn&#39;t take very long for a regex engine to find a match:</p><pre><code>$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD&#34;)&#39;
+0.04s user 0.01s system 95% cpu 0.052 total
+
+$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX&#34;)&#39;
+1.79s user 0.02s system 99% cpu 1.812 total
+</code></pre><p>The entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.</p><p>Most Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.</p><p>Let&#39;s look at how our expression runs into this problem, using a shorter string: &#34;ACCCX&#34;. While it seems fairly straightforward, there are still four different ways that the engine could match those three C&#39;s:</p><ol><li>CCC</li><li>CC+C</li><li>C+CC</li><li>C+C+C.</li></ol><p>The engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use <a href="https://regex101.com/debugger" target="_blank" rel="noopener noreferrer">RegEx 101 debugger</a> to see the engine has to take a total of 38 steps before it can determine the string doesn&#39;t match.</p><p>From there, the number of steps the engine must use to validate a string just continues to grow.</p><table><thead><tr><th>String</th><th>Number of C&#39;s</th><th>Number of steps</th></tr></thead><tbody><tr><td>ACCCX</td><td>3</td><td>38</td></tr><tr><td>ACCCCX</td><td>4</td><td>71</td></tr><tr><td>ACCCCCX</td><td>5</td><td>136</td></tr><tr><td>ACCCCCCCCCCCCCCX</td><td>14</td><td>65,553</td></tr></tbody></table><p>By the time the string includes 14 C&#39;s, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.</p><h2>Remediation</h2><p>Upgrade <code>marked</code> to version 4.0.10 or higher.</p><h2>References</h2><ul><li><a href="https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0" target="_blank" rel="noopener noreferrer">GitHub Commit</a></li><li><a href="https://github.com/markedjs/marked/releases/tag/v4.0.10" target="_blank" rel="noopener noreferrer">GitHub Release</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-MARKED-2342082" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+      <div class="issue-card severity--low">
+  <div class="card-header">
+    <div class="card-header-main">
+      <div class="severity-icon" style="background:#88879E">L</div>
+      <h3>Regular Expression Denial of Service (ReDoS)</h3>
+    </div>
+    <ul class="card-meta">
+      <li class="card-meta-item">SNYK-JS-BRACEEXPANSION-9789073</li>
+      <li class="card-meta-item">CWE-1333</li>
+      <li class="card-meta-item">Security</li>
+      <li class="card-meta-item">No Path Found</li>
+    </ul>
+  </div>
+  <div class="card-section">
+    <div class="card-detail"><span class="detail-label">Vulnerable module:</span> brace-expansion@1.1.11</div>
+    <div class="card-detail"><span class="detail-label">Introduced through:</span>
+      <div class="dep-path">snyk@1.0.0-monorepo &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+      <details class="dep-paths-toggle">
+        <summary><span class="toggle-more">Show 7 more paths</span><span class="toggle-less">Show less</span></summary>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-docker-plugin@8.8.1 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; @snyk/code-client@4.23.5 &#x203A; multimatch@5.0.0 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; rimraf@2.7.1 &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-mvn-plugin@4.3.2 &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-sbt-plugin@3.1.0 &#x203A; tmp@0.1.0 &#x203A; rimraf@2.7.1 &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-go-plugin@1.23.0 &#x203A; tmp@0.2.1 &#x203A; rimraf@3.0.2 &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+        <div class="dep-path">snyk@1.0.0-monorepo &#x203A; snyk-gradle-plugin@5.1.0 &#x203A; tmp@0.2.1 &#x203A; rimraf@3.0.2 &#x203A; glob@7.2.3 &#x203A; minimatch@3.1.2 &#x203A; brace-expansion@1.1.11</div>
+      </details>
+    </div>
+    <div class="issue-summary severity--low">
+      <div class="issue-description"><h2>Overview</h2><p><a href="https://github.com/juliangruber/brace-expansion" target="_blank" rel="noopener noreferrer">brace-expansion</a> is a Brace expansion as known from sh/bash</p><p>Affected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) in the <code>expand()</code> function, which is prone to catastrophic backtracking on very long malicious inputs.</p><h2>PoC</h2><pre><code>import index from &#34;./index.js&#34;;
+
+let str = &#34;{a}&#34; + &#34;,&#34;.repeat(100000) + &#34;\u0000&#34;;
+
+let startTime = performance.now();
+
+const result = index(str);
+
+let endTime = performance.now();
+
+let timeTaken = endTime - startTime;
+
+console.log(`匹配耗时: ${timeTaken.toFixed(3)} 毫秒`);
+</code></pre><h2>Details</h2><p>Denial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.</p><p>The Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren&#39;t very intuitive and can ultimately end up making it easy for attackers to take your site down.</p><p>Let’s take the following regular expression as an example:</p><pre><code>regex = /A(B|C+)+D/
+</code></pre><p>This regular expression accomplishes the following:</p><ul><li><code>A</code> The string must start with the letter &#39;A&#39;</li><li><code>(B|C+)+</code> The string must then follow the letter A with either the letter &#39;B&#39; or some number of occurrences of the letter &#39;C&#39; (the <code>+</code> matches one or more times). The <code>+</code> at the end of this section states that we can look for one or more matches of this section.</li><li><code>D</code> Finally, we ensure this section of the string ends with a &#39;D&#39;</li></ul><p>The expression would match inputs such as <code>ABBD</code>, <code>ABCCCCD</code>, <code>ABCBCCCD</code> and <code>ACCCCCD</code></p><p>It most cases, it doesn&#39;t take very long for a regex engine to find a match:</p><pre><code>$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD&#34;)&#39;
+0.04s user 0.01s system 95% cpu 0.052 total
+
+$ time node -e &#39;/A(B|C+)+D/.test(&#34;ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX&#34;)&#39;
+1.79s user 0.02s system 99% cpu 1.812 total
+</code></pre><p>The entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.</p><p>Most Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.</p><p>Let&#39;s look at how our expression runs into this problem, using a shorter string: &#34;ACCCX&#34;. While it seems fairly straightforward, there are still four different ways that the engine could match those three C&#39;s:</p><ol><li>CCC</li><li>CC+C</li><li>C+CC</li><li>C+C+C.</li></ol><p>The engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use <a href="https://regex101.com/debugger" target="_blank" rel="noopener noreferrer">RegEx 101 debugger</a> to see the engine has to take a total of 38 steps before it can determine the string doesn&#39;t match.</p><p>From there, the number of steps the engine must use to validate a string just continues to grow.</p><table><thead><tr><th>String</th><th>Number of C&#39;s</th><th>Number of steps</th></tr></thead><tbody><tr><td>ACCCX</td><td>3</td><td>38</td></tr><tr><td>ACCCCX</td><td>4</td><td>71</td></tr><tr><td>ACCCCCX</td><td>5</td><td>136</td></tr><tr><td>ACCCCCCCCCCCCCCX</td><td>14</td><td>65,553</td></tr></tbody></table><p>By the time the string includes 14 C&#39;s, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.</p><h2>Remediation</h2><p>Upgrade <code>brace-expansion</code> to version 1.1.12, 2.0.2, 3.0.1, 4.0.1 or higher.</p><h2>References</h2><ul><li><a href="https://github.com/advisories/GHSA-v6h2-p8h4-qcjw" target="_blank" rel="noopener noreferrer">GitHub Advisory</a></li><li><a href="https://github.com/juliangruber/brace-expansion/commit/0b6a9781e18e9d2769bb2931f4856d1360243ed2" target="_blank" rel="noopener noreferrer">GitHub Commit</a></li><li><a href="https://gist.github.com/mmmsssttt404/37a40ce7d6e5ca604858fe30814d9466" target="_blank" rel="noopener noreferrer">GitHub Gist</a></li><li><a href="https://github.com/juliangruber/brace-expansion/pull/65" target="_blank" rel="noopener noreferrer">GitHub PR</a></li></ul></div>
+    </div>
+    <div class="vuln-link"><a href="https://snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073" target="_blank" rel="noopener noreferrer">More about this vulnerability</a></div>
+  </div>
+</div>
+    </details>
+</section>
+</div>
+</main>
+</body>
+</html>

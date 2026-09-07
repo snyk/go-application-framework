@@ -43,10 +43,7 @@ const contributorWindowDays = 90
 // Authors are case-insensitively deduplicated and reported in lowercase.Results
 // are sorted by email so payloads are stable.
 //
-// A path that is not a git repository, or a repository with no commits, yields no
-// contributors and no error, because we proceed with a contributor count of 0. A
-// shallow repository yields the contributors of the history it holds, which
-// undercounts the repository as a whole.
+// A path that is not a git repository yields [ErrNotAGitRepository].
 func collectContributors(ctx context.Context, path string, now time.Time) ([]contributors_ingest.Contributor, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -54,7 +51,7 @@ func collectContributors(ctx context.Context, path string, now time.Time) ([]con
 
 	repo, closeRepo, err := openRepositoryFast(path)
 	if errors.Is(err, git.ErrRepositoryNotExists) {
-		return nil, nil
+		return nil, ErrNotAGitRepository
 	}
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)

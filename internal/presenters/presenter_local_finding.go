@@ -20,6 +20,7 @@ const NoneMimeType = "unknown"
 const ApplicationJSONMimeType = "application/json"
 const ApplicationSarifMimeType = content_type.SARIF_JSON
 const ApplicationHTMLMimeType = content_type.HTML
+const ApplicationTOONMimeType = content_type.TOON
 const CONFIG_JSON_STRIP_WHITESPACES = "internal_json_no_whitespaces"
 
 //go:embed templates/*

@@ -6,5 +6,6 @@ const (
 	LEGACY_CLI          = "application/json; schema=legacy-cli"
 	SARIF_JSON          = "application/sarif+json"
 	HTML                = "text/html"
+	TOON                = "text/toon"
 	UFM_RESULT          = "application/ufm.result"
 )

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/rs/zerolog"
 
@@ -50,6 +51,10 @@ type NetworkAccess interface {
 	GetErrorHandler() networktypes.ErrorHandlerFunc
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
+	// AddMiddleware registers a middleware wrapping the underlying http.RoundTripper,
+	// outside all internal middleware. Each registration wraps the previous one, so the
+	// last registered is the outermost: it sees a request first and its response last.
+	AddMiddleware(networktypes.MiddlewareFunc)
 
 	SetLogger(logger *zerolog.Logger)
 	SetConfiguration(configuration configuration.Configuration)
@@ -68,6 +73,7 @@ type networkImpl struct {
 	dynamicHeaders map[string]DynamicHeaderFunc
 	proxy          func(req *http.Request) (*url.URL, error)
 	errorHandler   networktypes.ErrorHandlerFunc
+	middleware     []networktypes.MiddlewareFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
 }
@@ -155,6 +161,13 @@ func (n *networkImpl) GetErrorHandler() networktypes.ErrorHandlerFunc {
 	return n.errorHandler
 }
 
+// AddMiddleware registers a middleware wrapping the underlying http.RoundTripper,
+// outside all internal middleware. Each registration wraps the previous one, so the
+// last registered is the outermost: it sees a request first and its response last.
+func (n *networkImpl) AddMiddleware(m networktypes.MiddlewareFunc) {
+	n.middleware = append(n.middleware, m)
+}
+
 // AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.
 // The function receives a string slice of existing values and should return the final values associated to the header field.
 // This function extends the possibilities that AddHeaderField() offers for static header fields.
@@ -199,6 +212,11 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
 		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
 	}
+
+	for _, m := range n.middleware {
+		crt = m(crt)
+	}
+
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
 		encapsulatedRoundTripper: crt,
@@ -279,6 +297,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
+		middleware:     slices.Clone(n.middleware),
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {

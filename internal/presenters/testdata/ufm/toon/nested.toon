@@ -1,0 +1,44 @@
+results[1]:
+  - effectiveSummary: null
+    errors: null
+    executionState: finished
+    findings[2]:
+      - attributes:
+          cause_of_failure: true
+          description: "First line\nSecond\tline \\ quoted \"value\", colon: and Unicode café ☃"
+          evidence: null
+          finding_type: sast
+          key: finding-4
+          locations[1]{file_path,from_line,type}:
+            "folder/\"quoted\",file.go",1,source
+          problems[1]:
+            - details:
+                "#key": "#not a comment"
+                a[8]:
+                  - null
+                  - false
+                  - "null"
+                  - "001"
+                  - ""
+                  -
+                  - [2]: x,y
+                  - count: 42
+                    fraction: 1.25
+                "colon:key": " trailing "
+                z: null
+              id: example-future
+              source: future_problem
+          rating:
+            severity: high
+          risk:
+          title: Example finding
+        id: 00000000-0000-4000-8000-000000000004
+        type: findings
+      - type: findings
+    outcomeReason: null
+    passFail: null
+    rawSummary: null
+    testConfiguration: null
+    testId: null
+    testSubject: null
+    warnings: null

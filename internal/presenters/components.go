@@ -286,16 +286,16 @@ func RenderTip(str string) string {
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
 	if severityMinLevel == "" {
-		return original
+		return slices.Clone(original)
 	}
 
 	minLevelPointer := slices.Index(original, severityMinLevel)
 
 	if minLevelPointer >= 0 {
-		return original[minLevelPointer:]
+		return slices.Clone(original[minLevelPointer:])
 	}
 
-	return original
+	return slices.Clone(original)
 }
 
 type SummaryData struct {
