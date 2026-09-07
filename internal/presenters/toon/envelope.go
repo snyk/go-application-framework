@@ -9,17 +9,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
-// EncodeResults builds the contract envelope from native test results and renders TOON.
-func EncodeResults(ctx context.Context, results []testapi.TestResult) ([]byte, error) {
+// PrepareResults returns normalized JSON values for the TOON template.
+func PrepareResults(ctx context.Context, results []testapi.TestResult) (any, error) {
 	envelope, err := buildEnvelope(ctx, results)
 	if err != nil {
 		return nil, err
 	}
-	payload, err := json.Marshal(envelope)
-	if err != nil {
-		return nil, fmt.Errorf("marshal envelope: %w", err)
-	}
-	return EncodeJSON(payload)
+	return jsonValue(envelope)
 }
 
 func buildEnvelope(ctx context.Context, results []testapi.TestResult) (map[string]any, error) {

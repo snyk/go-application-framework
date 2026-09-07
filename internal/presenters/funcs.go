@@ -287,18 +287,23 @@ func getSarifTemplateFuncMap() template.FuncMap {
 
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["encodeUFMToon"] = encodeUFMToon
-	fnMap["toonTabularField"] = toon.FormatTabularField
-	fnMap["toonScalar"] = toon.FormatScalarValue
-	return fnMap
-}
-
-func encodeUFMToon(results []testapi.TestResult) (string, error) {
-	output, err := toon.EncodeResults(context.Background(), results)
-	if err != nil {
-		return "", err
+	fnMap["prepareUFMToon"] = func(results []testapi.TestResult) (any, error) {
+		return toon.PrepareResults(context.Background(), results)
 	}
-	return string(output), nil
+	fnMap["toonKind"] = toon.Kind
+	fnMap["toonKey"] = toon.FormatKey
+	fnMap["toonPrimitive"] = toon.FormatPrimitive
+	fnMap["toonAllPrimitive"] = toon.AllPrimitive
+	fnMap["toonTabularFields"] = toon.TabularFields
+	fnMap["toonTabularCells"] = toon.TabularCells
+	fnMap["toonContext"] = func(key string, value any, indent string) any {
+		return struct {
+			Key    string
+			Value  any
+			Indent string
+		}{key, value, indent}
+	}
+	return fnMap
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
