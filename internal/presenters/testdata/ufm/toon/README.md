@@ -26,28 +26,25 @@ order before rendering; never sort arrays.
 
 ## Verify
 
-From the repository root:
+Check UFM extraction against expected JSON from the repository root:
 
 ```bash
 go test ./internal/presenters -run '^Test_UfmTOONContract$' -count=1
-
-toon_reference=$(mktemp -d)
-npm pack @toon-format/toon@4.1.1 --pack-destination "$toon_reference"
-tar -xzf "$toon_reference/toon-format-toon-4.1.1.tgz" -C "$toon_reference"
-node internal/presenters/testdata/ufm/toon/verify.mjs "$toon_reference/package/dist/index.mjs"
 ```
-
-`@toon-format/toon@4.1.1` is only for generating and verifying fixtures.
-The checks compare UFM extraction with expected JSON, exact TOON bytes and
-strictly decoded JSON. Do not trim whitespace. The verifier rejects integers
-outside JavaScript's safe range; cover those in the template renderer tests.
 
 ## Regenerate
 
-After the setup above, regenerate `.toon` files from the expected `.json` files:
+From this directory, use the [TOON reference CLI](https://toonformat.dev/cli/).
+Replace `sca` with the case to regenerate:
 
 ```bash
-node internal/presenters/testdata/ufm/toon/verify.mjs "$toon_reference/package/dist/index.mjs" --write
+jq -S . sca.json | npx --yes @toon-format/cli@4.1.1 --encode -o /tmp/sca.toon
+printf '%s' "$(< /tmp/sca.toon)" > /tmp/sca.toon
+cmp sca.toon /tmp/sca.toon
 ```
 
-This only updates `.toon` files. Review the diff and rerun both checks.
+The `printf` command removes the TOON reference CLI's final newline. For contract changes, copy
+`/tmp/sca.toon` to `sca.toon`, review the diff and rerun the Go test.
+
+Use the TOON reference CLI only for fixtures. Integers outside JavaScript's safe range need
+separate template renderer tests.

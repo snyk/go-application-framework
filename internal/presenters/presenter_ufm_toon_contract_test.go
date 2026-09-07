@@ -15,8 +15,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 )
 
-// These fixtures define the JSON input to the future TOON presenter. The pinned
-// reference codec verifies their .toon counterparts; see testdata/ufm/toon/README.md.
+// These fixtures define the JSON input to the future TOON presenter.
+// See testdata/ufm/toon/README.md for reference TOON commands.
 func Test_UfmTOONContract(t *testing.T) {
 	fixtureDir := filepath.Join("testdata", "ufm", "toon")
 	matches, err := filepath.Glob(filepath.Join(fixtureDir, "*.testresult.json"))
