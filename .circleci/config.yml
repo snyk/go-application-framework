@@ -58,6 +58,7 @@ jobs:
       - prodsec/security_scans:
           mode: auto
           open-source-agentic-fix-enabled: true
+          open-source-agentic-fix-base-branch: main
 
 commands:
   save-build-cache:
