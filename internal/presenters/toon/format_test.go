@@ -25,6 +25,14 @@ func TestFormatTabularField_plainValueUnquoted(t *testing.T) {
 	assert.Equal(t, "AWS Access Token", got)
 }
 
+func TestFormatScalarValue_quotesHashPrefix(t *testing.T) {
+	t.Parallel()
+
+	got, err := toon.FormatScalarValue("#not a comment")
+	require.NoError(t, err)
+	assert.Equal(t, `"#not a comment"`, got)
+}
+
 func TestFormatScalarValue_summaryUnquoted(t *testing.T) {
 	t.Parallel()
 
