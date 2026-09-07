@@ -25,35 +25,48 @@ func loadTestResults(t *testing.T, path string) []testapi.TestResult {
 	return results
 }
 
+func sectionCell(t *testing.T, section toon.Section, row int, column string) string {
+	t.Helper()
+	require.Less(t, row, len(section.Rows), "row index out of range")
+	for i, col := range section.Columns {
+		if col.Name == column {
+			return section.Rows[row][i]
+		}
+	}
+	require.Failf(t, "unknown column %q", column)
+	return ""
+}
+
 func TestProjectSCA_fixture(t *testing.T) {
 	t.Parallel()
 
-	view, err := toon.ProjectSCA(loadTestResults(t, "../testdata/ufm/sca.toon.testresult.json"))
+	section, err := toon.ProjectSCA(loadTestResults(t, "../testdata/ufm/sca.toon.testresult.json"))
 	require.NoError(t, err)
 
-	assert.Len(t, view.Rows, 3)
-	assert.Equal(t, "SNYK-JS-EJS-6689533", view.Rows[0].ID)
-	assert.Equal(t, "medium", view.Rows[0].Severity)
-	assert.Equal(t, "ejs@1.0.0", view.Rows[0].Pkg)
-	assert.Equal(t, "yes", view.Rows[0].Fixable)
-	assert.Equal(t, "SNYK-JS-LODASH-1018905", view.Rows[1].ID)
-	assert.Equal(t, "high", view.Rows[1].Severity)
-	assert.Equal(t, "lodash@4.17.4", view.Rows[1].Pkg)
-	assert.Equal(t, "no", view.Rows[1].Fixable)
-	assert.Equal(t, "SNYK-JS-QS-3153490", view.Rows[2].ID)
-	assert.Equal(t, "low", view.Rows[2].Severity)
-	assert.Equal(t, "qs@0.0.6", view.Rows[2].Pkg)
-	assert.Equal(t, "yes", view.Rows[2].Fixable)
-	assert.Equal(t, "3 unique vulns (4 paths) | 1 high 1 medium 1 low | 2 fixable", view.Summary)
+	assert.Equal(t, "sca", section.Name)
+	assert.Len(t, section.Rows, 3)
+	assert.Equal(t, "SNYK-JS-EJS-6689533", sectionCell(t, section, 0, "id"))
+	assert.Equal(t, "medium", sectionCell(t, section, 0, "severity"))
+	assert.Equal(t, "ejs@1.0.0", sectionCell(t, section, 0, "pkg"))
+	assert.Equal(t, "yes", sectionCell(t, section, 0, "fixable"))
+	assert.Equal(t, "SNYK-JS-LODASH-1018905", sectionCell(t, section, 1, "id"))
+	assert.Equal(t, "high", sectionCell(t, section, 1, "severity"))
+	assert.Equal(t, "lodash@4.17.4", sectionCell(t, section, 1, "pkg"))
+	assert.Equal(t, "no", sectionCell(t, section, 1, "fixable"))
+	assert.Equal(t, "SNYK-JS-QS-3153490", sectionCell(t, section, 2, "id"))
+	assert.Equal(t, "low", sectionCell(t, section, 2, "severity"))
+	assert.Equal(t, "qs@0.0.6", sectionCell(t, section, 2, "pkg"))
+	assert.Equal(t, "yes", sectionCell(t, section, 2, "fixable"))
+	assert.Equal(t, "3 unique vulns (4 paths) | 1 high 1 medium 1 low | 2 fixable", section.Summary)
 }
 
 func TestProjectSCA_empty(t *testing.T) {
 	t.Parallel()
 
-	view, err := toon.ProjectSCA(nil)
+	section, err := toon.ProjectSCA(nil)
 	require.NoError(t, err)
-	assert.Empty(t, view.Rows)
-	assert.Equal(t, "0 vulnerabilities found", view.Summary)
+	assert.Empty(t, section.Rows)
+	assert.Equal(t, "0 vulnerabilities found", section.Summary)
 }
 
 func TestProjectSCA_multiVersionPkg(t *testing.T) {
@@ -67,12 +80,12 @@ func TestProjectSCA_multiVersionPkg(t *testing.T) {
 	}
 	mock.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
 
-	view, err := toon.ProjectSCA([]testapi.TestResult{mock})
+	section, err := toon.ProjectSCA([]testapi.TestResult{mock})
 	require.NoError(t, err)
 
-	require.Len(t, view.Rows, 1)
-	assert.Equal(t, "lodash@4.17.4,4.17.10", view.Rows[0].Pkg)
-	assert.Equal(t, "yes", view.Rows[0].Fixable)
+	require.Len(t, section.Rows, 1)
+	assert.Equal(t, "lodash@4.17.4,4.17.10", sectionCell(t, section, 0, "pkg"))
+	assert.Equal(t, "yes", sectionCell(t, section, 0, "fixable"))
 }
 
 func TestProjectSCA_fixableWhenAnyPathFixable(t *testing.T) {
@@ -86,39 +99,40 @@ func TestProjectSCA_fixableWhenAnyPathFixable(t *testing.T) {
 	}
 	mock.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
 
-	view, err := toon.ProjectSCA([]testapi.TestResult{mock})
+	section, err := toon.ProjectSCA([]testapi.TestResult{mock})
 	require.NoError(t, err)
 
-	require.Len(t, view.Rows, 1)
-	assert.Equal(t, "yes", view.Rows[0].Fixable)
-	assert.Equal(t, "1 unique vulns (2 paths) | 1 medium | 1 fixable", view.Summary)
+	require.Len(t, section.Rows, 1)
+	assert.Equal(t, "yes", sectionCell(t, section, 0, "fixable"))
+	assert.Equal(t, "1 unique vulns (2 paths) | 1 medium | 1 fixable", section.Summary)
 }
 
 func TestProjectSecrets_fixture(t *testing.T) {
 	t.Parallel()
 
-	view, err := toon.ProjectSecrets(loadTestResults(t, "../testdata/ufm/secrets.toon.testresult.json"))
+	section, err := toon.ProjectSecrets(loadTestResults(t, "../testdata/ufm/secrets.toon.testresult.json"))
 	require.NoError(t, err)
 
-	assert.Len(t, view.Rows, 2)
-	assert.Equal(t, "AWS Access Token", view.Rows[0].Rule)
-	assert.Equal(t, "critical", view.Rows[0].Severity)
-	assert.Equal(t, "app.py", view.Rows[0].File)
-	assert.Equal(t, 1, view.Rows[0].Line)
-	assert.Equal(t, "Slack Bot Token", view.Rows[1].Rule)
-	assert.Equal(t, "high", view.Rows[1].Severity)
-	assert.Equal(t, "app.py", view.Rows[1].File)
-	assert.Equal(t, 5, view.Rows[1].Line)
-	assert.Equal(t, "2 secrets | 1 critical 1 high", view.Summary)
+	assert.Equal(t, "secrets", section.Name)
+	assert.Len(t, section.Rows, 2)
+	assert.Equal(t, "AWS Access Token", sectionCell(t, section, 0, "rule"))
+	assert.Equal(t, "critical", sectionCell(t, section, 0, "severity"))
+	assert.Equal(t, "app.py", sectionCell(t, section, 0, "file"))
+	assert.Equal(t, "1", sectionCell(t, section, 0, "line"))
+	assert.Equal(t, "Slack Bot Token", sectionCell(t, section, 1, "rule"))
+	assert.Equal(t, "high", sectionCell(t, section, 1, "severity"))
+	assert.Equal(t, "app.py", sectionCell(t, section, 1, "file"))
+	assert.Equal(t, "5", sectionCell(t, section, 1, "line"))
+	assert.Equal(t, "2 secrets | 1 critical 1 high", section.Summary)
 }
 
 func TestProjectSecrets_empty(t *testing.T) {
 	t.Parallel()
 
-	view, err := toon.ProjectSecrets(nil)
+	section, err := toon.ProjectSecrets(nil)
 	require.NoError(t, err)
-	assert.Empty(t, view.Rows)
-	assert.Equal(t, "0 secrets found", view.Summary)
+	assert.Empty(t, section.Rows)
+	assert.Equal(t, "0 secrets found", section.Summary)
 }
 
 func TestProjectSecrets_specialCharactersPreserved(t *testing.T) {
@@ -131,12 +145,12 @@ func TestProjectSecrets_specialCharactersPreserved(t *testing.T) {
 	}
 	mock.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
 
-	view, err := toon.ProjectSecrets([]testapi.TestResult{mock})
+	section, err := toon.ProjectSecrets([]testapi.TestResult{mock})
 	require.NoError(t, err)
 
-	require.Len(t, view.Rows, 1)
-	assert.Equal(t, "rule,with\"comma\"", view.Rows[0].Rule)
-	assert.Equal(t, "src/with space.go", view.Rows[0].File)
+	require.Len(t, section.Rows, 1)
+	assert.Equal(t, "rule,with\"comma\"", sectionCell(t, section, 0, "rule"))
+	assert.Equal(t, "src/with space.go", sectionCell(t, section, 0, "file"))
 }
 
 func scaFinding(id, name, version string, fixable bool) *testapi.FindingData {

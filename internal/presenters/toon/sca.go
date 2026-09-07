@@ -11,23 +11,28 @@ import (
 
 var scaSeverityOrder = []string{"critical", "high", "medium", "low"}
 
-// ProjectSCA maps native UFM SCA findings to the concise TOON view model.
-func ProjectSCA(results []testapi.TestResult) (SCAView, error) {
+var scaColumns = []colSpec[scaAggregate]{
+	{Name: "id", Quoted: true, Value: func(a scaAggregate) string { return a.id }},
+	{Name: "severity", Quoted: true, Value: func(a scaAggregate) string { return strings.ToLower(a.severity) }},
+	{Name: "pkg", Quoted: true, Value: func(a scaAggregate) string { return formatPkg(a.name, a.versions) }},
+	{Name: "fixable", Quoted: true, Value: func(a scaAggregate) string { return yesNo(a.fixable) }},
+}
+
+// ProjectSCA maps native UFM SCA findings to the concise TOON section.
+func ProjectSCA(results []testapi.TestResult) (Section, error) {
 	issues, err := issuesByFindingType(results, testapi.FindingTypeSca)
 	if err != nil {
-		return SCAView{}, err
+		return Section{}, err
 	}
 
 	aggregated := aggregateSCAIssues(issues)
 	if len(aggregated) == 0 {
-		return SCAView{Summary: "0 vulnerabilities found"}, nil
+		return buildSection("sca", aggregated, scaColumns, "0 vulnerabilities found"), nil
 	}
 
 	totalPaths := 0
 	counts := map[string]int{}
 	fixableCount := 0
-	rows := make([]SCARow, 0, len(aggregated))
-
 	for _, agg := range aggregated {
 		totalPaths += agg.pathCount
 		severity := strings.ToLower(agg.severity)
@@ -35,18 +40,10 @@ func ProjectSCA(results []testapi.TestResult) (SCAView, error) {
 		if agg.fixable {
 			fixableCount++
 		}
-		rows = append(rows, SCARow{
-			ID:       agg.id,
-			Severity: severity,
-			Pkg:      formatPkg(agg.name, agg.versions),
-			Fixable:  yesNo(agg.fixable),
-		})
 	}
 
-	return SCAView{
-		Rows:    rows,
-		Summary: scaSummary(len(rows), totalPaths, fixableCount, counts),
-	}, nil
+	return buildSection("sca", aggregated, scaColumns,
+		scaSummary(len(aggregated), totalPaths, fixableCount, counts)), nil
 }
 
 type scaAggregate struct {

@@ -2,57 +2,65 @@ package toon
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
-// ProjectSecrets maps native UFM Secrets findings to the concise TOON view model.
-func ProjectSecrets(results []testapi.TestResult) (SecretsView, error) {
+var secretsColumns = []colSpec[testapi.Issue]{
+	{Name: "rule", Quoted: true, Value: secretsRule},
+	{Name: "severity", Quoted: true, Value: normalizedSeverity},
+	{Name: "file", Quoted: true, Value: issueFile},
+	{Name: "line", Quoted: false, Value: issueLine},
+}
+
+// ProjectSecrets maps native UFM Secrets findings to the concise TOON section.
+func ProjectSecrets(results []testapi.TestResult) (Section, error) {
 	issues, err := issuesByFindingType(results, testapi.FindingTypeSecrets)
 	if err != nil {
-		return SecretsView{}, err
+		return Section{}, err
 	}
 
-	if len(issues) == 0 {
-		return SecretsView{Summary: "0 secrets found"}, nil
+	filtered := make([]testapi.Issue, 0, len(issues))
+	for _, issue := range issues {
+		if issue.GetFindingType() == testapi.FindingTypeSecrets {
+			filtered = append(filtered, issue)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return buildSection("secrets", filtered, secretsColumns, "0 secrets found"), nil
 	}
 
 	counts := map[string]int{}
-	rows := make([]SecretsRow, 0, len(issues))
-
-	for _, issue := range issues {
-		if issue.GetFindingType() != testapi.FindingTypeSecrets {
-			continue
-		}
-
-		severity := strings.ToLower(issue.GetSeverity())
-		if severity == "" {
-			severity = "low"
-		}
-		counts[severity]++
-
-		file := "unknown"
-		line := 0
-		if locs := issue.GetSourceLocations(); len(locs) > 0 {
-			if locs[0].FilePath != "" {
-				file = locs[0].FilePath
-			}
-			line = locs[0].FromLine
-		}
-
-		rows = append(rows, SecretsRow{
-			Rule:     secretsRule(issue),
-			Severity: severity,
-			File:     file,
-			Line:     line,
-		})
+	for _, issue := range filtered {
+		counts[normalizedSeverity(issue)]++
 	}
 
-	return SecretsView{
-		Rows:    rows,
-		Summary: secretsSummary(len(rows), counts),
-	}, nil
+	return buildSection("secrets", filtered, secretsColumns, secretsSummary(len(filtered), counts)), nil
+}
+
+func normalizedSeverity(issue testapi.Issue) string {
+	severity := strings.ToLower(issue.GetSeverity())
+	if severity == "" {
+		return "low"
+	}
+	return severity
+}
+
+func issueFile(issue testapi.Issue) string {
+	if locs := issue.GetSourceLocations(); len(locs) > 0 && locs[0].FilePath != "" {
+		return locs[0].FilePath
+	}
+	return "unknown"
+}
+
+func issueLine(issue testapi.Issue) string {
+	if locs := issue.GetSourceLocations(); len(locs) > 0 {
+		return strconv.Itoa(locs[0].FromLine)
+	}
+	return "0"
 }
 
 func secretsRule(issue testapi.Issue) string {
