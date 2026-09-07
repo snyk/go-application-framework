@@ -105,7 +105,10 @@ func (e *encoder) encodeArrayField(buf *bytes.Buffer, key string, items []any, d
 		buf.WriteString(formatTabularHeader(key, len(items), schema))
 		buf.WriteByte('\n')
 		for _, item := range items {
-			obj := item.(map[string]any)
+			obj, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
 			if err := e.encodeTabularRow(buf, obj, schema, depth+1); err != nil {
 				return err
 			}
@@ -216,6 +219,7 @@ func (e *encoder) encodeListItemObject(buf *bytes.Buffer, obj map[string]any, de
 	return nil
 }
 
+//nolint:gocyclo // ignore gocyclo introduced with fix for a linter errcheck error in `obj := item.(map[string]any)`
 func (e *encoder) encodeFirstListItemField(buf *bytes.Buffer, key string, value any, listDepth int) error {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -235,7 +239,10 @@ func (e *encoder) encodeFirstListItemField(buf *bytes.Buffer, key string, value 
 			buf.WriteString(formatTabularHeader(key, len(typed), schema))
 			buf.WriteByte('\n')
 			for _, item := range typed {
-				obj := item.(map[string]any)
+				obj, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
 				if err := e.encodeTabularRow(buf, obj, schema, listDepth+2); err != nil {
 					return err
 				}
@@ -446,7 +453,10 @@ func classifyColumn(values []any) (tabularField, bool) {
 
 	nestedColumns := make(map[string][]any, len(nestedOrder))
 	for _, value := range values {
-		obj := value.(map[string]any)
+		obj, ok := value.(map[string]any)
+		if !ok || obj == nil || len(obj) == 0 {
+			return tabularField{}, false
+		}
 		for _, key := range nestedOrder {
 			nestedColumns[key] = append(nestedColumns[key], obj[key])
 		}

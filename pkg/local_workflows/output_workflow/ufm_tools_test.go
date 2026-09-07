@@ -263,7 +263,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.0findings.testresult.json")
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
