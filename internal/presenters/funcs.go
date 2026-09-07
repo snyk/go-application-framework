@@ -287,7 +287,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["projectTOONSections"] = toon.ProjectSections
 	fnMap["toonTabularField"] = toon.FormatTabularField
 	fnMap["toonScalar"] = toon.FormatScalarValue
 	return fnMap

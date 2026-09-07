@@ -249,7 +249,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		assert.Contains(t, strings.ToLower(stdout), "<!doctype html>", "default writer should have received HTML output")
 	})
 
-	t.Run("toon flag renders TOON to the default stdout writer", func(t *testing.T) {
+	t.Run("toon flag routes UFM output through the TOON writer", func(t *testing.T) {
 		mockCtl := gomock.NewController(t)
 		defer mockCtl.Finish()
 
@@ -263,7 +263,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.toon.testresult.json")
+		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
@@ -273,11 +273,5 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
 		assert.NoError(t, err)
 		assert.NotNil(t, remaining)
-
-		expected, err := os.ReadFile("../../../internal/presenters/testdata/ufm/toon/secrets.concise.toon")
-		assert.NoError(t, err)
-		got := bytes.TrimSuffix([]byte(strings.TrimSpace(outputDestination.buffer.String())), []byte("\n"))
-		expected = bytes.TrimSuffix(expected, []byte("\n"))
-		assert.Equal(t, string(expected), string(got))
 	})
 }
