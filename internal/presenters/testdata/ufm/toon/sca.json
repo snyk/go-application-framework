@@ -1,0 +1,129 @@
+{
+  "results": [
+    {
+      "effectiveSummary": {
+        "count": 2
+      },
+      "errors": null,
+      "executionState": "finished",
+      "findings": [
+        {
+          "attributes": {
+            "cause_of_failure": true,
+            "description": "Synthetic finding for output contract tests.",
+            "evidence": [
+              {
+                "path": [
+                  {
+                    "name": "example-app",
+                    "version": "1.0.0"
+                  },
+                  {
+                    "name": "example-lib",
+                    "version": "1.0.0"
+                  }
+                ],
+                "source": "dependency_path"
+              }
+            ],
+            "finding_type": "sca",
+            "key": "finding-2",
+            "locations": [
+              {
+                "package": {
+                  "name": "example-lib",
+                  "version": "1.0.0"
+                },
+                "type": "package"
+              }
+            ],
+            "problems": [
+              {
+                "affected_versions": [
+                  "<2.0.0"
+                ],
+                "id": "SNYK-EXAMPLE-1",
+                "initially_fixed_in_versions": [
+                  "2.0.0"
+                ],
+                "is_fixable": true,
+                "package_name": "example-lib",
+                "source": "snyk_vuln"
+              }
+            ],
+            "rating": {
+              "severity": "high"
+            },
+            "risk": {},
+            "title": "Example finding"
+          },
+          "id": "00000000-0000-4000-8000-000000000002",
+          "relationships": {
+            "asset": {
+              "data": {
+                "id": "20000000-0000-4000-8000-000000000001",
+                "type": "assets"
+              },
+              "links": {
+                "related": "https://example.com/assets/example"
+              }
+            }
+          },
+          "type": "findings"
+        },
+        {
+          "attributes": {
+            "cause_of_failure": true,
+            "description": "Synthetic finding for output contract tests.",
+            "evidence": [],
+            "finding_type": "sca",
+            "key": "finding-1",
+            "locations": [
+              {
+                "package": {
+                  "name": "example-lib",
+                  "version": "1.1.0"
+                },
+                "type": "package"
+              }
+            ],
+            "problems": [
+              {
+                "affected_versions": [
+                  "<2.0.0"
+                ],
+                "id": "SNYK-EXAMPLE-1",
+                "initially_fixed_in_versions": [
+                  "2.0.0"
+                ],
+                "is_fixable": true,
+                "package_name": "example-lib",
+                "source": "snyk_vuln"
+              }
+            ],
+            "rating": {
+              "severity": "high"
+            },
+            "risk": {},
+            "title": "Example finding"
+          },
+          "id": "00000000-0000-4000-8000-000000000001",
+          "type": "findings"
+        }
+      ],
+      "outcomeReason": null,
+      "passFail": "fail",
+      "rawSummary": {
+        "count": 2
+      },
+      "testConfiguration": {
+        "scan_config": {
+          "sca": {}
+        }
+      },
+      "testId": "10000000-0000-4000-8000-000000000001",
+      "testSubject": null,
+      "warnings": null
+    }
+  ]
+}
