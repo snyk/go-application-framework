@@ -55,6 +55,9 @@ func needsQuoting(value string, ctx formatContext) bool {
 	if strings.HasPrefix(value, "-") {
 		return true
 	}
+	if value == "#" || strings.HasPrefix(value, "#") {
+		return true
+	}
 	if ctx.inArray && ctx.active != 0 && strings.ContainsRune(value, ctx.active) {
 		return true
 	}
@@ -145,13 +148,24 @@ func looksNumeric(value string) bool {
 }
 
 func hasLeadingZeroDecimal(value string) bool {
-	if len(value) < 2 {
+	if len(value) < 2 || value[0] != '0' {
 		return false
 	}
-	if value[0] != '0' {
+	if value[1] == '.' {
+		return len(value) > 2 && isDigit(value[2])
+	}
+	if !isDigit(value[1]) {
 		return false
 	}
-	return value[1] >= '0' && value[1] <= '9'
+	for i := 1; i < len(value); i++ {
+		switch value[i] {
+		case '.':
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func isDigit(b byte) bool {
