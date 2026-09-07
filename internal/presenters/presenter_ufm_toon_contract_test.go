@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,9 +18,16 @@ import (
 // These fixtures define the JSON input to the future TOON presenter. The pinned
 // reference codec verifies their .toon counterparts; see testdata/ufm/toon/README.md.
 func Test_UfmTOONContract(t *testing.T) {
-	for _, name := range []string{"sca", "secrets", "empty_sca", "empty_secrets", "mixed", "nested", "no_results"} {
+	fixtureDir := filepath.Join("testdata", "ufm", "toon")
+	matches, err := filepath.Glob(filepath.Join(fixtureDir, "*.testresult.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, matches, "no contract fixtures found")
+	sort.Strings(matches)
+
+	for _, inputPath := range matches {
+		name := strings.TrimSuffix(filepath.Base(inputPath), ".testresult.json")
 		t.Run(name, func(t *testing.T) {
-			input, err := os.ReadFile(filepath.Join("testdata", "ufm", "toon", name+".testresult.json"))
+			input, err := os.ReadFile(inputPath)
 			require.NoError(t, err)
 			results, err := ufm.NewSerializableTestResultFromBytes(input)
 			require.NoError(t, err)
@@ -47,7 +56,7 @@ func Test_UfmTOONContract(t *testing.T) {
 			}
 			actual, err := json.Marshal(map[string]any{"results": envelope})
 			require.NoError(t, err)
-			expected, err := os.ReadFile(filepath.Join("testdata", "ufm", "toon", name+".json"))
+			expected, err := os.ReadFile(filepath.Join(fixtureDir, name+".json"))
 			require.NoError(t, err)
 			require.Equal(t, decodeTOONContractJSON(t, expected), decodeTOONContractJSON(t, actual))
 		})
