@@ -287,27 +287,9 @@ func getSarifTemplateFuncMap() template.FuncMap {
 
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["projectTOONSections"] = func(results []testapi.TestResult, types []testapi.FindingType) []toon.Section {
-		sections, err := toon.ProjectSections(results, types)
-		if err != nil {
-			panic(fmt.Sprintf("project TOON sections: %v", err))
-		}
-		return sections
-	}
-	fnMap["toonTabularField"] = func(value string) string {
-		formatted, err := toon.FormatTabularField(value)
-		if err != nil {
-			panic(fmt.Sprintf("format TOON tabular field: %v", err))
-		}
-		return formatted
-	}
-	fnMap["toonScalar"] = func(value string) string {
-		formatted, err := toon.FormatScalarValue(value)
-		if err != nil {
-			panic(fmt.Sprintf("format TOON scalar: %v", err))
-		}
-		return formatted
-	}
+	fnMap["projectTOONSections"] = toon.ProjectSections
+	fnMap["toonTabularField"] = toon.FormatTabularField
+	fnMap["toonScalar"] = toon.FormatScalarValue
 	return fnMap
 }
 
