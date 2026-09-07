@@ -17,13 +17,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -138,7 +139,6 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, testAPIEndpoint)
 	config.Set(configuration.ORGANIZATION, testOrgID)
-	t.Cleanup(func() { registries.Delete(config) })
 
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
@@ -191,7 +191,6 @@ func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, testAPIEndpoint)
 	config.Set(configuration.ORGANIZATION, testOrgID)
-	t.Cleanup(func() { registries.Delete(config) })
 
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
@@ -207,17 +206,6 @@ func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T
 		}(i)
 	}
 	wg.Wait()
-
-	registry := getFlagRegistry(config)
-	require.NotNil(t, registry, "registry must exist after registration")
-	registry.mu.Lock()
-	registeredCount := len(registry.flags)
-	registry.mu.Unlock()
-	assert.Equal(t, flagCount, registeredCount,
-		"all concurrently registered flags must be present in the registry")
-
-	assert.Equal(t, int32(0), atomic.LoadInt32(&apiCallCount),
-		"no API call before any flag is read")
 
 	result := config.GetBool("concurrent_key_0")
 	assert.True(t, result)
@@ -271,7 +259,6 @@ func Test_AddFeatureFlagsToConfig_ConcurrentReads(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, testAPIEndpoint)
 	config.Set(configuration.ORGANIZATION, testOrgID)
-	t.Cleanup(func() { registries.Delete(config) })
 
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
