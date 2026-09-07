@@ -2,14 +2,12 @@ package toon
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 type sectionProjector struct {
 	findingType testapi.FindingType
-	name        string
 	project     func([]testapi.TestResult) (Section, error)
 }
 
@@ -18,13 +16,11 @@ type sectionProjector struct {
 var sectionProjectors = []sectionProjector{
 	{
 		findingType: testapi.FindingTypeSca,
-		name:        "sca",
-		project:     projectSCASection,
+		project:     ProjectSCA,
 	},
 	{
 		findingType: testapi.FindingTypeSecrets,
-		name:        "secrets",
-		project:     projectSecretsSection,
+		project:     ProjectSecrets,
 	},
 }
 
@@ -37,59 +33,11 @@ func ProjectSections(results []testapi.TestResult, presentTypes []testapi.Findin
 		}
 		section, err := entry.project(results)
 		if err != nil {
-			return nil, fmt.Errorf("project %s section: %w", entry.name, err)
+			return nil, fmt.Errorf("project %s section: %w", entry.findingType, err)
 		}
 		sections = append(sections, section)
 	}
 	return sections, nil
-}
-
-func projectSCASection(results []testapi.TestResult) (Section, error) {
-	view, err := ProjectSCA(results)
-	if err != nil {
-		return Section{}, err
-	}
-
-	rows := make([][]string, 0, len(view.Rows))
-	for _, row := range view.Rows {
-		rows = append(rows, []string{row.ID, row.Severity, row.Pkg, row.Fixable})
-	}
-
-	return Section{
-		Name: "sca",
-		Columns: []Column{
-			{Name: "id", Quoted: true},
-			{Name: "severity", Quoted: true},
-			{Name: "pkg", Quoted: true},
-			{Name: "fixable", Quoted: true},
-		},
-		Rows:    rows,
-		Summary: view.Summary,
-	}, nil
-}
-
-func projectSecretsSection(results []testapi.TestResult) (Section, error) {
-	view, err := ProjectSecrets(results)
-	if err != nil {
-		return Section{}, err
-	}
-
-	rows := make([][]string, 0, len(view.Rows))
-	for _, row := range view.Rows {
-		rows = append(rows, []string{row.Rule, row.Severity, row.File, strconv.Itoa(row.Line)})
-	}
-
-	return Section{
-		Name: "secrets",
-		Columns: []Column{
-			{Name: "rule", Quoted: true},
-			{Name: "severity", Quoted: true},
-			{Name: "file", Quoted: true},
-			{Name: "line", Quoted: false},
-		},
-		Rows:    rows,
-		Summary: view.Summary,
-	}, nil
 }
 
 func containsFindingType(types []testapi.FindingType, want testapi.FindingType) bool {
