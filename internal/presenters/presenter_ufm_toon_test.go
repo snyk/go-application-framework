@@ -58,8 +58,7 @@ func TestRenderTemplate_TOON_contractGoldens(t *testing.T) {
 			presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), writer)
 			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 
-			got := bytes.TrimSuffix(writer.Bytes(), []byte("\n"))
-			assert.Equal(t, string(expected), string(got))
+			assert.Equal(t, string(expected), writer.String())
 		})
 	}
 }
@@ -76,6 +75,45 @@ func TestRenderTemplate_TOON_findingsError(t *testing.T) {
 	err := presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "findings")
+}
+
+func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
+	t.Parallel()
+
+	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
+		"executionState": "finished",
+		"findings": [{"type": "findings", "attributes": {
+			"finding_type": "new_product",
+			"problems": [{"source": "new_product", "details": {
+				"arrays": [[], [[true, false], null]],
+				"rows": [{"a": [1, 2]}, {"a": [{"nested": {"value": true}}]}]
+			}}]
+		}}]
+	}]`))
+	require.NoError(t, err)
+
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
+	require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	assert.Contains(t, output.String(), "finding_type: new_product")
+	assert.Contains(t, output.String(), "source: new_product")
+	assert.Contains(t, output.String(), "arrays[2]:\n                  - []\n                  - [2]:\n                    - [2]: true,false\n                    - null")
+	assert.Contains(t, output.String(), "rows[2]:\n                  - a[2]: 1,2\n                  - a[1]{nested{value}}:\n                      true")
+}
+
+func TestRenderTemplate_TOON_formattingError(t *testing.T) {
+	t.Parallel()
+
+	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
+		"findings": [{"type": "findings", "attributes": {"title": "bad\u0001title"}}]
+	}]`))
+	require.NoError(t, err)
+
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
+	err = presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported control character U+0001")
 }
 
 func loadContractTestResults(t *testing.T, envelopePath string) []testapi.TestResult {
