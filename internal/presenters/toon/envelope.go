@@ -101,14 +101,14 @@ func jsonValueOrNull(value any) any {
 
 func jsonValue(value any) (any, error) {
 	if value == nil {
-		return nil, nil
+		return nullJSONValue(), nil
 	}
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
 	if string(payload) == "null" {
-		return nil, nil
+		return nullJSONValue(), nil
 	}
 	var decoded any
 	dec := json.NewDecoder(bytes.NewReader(payload))
@@ -117,4 +117,8 @@ func jsonValue(value any) (any, error) {
 		return nil, err
 	}
 	return decoded, nil
+}
+
+func nullJSONValue() any {
+	return nil
 }
