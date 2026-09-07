@@ -1,0 +1,19 @@
+[
+  {
+    "testId": "10000000-0000-4000-8000-000000000003",
+    "testConfiguration": {
+      "scan_config": {
+        "sca": {}
+      }
+    },
+    "executionState": "finished",
+    "passFail": "pass",
+    "effectiveSummary": {
+      "count": 0
+    },
+    "rawSummary": {
+      "count": 0
+    },
+    "findingsComplete": true
+  }
+]

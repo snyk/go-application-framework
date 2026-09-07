@@ -1,0 +1,120 @@
+[
+  {
+    "testId": "10000000-0000-4000-8000-000000000001",
+    "testConfiguration": {
+      "scan_config": {
+        "sca": {}
+      }
+    },
+    "executionState": "finished",
+    "passFail": "fail",
+    "effectiveSummary": {
+      "count": 2
+    },
+    "rawSummary": {
+      "count": 2
+    },
+    "findingsComplete": true,
+    "findings": [
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "type": "findings",
+        "attributes": {
+          "cause_of_failure": true,
+          "description": "Synthetic finding for output contract tests.",
+          "evidence": [
+            {
+              "source": "dependency_path",
+              "path": [
+                {
+                  "name": "example-app",
+                  "version": "1.0.0"
+                },
+                {
+                  "name": "example-lib",
+                  "version": "1.0.0"
+                }
+              ]
+            }
+          ],
+          "finding_type": "sca",
+          "key": "finding-2",
+          "locations": [
+            {
+              "type": "package",
+              "package": {
+                "name": "example-lib",
+                "version": "1.0.0"
+              }
+            }
+          ],
+          "problems": null,
+          "rating": {
+            "severity": "high"
+          },
+          "risk": {},
+          "title": "Example finding"
+        },
+        "relationships": {
+          "asset": {
+            "data": {
+              "id": "20000000-0000-4000-8000-000000000001",
+              "type": "assets"
+            },
+            "links": {
+              "related": "https://example.com/assets/example"
+            }
+          }
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "type": "findings",
+        "attributes": {
+          "cause_of_failure": true,
+          "description": "Synthetic finding for output contract tests.",
+          "evidence": [],
+          "finding_type": "sca",
+          "key": "finding-1",
+          "locations": [
+            {
+              "type": "package",
+              "package": {
+                "name": "example-lib",
+                "version": "1.1.0"
+              }
+            }
+          ],
+          "problems": null,
+          "rating": {
+            "severity": "high"
+          },
+          "risk": {},
+          "title": "Example finding"
+        }
+      }
+    ],
+    "problemStore": {
+      "SNYK-EXAMPLE-1": {
+        "source": "snyk_vuln",
+        "id": "SNYK-EXAMPLE-1",
+        "package_name": "example-lib",
+        "affected_versions": [
+          "<2.0.0"
+        ],
+        "initially_fixed_in_versions": [
+          "2.0.0"
+        ],
+        "is_fixable": true
+      }
+    },
+    "_problemRefs": {
+      "00000000-0000-4000-8000-000000000002": [
+        "SNYK-EXAMPLE-1"
+      ],
+      "00000000-0000-4000-8000-000000000001": [
+        "SNYK-EXAMPLE-1"
+      ]
+    }
+  }
+]
