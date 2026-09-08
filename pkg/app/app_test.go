@@ -38,9 +38,11 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -1905,4 +1907,69 @@ func Test_WithPostInvokeHooks(t *testing.T) {
 	_, err = engine.Invoke(wfId)
 	assert.NoError(t, err)
 	assert.True(t, hookCalled, "hook registered via WithPostInvokeHooks should fire")
+}
+
+// Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved guards an
+// ordering property that is easy to break: the framework's own extension
+// initializers all run before those of the consuming application, and some of
+// them read a feature flag while initializing. A lookup that fixes the set of
+// known flags at that moment would silently resolve every flag registered by a
+// downstream extension to false.
+func Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved(t *testing.T) {
+	orgId := "0d2bc57c-1df9-4115-996f-4f19aa12912b"
+	downstreamFlag := "downstream-extension-flag"
+	downstreamConfigKey := "internal_downstream_extension_enabled"
+
+	var mutex sync.Mutex
+	var requestedFlags []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "feature_flags") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var request v20241015.FeatureFlagRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+
+		mutex.Lock()
+		requestedFlags = append(requestedFlags, request.Data.Attributes.Flags...)
+		mutex.Unlock()
+
+		enabled := true
+		evaluations := make([]v20241015.FeatureFlagAttributes, 0, len(request.Data.Attributes.Flags))
+		for _, flag := range request.Data.Attributes.Flags {
+			evaluations = append(evaluations, v20241015.FeatureFlagAttributes{Key: flag, Value: &enabled})
+		}
+
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": v20241015.FeatureFlagsDataItem{
+				Attributes: v20241015.FeatureFlagAttributesList{Evaluations: evaluations},
+			},
+		}))
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	// mimics an extension of the consuming application, which is initialized
+	// after every extension the framework brings along
+	engine.AddExtensionInitializer(func(e workflow.Engine) error {
+		config_utils.AddFeatureFlagsToConfig(e, map[string]string{downstreamConfigKey: downstreamFlag})
+		return nil
+	})
+
+	require.NoError(t, engine.Init())
+
+	assert.True(t, config.GetBool(downstreamConfigKey),
+		"a feature flag registered by a downstream extension must be looked up")
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	assert.Contains(t, requestedFlags, downstreamFlag)
 }

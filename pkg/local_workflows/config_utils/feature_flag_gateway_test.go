@@ -45,6 +45,82 @@ func newFlagsResponse(evals []v20241015.FeatureFlagAttributes) *v20241015.ListFe
 	}
 }
 
+// flagGatewayStub records every batch evaluateFlags was called with and reports
+// each requested flag as enabled, except for the ones it was told to omit from
+// the response.
+type flagGatewayStub struct {
+	mu      sync.Mutex
+	batches [][]string
+	omit    map[string]bool
+}
+
+func stubFlagGateway(t *testing.T, omitFromResponse ...string) *flagGatewayStub {
+	t.Helper()
+
+	stub := &flagGatewayStub{omit: make(map[string]bool, len(omitFromResponse))}
+	for _, flag := range omitFromResponse {
+		stub.omit[flag] = true
+	}
+
+	originalEvaluateFlags := evaluateFlags
+	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		org uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		if len(flags) == 0 {
+			t.Error("evaluateFlags must never be called without flags")
+		}
+
+		stub.mu.Lock()
+		stub.batches = append(stub.batches, slices.Clone(flags))
+		stub.mu.Unlock()
+
+		enabled := true
+		evaluations := make([]v20241015.FeatureFlagAttributes, 0, len(flags))
+		for _, flag := range flags {
+			if stub.omit[flag] {
+				continue
+			}
+			evaluations = append(evaluations, v20241015.FeatureFlagAttributes{Key: flag, Value: &enabled})
+		}
+
+		return newFlagsResponse(evaluations), nil
+	}
+
+	return stub
+}
+
+func (s *flagGatewayStub) recordedBatches() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.batches)
+}
+
+func newFlagTestConfig() configuration.Configuration {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, testAPIEndpoint)
+	config.Set(configuration.ORGANIZATION, testOrgID)
+	return config
+}
+
+func newFlagTestEngine(t *testing.T, config configuration.Configuration) workflow.Engine {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	logger := zerolog.Logger{}
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+
+	return mockEngine
+}
+
 func Test_AddFeatureFlagGatewayToConfig_CacheDependentOnOrg(t *testing.T) {
 	testConfigKey := "test_feature_flag"
 	flag := "my-flag"
@@ -161,39 +237,9 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T) {
 	flagCount := 50
 
-	var apiCallCount int32
-	var capturedFlags []string
-
-	originalEvaluateFlags := evaluateFlags
-	t.Cleanup(func() { evaluateFlags = originalEvaluateFlags })
-
-	evaluateFlags = func(
-		config configuration.Configuration,
-		engine workflow.Engine,
-		flags []string,
-		org uuid.UUID,
-	) (*v20241015.ListFeatureFlagsResponse, error) {
-		atomic.AddInt32(&apiCallCount, 1)
-		capturedFlags = flags
-		trueVal := true
-		evals := make([]v20241015.FeatureFlagAttributes, len(flags))
-		for i, f := range flags {
-			evals[i] = v20241015.FeatureFlagAttributes{Key: f, Value: &trueVal}
-		}
-		return newFlagsResponse(evals), nil
-	}
-
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	mockEngine := mocks.NewMockEngine(ctrl)
-	logger := zerolog.Logger{}
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, testAPIEndpoint)
-	config.Set(configuration.ORGANIZATION, testOrgID)
-
-	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
 
 	var wg sync.WaitGroup
 	for i := 0; i < flagCount; i++ {
@@ -202,7 +248,7 @@ func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T
 			defer wg.Done()
 			configKey := fmt.Sprintf("concurrent_key_%d", i)
 			flagName := fmt.Sprintf("concurrent-flag-%d", i)
-			AddFeatureFlagsToConfig(mockEngine, map[string]string{configKey: flagName})
+			AddFeatureFlagsToConfig(engine, map[string]string{configKey: flagName})
 		}(i)
 	}
 	wg.Wait()
@@ -215,16 +261,98 @@ func Test_AddFeatureFlagsToConfig_ConcurrentRegistrationAndBatching(t *testing.T
 		assert.True(t, config.GetBool(configKey), "flag %s should be resolvable", configKey)
 	}
 
-	assert.Equal(t, int32(1), atomic.LoadInt32(&apiCallCount),
-		"all registered flags must resolve from a single batched API call")
-
 	expectedFlags := make([]string, flagCount)
 	for i := 0; i < flagCount; i++ {
 		expectedFlags[i] = fmt.Sprintf("concurrent-flag-%d", i)
 	}
 	slices.Sort(expectedFlags)
-	assert.Equal(t, expectedFlags, capturedFlags,
-		"batch request must contain all registered flag names")
+
+	assert.Equal(t, [][]string{expectedFlags}, stub.recordedBatches(),
+		"all registered flags must resolve from a single batched API call")
+}
+
+func Test_AddFeatureFlagsToConfig_RegistrationsBeforeFirstAccessShareOneRequest(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{"batched_key_a": "batched-flag-a"})
+	AddFeatureFlagsToConfig(engine, map[string]string{"batched_key_b": "batched-flag-b"})
+	AddFeatureFlagsToConfig(engine, map[string]string{"batched_key_c": "batched-flag-c"})
+
+	assert.True(t, config.GetBool("batched_key_b"))
+	assert.True(t, config.GetBool("batched_key_a"))
+	assert.True(t, config.GetBool("batched_key_c"))
+
+	assert.Equal(t, [][]string{{"batched-flag-a", "batched-flag-b", "batched-flag-c"}}, stub.recordedBatches(),
+		"the first access must look up every flag registered so far")
+}
+
+func Test_AddFeatureFlagsToConfig_LateRegistrationIsLookedUp(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{"early_key": "early-flag"})
+	assert.True(t, config.GetBool("early_key"))
+
+	// registered after the first lookup already happened
+	AddFeatureFlagsToConfig(engine, map[string]string{
+		"late_key_a": "late-flag-a",
+		"late_key_b": "late-flag-b",
+	})
+
+	assert.True(t, config.GetBool("late_key_a"), "a flag registered after an earlier lookup must be looked up")
+	assert.True(t, config.GetBool("late_key_b"))
+
+	assert.Equal(t, [][]string{{"early-flag"}, {"late-flag-a", "late-flag-b"}}, stub.recordedBatches(),
+		"the second lookup must only request the flags that are not known yet")
+}
+
+func Test_AddFeatureFlagsToConfig_ClonedConfigurationSharesLookup(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{"clone_key": "clone-flag"})
+
+	clone := config.Clone()
+	assert.True(t, clone.GetBool("clone_key"))
+	assert.True(t, config.GetBool("clone_key"))
+
+	assert.Equal(t, [][]string{{"clone-flag"}}, stub.recordedBatches(),
+		"a cloned configuration must reuse the lookup of the configuration it was cloned from")
+}
+
+func Test_AddFeatureFlagsToConfig_LookupIsScopedToApiEndpoint(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{"endpoint_key": "endpoint-flag"})
+	assert.True(t, config.GetBool("endpoint_key"))
+
+	otherEndpoint := config.Clone()
+	otherEndpoint.Set(configuration.API_URL, "https://api.eu.snyk.io")
+	assert.True(t, otherEndpoint.GetBool("endpoint_key"))
+
+	assert.Equal(t, [][]string{{"endpoint-flag"}, {"endpoint-flag"}}, stub.recordedBatches(),
+		"a configuration addressing another endpoint must not reuse the lookup")
+}
+
+func Test_AddFeatureFlagsToConfig_FlagMissingFromResponseIsNotRequestedAgain(t *testing.T) {
+	stub := stubFlagGateway(t, "unreported-flag")
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{"unreported_key": "unreported-flag"})
+
+	for i := 0; i < 3; i++ {
+		assert.False(t, config.GetBool("unreported_key"))
+	}
+
+	assert.Equal(t, [][]string{{"unreported-flag"}}, stub.recordedBatches(),
+		"a flag the gateway does not report must resolve to false without being requested again")
 }
 
 func Test_AddFeatureFlagsToConfig_ConcurrentReads(t *testing.T) {
