@@ -6,7 +6,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
-	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	featureflaggateway "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway"
@@ -18,13 +18,84 @@ import (
 var evaluateFlags = featureflaggateway.EvaluateFlags
 var errInvalidEvaluateFlagsResponse = errors.New("invalid evaluateFlags response")
 
+const registryConfigKey = "hidden_feature_flag_registry"
+
+var registryMu sync.Mutex
+
+type flagRegistry struct {
+	mu       sync.RWMutex
+	flags    map[string]struct{}
+	orgFetch sync.Map
+}
+
+type orgFetchResult struct {
+	mu     sync.Mutex
+	values map[string]bool
+	done   bool
+}
+
+func getOrCreateRegistry(config configuration.Configuration) *flagRegistry {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	if v := config.Get(registryConfigKey); v != nil {
+		if r, ok := v.(*flagRegistry); ok {
+			return r
+		}
+	}
+	r := &flagRegistry{flags: make(map[string]struct{})}
+	config.Set(registryConfigKey, r)
+	return r
+}
+
+func (r *flagRegistry) addFlags(flags []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, f := range flags {
+		r.flags[f] = struct{}{}
+	}
+}
+
+func (r *flagRegistry) allFlags() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]string, 0, len(r.flags))
+	for f := range r.flags {
+		result = append(result, f)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func (r *flagRegistry) resolve(c configuration.Configuration, engine workflow.Engine, orgID string, flagName string) (bool, error) {
+	fetchI, _ := r.orgFetch.LoadOrStore(orgID, &orgFetchResult{})
+	f := fetchI.(*orgFetchResult)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if !f.done {
+		allFlags := r.allFlags()
+		var err error
+		f.values, err = areFeaturesEnabled(c, engine, orgID, allFlags...)
+		if err != nil {
+			return false, fmt.Errorf("check feature flags batch: %w", err)
+		}
+		f.done = true
+	}
+
+	return f.values[flagName], nil
+}
+
 func AddFeatureFlagsToConfig(
 	engine workflow.Engine,
 	configKeyToFlag map[string]string,
 ) {
 	config := engine.GetConfiguration()
-	flags := slices.Collect(maps.Values(configKeyToFlag))
-	sort.Strings(flags)
+	registry := getOrCreateRegistry(config)
+
+	newFlags := slices.Collect(maps.Values(configKeyToFlag))
+	registry.addFlags(newFlags)
 
 	for configKey, flagName := range configKeyToFlag {
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
@@ -38,23 +109,7 @@ func AddFeatureFlagsToConfig(
 			}
 
 			orgID := c.GetString(configuration.ORGANIZATION)
-			cacheKey := fmt.Sprintf("hidden_flags_%s:%s", orgID, strings.Join(flags, ","))
-			if cached := c.Get(cacheKey); cached != nil {
-				if m, ok := cached.(map[string]bool); ok {
-					return m[flagName], nil
-				}
-			}
-
-			res, err := areFeaturesEnabled(c, engine, orgID, flags...)
-			if err != nil {
-				return false, fmt.Errorf("check feature flags batch: %w", err)
-			}
-			if err := config.AddKeyDependency(cacheKey, configuration.ORGANIZATION); err != nil {
-				engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", cacheKey)
-			}
-			c.Set(cacheKey, res)
-
-			return res[flagName], nil
+			return registry.resolve(c, engine, orgID, flagName)
 		}
 		config.AddDefaultValue(configKey, callback)
 	}
