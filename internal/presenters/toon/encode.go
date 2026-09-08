@@ -3,8 +3,9 @@ package toon
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 )
 
 var unquotedKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*$`)
@@ -19,27 +20,6 @@ func Kind(value any) string {
 	default:
 		return "scalar"
 	}
-}
-
-func sortedKeys(obj map[string]any) []string {
-	keys := make([]string, 0, len(obj))
-	for key := range obj {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func sameKeySet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func AllPrimitive(items []any) bool {
@@ -82,17 +62,17 @@ func TabularFields(items []any) []TabularField {
 		return nil
 	}
 
-	fieldOrder := sortedKeys(firstObj)
+	fieldOrder := slices.Sorted(maps.Keys(firstObj))
 	columns := make(map[string][]any, len(fieldOrder))
 	for index, item := range items {
 		obj, ok := item.(map[string]any)
 		if !ok || obj == nil || len(obj) == 0 {
 			return nil
 		}
-		keys := sortedKeys(obj)
+		keys := slices.Sorted(maps.Keys(obj))
 		if index == 0 {
 			fieldOrder = keys
-		} else if !sameKeySet(fieldOrder, keys) {
+		} else if !slices.Equal(fieldOrder, keys) {
 			return nil
 		}
 		for _, key := range fieldOrder {
@@ -116,42 +96,8 @@ func classifyColumn(values []any) (TabularField, bool) {
 	if AllPrimitive(values) {
 		return TabularField{}, true
 	}
-
-	var nestedOrder []string
-	for index, value := range values {
-		obj, ok := value.(map[string]any)
-		if !ok || obj == nil || len(obj) == 0 {
-			return TabularField{}, false
-		}
-		keys := sortedKeys(obj)
-		if index == 0 {
-			nestedOrder = keys
-		} else if !sameKeySet(nestedOrder, keys) {
-			return TabularField{}, false
-		}
-	}
-
-	nestedColumns := make(map[string][]any, len(nestedOrder))
-	for _, value := range values {
-		obj, ok := value.(map[string]any)
-		if !ok || obj == nil || len(obj) == 0 {
-			return TabularField{}, false
-		}
-		for _, key := range nestedOrder {
-			nestedColumns[key] = append(nestedColumns[key], obj[key])
-		}
-	}
-
-	nested := make([]TabularField, len(nestedOrder))
-	for i, name := range nestedOrder {
-		field, ok := classifyColumn(nestedColumns[name])
-		if !ok {
-			return TabularField{}, false
-		}
-		field.Name = name
-		nested[i] = field
-	}
-	return TabularField{Nested: nested}, true
+	nested := TabularFields(values)
+	return TabularField{Nested: nested}, len(nested) > 0
 }
 
 func TabularCells(obj map[string]any, schema []TabularField) ([]any, error) {
