@@ -1,0 +1,162 @@
+package toon
+
+import (
+	"fmt"
+	"strings"
+)
+
+// FormatTabularField quotes a tabular-array cell value (comma-delimited).
+func FormatTabularField(value string) (string, error) {
+	return formatString(value, formatContext{active: ',', inArray: true})
+}
+
+// FormatScalarValue quotes an object field value after "key: ".
+func FormatScalarValue(value string) (string, error) {
+	return formatString(value, formatContext{document: '\n'})
+}
+
+func formatString(value string, ctx formatContext) (string, error) {
+	if needsQuoting(value, ctx) {
+		return quoteString(value), nil
+	}
+	return value, nil
+}
+
+type formatContext struct {
+	active   rune
+	document rune
+	inArray  bool
+}
+
+//nolint:gocyclo // mirrors toon-go format.NeedsQuoting rules
+func needsQuoting(value string, ctx formatContext) bool {
+	if len(value) == 0 {
+		return true
+	}
+	if strings.TrimSpace(value) != value {
+		return true
+	}
+	switch value {
+	case "true", "false", "null":
+		return true
+	}
+	if looksNumeric(value) || hasLeadingZeroDecimal(value) {
+		return true
+	}
+	if strings.ContainsAny(value, ":\\\"[]{}") {
+		return true
+	}
+	if strings.IndexFunc(value, func(r rune) bool { return r < 0x20 }) >= 0 {
+		return true
+	}
+	if strings.HasPrefix(value, "-") {
+		return true
+	}
+	if value == "#" || strings.HasPrefix(value, "#") {
+		return true
+	}
+	if ctx.inArray && ctx.active != 0 && strings.ContainsRune(value, ctx.active) {
+		return true
+	}
+	if !ctx.inArray && ctx.document != 0 && strings.ContainsRune(value, ctx.document) {
+		return true
+	}
+	return false
+}
+
+func quoteString(value string) string {
+	var b strings.Builder
+	b.Grow(len(value) + 2)
+	b.WriteByte('"')
+	for _, r := range value {
+		switch r {
+		case '\\':
+			b.WriteString("\\\\")
+		case '"':
+			b.WriteString("\\\"")
+		case '\n':
+			b.WriteString("\\n")
+		case '\r':
+			b.WriteString("\\r")
+		case '\t':
+			b.WriteString("\\t")
+		default:
+			if r < 0x20 {
+				b.WriteString(fmt.Sprintf(`\u%04x`, r))
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+//nolint:gocyclo // mirrors toon-go format.LooksNumeric rules
+func looksNumeric(value string) bool {
+	if len(value) == 0 {
+		return false
+	}
+	i := 0
+	if value[0] == '-' {
+		i++
+		if i == len(value) {
+			return false
+		}
+	}
+	digits := 0
+	for i < len(value) && isDigit(value[i]) {
+		i++
+		digits++
+	}
+	if digits == 0 {
+		return false
+	}
+	if i < len(value) && value[i] == '.' {
+		i++
+		if i == len(value) || !isDigit(value[i]) {
+			return false
+		}
+		for i < len(value) && isDigit(value[i]) {
+			i++
+		}
+	}
+	if i < len(value) && (value[i] == 'e' || value[i] == 'E') {
+		i++
+		if i < len(value) && (value[i] == '+' || value[i] == '-') {
+			i++
+		}
+		if i == len(value) || !isDigit(value[i]) {
+			return false
+		}
+		for i < len(value) && isDigit(value[i]) {
+			i++
+		}
+	}
+	return i == len(value)
+}
+
+func hasLeadingZeroDecimal(value string) bool {
+	if len(value) < 2 || value[0] != '0' {
+		return false
+	}
+	if value[1] == '.' {
+		return len(value) > 2 && isDigit(value[2])
+	}
+	if !isDigit(value[1]) {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		switch value[i] {
+		case '.':
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
+}
