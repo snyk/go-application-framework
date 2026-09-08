@@ -12,9 +12,14 @@ import (
 func TestFormatTabularField_quotesComma(t *testing.T) {
 	t.Parallel()
 
-	got, err := toon.FormatTabularField(`rule,with"comma"`)
-	require.NoError(t, err)
-	assert.Equal(t, `"rule,with\"comma\""`, got)
+	for _, tc := range []struct{ input, expected string }{
+		{`Doe, Jane`, `"Doe, Jane"`},
+		{`rule,with"comma"`, `"rule,with\"comma\""`},
+	} {
+		got, err := toon.FormatTabularField(tc.input)
+		require.NoError(t, err)
+		assert.Equal(t, tc.expected, got)
+	}
 }
 
 func TestFormatTabularField_plainValueUnquoted(t *testing.T) {

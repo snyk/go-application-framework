@@ -86,6 +86,8 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 			"finding_type": "new_product",
 			"problems": [{"source": "new_product", "details": {
 				"arrays": [[], [[true, false], null]],
+				"credits": ["Doe, Jane", "Smith"],
+				"nestedCredits": [["Doe, Jane", "Smith"]],
 				"rows": [{"a": [1, 2]}, {"a": [{"nested": {"value": true}}]}]
 			}}]
 		}}]
@@ -97,6 +99,8 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 	require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 	assert.Contains(t, output.String(), "finding_type: new_product")
 	assert.Contains(t, output.String(), "source: new_product")
+	assert.Contains(t, output.String(), `credits[2]: "Doe, Jane",Smith`)
+	assert.Contains(t, output.String(), "nestedCredits[1]:\n                  - [2]: \"Doe, Jane\",Smith")
 	assert.Contains(t, output.String(), "arrays[2]:\n                  - []\n                  - [2]:\n                    - [2]: true,false\n                    - null")
 	assert.Contains(t, output.String(), "rows[2]:\n                  - a[2]: 1,2\n                  - a[1]{nested{value}}:\n                      true")
 }
