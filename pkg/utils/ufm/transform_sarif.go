@@ -22,6 +22,7 @@ type transformConfig struct {
 	severityThreshold string
 }
 
+// WithSeverityThreshold drops findings below the given severity.
 func WithSeverityThreshold(threshold string) TransformOption {
 	return func(c *transformConfig) {
 		c.severityThreshold = threshold
@@ -34,15 +35,19 @@ func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_sc
 		opt(cfg)
 	}
 
-	findings, extras, err := mapUFMFindings(sarifDoc, cfg.severityThreshold)
+	// Empty means no filtering; resolving it would drop unmapped severities.
+	var allowed []string
+	if cfg.severityThreshold != "" {
+		allowed = findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, cfg.severityThreshold)
+	}
+
+	findings, extras, err := mapUFMFindings(sarifDoc, allowed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map findings: %w", err)
 	}
-
-	allowed := findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, cfg.severityThreshold)
 	effectiveSummary := buildEffectiveSummary(testSummary, allowed)
-	rawSummary := buildRawSummary(testSummary)
-	suppressedSummary := buildSuppressedSummary(testSummary)
+	rawSummary := buildRawSummary(testSummary, allowed)
+	suppressedSummary := buildSuppressedSummary(testSummary, allowed)
 
 	result := NewSarifTestResult(
 		findings,
@@ -88,7 +93,8 @@ type FindingExtra struct {
 	PolicyOriginalSeverity string                `json:"policyOriginalSeverity,omitempty"`
 }
 
-func mapUFMFindings(sarifDoc *sarif.SarifDocument, severityThreshold string) ([]testapi.FindingData, map[string]interface{}, error) {
+// mapUFMFindings converts every SARIF result into a finding; an empty allowedSeverities keeps all of them.
+func mapUFMFindings(sarifDoc *sarif.SarifDocument, allowedSeverities []string) ([]testapi.FindingData, map[string]interface{}, error) {
 	if len(sarifDoc.Runs) == 0 {
 		return []testapi.FindingData{}, nil, nil
 	}
@@ -97,11 +103,9 @@ func mapUFMFindings(sarifDoc *sarif.SarifDocument, severityThreshold string) ([]
 	rules := sarifDoc.Runs[0].Tool.Driver.Rules
 	perFinding := make(map[string]interface{})
 
-	allowed := findings_utils.FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, severityThreshold)
-
 	for _, res := range sarifDoc.Runs[0].Results {
 		severity := sarif_utils.SarifLevelToSeverity(res.Level)
-		if severityThreshold != "" && !slices.Contains(allowed, severity) {
+		if len(allowedSeverities) > 0 && !slices.Contains(allowedSeverities, severity) {
 			continue
 		}
 
@@ -170,7 +174,7 @@ func mapUFMFinding(res sarif.Result, rules []sarif.Rule) (testapi.FindingData, e
 		key = res.Fingerprints.Num0
 	}
 	if key == "" {
-		key = res.RuleID
+		key = findingLocationKey(res)
 	}
 
 	problems := mapUFMProblems(res, rules)
@@ -217,10 +221,20 @@ func generateFindingID(res sarif.Result) uuid.UUID {
 
 	seed := res.RuleID + res.Fingerprints.Num0 + res.Fingerprints.Num1
 	if res.Fingerprints.Num0 == "" && res.Fingerprints.Num1 == "" && len(res.Locations) > 0 {
-		loc := res.Locations[0].PhysicalLocation
-		seed += loc.ArtifactLocation.URI + fmt.Sprintf(":%d", loc.Region.StartLine)
+		seed = findingLocationKey(res)
 	}
 	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(seed))
+}
+
+// findingLocationKey identifies a result with no fingerprint, used for both
+// Attributes.Key and the generated finding ID.
+func findingLocationKey(res sarif.Result) string {
+	if len(res.Locations) == 0 {
+		return res.RuleID
+	}
+
+	location := res.Locations[0].PhysicalLocation
+	return fmt.Sprintf("%s|%s:%d:%d", res.RuleID, location.ArtifactLocation.URI, location.Region.StartLine, location.Region.StartColumn)
 }
 
 func mapUFMLocations(res sarif.Result) ([]testapi.FindingLocation, error) {
@@ -435,6 +449,8 @@ func mapUFMSuppression(res sarif.Result) *testapi.Suppression {
 		}
 	}
 
+	// Relative expirations like "15 days" stay unparsed but are preserved
+	// verbatim in SuppressionExtra.Expiration.
 	if suppression.Properties.Expiration != nil {
 		if t, err := time.Parse(time.RFC3339, *suppression.Properties.Expiration); err == nil {
 			ufmSuppression.ExpiresAt = &t
@@ -444,12 +460,12 @@ func mapUFMSuppression(res sarif.Result) *testapi.Suppression {
 	return ufmSuppression
 }
 
-func buildEffectiveSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
+// buildSummary counts one column of the test summary per severity, filtered by allowedSeverities.
+func buildSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string, count func(json_schemas.TestSummaryResult) int) *testapi.FindingSummary {
 	if testSummary == nil {
 		return nil
 	}
 
-	countBy := make(map[string]map[string]uint32)
 	severityCounts := make(map[string]uint32)
 	var total uint32
 
@@ -457,11 +473,11 @@ func buildEffectiveSummary(testSummary *json_schemas.TestSummary, allowedSeverit
 		if len(allowedSeverities) > 0 && !slices.Contains(allowedSeverities, result.Severity) {
 			continue
 		}
-		severityCounts[result.Severity] = uint32(result.Open)
-		total += uint32(result.Open)
+		severityCounts[result.Severity] = uint32(count(result))
+		total += uint32(count(result))
 	}
 
-	countBy["severity"] = severityCounts
+	countBy := map[string]map[string]uint32{"severity": severityCounts}
 
 	return &testapi.FindingSummary{
 		Count:   total,
@@ -469,48 +485,16 @@ func buildEffectiveSummary(testSummary *json_schemas.TestSummary, allowedSeverit
 	}
 }
 
-func buildRawSummary(testSummary *json_schemas.TestSummary) *testapi.FindingSummary {
-	if testSummary == nil {
-		return nil
-	}
-
-	countBy := make(map[string]map[string]uint32)
-	severityCounts := make(map[string]uint32)
-	var total uint32
-
-	for _, result := range testSummary.Results {
-		severityCounts[result.Severity] = uint32(result.Total)
-		total += uint32(result.Total)
-	}
-
-	countBy["severity"] = severityCounts
-
-	return &testapi.FindingSummary{
-		Count:   total,
-		CountBy: &countBy,
-	}
+func buildEffectiveSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
+	return buildSummary(testSummary, allowedSeverities, func(r json_schemas.TestSummaryResult) int { return r.Open })
 }
 
-func buildSuppressedSummary(testSummary *json_schemas.TestSummary) *testapi.FindingSummary {
-	if testSummary == nil {
-		return nil
-	}
+func buildRawSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
+	return buildSummary(testSummary, allowedSeverities, func(r json_schemas.TestSummaryResult) int { return r.Total })
+}
 
-	countBy := make(map[string]map[string]uint32)
-	severityCounts := make(map[string]uint32)
-	var total uint32
-
-	for _, result := range testSummary.Results {
-		severityCounts[result.Severity] = uint32(result.Ignored)
-		total += uint32(result.Ignored)
-	}
-
-	countBy["severity"] = severityCounts
-
-	return &testapi.FindingSummary{
-		Count:   total,
-		CountBy: &countBy,
-	}
+func buildSuppressedSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
+	return buildSummary(testSummary, allowedSeverities, func(r json_schemas.TestSummaryResult) int { return r.Ignored })
 }
 
 func collectPriorityScoreFactors(res sarif.Result) []PriorityScoreFactor {

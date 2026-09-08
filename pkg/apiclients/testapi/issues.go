@@ -774,7 +774,7 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 
 // processSecretsRuleProblem extracts data from a secrets rule problem
 func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
-	if id := problem.GetID(); id != "" && b.problemID == "" {
+	if id := problem.GetID(); id != "" {
 		b.problemID = id
 	}
 
@@ -788,7 +788,7 @@ func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
 
 // processSnykCodeRuleProblem extracts data from a Snyk Code rule problem
 func (b *issueBuilder) processSnykCodeRuleProblem(problem *Problem) {
-	if id := problem.GetID(); id != "" && b.problemID == "" {
+	if id := problem.GetID(); id != "" {
 		b.problemID = id
 	}
 

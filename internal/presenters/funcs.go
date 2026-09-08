@@ -283,9 +283,35 @@ func getPolicyModificationsFromIssue(issue testapi.Issue) []testapi.PolicyModifi
 	return nil
 }
 
-// findingExtraLocal mirrors the JSON shape of ufm.FindingExtra for deserialization
-// when metadata arrives as map[string]interface{} (e.g. after JSON round-trip).
-// Cannot import pkg/utils/ufm directly due to an import cycle.
+func joinPolicyModificationReasons(modifications []testapi.PolicyModification) string {
+	reasons := make([]string, 0, len(modifications))
+	for _, modification := range modifications {
+		if modification.Reason != "" {
+			reasons = append(reasons, modification.Reason)
+		}
+	}
+	return strings.Join(reasons, "; ")
+}
+
+// buildRuleIndexes maps each problem ID to its position in uniqueRules.
+func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
+	indexes := make(map[string]int, len(uniqueRules))
+	for index, issue := range uniqueRules {
+		indexes[issue.GetProblemID()] = index
+	}
+	return indexes
+}
+
+// Mirrors ufm.MetadataKeyFindingExtras / ufm.MetadataKeyCoverage; see
+// findingExtraLocal for why they can't be imported instead.
+const (
+	metadataKeyFindingExtras = "finding-extras"
+	metadataKeyCoverage      = "coverage"
+)
+
+// findingExtraLocal mirrors the JSON shape of ufm.FindingExtra for
+// deserialization when metadata arrives as map[string]interface{} (e.g. after
+// JSON round-trip). Cannot import pkg/utils/ufm directly due to an import cycle.
 type findingExtraLocal struct {
 	Fingerprints           map[string]string          `json:"fingerprints,omitempty"`
 	IsAutofixable          bool                       `json:"isAutofixable,omitempty"`
@@ -314,8 +340,10 @@ type priorityScoreFactorLocal struct {
 	Type  string `json:"type"`
 }
 
-func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) interface{} {
-	extras, ok := testResult.GetMetadataValue("finding-extras").(map[string]interface{})
+// getFindingExtraFromIssue returns the SARIF details the transformation stashed
+// on the test result for one of the issue's findings, or nil when there are none.
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) *findingExtraLocal {
+	extras, ok := testResult.GetMetadataValue(metadataKeyFindingExtras).(map[string]interface{})
 	if !ok {
 		return nil
 	}
@@ -327,91 +355,24 @@ func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult
 		if !found {
 			continue
 		}
-		if m, isMap := extra.(map[string]interface{}); isMap {
-			return findingExtraFromMap(m)
+		if decoded := findingExtraFromValue(extra); decoded != nil {
+			return decoded
 		}
-		return extra
 	}
 	return nil
 }
 
-func findingExtraFromMap(m map[string]interface{}) findingExtraLocal {
-	fe := findingExtraLocal{}
-	if v, ok := m["fingerprints"].(map[string]interface{}); ok {
-		fe.Fingerprints = make(map[string]string, len(v))
-		for k, val := range v {
-			fe.Fingerprints[k] = fmt.Sprintf("%v", val)
-		}
+// findingExtraFromValue normalizes a struct or map metadata value into findingExtraLocal.
+func findingExtraFromValue(value interface{}) *findingExtraLocal {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
 	}
-	if v, ok := m["isAutofixable"].(bool); ok {
-		fe.IsAutofixable = v
-	}
-	if v, ok := m["arguments"].([]interface{}); ok {
-		fe.Arguments = make([]string, len(v))
-		for i, a := range v {
-			fe.Arguments[i] = fmt.Sprintf("%v", a)
-		}
-	}
-	if v, ok := m["messageText"].(string); ok {
-		fe.MessageText = v
-	}
-	if v, ok := m["messageMarkdown"].(string); ok {
-		fe.MessageMarkdown = v
-	}
-	if v, ok := m["ruleIndex"].(float64); ok {
-		fe.RuleIndex = int(v)
-	}
-	if v, ok := m["policyOriginalLevel"].(string); ok {
-		fe.PolicyOriginalLevel = v
-	}
-	if v, ok := m["policySeverity"].(string); ok {
-		fe.PolicySeverity = v
-	}
-	if v, ok := m["policyOriginalSeverity"].(string); ok {
-		fe.PolicyOriginalSeverity = v
-	}
-	if v, ok := m["suppression"].(map[string]interface{}); ok {
-		fe.Suppression = suppressionExtraFromMap(v)
-	}
-	if v, ok := m["priorityScoreFactors"].([]interface{}); ok {
-		fe.PriorityScoreFactors = make([]priorityScoreFactorLocal, 0, len(v))
-		for _, item := range v {
-			if fm, ok := item.(map[string]interface{}); ok {
-				factor := priorityScoreFactorLocal{}
-				if label, ok := fm["label"].(bool); ok {
-					factor.Label = label
-				}
-				if typ, ok := fm["type"].(string); ok {
-					factor.Type = typ
-				}
-				fe.PriorityScoreFactors = append(fe.PriorityScoreFactors, factor)
-			}
-		}
+	fe := &findingExtraLocal{}
+	if err := json.Unmarshal(data, fe); err != nil {
+		return nil
 	}
 	return fe
-}
-
-func suppressionExtraFromMap(m map[string]interface{}) *suppressionExtraLocal {
-	s := &suppressionExtraLocal{}
-	if v, ok := m["guid"].(string); ok {
-		s.GUID = v
-	}
-	if v, ok := m["category"].(string); ok {
-		s.Category = v
-	}
-	if v, ok := m["ignoredBy"].(string); ok {
-		s.IgnoredBy = v
-	}
-	if v, ok := m["email"].(string); ok {
-		s.Email = v
-	}
-	if v, ok := m["expiration"].(string); ok {
-		s.Expiration = v
-	}
-	if v, ok := m["ignoredOn"].(string); ok {
-		s.IgnoredOn = v
-	}
-	return s
 }
 
 type coverageLocal struct {
@@ -422,19 +383,19 @@ type coverageLocal struct {
 }
 
 func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
-	raw := testResult.GetMetadataValue("coverage")
+	raw := testResult.GetMetadataValue(metadataKeyCoverage)
 	if raw == nil {
-		return nil
+		return []coverageLocal{}
 	}
 
 	if arr, ok := raw.([]interface{}); ok {
 		b, err := json.Marshal(arr)
 		if err != nil {
-			return nil
+			return raw
 		}
 		var covs []coverageLocal
 		if err := json.Unmarshal(b, &covs); err != nil {
-			return nil
+			return raw
 		}
 		return covs
 	}
@@ -461,30 +422,10 @@ func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem 
 	return nil
 }
 
-func fingerprintsJSON(extra interface{}, fallbackID string) string {
+func fingerprintsJSON(extra *findingExtraLocal, fallbackID string) string {
 	var fps map[string]string
 	if extra != nil {
-		switch e := extra.(type) {
-		case map[string]interface{}:
-			if raw, ok := e["fingerprints"]; ok {
-				if m, ok := raw.(map[string]interface{}); ok {
-					fps = make(map[string]string, len(m))
-					for k, v := range m {
-						fps[k] = fmt.Sprintf("%v", v)
-					}
-				}
-			}
-		default:
-			v := reflect.ValueOf(extra)
-			if v.Kind() == reflect.Struct {
-				f := v.FieldByName("Fingerprints")
-				if f.IsValid() && !f.IsNil() {
-					if m, ok := f.Interface().(map[string]string); ok {
-						fps = m
-					}
-				}
-			}
-		}
+		fps = extra.Fingerprints
 	}
 
 	if len(fps) == 0 {
@@ -546,6 +487,8 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	// UFM data access helpers
 	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	fnMap["getPolicyModificationsFromIssue"] = getPolicyModificationsFromIssue
+	fnMap["joinPolicyModificationReasons"] = joinPolicyModificationReasons
+	fnMap["buildRuleIndexes"] = buildRuleIndexes
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
 	fnMap["fingerprintsJSON"] = fingerprintsJSON

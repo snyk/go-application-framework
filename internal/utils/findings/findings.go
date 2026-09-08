@@ -11,16 +11,16 @@ type FindingsFilterFunc func(local_models.FindingResource) bool
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
 	if severityMinLevel == "" {
-		return original
+		return slices.Clone(original)
 	}
 
 	minLevelPointer := slices.Index(original, severityMinLevel)
 
 	if minLevelPointer >= 0 {
-		return original[minLevelPointer:]
+		return slices.Clone(original[minLevelPointer:])
 	}
 
-	return original
+	return slices.Clone(original)
 }
 
 func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string) FindingsFilterFunc {

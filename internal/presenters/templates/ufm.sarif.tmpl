@@ -7,6 +7,8 @@
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
 			{{- $findingType := index $findingTypes 0 }}
 			{{- $issues := getIssuesFromTestResult $result }}
+			{{- $uniqueRules := deduplicateIssues $issues "problemID" }}
+			{{- $ruleIndexes := buildRuleIndexes $uniqueRules }}
 			{{- $issuesSize := sub (len $issues) 1 }}
 			{{- $metadata := $result.Get "metadata" }}
 			{
@@ -17,7 +19,6 @@
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
 						"rules" : [
-							{{- $uniqueRules := deduplicateIssues $issues "problemID" }}
 							{{- $rulesSize := sub (len $uniqueRules) 1 }}
 							{{- range $index, $issue := $uniqueRules }}
 							{{- $tags := buildRuleTags $issue }}
@@ -141,13 +142,17 @@
 				{
 					"ruleId": {{ getQuotedString $problemID }},
 					{{- if $findingExtra }}
-					"ruleIndex": {{ $findingExtra.RuleIndex }},
+					"ruleIndex": {{ index $ruleIndexes $problemID }},
 					{{- end }}
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetEffectiveSeverity) }},
 					"message": {
-						{{- if and $findingExtra $findingExtra.MessageText }}
+						{{- if and $findingExtra (or $findingExtra.MessageText $findingExtra.MessageMarkdown) }}
+						{{- if $findingExtra.MessageText }}
 						"text": {{ getQuotedString $findingExtra.MessageText }},
+						{{- end }}
+						{{- if $findingExtra.MessageMarkdown }}
 						"markdown": {{ getQuotedString $findingExtra.MessageMarkdown }},
+						{{- end }}
 						"arguments": [
 							{{- if $findingExtra.Arguments }}
 							{{- $argSize := sub (len $findingExtra.Arguments) 1 }}
@@ -186,14 +191,14 @@
 									{{- end }}
 								},
 								"region": {
-									"startLine": {{ $physicalLoc.Region.StartLine }}{{if $physicalLoc.Region.EndLine}},{{end}}
-									{{- if $physicalLoc.Region.EndLine }}
-									"endLine": {{ $physicalLoc.Region.EndLine }}{{if $physicalLoc.Region.StartColumn}},{{end}}
+									"startLine": {{ $physicalLoc.Region.StartLine }}
+									{{- if $physicalLoc.Region.EndLine }},
+									"endLine": {{ $physicalLoc.Region.EndLine }}
 									{{- end }}
-									{{- if $physicalLoc.Region.StartColumn }}
-									"startColumn": {{ $physicalLoc.Region.StartColumn }}{{if $physicalLoc.Region.EndColumn}},{{end}}
+									{{- if $physicalLoc.Region.StartColumn }},
+									"startColumn": {{ $physicalLoc.Region.StartColumn }}
 									{{- end }}
-									{{- if $physicalLoc.Region.EndColumn }}
+									{{- if $physicalLoc.Region.EndColumn }},
 									"endColumn": {{ $physicalLoc.Region.EndColumn }}
 									{{- end }}
 								}
@@ -434,9 +439,7 @@
 					"properties": {
 						{{- if $policyMods }}
 						"snykPolicy/v1": {
-							{{- range $pmod := $policyMods }}
-							"reason": {{ getQuotedString $pmod.Reason }}
-							{{- end }}
+							"reason": {{ getQuotedString (joinPolicyModificationReasons $policyMods) }}
 						}{{if gt (int $riskScore) 0}},{{end}}
 						{{- end }}
 						{{- if gt (int $riskScore) 0 }}
@@ -449,9 +452,7 @@
 			],
 				{{- $coverage := getCoverageFromTestResult $result }}
 				{{- $reportURL := index $metadata "report-url" }}
-				{{- if or $coverage $reportURL }}
 				"properties": {
-					{{- if $coverage }}
 					"coverage": [
 						{{- $coverageSlice := $coverage }}
 						{{- $covSize := sub (len $coverageSlice) 1 }}
@@ -464,8 +465,7 @@
 						}{{if lt $covIndex $covSize}},{{end}}
 						{{- end }}
 					]
-					{{- end }}
-					{{- if and $coverage $reportURL }},{{end}}
+					{{- if $reportURL }},{{end}}
 					{{- if $reportURL }}
 					{{- $projectId := index $metadata "projectid" }}
 					{{- $snapshotId := index $metadata "snapshotid" }}
@@ -480,7 +480,6 @@
 					}
 					{{- end }}
 				},
-				{{- end }}
 				"automationDetails": {
 					{{- $projectName := or (index $metadata "project-name") "" }}
 					{{- if not $projectName }} {{- $projectName = printf "%d" $resultIndex }} {{- end }}

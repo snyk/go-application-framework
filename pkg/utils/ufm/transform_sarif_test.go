@@ -247,6 +247,34 @@ func TestTransformToUFMFromSarif_SeverityThreshold(t *testing.T) {
 		assert.False(t, hasMedium)
 	})
 
+	t.Run("filters every summary, not just the effective one", func(t *testing.T) {
+		summary := testSummary()
+		summary.Results = []json_schemas.TestSummaryResult{
+			{Severity: "high", Total: 3, Open: 1, Ignored: 2},
+			{Severity: "medium", Total: 5, Open: 4, Ignored: 1},
+		}
+
+		result, err := TransformToUFMFromSarif(testSarifDoc(), summary, WithSeverityThreshold("high"))
+		require.NoError(t, err)
+
+		suppressed, ok := result.Get(TestResultSuppressedSummary).(*testapi.FindingSummary)
+		require.True(t, ok)
+
+		// Sub-threshold severities are gone from the findings, so reporting
+		// them in any summary would contradict what the caller can see.
+		for name, actual := range map[string]*testapi.FindingSummary{
+			"raw":        result.GetRawSummary(),
+			"suppressed": suppressed,
+		} {
+			require.NotNil(t, actual, name)
+			_, hasMedium := (*actual.CountBy)["severity"]["medium"]
+			assert.False(t, hasMedium, "%s summary still counts medium", name)
+		}
+
+		assert.Equal(t, uint32(3), result.GetRawSummary().Count)
+		assert.Equal(t, uint32(2), suppressed.Count)
+	})
+
 	t.Run("keeps all findings when no threshold", func(t *testing.T) {
 		result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
 		require.NoError(t, err)
@@ -431,7 +459,38 @@ func TestTransformToUFMFromSarif_KeyFallback(t *testing.T) {
 	findings, _, err := result.Findings(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, "javascript/XSS", findings[1].Attributes.Key)
+	assert.Equal(t, "javascript/XSS|routes/index.ts:10:5", findings[1].Attributes.Key)
+}
+
+func TestTransformToUFMFromSarif_KeyFallbackDistinguishesLocations(t *testing.T) {
+	sarifDoc := testSarifDoc()
+	sarifDoc.Runs[0].Results[0].Fingerprints = sarif.Fingerprints{}
+	sarifDoc.Runs[0].Results[1].Fingerprints = sarif.Fingerprints{}
+	sarifDoc.Runs[0].Results[0].RuleID = "same/Rule"
+	sarifDoc.Runs[0].Results[1].RuleID = "same/Rule"
+
+	result, err := TransformToUFMFromSarif(sarifDoc, testSummary())
+	require.NoError(t, err)
+	findings, _, err := result.Findings(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, findings, 2)
+	assert.NotEqual(t, findings[0].Attributes.Key, findings[1].Attributes.Key)
+}
+
+func TestTransformToUFMFromSarif_EffectiveSummaryKeepsUnmappedSeverityWithoutThreshold(t *testing.T) {
+	sarifDoc := testSarifDoc()
+	sarifDoc.Runs[0].Results[0].Level = "none"
+	summary := testSummary()
+	summary.Results = append(summary.Results, json_schemas.TestSummaryResult{Severity: "unmapped", Total: 1, Open: 1})
+
+	result, err := TransformToUFMFromSarif(sarifDoc, summary)
+	require.NoError(t, err)
+
+	effective := result.GetEffectiveSummary()
+	require.NotNil(t, effective)
+	assert.Equal(t, uint32(3), effective.Count)
+	assert.Equal(t, uint32(1), (*effective.CountBy)["severity"]["unmapped"])
 }
 
 func TestTransformToUFMFromSarif_SummaryWithIgnores(t *testing.T) {

@@ -202,8 +202,11 @@ func normalizeResults(run map[string]interface{}) {
 	}
 }
 
-// normalizeResultProperties strips fields that are covered by focused tests but
-// are not present in older fixture ground truth.
+// normalizeResultProperties strips result properties that this pipeline emits
+// but the recorded ground-truth SARIF predates, so the comparison stays focused
+// on the fields both sides share. Anything stripped here must be asserted
+// elsewhere: priorityScore is covered by
+// Test_UfmPresenter_SarifRendersPriorityScore.
 func normalizeResultProperties(run map[string]interface{}) {
 	results, ok := run["results"].([]interface{})
 	if !ok {
@@ -231,6 +234,24 @@ func normalizeResultProperties(run map[string]interface{}) {
 		if len(properties) == 0 {
 			delete(result, "properties")
 		}
+	}
+}
+
+// normalizeRunProperties drops an empty run-level coverage array. The template
+// renders "coverage" unconditionally to match local_finding.sarif.tmpl, whereas
+// the recorded ground-truth SARIF omits the whole properties block when a test
+// result carries no coverage metadata. Emission is asserted by
+// Test_UfmPresenter_SarifRendersEmptyCoverage.
+func normalizeRunProperties(run map[string]interface{}) {
+	properties, ok := run["properties"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	if coverage, ok := properties["coverage"].([]interface{}); ok && len(coverage) == 0 {
+		delete(properties, "coverage")
+	}
+	if len(properties) == 0 {
+		delete(run, "properties")
 	}
 }
 
@@ -668,6 +689,7 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string, ignoreSuppressi
 
 		// Normalize result properties covered by focused tests.
 		normalizeResultProperties(run)
+		normalizeRunProperties(run)
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
@@ -2050,11 +2072,23 @@ func normalizeSarifJSON(data interface{}) interface{} {
 
 var automationIDIndexRe = regexp.MustCompile(`^(Snyk/[^/]+)/\d+/`)
 
+// automationIDTimestampRe matches the trailing timestamp that
+// getAutomationDetailsId stamps onto every automation-details ID. It has
+// second resolution and is taken at render time, so the two pipelines disagree
+// whenever a second boundary falls between their two renders.
+var automationIDTimestampRe = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
+
 func normalizeSarifJSONInner(data interface{}, parentKey string) interface{} {
 	switch v := data.(type) {
 	case map[string]interface{}:
 		result := make(map[string]interface{}, len(v))
 		for key, val := range v {
+			// Generic array sorting below can reorder the rules array. A focused
+			// presenter test validates that each emitted ruleIndex points at the
+			// matching rule, so omit the positional index from this parity check.
+			if key == "ruleIndex" {
+				continue
+			}
 			result[key] = normalizeSarifJSONInner(val, key)
 		}
 		return result
@@ -2071,7 +2105,8 @@ func normalizeSarifJSONInner(data interface{}, parentKey string) interface{} {
 		return normalized
 	case string:
 		if parentKey == "id" {
-			return automationIDIndexRe.ReplaceAllString(v, "${1}/")
+			normalized := automationIDIndexRe.ReplaceAllString(v, "${1}/")
+			return automationIDTimestampRe.ReplaceAllString(normalized, "*")
 		}
 		return data
 	default:
@@ -2113,6 +2148,197 @@ func Test_UfmPresenter_SarifFromSarifInput_JSONRoundTrip(t *testing.T) {
 			require.NoError(t, json.Unmarshal(writer.Bytes(), &result), "output should be valid JSON")
 		})
 	}
+}
+
+// renderUfmSarifFromSarifDoc runs the SARIF -> UFM -> SARIF pipeline and
+// returns the parsed output document.
+func renderUfmSarifFromSarifDoc(t *testing.T, input *sarif.SarifDocument) map[string]interface{} {
+	t.Helper()
+
+	summary := sarif_utils.CreateCodeSummary(input, "/path/to/project")
+	result, err := ufm.TransformToUFMFromSarif(input, summary)
+	require.NoError(t, err)
+
+	writer := &bytes.Buffer{}
+	presenter := presenters.NewUfmRenderer(
+		[]testapi.TestResult{result},
+		configuration.NewWithOpts(),
+		writer,
+		presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("test"))),
+	)
+	require.NoError(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+
+	var output map[string]interface{}
+	require.NoError(t, json.Unmarshal(writer.Bytes(), &output))
+	return output
+}
+
+func loadSarifDoc(t *testing.T, path string) *sarif.SarifDocument {
+	t.Helper()
+
+	sarifBytes, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var input sarif.SarifDocument
+	require.NoError(t, json.Unmarshal(sarifBytes, &input))
+	require.NotEmpty(t, input.Runs)
+	require.NotEmpty(t, input.Runs[0].Results)
+	return &input
+}
+
+// Test_UfmPresenter_SarifRuleIndexAddressesEmittedRules guards against emitting
+// the input SARIF's rule index verbatim. The rules array we render only holds
+// the rules that produced findings, so an input catalog containing rules
+// without findings shifts every index.
+func Test_UfmPresenter_SarifRuleIndexAddressesEmittedRules(t *testing.T) {
+	input := loadSarifDoc(t, "testdata/4-high-5-medium.json")
+	input.Runs[0].Tool.Driver.Rules = append([]sarif.Rule{{ID: "unused/rule"}}, input.Runs[0].Tool.Driver.Rules...)
+	for index := range input.Runs[0].Results {
+		input.Runs[0].Results[index].RuleIndex++
+	}
+
+	run := requireStringMap(t, requireInterfaceSlice(t, renderUfmSarifFromSarifDoc(t, input)["runs"])[0])
+	driver := requireStringMap(t, requireStringMap(t, run["tool"])["driver"])
+	rules := requireInterfaceSlice(t, driver["rules"])
+
+	results := requireInterfaceSlice(t, run["results"])
+	require.NotEmpty(t, results)
+	for _, rawResult := range results {
+		result := requireStringMap(t, rawResult)
+		ruleIndex := int(requireFloat64(t, result["ruleIndex"]))
+		require.Less(t, ruleIndex, len(rules))
+		assert.Equal(t, result["ruleId"], requireStringMap(t, rules[ruleIndex])["id"])
+	}
+}
+
+// Test_UfmPresenter_SarifRendersPartialMessagesAndRegions covers the two SARIF
+// shapes where a field the template used to depend on is absent: a message with
+// markdown but no text, and a region with a startColumn but no endLine.
+func Test_UfmPresenter_SarifRendersPartialMessagesAndRegions(t *testing.T) {
+	input := loadSarifDoc(t, "testdata/4-high-5-medium.json")
+	require.NotEmpty(t, input.Runs[0].Results[0].Locations)
+	input.Runs[0].Results[0].Message.Text = ""
+	input.Runs[0].Results[0].Message.Markdown = "markdown only"
+	input.Runs[0].Results[0].Locations[0].PhysicalLocation.Region.EndLine = 0
+	input.Runs[0].Results[0].Locations[0].PhysicalLocation.Region.StartColumn = 3
+	input.Runs[0].Results[0].Locations[0].PhysicalLocation.Region.EndColumn = 4
+
+	run := requireStringMap(t, requireInterfaceSlice(t, renderUfmSarifFromSarifDoc(t, input)["runs"])[0])
+
+	var markdownResult map[string]interface{}
+	for _, rawResult := range requireInterfaceSlice(t, run["results"]) {
+		candidate := requireStringMap(t, rawResult)
+		if requireStringMap(t, candidate["message"])["markdown"] == "markdown only" {
+			markdownResult = candidate
+			break
+		}
+	}
+	require.NotNil(t, markdownResult, "markdown must survive even when the message has no text")
+
+	location := requireStringMap(t, requireInterfaceSlice(t, markdownResult["locations"])[0])
+	region := requireStringMap(t, requireStringMap(t, location["physicalLocation"])["region"])
+	assert.Equal(t, float64(3), region["startColumn"])
+	assert.NotContains(t, region, "endLine")
+}
+
+// Test_UfmPresenter_SarifRendersEmptyCoverage keeps the run-level properties
+// block unconditional, matching local_finding.sarif.tmpl.
+func Test_UfmPresenter_SarifRendersEmptyCoverage(t *testing.T) {
+	input := loadSarifDoc(t, "testdata/4-high-5-medium.json")
+	input.Runs[0].Properties.Coverage = nil
+
+	run := requireStringMap(t, requireInterfaceSlice(t, renderUfmSarifFromSarifDoc(t, input)["runs"])[0])
+
+	properties := requireStringMap(t, run["properties"])
+	assert.Empty(t, properties["coverage"])
+}
+
+func requireStringMap(t *testing.T, value interface{}) map[string]interface{} {
+	t.Helper()
+	result, ok := value.(map[string]interface{})
+	require.True(t, ok)
+	return result
+}
+
+func requireInterfaceSlice(t *testing.T, value interface{}) []interface{} {
+	t.Helper()
+	result, ok := value.([]interface{})
+	require.True(t, ok)
+	return result
+}
+
+func requireFloat64(t *testing.T, value interface{}) float64 {
+	t.Helper()
+	result, ok := value.(float64)
+	require.True(t, ok)
+	return result
+}
+
+// Test_UfmPresenter_SarifRendersPriorityScore pins the priorityScore rendering
+// that toInt's uint16 case enables. testapi.Issue.GetRiskScore returns a uint16,
+// so before that case existed `int $riskScore` in the template always collapsed
+// to 0 and the key was never emitted. The ground-truth fixtures compared in
+// Test_UfmPresenter_Sarif predate the field and have it normalized away, which
+// makes this the only test asserting it.
+func Test_UfmPresenter_SarifRendersPriorityScore(t *testing.T) {
+	testResultBytes, err := os.ReadFile("testdata/ufm/webgoat.testresult.json")
+	require.NoError(t, err)
+
+	testResults, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+	require.NoError(t, err)
+
+	writer := &bytes.Buffer{}
+	presenter := presenters.NewUfmRenderer(
+		testResults,
+		configuration.NewWithOpts(),
+		writer,
+		presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("test"))),
+	)
+	require.NoError(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+
+	var output map[string]interface{}
+	require.NoError(t, json.Unmarshal(writer.Bytes(), &output))
+
+	runs := requireInterfaceSlice(t, output["runs"])
+	scoresByRuleID := map[string]float64{}
+	for _, rawResult := range requireInterfaceSlice(t, requireStringMap(t, runs[0])["results"]) {
+		result := requireStringMap(t, rawResult)
+		properties, ok := result["properties"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		score, ok := properties["priorityScore"]
+		if !ok {
+			continue
+		}
+		ruleID, ok := result["ruleId"].(string)
+		require.True(t, ok)
+		scoresByRuleID[ruleID] = requireFloat64(t, score)
+	}
+
+	require.NotEmpty(t, scoresByRuleID, "risk scores from the test result must reach SARIF as priorityScore")
+	assert.Equal(t, float64(343), scoresByRuleID["SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966"])
+	for ruleID, score := range scoresByRuleID {
+		assert.Positive(t, score, "priorityScore is only emitted for non-zero risk scores (%s)", ruleID)
+	}
+}
+
+// Test_UfmPresenter_SarifSurfacesInvalidCoverageMetadata pins that coverage the
+// renderer cannot decode aborts the render instead of quietly rendering an
+// empty coverage array. The shape below is what a JSON round-trip produces when
+// the metadata does not match the coverage contract.
+func Test_UfmPresenter_SarifSurfacesInvalidCoverageMetadata(t *testing.T) {
+	result := sarifToUFM(t, "testdata/4-high-5-medium.json", nil)
+	result.SetMetadata("coverage", []interface{}{map[string]interface{}{"files": "not-a-number"}})
+
+	writer := &bytes.Buffer{}
+	presenter := presenters.NewUfmRenderer(
+		[]testapi.TestResult{result},
+		configuration.NewWithOpts(),
+		writer,
+		presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("test"))),
+	)
+	assert.Error(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
 }
 
 func Test_UfmPresenter_HumanReadableFromSarifInput(t *testing.T) {
