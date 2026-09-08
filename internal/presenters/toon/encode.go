@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 )
 
 var unquotedKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*$`)
@@ -65,11 +64,7 @@ func FormatKey(key string) string {
 	if unquotedKeyPattern.MatchString(key) {
 		return key
 	}
-	quoted, err := quoteString(key)
-	if err != nil {
-		return `"` + strings.ReplaceAll(key, `"`, `\"`) + `"`
-	}
-	return quoted
+	return quoteString(key)
 }
 
 type TabularField struct {

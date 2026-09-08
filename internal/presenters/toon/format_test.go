@@ -1,6 +1,7 @@
 package toon_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,26 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/presenters/toon"
 )
+
+func TestFormatControlCharacters(t *testing.T) {
+	t.Parallel()
+
+	for r := rune(0); r < 0x20; r++ {
+		input := "before" + string(r) + "after"
+		escaped := fmt.Sprintf(`\u%04x`, r)
+		if short, ok := map[rune]string{'\n': `\n`, '\r': `\r`, '\t': `\t`}[r]; ok {
+			escaped = short
+		}
+		expected := `"before` + escaped + `after"`
+		scalar, err := toon.FormatScalarValue(input)
+		require.NoError(t, err)
+		assert.Equal(t, expected, scalar)
+		cell, err := toon.FormatTabularField(input)
+		require.NoError(t, err)
+		assert.Equal(t, expected, cell)
+		assert.Equal(t, expected, toon.FormatKey(input))
+	}
+}
 
 func TestFormatTabularField_quotesComma(t *testing.T) {
 	t.Parallel()

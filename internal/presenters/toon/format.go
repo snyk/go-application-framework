@@ -16,11 +16,8 @@ func FormatScalarValue(value string) (string, error) {
 }
 
 func formatString(value string, ctx formatContext) (string, error) {
-	if err := validateCharacters(value); err != nil {
-		return "", err
-	}
 	if needsQuoting(value, ctx) {
-		return quoteString(value)
+		return quoteString(value), nil
 	}
 	return value, nil
 }
@@ -49,7 +46,7 @@ func needsQuoting(value string, ctx formatContext) bool {
 	if strings.ContainsAny(value, ":\\\"[]{}") {
 		return true
 	}
-	if strings.ContainsRune(value, '\n') || strings.ContainsRune(value, '\r') || strings.ContainsRune(value, '\t') {
+	if strings.IndexFunc(value, func(r rune) bool { return r < 0x20 }) >= 0 {
 		return true
 	}
 	if strings.HasPrefix(value, "-") {
@@ -67,7 +64,7 @@ func needsQuoting(value string, ctx formatContext) bool {
 	return false
 }
 
-func quoteString(value string) (string, error) {
+func quoteString(value string) string {
 	var b strings.Builder
 	b.Grow(len(value) + 2)
 	b.WriteByte('"')
@@ -85,22 +82,14 @@ func quoteString(value string) (string, error) {
 			b.WriteString("\\t")
 		default:
 			if r < 0x20 {
-				return "", fmt.Errorf("toon: unsupported control character U+%04X in string", r)
+				b.WriteString(fmt.Sprintf(`\u%04x`, r))
+			} else {
+				b.WriteRune(r)
 			}
-			b.WriteRune(r)
 		}
 	}
 	b.WriteByte('"')
-	return b.String(), nil
-}
-
-func validateCharacters(value string) error {
-	for _, r := range value {
-		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
-			return fmt.Errorf("toon: unsupported control character U+%04X in string", r)
-		}
-	}
-	return nil
+	return b.String()
 }
 
 //nolint:gocyclo // mirrors toon-go format.LooksNumeric rules

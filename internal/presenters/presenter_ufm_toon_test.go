@@ -114,19 +114,23 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 	assert.Contains(t, output.String(), "rows[2]:\n                  - a[2]: 1,2\n                  - a[1]{nested{value}}:\n                      true")
 }
 
-func TestRenderTemplate_TOON_formattingError(t *testing.T) {
+func TestRenderTemplate_TOON_controlCharacters(t *testing.T) {
 	t.Parallel()
 
 	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
-		"findings": [{"type": "findings", "attributes": {"title": "bad\u0001title"}}]
+		"findings": [{"type": "findings", "attributes": {
+			"title": "bad\u0001title",
+			"problems": [{"source": "new_product", "details": {"key\u0001\\n\n\"": "value"}}]
+		}}]
 	}]`))
 	require.NoError(t, err)
 
 	var output bytes.Buffer
 	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
 	err = presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported control character U+0001")
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), `title: "bad\u0001title"`)
+	assert.Contains(t, output.String(), `"key\u0001\\n\n\""`)
 }
 
 func loadContractTestResults(t *testing.T, envelopePath string) []testapi.TestResult {
