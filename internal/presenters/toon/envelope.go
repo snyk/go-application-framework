@@ -41,9 +41,9 @@ func buildResultEnvelope(ctx context.Context, result testapi.TestResult) (map[st
 
 	findingValues := make([]any, len(findings))
 	for i, finding := range findings {
-		value, marshalErr := encodeFinding(finding)
+		value, marshalErr := jsonValue(finding)
 		if marshalErr != nil {
-			return nil, marshalErr
+			return nil, fmt.Errorf("marshal finding: %w", marshalErr)
 		}
 		findingValues[i] = value
 	}
@@ -70,18 +70,6 @@ func buildResultEnvelope(ctx context.Context, result testapi.TestResult) (map[st
 		"testSubject":       testSubject,
 		"findings":          findingValues,
 	}, nil
-}
-
-func encodeFinding(finding testapi.FindingData) (map[string]any, error) {
-	payload, err := json.Marshal(finding)
-	if err != nil {
-		return nil, fmt.Errorf("marshal finding: %w", err)
-	}
-	var encoded map[string]any
-	if err := json.Unmarshal(payload, &encoded); err != nil {
-		return nil, fmt.Errorf("decode finding: %w", err)
-	}
-	return encoded, nil
 }
 
 func jsonValueOrNull(value any) any {

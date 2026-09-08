@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
+	"github.com/snyk/go-application-framework/internal/presenters/toon"
 	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -88,17 +89,25 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 				"arrays": [[], [[true, false], null]],
 				"credits": ["Doe, Jane", "Smith"],
 				"nestedCredits": [["Doe, Jane", "Smith"]],
+				"numbers": [9007199254740993, -9007199254740993, 0.1234567890123456789],
 				"rows": [{"a": [1, 2]}, {"a": [{"nested": {"value": true}}]}]
 			}}]
 		}}]
 	}]`))
 	require.NoError(t, err)
 
+	prepared, err := toon.PrepareResults(t.Context(), results)
+	require.NoError(t, err)
+	normalized, err := json.Marshal(prepared)
+	require.NoError(t, err)
+	assert.Contains(t, string(normalized), `"numbers":[9007199254740993,-9007199254740993,0.1234567890123456789]`)
+
 	var output bytes.Buffer
 	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
 	require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 	assert.Contains(t, output.String(), "finding_type: new_product")
 	assert.Contains(t, output.String(), "source: new_product")
+	assert.Contains(t, output.String(), "numbers[3]: 9007199254740993,-9007199254740993,0.1234567890123456789")
 	assert.Contains(t, output.String(), `credits[2]: "Doe, Jane",Smith`)
 	assert.Contains(t, output.String(), "nestedCredits[1]:\n                  - [2]: \"Doe, Jane\",Smith")
 	assert.Contains(t, output.String(), "arrays[2]:\n                  - []\n                  - [2]:\n                    - [2]: true,false\n                    - null")
