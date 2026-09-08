@@ -10,7 +10,7 @@ import (
 
 var unquotedKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*$`)
 
-// Kind distinguishes containers from scalar JSON values for templates.
+// Kind returns object, array, or scalar for TOON templates.
 func Kind(value any) string {
 	switch value.(type) {
 	case map[string]any:
@@ -22,6 +22,7 @@ func Kind(value any) string {
 	}
 }
 
+// AllPrimitive reports whether every array item is a JSON scalar.
 func AllPrimitive(items []any) bool {
 	for _, item := range items {
 		if !isPrimitive(item) {
@@ -40,6 +41,7 @@ func isPrimitive(value any) bool {
 	}
 }
 
+// FormatKey returns a quoted or bare TOON object key.
 func FormatKey(key string) string {
 	if unquotedKeyPattern.MatchString(key) {
 		return key
@@ -52,6 +54,7 @@ type TabularField struct {
 	Nested []TabularField
 }
 
+// TabularFields returns the column schema for a uniform object array, or nil.
 func TabularFields(items []any) []TabularField {
 	if len(items) == 0 {
 		return nil
@@ -100,6 +103,7 @@ func classifyColumn(values []any) (TabularField, bool) {
 	return TabularField{Nested: nested}, len(nested) > 0
 }
 
+// TabularCells returns the flattened row values for a tabular schema.
 func TabularCells(obj map[string]any, schema []TabularField) ([]any, error) {
 	cells := make([]any, 0, len(schema))
 	for _, field := range schema {
@@ -124,6 +128,7 @@ func TabularCells(obj map[string]any, schema []TabularField) ([]any, error) {
 	return cells, nil
 }
 
+// FormatPrimitive renders a JSON scalar as a TOON literal.
 func FormatPrimitive(value any, tabular bool) (string, error) {
 	switch typed := value.(type) {
 	case nil:
