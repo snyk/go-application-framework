@@ -39,48 +39,23 @@ func buildResultEnvelope(ctx context.Context, result testapi.TestResult) (map[st
 		return nil, fmt.Errorf("findings: %w", err)
 	}
 
-	findingValues := make([]any, len(findings))
-	for i, finding := range findings {
-		value, marshalErr := jsonValue(finding)
-		if marshalErr != nil {
-			return nil, fmt.Errorf("marshal finding: %w", marshalErr)
-		}
-		findingValues[i] = value
-	}
-
-	rawSummary, err := jsonValue(result.Get(testapi.TestResultRawSummary))
-	if err != nil {
-		return nil, err
-	}
-	testSubject, err := jsonValue(result.Get(testapi.TestResultTestSubject))
-	if err != nil {
-		return nil, err
+	if findings == nil {
+		findings = []testapi.FindingData{}
 	}
 
 	return map[string]any{
-		"testId":            jsonValueOrNull(result.GetTestID()),
-		"testConfiguration": jsonValueOrNull(result.GetTestConfiguration()),
+		"testId":            result.GetTestID(),
+		"testConfiguration": result.GetTestConfiguration(),
 		"executionState":    result.GetExecutionState(),
-		"effectiveSummary":  jsonValueOrNull(result.GetEffectiveSummary()),
-		"rawSummary":        rawSummary,
-		"passFail":          jsonValueOrNull(result.GetPassFail()),
-		"outcomeReason":     jsonValueOrNull(result.GetOutcomeReason()),
-		"errors":            jsonValueOrNull(result.GetErrors()),
-		"warnings":          jsonValueOrNull(result.GetWarnings()),
-		"testSubject":       testSubject,
-		"findings":          findingValues,
+		"effectiveSummary":  result.GetEffectiveSummary(),
+		"rawSummary":        result.Get(testapi.TestResultRawSummary),
+		"passFail":          result.GetPassFail(),
+		"outcomeReason":     result.GetOutcomeReason(),
+		"errors":            result.GetErrors(),
+		"warnings":          result.GetWarnings(),
+		"testSubject":       result.Get(testapi.TestResultTestSubject),
+		"findings":          findings,
 	}, nil
-}
-
-func jsonValueOrNull(value any) any {
-	if value == nil {
-		return nil
-	}
-	encoded, err := jsonValue(value)
-	if err != nil {
-		return nil
-	}
-	return encoded
 }
 
 func jsonValue(value any) (any, error) {

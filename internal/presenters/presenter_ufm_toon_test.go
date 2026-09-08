@@ -3,6 +3,7 @@ package presenters_test
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,6 +113,27 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 	assert.Contains(t, output.String(), "nestedCredits[1]:\n                  - [2]: \"Doe, Jane\",Smith")
 	assert.Contains(t, output.String(), "arrays[2]:\n                  - []\n                  - [2]:\n                    - [2]: true,false\n                    - null")
 	assert.Contains(t, output.String(), "rows[2]:\n                  - a[2]: 1,2\n                  - a[1]{nested{value}}:\n                      true")
+}
+
+func TestRenderTemplate_TOON_envelopeError(t *testing.T) {
+	t.Parallel()
+
+	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
+		"errors": [{"detail": "failed", "status": "500", "meta": {"value": 0}}]
+	}]`))
+	require.NoError(t, err)
+	metadata := (*results[0].GetErrors())[0].Meta
+	(*metadata)["value"] = math.Inf(1)
+
+	var jsonErr *json.UnsupportedValueError
+	_, err = toon.PrepareResults(t.Context(), results)
+	assert.ErrorAs(t, err, &jsonErr)
+
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
+	err = presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+	assert.ErrorAs(t, err, &jsonErr)
+	assert.Empty(t, output.String())
 }
 
 func TestRenderTemplate_TOON_controlCharacters(t *testing.T) {
