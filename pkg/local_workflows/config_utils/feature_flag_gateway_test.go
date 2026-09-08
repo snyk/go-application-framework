@@ -355,6 +355,61 @@ func Test_AddFeatureFlagsToConfig_FlagMissingFromResponseIsNotRequestedAgain(t *
 		"a flag the gateway does not report must resolve to false without being requested again")
 }
 
+func Test_AddFeatureFlagsToConfig_LocallySetKeyIsNotEvaluatedRemotely(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	AddFeatureFlagsToConfig(engine, map[string]string{
+		"overridden_key": "overridden-flag",
+		"remote_key":     "remote-flag",
+	})
+
+	// mimics an application forcing the feature off, e.g. a preview build
+	config.Set("overridden_key", false)
+
+	assert.True(t, config.GetBool("remote_key"))
+	assert.Equal(t, [][]string{{"remote-flag"}}, stub.recordedBatches(),
+		"a key that already holds a value must not be evaluated as part of another key's batch")
+
+	assert.False(t, config.GetBool("overridden_key"), "the local value must win over the remote one")
+	assert.Equal(t, [][]string{{"remote-flag"}}, stub.recordedBatches(),
+		"reading the overridden key must not trigger a lookup either")
+}
+
+// Test_AddFeatureFlagsToConfig_KeySetViaAlternativeKeyIsNotEvaluatedRemotely
+// covers the value sources an application wires up behind an alternative key -
+// an environment variable, a command line flag or a config file entry. Those
+// reach the configuration the same way, so an alternative key stands in for all
+// of them without the test depending on the process environment.
+//
+// Only one alternative key is registered, because that is as far as the lookup
+// reliably sees: Configuration.IsSet decides a multi-alternative key by its last
+// alternative rather than its first, so a value under an earlier alternative is
+// reported as unset and the flag is evaluated needlessly. The key keeps its
+// value either way, so this is a wasted request rather than a wrong result.
+func Test_AddFeatureFlagsToConfig_KeySetViaAlternativeKeyIsNotEvaluatedRemotely(t *testing.T) {
+	stub := stubFlagGateway(t)
+	config := newFlagTestConfig()
+	engine := newFlagTestEngine(t, config)
+
+	config.AddAlternativeKeys("alt_overridden_key", []string{"alt_overridden_key_source"})
+
+	AddFeatureFlagsToConfig(engine, map[string]string{
+		"alt_overridden_key": "alt-overridden-flag",
+		"alt_remote_key":     "alt-remote-flag",
+	})
+
+	config.Set("alt_overridden_key_source", false)
+
+	assert.True(t, config.GetBool("alt_remote_key"))
+	assert.Equal(t, [][]string{{"alt-remote-flag"}}, stub.recordedBatches(),
+		"a key supplied through an alternative key must not be evaluated as part of another key's batch")
+
+	assert.False(t, config.GetBool("alt_overridden_key"), "the alternative key must win over the remote value")
+	assert.Equal(t, [][]string{{"alt-remote-flag"}}, stub.recordedBatches())
+}
+
 func Test_AddFeatureFlagsToConfig_ConcurrentReads(t *testing.T) {
 	flagCount := 10
 

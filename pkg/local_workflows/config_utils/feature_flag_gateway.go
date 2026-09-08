@@ -3,8 +3,6 @@ package config_utils
 import (
 	"errors"
 	"fmt"
-	"maps"
-	"slices"
 	"sort"
 	"sync"
 
@@ -35,9 +33,17 @@ type fetchKey struct {
 // flagRegistry collects every flag registered against one configuration, so that
 // an access can look all of them up in a single request.
 type flagRegistry struct {
-	mu       sync.RWMutex
-	flags    map[string]struct{}
+	mu sync.RWMutex
+	// flags maps a flag name to the configuration key it backs.
+	flags    map[string]string
 	orgFetch map[fetchKey]*orgFetchResult
+}
+
+// registeredFlag is a remote feature flag together with the configuration key it
+// backs.
+type registeredFlag struct {
+	name      string
+	configKey string
 }
 
 // orgFetchResult memorizes the flags already looked up for one fetchKey. A flag
@@ -56,7 +62,7 @@ func getOrCreateRegistry(config configuration.Configuration) *flagRegistry {
 	}
 
 	registry := &flagRegistry{
-		flags:    make(map[string]struct{}),
+		flags:    make(map[string]string),
 		orgFetch: make(map[fetchKey]*orgFetchResult),
 	}
 
@@ -68,22 +74,22 @@ func getOrCreateRegistry(config configuration.Configuration) *flagRegistry {
 	return registry
 }
 
-func (r *flagRegistry) addFlags(flags []string) {
+func (r *flagRegistry) addFlags(configKeyToFlag map[string]string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, f := range flags {
-		r.flags[f] = struct{}{}
+	for configKey, flagName := range configKeyToFlag {
+		r.flags[flagName] = configKey
 	}
 }
 
-func (r *flagRegistry) allFlags() []string {
+func (r *flagRegistry) allFlags() []registeredFlag {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	result := make([]string, 0, len(r.flags))
-	for f := range r.flags {
-		result = append(result, f)
+	result := make([]registeredFlag, 0, len(r.flags))
+	for flagName, configKey := range r.flags {
+		result = append(result, registeredFlag{name: flagName, configKey: configKey})
 	}
-	sort.Strings(result)
+	sort.Slice(result, func(i, j int) bool { return result[i].name < result[j].name })
 	return result
 }
 
@@ -102,7 +108,7 @@ func (r *flagRegistry) fetchResultFor(key fetchKey) *orgFetchResult {
 // resolve returns the value of flagName and looks up every flag that is
 // registered but not yet known in a single request. Flags registered after an
 // earlier lookup are picked up here, flags already looked up are not requested
-// again.
+// again, and neither are flags whose configuration key is locally overridden.
 func (r *flagRegistry) resolve(c configuration.Configuration, engine workflow.Engine, orgID string, flagName string) (bool, error) {
 	fetched := r.fetchResultFor(fetchKey{orgID: orgID, apiURL: c.GetString(configuration.API_URL)})
 
@@ -114,10 +120,20 @@ func (r *flagRegistry) resolve(c configuration.Configuration, engine workflow.En
 	}
 
 	missing := make([]string, 0)
-	for _, name := range r.allFlags() {
-		if _, known := fetched.values[name]; !known {
-			missing = append(missing, name)
+	for _, flag := range r.allFlags() {
+		if _, known := fetched.values[flag.name]; known {
+			continue
 		}
+
+		// A key that already holds a value never consults its default value
+		// function, so evaluating its flag remotely would report an exposure for a
+		// value nobody reads. The flag this call is for is exempt: it is being
+		// resolved right now, which means its key has no value.
+		if flag.name != flagName && c.IsSet(flag.configKey) {
+			continue
+		}
+
+		missing = append(missing, flag.name)
 	}
 
 	// Requesting no flags at all would be rejected by the gateway and, since
@@ -146,6 +162,15 @@ func (r *flagRegistry) resolve(c configuration.Configuration, engine workflow.En
 // looks up every flag registered so far in a single request, and flags
 // registered afterwards are picked up by the next access that needs them.
 //
+// A key that already holds a value keeps it, and its flag is left out of the
+// batch another key triggers, so it is not evaluated remotely for nothing. Two
+// limits apply. The value has to be there before the first flag is resolved -
+// an override applied later cannot unsend a request. And the batch is narrowed
+// via Configuration.IsSet, which answers a slightly narrower question than the
+// callback's own "does this key already have a value": it does not see a value
+// that only a pflag default or a non-last alternative key provides. Such a key
+// still keeps its value, its flag is merely evaluated needlessly.
+//
 // Registration has to happen before a configuration is cloned. Clone copies the
 // default value functions that exist at that moment, so a configuration cloned
 // before a flag is registered resolves that flag to false.
@@ -155,9 +180,7 @@ func AddFeatureFlagsToConfig(
 ) {
 	config := engine.GetConfiguration()
 	registry := getOrCreateRegistry(config)
-
-	newFlags := slices.Collect(maps.Values(configKeyToFlag))
-	registry.addFlags(newFlags)
+	registry.addFlags(configKeyToFlag)
 
 	for configKey, flagName := range configKeyToFlag {
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
