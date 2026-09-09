@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,9 +39,11 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -1905,4 +1908,131 @@ func Test_WithPostInvokeHooks(t *testing.T) {
 	_, err = engine.Invoke(wfId)
 	assert.NoError(t, err)
 	assert.True(t, hookCalled, "hook registered via WithPostInvokeHooks should fire")
+}
+
+// flagGatewayRecorder stands in for the feature flag gateway. It reports every
+// requested flag as enabled and records what it was asked to evaluate.
+type flagGatewayRecorder struct {
+	mutex sync.Mutex
+	flags []string
+}
+
+func (r *flagGatewayRecorder) requestedFlags() []string {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return slices.Clone(r.flags)
+}
+
+func newFlagGatewayServer(t *testing.T) (*httptest.Server, *flagGatewayRecorder) {
+	t.Helper()
+
+	recorder := &flagGatewayRecorder{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "feature_flags") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// The handler runs on its own goroutine, where t.FailNow - and with it
+		// require - must not be called: it would abandon the handler without a
+		// response and surface as an opaque client side error instead of this
+		// assertion. Report and answer with a status the caller can act on.
+		var request v20241015.FeatureFlagRequest
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&request)) {
+			http.Error(w, "malformed feature flag request", http.StatusInternalServerError)
+			return
+		}
+
+		recorder.mutex.Lock()
+		recorder.flags = append(recorder.flags, request.Data.Attributes.Flags...)
+		recorder.mutex.Unlock()
+
+		enabled := true
+		evaluations := make([]v20241015.FeatureFlagAttributes, 0, len(request.Data.Attributes.Flags))
+		for _, flag := range request.Data.Attributes.Flags {
+			evaluations = append(evaluations, v20241015.FeatureFlagAttributes{Key: flag, Value: &enabled})
+		}
+
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": v20241015.FeatureFlagsDataItem{
+				Attributes: v20241015.FeatureFlagAttributesList{Evaluations: evaluations},
+			},
+		})
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	return server, recorder
+}
+
+// Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved guards an
+// ordering property that is easy to break: the framework's own extension
+// initializers all run before those of the consuming application, and some of
+// them read a feature flag while initializing. A lookup that fixes the set of
+// known flags at that moment would silently resolve every flag registered by a
+// downstream extension to false.
+func Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved(t *testing.T) {
+	orgId := "0d2bc57c-1df9-4115-996f-4f19aa12912b"
+	downstreamFlag := "downstream-extension-flag"
+	downstreamConfigKey := "internal_downstream_extension_enabled"
+
+	server, gateway := newFlagGatewayServer(t)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	// mimics an extension of the consuming application, which is initialized
+	// after every extension the framework brings along
+	engine.AddExtensionInitializer(func(e workflow.Engine) error {
+		config_utils.AddFeatureFlagsToConfig(e, map[string]string{downstreamConfigKey: downstreamFlag})
+		return nil
+	})
+
+	require.NoError(t, engine.Init())
+
+	assert.True(t, config.GetBool(downstreamConfigKey),
+		"a feature flag registered by a downstream extension must be looked up")
+
+	assert.Contains(t, gateway.requestedFlags(), downstreamFlag)
+}
+
+// Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely pins the
+// contract a consumer relies on when it forces a feature on or off: a key that
+// already holds a value never consults its default value function, so its flag
+// must not be evaluated remotely. Batching makes that easy to lose, because an
+// extension initializer reading its own flag drags every registered flag into
+// one request while the engine starts up.
+func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing.T) {
+	orgId := "0d2bc57c-1df9-4115-996f-4f19aa12912b"
+
+	server, gateway := newFlagGatewayServer(t)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	// mimics an application forcing the feature off while it registers its
+	// extensions, which is before the engine initializes them and therefore
+	// before any of them reads a feature flag
+	config.Set(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES, false)
+
+	require.NoError(t, engine.Init())
+
+	// The sibling flag is registered next to the overridden one and is not set
+	// locally, so it has to be in the batch. Requiring it keeps the assertion
+	// below meaningful: without it, renaming either flag would leave a negative
+	// assertion that passes because nothing matches it any more.
+	requested := gateway.requestedFlags()
+	require.Contains(t, requested, "clientFileFilterGitignore_MetaCharFix",
+		"the batch must cover the registration group the overridden flag belongs to")
+	assert.NotContains(t, requested, "clientFileFilterGitignore_TrackedFilesRollout",
+		"the flag behind a locally set key must not be evaluated remotely")
+	assert.False(t, config.GetBool(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES),
+		"the local value must win over the remote one")
 }
