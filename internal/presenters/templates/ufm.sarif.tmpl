@@ -29,17 +29,16 @@
 								"id": {{ getQuotedString $problemID }},
 								{{- if $codeRule }}
 								"name": {{ getQuotedString $codeRule.Name }},
-								{{- end }}
-								"shortDescription": {
-									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
-								},
-								{{- if not $codeRule }}
+								{{- else }}
 								{{- with buildRuleFullDescription $issue }}
 								"fullDescription": {
 									"text": {{ getQuotedString . }}
 								},
 								{{- end }}
 								{{- end }}
+								"shortDescription": {
+									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
+								},
 								{{- if $codeRule }}
 								"defaultConfiguration": {
 									"level": {{ getQuotedString (severityToSarifLevel (printf "%s" $codeRule.DefaultConfiguration.Severity)) }}
@@ -47,8 +46,8 @@
 								{{- end }}
 								"help": {
 									{{- if $codeRule }}
-									"markdown": {{ getQuotedString (derefStr $codeRule.Help.Markdown) }},
-									"text": {{ getQuotedString (derefStr $codeRule.Help.Text) }}
+									"text": {{ getQuotedString (derefStr $codeRule.Help.Text) }},
+									"markdown": {{ getQuotedString (derefStr $codeRule.Help.Markdown) }}
 									{{- else }}
 									"text": "",
 									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $issue.GetFindingType) }}
@@ -57,10 +56,8 @@
 								"properties": {
 									"tags": [
 										{{- if $codeRule }}
-										{{- $origTags := $codeRule.Properties.Tags }}
-										{{- $origTagsSize := sub (len $origTags) 1 }}
-										{{- range $tagIndex, $tag := $origTags }}
-										{{ getQuotedString $tag }}{{if lt $tagIndex $origTagsSize}},{{end}}
+										{{- range $tagIndex, $tag := $codeRule.Properties.Tags }}
+										{{- if $tagIndex }}, {{ end }}{{ getQuotedString $tag }}
 										{{- end }}
 										{{- else }}
 										{{- $tagsSize := sub (len $tags) 1 }}
@@ -155,9 +152,8 @@
 						{{- end }}
 						"arguments": [
 							{{- if $findingExtra.Arguments }}
-							{{- $argSize := sub (len $findingExtra.Arguments) 1 }}
 							{{- range $argIndex, $arg := $findingExtra.Arguments }}
-							{{ getQuotedString $arg }}{{if lt $argIndex $argSize}},{{end}}
+							{{- if $argIndex }}, {{ end }}{{ getQuotedString $arg }}
 							{{- end }}
 							{{- end }}
 						]
@@ -165,9 +161,8 @@
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}
 						{{- if and $findingExtra $findingExtra.Arguments }},
 						"arguments": [
-							{{- $argSize := sub (len $findingExtra.Arguments) 1 }}
 							{{- range $argIndex, $arg := $findingExtra.Arguments }}
-							{{ getQuotedString $arg }}{{if lt $argIndex $argSize}},{{end}}
+							{{- if $argIndex }}, {{ end }}{{ getQuotedString $arg }}
 							{{- end }}
 						]
 						{{- end }}
