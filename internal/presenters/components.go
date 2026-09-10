@@ -18,6 +18,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	findingsutils "github.com/snyk/go-application-framework/internal/utils/findings"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	errorutils "github.com/snyk/go-application-framework/pkg/local_workflows/error_utils"
@@ -285,17 +286,7 @@ func RenderTip(str string) string {
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
-	if severityMinLevel == "" {
-		return slices.Clone(original)
-	}
-
-	minLevelPointer := slices.Index(original, severityMinLevel)
-
-	if minLevelPointer >= 0 {
-		return slices.Clone(original[minLevelPointer:])
-	}
-
-	return slices.Clone(original)
+	return findingsutils.FilterSeverityASC(original, severityMinLevel)
 }
 
 type SummaryData struct {
