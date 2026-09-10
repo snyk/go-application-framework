@@ -193,6 +193,8 @@ var known_flags = []string{
 	"tfc-endpoint",
 	"tfc-token",
 	"to",
+	"toon",
+	"toon-file-output",
 	"traverse-node-modules",
 	"trust-policies",
 	"unmanaged",
