@@ -229,6 +229,12 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
+	if id := config.GetString("internal_snyk_agent_session_id"); id != "" {
+		ic.AddExtension("studio.agent.session.id", id)
+	}
+	if id := config.GetString("internal_snyk_client_machine_id"); id != "" {
+		ic.AddExtension("studio::client_machine_id", id)
+	}
 
 	data, err := analytics.GetV2InstrumentationObject(ic, analytics.WithLogger(logger))
 	if err != nil {
