@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"maps"
 	"os/user"
+	"reflect"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
@@ -71,6 +73,7 @@ type instrumentationCollectorImpl struct {
 
 type serializeOptions struct {
 	logger *zerolog.Logger
+	cfg    configuration.Configuration
 }
 
 type serializeOptionFunc func(*serializeOptions)
@@ -78,6 +81,15 @@ type serializeOptionFunc func(*serializeOptions)
 func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
 	return func(o *serializeOptions) {
 		o.logger = logger
+	}
+}
+
+// WithConfiguration opts sanitizeExtensionData into shape-based secret redaction,
+// using the same scrub dictionary GAF's debug-log redaction already trusts.
+// Omitted, sanitizeExtensionData's behavior is unchanged from before this option existed.
+func WithConfiguration(cfg configuration.Configuration) serializeOptionFunc {
+	return func(o *serializeOptions) {
+		o.cfg = cfg
 	}
 }
 
@@ -156,10 +168,10 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 		o(&options)
 	}
 
-	return t.getV2InstrumentationObject(options.logger), nil
+	return t.getV2InstrumentationObject(&options), nil
 }
 
-func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerolog.Logger) *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
 	d := api.AnalyticsData{
@@ -167,13 +179,23 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerol
 		Attributes: a,
 	}
 
-	return ic.sanitizeExtensionData(logger, d)
+	return ic.sanitizeExtensionData(options, d)
 }
 
 // Since the `extension` attribute in the analytics payload is a value any
 // product line potentially can contribute to, we utilize the same sanitation logic
 // already in place for the legacy v1 analytics, to ensure the same level of PII protection.
-func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Logger, d api.AnalyticsData) *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
+	logger := options.logger
+
+	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
+	// does whole-string literal replacement, so running it over raw JSON would let a redacted
+	// value collide with an unrelated field that happens to contain the same substring.
+	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
+		scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, logging.GetScrubDictFromConfig(options.cfg))
+		d.Attributes.Interaction.Extension = &scrubbed
+	}
+
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
 	result := &api.AnalyticsRequestBody{
 		Data: d,
@@ -211,6 +233,57 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Lo
 	}
 
 	return result
+}
+
+// scrubExtensionMap and scrubExtensionValue redact string leaves of an arbitrary
+// AddExtension payload without ever serializing it to JSON bytes first, so a redaction
+// can't run past the field it matched in and corrupt or bleed into a sibling field.
+func scrubExtensionMap(m map[string]interface{}, dict logging.ScrubbingDict) map[string]interface{} {
+	return scrubExtensionMapSeen(m, dict, map[uintptr]bool{})
+}
+
+// seen tracks map/slice pointers on the current recursion path, guarding against
+// cycles a caller of AddExtension could construct (e.g. a map containing itself).
+// It is deleted on the way back up so a value referenced from two non-cyclic
+// branches (a diamond, not a cycle) is still scrubbed both times.
+func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) map[string]interface{} {
+	ptr := reflect.ValueOf(m).Pointer()
+	if seen[ptr] {
+		return nil
+	}
+	seen[ptr] = true
+	defer delete(seen, ptr)
+
+	scrubbed := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		scrubbed[k] = scrubExtensionValueSeen(v, dict, seen)
+	}
+	return scrubbed
+}
+
+func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
+	switch val := v.(type) {
+	case string:
+		return string(logging.ScrubValue([]byte(val), dict))
+	case map[string]interface{}:
+		return scrubExtensionMapSeen(val, dict, seen)
+	case []interface{}:
+		ptr := reflect.ValueOf(val).Pointer()
+		if ptr != 0 && seen[ptr] {
+			return nil
+		}
+		if ptr != 0 {
+			seen[ptr] = true
+			defer delete(seen, ptr)
+		}
+		scrubbed := make([]interface{}, len(val))
+		for i, item := range val {
+			scrubbed[i] = scrubExtensionValueSeen(item, dict, seen)
+		}
+		return scrubbed
+	default:
+		return v
+	}
 }
 
 func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {

@@ -1,0 +1,101 @@
+{{- define "main" -}}
+  {{- $first := true -}}
+  {{- range $key, $value := prepareUFMToon .TestResults -}}
+    {{- if not $first }}{{ "\n" }}{{ end -}}
+    {{- template "toonField" (toonContext $key $value "") -}}
+    {{- $first = false -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Callers emit the field's prefix; Indent determines its children's indentation. */ -}}
+{{- define "toonField" -}}
+  {{- toonKey .Key -}}
+  {{- $kind := toonKind .Value -}}
+  {{- if eq $kind "object" -}}
+    {{- ":" -}}
+    {{- $indent := print .Indent "  " -}}
+    {{- range $key, $value := .Value -}}
+      {{- "\n" }}{{ $indent -}}
+      {{- template "toonField" (toonContext $key $value $indent) -}}
+    {{- end -}}
+  {{- else if eq $kind "array" -}}
+    {{- template "toonArray" . -}}
+  {{- else -}}
+    {{- ": " }}{{ toonPrimitive .Value false -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonArray" -}}
+  {{- if eq (len .Value) 0 -}}
+    {{- ": []" -}}
+  {{- else -}}
+    {{- "[" }}{{ len .Value }}{{ "]" -}}
+    {{- $fields := toonTabularFields .Value -}}
+    {{- $indent := print .Indent "  " -}}
+    {{- if $fields -}}
+      {{- "{" }}{{ template "toonColumns" $fields }}{{ "}:" -}}
+      {{- range $row := .Value -}}
+        {{- "\n" }}{{ $indent -}}
+        {{- range $i, $cell := toonTabularCells $row $fields -}}
+          {{- if $i }},{{ end -}}
+          {{- toonPrimitive $cell true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else if toonAllPrimitive .Value -}}
+      {{- ": " }}{{ template "toonPrimitives" .Value -}}
+    {{- else -}}
+      {{- ":" -}}
+      {{- range $item := .Value -}}
+        {{- "\n" }}{{ $indent -}}
+        {{- template "toonItem" (toonContext "" $item $indent) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonColumns" -}}
+  {{- range $i, $field := . -}}
+    {{- if $i }},{{ end -}}
+    {{- toonKey $field.Name -}}
+    {{- if $field.Nested -}}
+      {{- "{" }}{{ template "toonColumns" $field.Nested }}{{ "}" -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonPrimitives" -}}
+  {{- range $i, $value := . -}}
+    {{- if $i }},{{ end -}}
+    {{- toonPrimitive $value true -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonItem" -}}
+  {{- "-" -}}
+  {{- $kind := toonKind .Value -}}
+  {{- $indent := print .Indent "  " -}}
+  {{- if eq $kind "object" -}}
+    {{- $first := true -}}
+    {{- range $key, $value := .Value -}}
+      {{- if $first }}{{ " " }}{{ else }}{{ "\n" }}{{ $indent }}{{ end -}}
+      {{- template "toonField" (toonContext $key $value $indent) -}}
+      {{- $first = false -}}
+    {{- end -}}
+  {{- else if eq $kind "array" -}}
+    {{- if eq (len .Value) 0 -}}
+      {{- " []" -}}
+    {{- else -}}
+      {{- " [" }}{{ len .Value }}{{ "]:" -}}
+      {{- if toonAllPrimitive .Value -}}
+        {{- " " }}{{ template "toonPrimitives" .Value -}}
+      {{- else -}}
+        {{- range $item := .Value -}}
+          {{- "\n" }}{{ $indent -}}
+          {{- template "toonItem" (toonContext "" $item $indent) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- " " }}{{ toonPrimitive .Value false -}}
+  {{- end -}}
+{{- end -}}

@@ -1,14 +1,18 @@
 package utils
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
+// FILEPERM_755 and FILEPERM_666 are kept here as aliases for existing consumers of this package;
+// the canonical definitions live in internal/fileperms so they can be imported without an
+// import cycle by packages this package itself depends on.
 const (
-	FILEPERM_755 fs.FileMode = 0755 // Owner=rwx, Group=r-x, Other=r-x
-	FILEPERM_666 fs.FileMode = 0666 // Owner=rw-, Group=rw-, Other=rw-
+	FILEPERM_755 = fileperms.FILEPERM_755
+	FILEPERM_666 = fileperms.FILEPERM_666
 )
 
 func CreateFilePath(path string) error {

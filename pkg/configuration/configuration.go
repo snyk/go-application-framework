@@ -644,6 +644,12 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 	switch v := result.(type) {
 	case []string:
 		return v
+	// JSON arrays read back from a config file are decoded as []interface{}.
+	case []interface{}:
+		for _, item := range v {
+			output = append(output, fmt.Sprintf("%v", item))
+		}
+		return output
 	case string:
 		if len(v) > 0 {
 			return []string{v}

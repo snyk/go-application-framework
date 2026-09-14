@@ -89,6 +89,18 @@ func (mr *MockNetworkAccessMockRecorder) AddHeaders(request interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaders", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaders), request)
 }
 
+// AddMiddleware mocks base method.
+func (m *MockNetworkAccess) AddMiddleware(arg0 networktypes.MiddlewareFunc) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddMiddleware", arg0)
+}
+
+// AddMiddleware indicates an expected call of AddMiddleware.
+func (mr *MockNetworkAccessMockRecorder) AddMiddleware(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMiddleware", reflect.TypeOf((*MockNetworkAccess)(nil).AddMiddleware), arg0)
+}
+
 // AddRootCAs mocks base method.
 func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
 	m.ctrl.T.Helper()

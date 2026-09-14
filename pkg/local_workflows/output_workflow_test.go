@@ -139,6 +139,18 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 
 	jsonFileOutput := config.Get("json-file-output")
 	assert.Equal(t, "", jsonFileOutput)
+
+	html := config.Get("html")
+	assert.Equal(t, false, html)
+
+	htmlFileOutput := config.Get("html-file-output")
+	assert.Equal(t, "", htmlFileOutput)
+
+	toon := config.Get("toon")
+	assert.Equal(t, false, toon)
+
+	toonFileOutput := config.Get("toon-file-output")
+	assert.Equal(t, "", toonFileOutput)
 }
 
 type testOutputDestination struct {
