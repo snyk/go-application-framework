@@ -134,6 +134,54 @@ func GetTargetId(path string, idType TargetIdType, options ...TargetIdOptions) (
 	return targetId.String(), nil
 }
 
+// GitTarget holds the components decoded from a git target identifier.
+type GitTarget struct {
+	// Namespace is the repository host and path, e.g. "github.com/snyk/go-application-framework".
+	Namespace string
+	// Repository is the project name, i.e. the last segment of the namespace.
+	Repository string
+	// Commit is the commit hash (the purl version component).
+	Commit string
+	// Branch is the branch name carried in the qualifiers; it may be empty.
+	Branch string
+}
+
+// ParseGitTargetId decodes a git target identifier produced by GetTargetId of
+// the form:
+//
+//	pkg:git/<namespace>@<commit>?branch=<branch>[#subpath]
+func ParseGitTargetId(targetId string) (GitTarget, bool) {
+	u, err := url.Parse(targetId)
+	if err != nil {
+		return GitTarget{}, false
+	}
+
+	const gitPrefix = "git/"
+	if u.Scheme != "pkg" || !strings.HasPrefix(u.Opaque, gitPrefix) {
+		return GitTarget{}, false
+	}
+
+	namespaceAndCommit := strings.TrimPrefix(u.Opaque, gitPrefix)
+
+	namespace := namespaceAndCommit
+	var commit string
+	if at := strings.LastIndex(namespaceAndCommit, "@"); at >= 0 {
+		namespace, commit = namespaceAndCommit[:at], namespaceAndCommit[at+1:]
+	}
+
+	repository := namespace
+	if slash := strings.LastIndex(namespace, "/"); slash >= 0 {
+		repository = namespace[slash+1:]
+	}
+
+	return GitTarget{
+		Namespace:  namespace,
+		Repository: repository,
+		Commit:     commit,
+		Branch:     u.Query().Get("branch"),
+	}, true
+}
+
 func emptyTargetId() *url.URL {
 	t := &url.URL{
 		Scheme:   "pkg",
