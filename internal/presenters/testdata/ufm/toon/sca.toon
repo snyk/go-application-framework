@@ -3,3 +3,4 @@ org: unknown
 project: unknown
 sca[1]{fixable,id,pkg,severity}:
   no,SNYK-EXAMPLE-1,"example-lib@1.0.0,1.1.0",""
+sca_summary: 1 unique vulns (2 paths) |  | 0 fixable

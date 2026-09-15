@@ -32,7 +32,8 @@ func TestTOONMapping_SCAOccurrences(t *testing.T) {
 	]`)
 	requireTOONEqual(t, false, `sca[2]{fixable,id,pkg,severity}:
   no,SNYK-EXAMPLE-1,example@1.10,high
-  no,SNYK-EXAMPLE-1,example@1.2,medium`, output)
+  no,SNYK-EXAMPLE-1,example@1.2,medium
+sca_summary: 2 unique vulns | 1 high 1 medium | 0 fixable`, output)
 }
 
 func TestTOONMapping_SecretsFallbacks(t *testing.T) {
@@ -50,7 +51,8 @@ func TestTOONMapping_SecretsFallbacks(t *testing.T) {
 	requireTOONEqual(t, false, `secrets[3]{file,line,rule,severity}:
   unknown,0,secret,low
   unknown,0,fallback,low
-  first.txt,7,rule-1,high`, output)
+  first.txt,7,rule-1,high
+secrets_summary: 3 secrets | 1 high 2 low`, output)
 }
 
 func TestTOONMapping_SortedBySeverity(t *testing.T) {
@@ -61,7 +63,8 @@ func TestTOONMapping_SortedBySeverity(t *testing.T) {
 	]}]`)
 	requireTOONEqual(t, false, `sca[2]{fixable,id,pkg,severity}:
   no,b-critical,@,critical
-  no,a-low,@,low`, output)
+  no,a-low,@,low
+sca_summary: 2 unique vulns | 1 critical 1 low | 0 fixable`, output)
 }
 
 func TestTOONMapping_FiltersByEffectiveSeverity(t *testing.T) {
@@ -75,7 +78,8 @@ func TestTOONMapping_FiltersByEffectiveSeverity(t *testing.T) {
 			"problems":[{"source":"snyk_vuln","id":"effective-low","severity":"high"}]}}
 	]}]`, "high", false)
 	requireTOONEqual(t, false, `sca[1]{fixable,id,pkg,severity}:
-  no,effective-high,@,low`, output)
+  no,effective-high,@,low
+sca_summary: 1 unique vulns | 1 low | 0 fixable`, output)
 }
 
 func TestTOONMapping_OrdersActiveBeforeConfiguredIgnoredIssues(t *testing.T) {
@@ -89,12 +93,14 @@ func TestTOONMapping_OrdersActiveBeforeConfiguredIgnoredIssues(t *testing.T) {
 
 	requireTOONEqual(t, false, `secrets[2]{file,line,rule,severity}:
   unknown,0,active-high,high
-  unknown,0,active-low,low`, renderFindingsWithOptions(t, input, "", false))
+  unknown,0,active-low,low
+secrets_summary: 2 secrets | 1 high 1 low`, renderFindingsWithOptions(t, input, "", false))
 	requireTOONEqual(t, false, `secrets[4]{file,line,rule,severity}:
   unknown,0,active-high,high
   unknown,0,active-low,low
   unknown,0,ignored-critical,critical
-  unknown,0,ignored-medium,medium`, renderFindingsWithOptions(t, input, "", true))
+  unknown,0,ignored-medium,medium
+secrets_summary: 4 secrets | 1 critical 1 high 1 medium 1 low`, renderFindingsWithOptions(t, input, "", true))
 }
 
 func TestTOONMapping_FilteredIssuesRetainDiagnostics(t *testing.T) {
@@ -122,7 +128,8 @@ func TestTOONMapping_StableVersions(t *testing.T) {
 	}
 	output := renderFindings(t, false, `[{"findings":[`+strings.Join(findings, ",")+`]}]`)
 	requireTOONEqual(t, false, `sca[1]{fixable,id,pkg,severity}:
-  no,same,"example@1.0,01.0",""`, output)
+  no,same,"example@1.0,01.0",""
+sca_summary: 1 unique vulns (3 paths) |  | 0 fixable`, output)
 }
 
 func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
@@ -139,7 +146,8 @@ func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
 	requireTOONEqual(t, true, `sca[3]{cvss,fixable,id,pkg,severity,title,upgrade}:
   "3.0",yes,"","package-3@3,4",severity-3,Title 3,target@4
   "1.0",yes,first,package-1@1,severity-1,Title 1,target@2
-  "0.0",yes,second,"package-0@0,2",severity-0,Title 0,target@1`, output)
+  "0.0",yes,second,"package-0@0,2",severity-0,Title 0,target@1
+sca_summary: 3 unique vulns (5 paths) |  | 3 fixable`, output)
 }
 
 func TestTOONMapping_SCAFixability(t *testing.T) {
@@ -147,11 +155,12 @@ func TestTOONMapping_SCAFixability(t *testing.T) {
 
 	for _, tc := range []struct {
 		name, action, expected string
+		fixable                int
 	}{
-		{"upgrade", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"},{"name":"example","version":"2"}]}]}`, "yes"},
-		{"root only", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"}],"is_drop":true}]}`, "no"},
-		{"empty target", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{},{}]}]}`, "yes"},
-		{"pin", `{"format":"pin_package_advice","package_name":"example","pin_version":"2"}`, "no"},
+		{"upgrade", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"},{"name":"example","version":"2"}]}]}`, "yes", 1},
+		{"root only", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"}],"is_drop":true}]}`, "no", 0},
+		{"empty target", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{},{}]}]}`, "yes", 1},
+		{"pin", `{"format":"pin_package_advice","package_name":"example","pin_version":"2"}`, "no", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -161,7 +170,8 @@ func TestTOONMapping_SCAFixability(t *testing.T) {
 				 "relationships":{"fix":{"data":{"attributes":{"action":%s}}}}}
 			]}]`, tc.action))
 			requireTOONEqual(t, false, fmt.Sprintf(`sca[1]{fixable,id,pkg,severity}:
-  %s,same,@,""`, tc.expected), output)
+  %s,same,@,""
+sca_summary: 1 unique vulns (2 paths) |  | %d fixable`, tc.expected, tc.fixable), output)
 		})
 	}
 }
@@ -169,7 +179,7 @@ func TestTOONMapping_SCAFixability(t *testing.T) {
 func TestTOONMapping_SCASources(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name, attributes, expected string
+		name, attributes, expected, severitySummary string
 	}{
 		{
 			"prefer first vulnerability over license and other identifiers",
@@ -178,29 +188,34 @@ func TestTOONMapping_SCASources(t *testing.T) {
 				{"source":"snyk_vuln","id":"second","severity":"low"}],
 			 "locations":[{"type":"source","file_path":"manifest"},{"type":"package","package":{"name":"installed","version":"2"}}]`,
 			`no,first,installed@2,high`,
+			"1 high",
 		},
 		{
 			"license package fallback",
 			`"problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT","severity":"medium","package_name":"example","package_version":"3"}]`,
 			`no,"snyk:lic:npm:x:MIT",example@3,medium`,
+			"1 medium",
 		},
 		{
 			"null fields retain empty defaults",
 			`"problems":[{"source":"snyk_vuln","id":null,"severity":null,"package_name":null,"package_version":null}]`,
 			`no,"",@,""`,
+			"",
 		},
 		{
 			"empty ID and severity do not use finding fallbacks",
 			`"key":"finding-key","rating":{"severity":"high"},"problems":[{"source":"snyk_vuln","package_name":"example","package_version":"3"}],
 			 "locations":[{"type":"package","package":{"name":"installed"}}]`,
 			`no,"",installed@3,""`,
+			"",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			output := renderFindings(t, false, fmt.Sprintf(
 				`[{"findings":[{"attributes":{"finding_type":"sca",%s}}]}]`, tc.attributes))
-			requireTOONEqual(t, false, "sca[1]{fixable,id,pkg,severity}:\n  "+tc.expected, output)
+			requireTOONEqual(t, false, "sca[1]{fixable,id,pkg,severity}:\n  "+tc.expected+
+				"\nsca_summary: 1 unique vulns | "+tc.severitySummary+" | 0 fixable", output)
 		})
 	}
 }
@@ -270,7 +285,8 @@ func TestTOONMapping_FullSCADetails(t *testing.T) {
 			cvss, err := toon.FormatTabularField(tc.expectedCVSS)
 			require.NoError(t, err)
 			requireTOONEqual(t, true, fmt.Sprintf(`sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:
-  %s,no,example,@,"",%s,none`, cvss, title), output)
+  %s,no,example,@,"",%s,none
+sca_summary: 1 unique vulns |  | 0 fixable`, cvss, title), output)
 		})
 	}
 }
@@ -287,7 +303,8 @@ func TestTOONMapping_FullSCAUpgrades(t *testing.T) {
 			{"dependency_path":[{"name":"root","version":"1"},{},{"name":"example","version":"2"},{"name":"other","version":"3"}]}]}}}}}}
 	]}]`)
 	requireTOONEqual(t, true, `sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:
-  n/a,yes,same,@,"",without advice,none`, output)
+  n/a,yes,same,@,"",without advice,none
+sca_summary: 1 unique vulns (3 paths) |  | 1 fixable`, output)
 }
 
 func TestTOONMapping_CVSSValidationOnlyInFullOutput(t *testing.T) {
