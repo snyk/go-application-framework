@@ -54,7 +54,7 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 	)
 
 	debugLogger.Info().Msgf("UFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
-	err := renderer.RenderTemplate(wEntry.templates, wEntry.mimeType)
+	err := renderer.RenderTemplateWithContext(invocation.Context(), wEntry.templates, wEntry.mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msgf("UFM - [%s] Failed to render local finding", name)
 		return err

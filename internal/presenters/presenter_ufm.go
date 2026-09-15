@@ -1,6 +1,7 @@
 package presenters
 
 import (
+	"context"
 	"fmt"
 	htmlTemplate "html/template"
 	"io"
@@ -13,6 +14,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
+
+const CONFIG_TOON_FULL = "toon-full"
+const CONFIG_TOON_FEEDBACK = "toon-feedback"
 
 type UfmPresenter struct {
 	TestPath         string
@@ -145,6 +149,10 @@ func (p *UfmPresenter) RegisterMimeType(mimeType string, implFactory TemplateImp
 }
 
 func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
+	return p.RenderTemplateWithContext(context.Background(), templateFiles, mimeType)
+}
+
+func (p *UfmPresenter) RenderTemplateWithContext(ctx context.Context, templateFiles []string, mimeType string) error {
 	// Call renderHTMLTemplate() for HTML mime type
 	if _, ok := p.htmlTemplateImpl[mimeType]; ok {
 		return p.renderHTMLTemplate(templateFiles, mimeType)
@@ -155,6 +163,8 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 	if err != nil {
 		return err
 	}
+
+	localFindingsTemplate.Funcs(template.FuncMap{"getContext": func() context.Context { return ctx }})
 
 	// load files
 	err = loadTemplates(templateFiles, localFindingsTemplate)

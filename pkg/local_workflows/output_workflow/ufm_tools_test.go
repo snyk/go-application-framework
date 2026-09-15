@@ -2,7 +2,9 @@ package output_workflow
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -249,29 +252,122 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		assert.Contains(t, strings.ToLower(stdout), "<!doctype html>", "default writer should have received HTML output")
 	})
 
-	t.Run("toon flag routes UFM output through the TOON writer", func(t *testing.T) {
-		mockCtl := gomock.NewController(t)
-		defer mockCtl.Finish()
+	for _, full := range []bool{false, true} {
+		t.Run(fmt.Sprintf("toon stdout and file/full=%t", full), func(t *testing.T) {
+			mockCtl := gomock.NewController(t)
+			defer mockCtl.Finish()
 
-		stdoutConfig := configuration.NewWithOpts()
-		stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON, true)
-		stdoutConfig.Set(configuration.MAX_THREADS, 10)
+			stdoutConfig := configuration.NewWithOpts()
+			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON, true)
+			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FULL, full)
+			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FEEDBACK, "Share feedback using the host command.")
+			outputFile := filepath.Join(t.TempDir(), "results.toon")
+			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FILE, outputFile)
+			stdoutConfig.Set(configuration.MAX_THREADS, 10)
 
-		ctx := pkgMocks.NewMockInvocationContext(mockCtl)
-		ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-		ctx.EXPECT().GetConfiguration().Return(stdoutConfig).AnyTimes()
-		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
-		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
+			ctx := pkgMocks.NewMockInvocationContext(mockCtl)
+			ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+			ctx.EXPECT().GetConfiguration().Return(stdoutConfig).AnyTimes()
+			ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
+			invocationContext := context.WithValue(t.Context(), networking.InteractionIdKey, "interaction-test")
+			ctx.EXPECT().Context().Return(invocationContext).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.0findings.testresult.json")
-		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
-		input := []workflow.Data{workflowData}
+			results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{"findings":[{"attributes":{
+	            "finding_type":"secret","title":"example-rule","description":"excluded",
+	            "locations":[{"type":"source","file_path":"example.txt","from_line":5,"to_line":8}]
+	        }}, {"id":"00000000-0000-4000-8000-000000000002","attributes":{
+	            "finding_type":"sca","title":"Example","problems":[{"source":"snyk_vuln","id":"example","cvss_base_score":0}],
+	            "locations":[{"type":"package","package":{"name":"example","version":"1"}}]
+	        }}, {"id":"00000000-0000-4000-8000-000000000004","attributes":{
+	            "finding_type":"sca","title":"Later occurrence","problems":[{"source":"snyk_vuln","id":"example"}],
+	            "locations":[{"type":"package","package":{"name":"example","version":"1.5"}}]
+	        },"relationships":{"fix":{"data":{"attributes":{"action":{"format":"upgrade_package_advice",
+	            "upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"},{"name":"example","version":"2"}]}]}
+	        }}}}}, {"id":"00000000-0000-4000-8000-000000000003","attributes":{
+	            "finding_type":"future","title":"Future finding","rating":{"severity":"medium"}
+	        }}]}]`))
+			assert.NoError(t, err)
+			workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
+			input := []workflow.Data{workflowData}
 
-		outputDestination := &stubOutputDestination{}
-		writers := GetWritersFromConfiguration(stdoutConfig, outputDestination)
+			outputDestination := &stubOutputDestination{}
+			writers := GetWritersFromConfiguration(stdoutConfig, outputDestination)
 
-		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
-		assert.NoError(t, err)
-		assert.NotNil(t, remaining)
-	})
+			remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
+			assert.NoError(t, err)
+			assert.NotNil(t, remaining)
+			expected := "sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\""
+			if full {
+				expected = "sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:\n  \"0.0\",yes,example,\"example@1,1.5\",\"\",Example,none"
+			}
+			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
+			header := "interaction_id: interaction-test\norg: unknown\nproject: unknown\n"
+			if !full {
+				header = "hint: add --full for all fields\n" + header
+			}
+			feedback := "feedback: Share feedback using the host command.\n"
+			expected = feedback + "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" + header + expected
+			header = feedback + header
+			assert.Equal(t, expected+"\n", outputDestination.buffer.String())
+			content, err := os.ReadFile(outputFile)
+			assert.NoError(t, err)
+			assert.Equal(t, expected, string(content))
+
+			emptyResults := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.0findings.testresult.json")
+			emptyData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), emptyResults)
+			emptyDestination := &stubOutputDestination{}
+			emptyWriters := GetWritersFromConfiguration(stdoutConfig, emptyDestination)
+			_, err = HandleContentTypeUnifiedModel([]workflow.Data{emptyData}, ctx, emptyWriters)
+			assert.NoError(t, err)
+			assert.Equal(t, header+"secrets: []\n", emptyDestination.buffer.String())
+			content, err = os.ReadFile(outputFile)
+			assert.NoError(t, err)
+			assert.Equal(t, header+"secrets: []", string(content))
+
+			failedResults, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
+				"findingsComplete":true,"executionState":"errored","testConfiguration":{"scan_config":{"secrets":{}}},
+				"errors":[{"detail":"Scan failed","status":"500"}]
+			}]`))
+			assert.NoError(t, err)
+			failedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), failedResults)
+			failedDestination := &stubOutputDestination{}
+			failedWriters := GetWritersFromConfiguration(stdoutConfig, failedDestination)
+			_, err = HandleContentTypeUnifiedModel([]workflow.Data{failedData}, ctx, failedWriters)
+			assert.NoError(t, err)
+			expectedFailure := "feedback: Share feedback using the host command.\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nsecrets: []\nsecrets_error: Scan failed"
+			assert.Equal(t, expectedFailure+"\n", failedDestination.buffer.String())
+			content, err = os.ReadFile(outputFile)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedFailure, string(content))
+
+			genericFailure, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
+				"executionState":"errored","errors":[{"detail":"Other scan failed"}],"warnings":[{"detail":"Partial input"}]
+			}]`))
+			assert.NoError(t, err)
+			genericData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), genericFailure)
+			genericDestination := &stubOutputDestination{}
+			_, err = HandleContentTypeUnifiedModel([]workflow.Data{genericData}, ctx, GetWritersFromConfiguration(stdoutConfig, genericDestination))
+			assert.NoError(t, err)
+			expectedFailure = "errors: Other scan failed\n" + feedback + "findings: []\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nwarnings: Partial input"
+			assert.Equal(t, expectedFailure+"\n", genericDestination.buffer.String())
+			content, err = os.ReadFile(outputFile)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedFailure, string(content))
+
+			for _, state := range []string{"pending", "started"} {
+				unfinishedResults, parseErr := ufm.NewSerializableTestResultFromBytes([]byte(fmt.Sprintf(
+					`[{"findingsComplete":true,"executionState":%q,"testConfiguration":{"scan_config":{"secrets":{}}}}]`, state)))
+				assert.NoError(t, parseErr)
+				unfinishedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), unfinishedResults)
+				unfinishedDestination := &stubOutputDestination{}
+				unfinishedWriters := GetWritersFromConfiguration(stdoutConfig, unfinishedDestination)
+				_, renderErr := HandleContentTypeUnifiedModel([]workflow.Data{unfinishedData}, ctx, unfinishedWriters)
+				assert.ErrorContains(t, renderErr, "scan is "+state)
+				assert.Empty(t, unfinishedDestination.buffer.String())
+				content, readErr := os.ReadFile(outputFile)
+				assert.NoError(t, readErr)
+				assert.Equal(t, expectedFailure, string(content), "existing output must remain untouched")
+			}
+		})
+	}
 }
