@@ -1023,6 +1023,39 @@ func Test_Configuration_GetStringSliceFromEmptyString(t *testing.T) {
 	assert.Equal(t, []string{}, actual)
 }
 
+// A JSON array read back from the config store arrives as []interface{}, not []string.
+func Test_Configuration_GetStringSliceFromPersistedJSONArray(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
+	assert.NoError(t, prepareConfigstore(`{"paths": ["first", "second"]}`))
+
+	config := NewWithOpts(WithFiles(TEST_FILENAME))
+
+	assert.Equal(t, []string{"first", "second"}, config.GetStringSlice("paths"))
+}
+
+func Test_Configuration_GetStringSliceFromInterfaceSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    interface{}
+		expected []string
+	}{
+		{"string elements", []interface{}{"a", "b"}, []string{"a", "b"}},
+		{"empty slice", []interface{}{}, []string{}},
+		{"non-string elements are stringified", []interface{}{1, true}, []string{"1", "true"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := NewWithOpts()
+			config.Set("key1", tt.value)
+
+			assert.Equal(t, tt.expected, config.GetStringSlice("key1"))
+		})
+	}
+}
+
 func Test_Configuration_AddKeyDependency_happy(t *testing.T) {
 	key1 := "key1"
 	key2 := "key2"

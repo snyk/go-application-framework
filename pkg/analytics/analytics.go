@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"bytes"
+
 	"github.com/snyk/go-application-framework/pkg/logging"
 
 	//nolint:gosec // insecure sha1 used for legacy identifier
@@ -21,6 +22,7 @@ import (
 	"github.com/hashicorp/go-uuid"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/metrics"
 	utils2 "github.com/snyk/go-application-framework/internal/utils"
 )
 
@@ -44,6 +46,9 @@ type Analytics interface {
 	AddExtensionStringValue(key string, value string)
 	AddExtensionBoolValue(key string, value bool)
 }
+
+// Compile-time check that Analytics satisfies metrics.Recorder.
+var _ metrics.Recorder = (Analytics)(nil)
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
 type AnalyticsImpl struct {
@@ -363,11 +368,24 @@ func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue s
 	return SanitizeStaticValues(valuesToSanitize, replacementValue, content)
 }
 
+// SanitizeStaticValues replaces every occurrence of each valuesToSanitize entry in content with
+// replacementValue. Replacement is JSON-aware (see logging.RedactStaticTerm) only when content is
+// itself valid JSON: the bare-value quoting that keeps a redacted JSON payload parseable would
+// otherwise inject stray quotes into a plain-text snippet -- something an exported function has to
+// tolerate, since it can't assume every caller passes valid JSON.
 func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, content []byte) ([]byte, error) {
 	contentStr := string(content)
+	jsonAware := json.Valid(content)
 
 	for _, valueToReplace := range valuesToSanitize {
-		contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
+		if valueToReplace == "" {
+			continue // strings.ReplaceAll inserts replacementValue between every rune for an empty old string
+		}
+		if jsonAware {
+			contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
+		} else {
+			contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
+		}
 	}
 
 	return []byte(contentStr), nil

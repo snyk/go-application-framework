@@ -235,6 +235,70 @@ func Test_SanitizeUsername(t *testing.T) {
 	}
 }
 
+// Test_SanitizeUsername_NumericUsernameCollision guards against a numeric username -- a realistic
+// value in containerized environments where $USER is set to a raw UID with no matching
+// /etc/passwd entry -- colliding with an unrelated bare JSON number and corrupting the payload.
+func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
+	input := []byte(`{"durationMs":10001234,"count":1000,"other":"x"}`)
+
+	output, err := SanitizeUsername("1000", "/home/1000", "***", input)
+	assert.NoError(t, err)
+
+	assert.True(t, json.Valid(output), "sanitizing produced invalid JSON: %s", output)
+	assert.Equal(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
+}
+
+// Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted covers SanitizeStaticValues being
+// called on a non-JSON snippet, not the full valid JSON its current callers always pass -- it's
+// exported API, so a future caller isn't bound to that. Without gating on content's own validity,
+// a term next to ": "/"," here would get RedactStaticTerm's bare-value quoting even though there's
+// no JSON to protect, injecting stray quotes into plain text.
+func Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted(t *testing.T) {
+	output, err := SanitizeStaticValues([]string{"1000"}, "***", []byte("user: 1000, retry: 2000"))
+	assert.NoError(t, err)
+	assert.Equal(t, "user: ***, retry: 2000", string(output))
+}
+
+// Test_SanitizeStaticValues_EmptyValueIsNoop covers both branches of the jsonAware split: unlike
+// RedactStaticTerm, strings.ReplaceAll has no built-in guard against an empty old string -- it
+// inserts replacementValue between every rune instead of leaving the content untouched.
+func Test_SanitizeStaticValues_EmptyValueIsNoop(t *testing.T) {
+	t.Run("non-JSON content", func(t *testing.T) {
+		output, err := SanitizeStaticValues([]string{""}, "***", []byte("plain text"))
+		assert.NoError(t, err)
+		assert.Equal(t, "plain text", string(output))
+	})
+
+	t.Run("JSON content", func(t *testing.T) {
+		output, err := SanitizeStaticValues([]string{""}, "***", []byte(`{"a":1}`))
+		assert.NoError(t, err)
+		assert.Equal(t, `{"a":1}`, string(output))
+	})
+}
+
+// Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload proves the fix survives the real
+// GetRequest() pipeline, not just a hand-built JSON blob: a numeric username embedded in an error
+// message must be redacted without corrupting the rest of the marshaled payload.
+func Test_GetRequest_RedactsNumericUsernameFromMarshaledPayload(t *testing.T) {
+	a := New().(*AnalyticsImpl) //nolint:errcheck //in this test, the type is clear
+	a.userCurrent = func() (*user.User, error) {
+		return &user.User{Username: "1000", HomeDir: t.TempDir()}, nil
+	}
+	a.AddError(fmt.Errorf("permission denied for user 1000"))
+
+	req, err := a.GetRequest()
+	assert.NoError(t, err)
+
+	body, err := io.ReadAll(req.Body)
+	assert.NoError(t, err)
+	assert.True(t, json.Valid(body), "GetRequest produced invalid JSON: %s", body)
+
+	var decoded dataOutput
+	assert.NoError(t, json.Unmarshal(body, &decoded))
+	assert.NotContains(t, decoded.Data.Metadata.ErrorMessage, "1000")
+	assert.NotEmpty(t, decoded.Data.Id)
+}
+
 func newTestAnalytics(t *testing.T) Analytics {
 	t.Helper()
 	a := New()

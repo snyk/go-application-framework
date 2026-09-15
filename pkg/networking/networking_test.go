@@ -21,12 +21,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 func getConfig() configuration.Configuration {
@@ -55,9 +57,12 @@ func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
 		}
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
-	_, err := client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
@@ -79,9 +84,12 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 		}
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
-	_, err := client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
@@ -114,12 +122,15 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config.Set(configuration.INTEGRATION_NAME, integrationName)
 	config.Set(configuration.INTEGRATION_VERSION, integrationVersion)
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, server.URL)
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 
-	_, err = client.Get(server.URL)
-	assert.NoError(t, err)
+	rsp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 }
 
 func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
@@ -139,9 +150,12 @@ func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	config.Set(configuration.API_URL, "https://www.example.com/not/the/server/URL")
 	rsp, err := client.Get(server.URL)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	require.NotNil(t, rsp)
+	defer rsp.Body.Close()
 	capturedHeaders := make(map[string]string)
 	rspBody, err := io.ReadAll(rsp.Body)
 	assert.NoError(t, err)
@@ -203,10 +217,17 @@ func Test_GetHTTPClient(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
 
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
 	client := net.GetHttpClient()
-	response, err := client.Get("https://www.snyk.io")
-	assert.Nil(t, err)
-	assert.Equal(t, 200, response.StatusCode)
+	response, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
 }
 
 func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
@@ -488,7 +509,7 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	})
 	server := httptest.NewServer(handler)
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	t.Run("returns the error from the handler", func(t *testing.T) {
 		network := NewNetworkAccess(config)
@@ -496,7 +517,10 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 			return expectedErr // overrides the previous error
 		})
 		client := network.GetHttpClient()
-		_, err := client.Get(server.URL)
+		res, err := client.Get(server.URL)
+		if res != nil {
+			res.Body.Close()
+		}
 		assert.ErrorAs(t, err, &expectedErr)
 	})
 
@@ -505,7 +529,9 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 		network.AddErrorHandler(nil)
 		client := network.GetHttpClient()
 		res, err := client.Get(server.URL)
-		assert.Nil(t, err)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		defer res.Body.Close()
 		assert.Equal(t, res.StatusCode, http.StatusUnauthorized)
 	})
 
@@ -515,7 +541,10 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 			return expectedErr // overrides the previous error
 		})
 		client := network.GetUnauthorizedHttpClient()
-		_, err := client.Get(server.URL)
+		res, err := client.Get(server.URL)
+		if res != nil {
+			res.Body.Close()
+		}
 		assert.ErrorAs(t, err, &expectedErr)
 	})
 }
@@ -556,3 +585,63 @@ func TestNetworkImpl_GetUnauthorizedHttpClient_NetworkStackErrorHandlerMiddlewar
 	expectedDNSError := cli.NewDNSResolutionError("")
 	assert.Equal(t, expectedDNSError.ErrorCode, snykError.ErrorCode)
 }
+
+func Test_AddMiddleware_AppliesInRegistrationOrder(t *testing.T) {
+	appendToHeader := func(value string) networktypes.MiddlewareFunc {
+		return func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				req.Header.Set("X-Order", req.Header.Get("X-Order")+value)
+				return next.RoundTrip(req)
+			})
+		}
+	}
+
+	var gotOrder string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotOrder = r.Header.Get("X-Order")
+	})
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+
+	net := NewNetworkAccess(config)
+	net.AddMiddleware(appendToHeader("a"))
+	net.AddMiddleware(appendToHeader("b"))
+
+	res, err := net.GetUnauthorizedHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.Equal(t, "ba", gotOrder, "the last registered middleware wraps the others, so it runs first")
+}
+
+func Test_AddMiddleware_SurvivesClone(t *testing.T) {
+	var called bool
+	middlewareFunc := func(next http.RoundTripper) http.RoundTripper {
+		return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			called = true
+			return next.RoundTrip(req)
+		})
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+
+	net := NewNetworkAccess(config)
+	net.AddMiddleware(middlewareFunc)
+
+	res, err := net.Clone().GetUnauthorizedHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.True(t, called, "a clone must keep the middleware registered on the original")
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

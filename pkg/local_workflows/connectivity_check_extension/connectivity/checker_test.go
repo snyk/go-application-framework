@@ -150,8 +150,7 @@ func TestDetectProxyConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear every variable the checker reads, so the host environment
-			// cannot leak into the result. Derived from envVarSpecs so that
-			// variables added there stay isolated.
+			// cannot leak into the result.
 			for _, spec := range envVarSpecs {
 				for _, key := range spec.names {
 					t.Setenv(key, "")

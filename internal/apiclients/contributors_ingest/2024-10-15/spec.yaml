@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: Contributing Devs Ingest API
+  description: |
+    Hidden ingest API for CLI Active Contributor billing.
+    Vendored from contributingDevsIngestApi (2024-10-15); sweater-comb refs inlined for codegen.
+  version: 2024-10-15
+servers:
+  - url: /
+paths:
+  /hidden/orgs/{org_id}/contributing_devs:
+    post:
+      operationId: createContributingDevs
+      summary: Ingest contributors for an entity
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/CreateContributingDevsRequestBody'
+      responses:
+        "201":
+          description: Contributors accepted and published
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/CreateContributingDevsResponseBody'
+        "400":
+          description: Bad request
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+components:
+  schemas:
+    CreateContributingDevsRequestBody:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - type
+            - attributes
+          properties:
+            type:
+              type: string
+              enum:
+                - contributing_devs
+            attributes:
+              $ref: '#/components/schemas/ContributingDevsIngestAttributes'
+    ContributingDevsIngestAttributes:
+      type: object
+      required:
+        - contributors_entity_type
+        - contributors_entity_id
+        - contributors
+      properties:
+        contributors_entity_type:
+          type: string
+          enum:
+            - project
+            - target
+            - revision
+        contributors_entity_id:
+          type: string
+        contributors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contributor'
+    Contributor:
+      type: object
+      required:
+        - email
+        - commit_date
+      properties:
+        email:
+          type: string
+        commit_date:
+          type: string
+          format: date-time
+    CreateContributingDevsResponseBody:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - id
+            - type
+          properties:
+            id:
+              type: string
+            type:
+              type: string

@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
@@ -290,10 +291,40 @@ func defaultMaxNetworkRequestAttempts() configuration.DefaultValueFunction {
 			return value, nil
 		}
 
-		if conf.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+		if utils.NetworkRetriesEnabled(conf) {
 			return multipleAttempts, nil
 		}
 		return singleAttempt, nil
+	}
+	return callback
+}
+
+// GetStringSlice's type switch otherwise wraps a raw env-var CSV string as a
+// single unsplit entry, so it must be normalized into a []string first. The
+// framework ships oauth2/token for auth-token-refresh retries; applications can
+// declare additional service-specific paths via config or environment variable.
+func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		paths := []string{"oauth2/token"}
+
+		if raw, ok := existingValue.(string); ok {
+			for _, part := range strings.Split(raw, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					paths = append(paths, trimmed)
+				}
+			}
+		} else if strSlice, ok := existingValue.([]string); ok {
+			paths = append(paths, strSlice...)
+		} else if ifaceSlice, ok := existingValue.([]interface{}); ok {
+			// Handle JSON-loaded arrays which come as []interface{}
+			for _, v := range ifaceSlice {
+				if str, ok := v.(string); ok && str != "" {
+					paths = append(paths, str)
+				}
+			}
+		}
+
+		return paths, nil
 	}
 	return callback
 }
@@ -321,7 +352,12 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
+	// any external caller still using IsValidAuthHost directly keeps
+	// working; GAF's own validation no longer reads this key (see
+	// IsValidSnykHost). Remove once that's confirmed unused downstream.
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOSTS, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS))
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
@@ -373,7 +409,13 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
+	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
+
+	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
+		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:   "clientFileFilterGitignore_MetaCharFix",
+		pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES: "clientFileFilterGitignore_TrackedFilesRollout",
+	})
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {

@@ -1,1 +1,5 @@
 * @snyk/developer-experience_cli @snyk/developer-experience_ide
+
+/internal/contributors/ @snyk/platformeng_identity-tenancy
+/internal/apiclients/contributors_ingest/ @snyk/platformeng_identity-tenancy
+/pkg/networking/middleware/contributor_capture/ @snyk/platformeng_identity-tenancy

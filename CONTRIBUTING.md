@@ -1,6 +1,10 @@
 # Contributing
 
 This repo is intended for internal (Snyk) contributions only at this time.
+Note this governs who *contributes*, not who can *see* it — the repository,
+including its full history, is public. See AGENTS.md §
+["This repository is public"](AGENTS.md#this-repository-is-public) before
+referencing any internal system, ticket, or repo in your changes.
 
 ## Creating a new extension
 

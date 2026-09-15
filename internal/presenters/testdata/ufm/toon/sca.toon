@@ -1,0 +1,69 @@
+results[1]:
+  - effectiveSummary:
+      count: 2
+    errors: null
+    executionState: finished
+    findings[2]:
+      - attributes:
+          cause_of_failure: true
+          description: Synthetic finding for output contract tests.
+          evidence[1]:
+            - path[2]{name,version}:
+                example-app,1.0.0
+                example-lib,1.0.0
+              source: dependency_path
+          finding_type: sca
+          key: finding-2
+          locations[1]{package{name,version},type}:
+            example-lib,1.0.0,package
+          problems[1]:
+            - affected_versions[1]: <2.0.0
+              id: SNYK-EXAMPLE-1
+              initially_fixed_in_versions[1]: 2.0.0
+              is_fixable: true
+              package_name: example-lib
+              source: snyk_vuln
+          rating:
+            severity: high
+          risk:
+          title: Example finding
+        id: 00000000-0000-4000-8000-000000000002
+        relationships:
+          asset:
+            data:
+              id: 20000000-0000-4000-8000-000000000001
+              type: assets
+            links:
+              related: "https://example.com/assets/example"
+        type: findings
+      - attributes:
+          cause_of_failure: true
+          description: Synthetic finding for output contract tests.
+          evidence: []
+          finding_type: sca
+          key: finding-1
+          locations[1]{package{name,version},type}:
+            example-lib,1.1.0,package
+          problems[1]:
+            - affected_versions[1]: <2.0.0
+              id: SNYK-EXAMPLE-1
+              initially_fixed_in_versions[1]: 2.0.0
+              is_fixable: true
+              package_name: example-lib
+              source: snyk_vuln
+          rating:
+            severity: high
+          risk:
+          title: Example finding
+        id: 00000000-0000-4000-8000-000000000001
+        type: findings
+    outcomeReason: null
+    passFail: fail
+    rawSummary:
+      count: 2
+    testConfiguration:
+      scan_config:
+        sca:
+    testId: 10000000-0000-4000-8000-000000000001
+    testSubject: null
+    warnings: null

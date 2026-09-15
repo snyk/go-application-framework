@@ -398,8 +398,9 @@ const (
 
 // Defines values for UploadResourceContentType.
 const (
-	UploadResourceContentTypeSbom   UploadResourceContentType = "sbom"
-	UploadResourceContentTypeSource UploadResourceContentType = "source"
+	UploadResourceContentTypeContainerAnalysis UploadResourceContentType = "container_analysis"
+	UploadResourceContentTypeSbom              UploadResourceContentType = "sbom"
+	UploadResourceContentTypeSource            UploadResourceContentType = "source"
 )
 
 // Defines values for UploadResourceType.
@@ -1435,15 +1436,29 @@ type PolicyRefSet struct {
 // Only a subset of fields are included, for more details see the API documentation
 // https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/policies/-policy_id-
 type PolicyRule struct {
-	Created  time.Time          `json:"created"`
-	Id       openapi_types.UUID `json:"id"`
-	Modified time.Time          `json:"modified"`
-	Name     string             `json:"name"`
-	Review   PolicyRuleReview   `json:"review"`
+	Created    time.Time           `json:"created"`
+	Id         openapi_types.UUID  `json:"id"`
+	Modified   time.Time           `json:"modified"`
+	Name       string              `json:"name"`
+	Review     PolicyRuleReview    `json:"review"`
+	ReviewedAt *time.Time          `json:"reviewed_at,omitempty"`
+	ReviewedBy *PolicyRuleReviewer `json:"reviewed_by,omitempty"`
 }
 
 // PolicyRuleReview defines model for PolicyRule.Review.
 type PolicyRuleReview string
+
+// PolicyRuleReviewer defines model for PolicyRuleReviewer.
+type PolicyRuleReviewer struct {
+	// Email Email of the reviewer
+	Email *string `json:"email,omitempty"`
+
+	// Id User ID of the reviewer
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the reviewer
+	Name string `json:"name"`
+}
 
 // Problem Problems are representative of the finding in other security domains and
 // systems with a well-known identifier.
@@ -1971,6 +1986,9 @@ type SnykVulnProblem struct {
 	// a given version is vulnerable.
 	InitiallyFixedInVersions []string `json:"initially_fixed_in_versions"`
 
+	// Insights Insights to be used when triaging the vulnerability.
+	Insights *SnykvulndbVulnInsights `json:"insights,omitempty"`
+
 	// IsDisputed Indicates if the vulnerability is formally disputed.
 	// A vulnerability's claim (e.g., that it's a security flaw, or the scope/impact) is
 	// **disputed** when one party, often the vendor or a security professional, formally
@@ -2008,6 +2026,9 @@ type SnykVulnProblem struct {
 	// from typo to version change). When the vulnerability is first added, this
 	// field and published will be (almost) identical.
 	ModifiedAt time.Time `json:"modified_at"`
+
+	// ModuleName The module within the dependency.
+	ModuleName *string `json:"module_name,omitempty"`
 
 	// PackageFullName The full name of the vulnerable software package.
 	// It's achieved by combining the packageName and packageNamespace
@@ -2050,6 +2071,11 @@ type SnykVulnProblem struct {
 
 	// VulnerableFunctions Known vulnerable functions in software packages.
 	VulnerableFunctions *map[string]SnykvulndbVulnerableFunction `json:"vulnerable_functions,omitempty"`
+
+	// VulnerableFunctionsList Known vulnerable functions in software packages.
+	// New version of the vulnerable_functions field to match
+	// using an array in upstream services.
+	VulnerableFunctionsList *[]SnykvulndbVulnerableFunction `json:"vulnerable_functions_list,omitempty"`
 }
 
 // SnykVulnProblemSource defines model for SnykVulnProblem.Source.
@@ -2469,8 +2495,7 @@ type UpgradePath struct {
 type UploadResource struct {
 	// ContentType Content present in the Upload Revision.
 	//
-	// Currently only SBOMs and Source files are accepted
-	// content types.
+	// Accepted content types are SBOMs, Source files, and container analysis.
 	ContentType UploadResourceContentType `json:"content_type"`
 
 	// FilePatterns File Patterns to include in the scan. Elements must be less than 256 characters.
@@ -2504,8 +2529,7 @@ type UploadResource struct {
 
 // UploadResourceContentType Content present in the Upload Revision.
 //
-// Currently only SBOMs and Source files are accepted
-// content types.
+// Accepted content types are SBOMs, Source files, and container analysis.
 type UploadResourceContentType string
 
 // UploadResourceType defines model for UploadResource.Type.
@@ -2842,6 +2866,12 @@ type SnykvulndbReferenceLinks struct {
 	Url string `json:"url"`
 }
 
+// SnykvulndbVulnInsights Insights to be used when triaging a vulnerability.
+type SnykvulndbVulnInsights struct {
+	// TriageAdvice Advice for triaging this vulnerability.
+	TriageAdvice *string `json:"triage_advice,omitempty"`
+}
+
 // SnykvulndbVulnerableFunction Information about a function known to be vulnerable in a software package.
 type SnykvulndbVulnerableFunction struct {
 	// FunctionId Vulnerable function.
@@ -2855,6 +2885,9 @@ type SnykvulndbVulnerableFunction struct {
 type SnykvulndbVulnerableFunctionId struct {
 	// ClassName Class containing the function.
 	ClassName *string `json:"class_name,omitempty"`
+
+	// FilePath Vulnerable File Path
+	FilePath *string `json:"file_path,omitempty"`
 
 	// FunctionName Vulnerable function name.
 	FunctionName string `json:"function_name"`
