@@ -2,5 +2,7 @@ feedback: ""
 hint: add --full for all fields
 org: unknown
 project: unknown
+sca[1]{fixable,id,pkg,severity}:
+  no,SNYK-EXAMPLE-1,"example-lib@1.0.0,1.1.0",""
 secrets[1]{file,line,rule,severity}:
   config.txt,7,example-secret-rule,high

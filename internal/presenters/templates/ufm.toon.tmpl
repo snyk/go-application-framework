@@ -1,6 +1,195 @@
 {{- define "main" -}}
+  {{- $envelope := dict -}}
+  {{- $state := dict "Envelope" $envelope "SCA" (array) "Versions" (dict) "Fixable" (dict) "Fatal" false
+                    "Full" (eq (getValueFromConfig "toon-full") "true") -}}
+  {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
+  {{- range $result := .TestResults -}}
+    {{- $findings := getFindings (getContext) $result -}}
+    {{- template "toonDiagnostics" (dict "State" $state "Result" $result "Findings" $findings) -}}
+    {{- range $finding := $findings -}}
+      {{- with $finding.Attributes -}}
+        {{- if eq .FindingType "sca" -}}
+          {{- template "toonSCA" (dict "State" $state "Finding" $finding) -}}
+        {{- else if or (eq .FindingType "secret") (eq .FindingType "secrets") -}}
+          {{- template "toonSecrets" (dict "Envelope" $envelope "Attributes" .) -}}
+        {{- else -}}
+          {{- template "toonFinding" (dict "Envelope" $envelope "Finding" $finding) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $versions := $state.Versions -}}
+    {{- $_ := set $versions "Values" (sortVersions $versions.Values) -}}
+  {{- end -}}
+  {{- $seen := dict -}}
+  {{- $rows := array -}}
+  {{- range $row := $state.SCA -}}
+    {{- if index $seen $row.id -}}{{- continue -}}{{- end -}}
+    {{- $_ := set $seen $row.id true -}}
+    {{- $_ := set $row "pkg" (print $row.pkg "@" (join (index $state.Versions $row.id).Values ",")) -}}
+    {{- if index $state.Fixable $row.id -}}{{- $_ := set $row "fixable" "yes" -}}{{- end -}}
+    {{- $rows = append $rows $row -}}
+  {{- end -}}
+  {{- if $rows -}}{{- $_ := set $envelope "sca" $rows -}}{{- end -}}
+  {{- if .TestResults -}}{{- template "toonContextFields" $state -}}{{- end -}}
+  {{- template "toonDocument" $envelope -}}
+{{- end -}}
+
+{{- define "toonContextFields" -}}
+  {{- $envelope := .Envelope -}}
+  {{- $_ := set $envelope "org" (or (getStringFromConfig "internal_org_slug") (getStringFromConfig "org") "unknown") -}}
+  {{- $project := "unknown" -}}
+  {{- with getStringFromConfig "internal_working_dir" -}}{{- $project = baseName . -}}{{- end -}}
+  {{- $_ := set $envelope "project" $project -}}
+  {{- $_ := set $envelope "feedback" (getStringFromConfig "toon-feedback") -}}
+  {{- with getInteractionID (getContext) -}}{{- $_ := set $envelope "interaction_id" . -}}{{- end -}}
+  {{- if and (not .Full) (not .Fatal) -}}{{- $_ := set $envelope "hint" "add --full for all fields" -}}{{- end -}}
+  {{- with getErrorTip (getContext) -}}
+    {{- $tip := . -}}
+    {{- if $envelope.errors -}}{{- $_ := set $envelope "hint" $tip -}}{{- end -}}
+    {{- range $scanner := array "sca" "secrets" -}}
+      {{- if index $envelope (print $scanner "_error") -}}
+        {{- $key := print $scanner "_hint" -}}
+        {{- $message := $tip -}}
+        {{- with index $envelope $key -}}{{- $message = trimSpace (print . "\n" $tip) -}}{{- end -}}
+        {{- $_ := set $envelope $key $message -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonDiagnosticMessage" -}}
+  {{- $message := "" -}}
+  {{- with .Items -}}
+    {{- range $i, $diagnostic := . -}}
+      {{- if $i -}}{{- $message = print $message "\n" -}}{{- end -}}
+      {{- $message = print $message (or $diagnostic.Detail (stringValue $diagnostic.Title) (stringValue $diagnostic.Code) "Scanner diagnostic.") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $_ := set . "Message" $message -}}
+{{- end -}}
+
+{{- define "toonAppendMessage" -}}
+  {{- if .Message -}}
+    {{- $message := .Message -}}
+    {{- with index .Envelope .Key -}}{{- $message = print . "\n" $message -}}{{- end -}}
+    {{- $_ := set .Envelope .Key $message -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonDiagnostics" -}}
+  {{- $envelope := .State.Envelope -}}
+  {{- $scanners := dict -}}
+  {{- with .Result.GetTestConfiguration -}}{{- with .ScanConfig -}}
+    {{- if .Sca -}}{{- $_ := set $scanners "sca" true -}}{{- end -}}
+    {{- if .Secrets -}}{{- $_ := set $scanners "secrets" true -}}{{- end -}}
+  {{- end -}}{{- end -}}
+  {{- range .Findings -}}{{- with .Attributes -}}
+    {{- if eq .FindingType "sca" -}}{{- $_ := set $scanners "sca" true -}}{{- end -}}
+    {{- if or (eq .FindingType "secret") (eq .FindingType "secrets") -}}{{- $_ := set $scanners "secrets" true -}}{{- end -}}
+  {{- end -}}{{- end -}}
+  {{- $errors := dict "Items" .Result.GetErrors -}}
+  {{- $warnings := dict "Items" .Result.GetWarnings -}}
+  {{- template "toonDiagnosticMessage" $errors -}}
+  {{- template "toonDiagnosticMessage" $warnings -}}
+  {{- $state := .Result.GetExecutionState -}}
+  {{- if or (eq $state "pending") (eq $state "started") -}}{{- fail (print "scan is " $state) -}}{{- end -}}
+  {{- if and (eq $state "errored") (not $errors.Message) -}}{{- $_ := set $errors "Message" "Scan failed." -}}{{- end -}}
+  {{- if not $scanners -}}
+    {{- if not $envelope.findings -}}{{- $_ := set $envelope "findings" (array) -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" "errors" "Message" $errors.Message) -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" "warnings" "Message" $warnings.Message) -}}
+  {{- end -}}
+  {{- if and $errors.Message (not .Findings) -}}{{- $_ := set .State "Fatal" true -}}{{- end -}}
+  {{- range $scanner, $_ := $scanners -}}
+    {{- if not (index $envelope $scanner) -}}{{- $_ := set $envelope $scanner (array) -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" (print $scanner "_error") "Message" $errors.Message) -}}
+    {{- $warningKey := print $scanner "_warning" -}}
+    {{- if eq $scanner "secrets" -}}{{- $warningKey = "secrets_hint" -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" $warningKey "Message" $warnings.Message) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonFinding" -}}
+  {{- $id := "" -}}{{- with .Finding.Id -}}{{- $id = print . -}}{{- end -}}
+  {{- $attributes := .Finding.Attributes -}}
+  {{- $row := dict "id" $id "finding_type" (print $attributes.FindingType) "title" $attributes.Title "severity" (print $attributes.Rating.Severity) -}}
+  {{- $_ := set .Envelope "findings" (append (or .Envelope.findings (array)) $row) -}}
+{{- end -}}
+
+{{- define "toonSecrets" -}}
+  {{- $attributes := .Attributes -}}
+  {{- $rule := $attributes.Title -}}
+  {{- if $attributes.Problems -}}
+    {{- with (getSecretsRule (index $attributes.Problems 0)).Id -}}{{- $rule = . -}}{{- end -}}
+  {{- end -}}
+  {{- $file := "unknown" -}}{{- $line := 0 -}}
+  {{- if $attributes.Locations -}}
+    {{- $location := getSourceLocation (index $attributes.Locations 0) -}}
+    {{- $file = or $location.FilePath "unknown" -}}{{- $line = $location.FromLine -}}
+  {{- end -}}
+  {{- $row := dict "rule" (or $rule "secret") "severity" (or (toLowerCase (print $attributes.Rating.Severity)) "low") "file" $file "line" (number $line) -}}
+  {{- $_ := set .Envelope "secrets" (append (or .Envelope.secrets (array)) $row) -}}
+{{- end -}}
+
+{{- define "toonSCA" -}}
+  {{- $state := .State -}}
+  {{- $finding := .Finding -}}
+  {{- $attributes := $finding.Attributes -}}
+  {{- $problem := false -}}
+  {{- range $source := array "snyk_vuln" "snyk_license" -}}
+    {{- range $candidate := $attributes.Problems -}}
+      {{- if eq $candidate.Discriminator $source -}}{{- $problem = $candidate -}}{{- break -}}{{- end -}}
+    {{- end -}}
+    {{- if $problem -}}{{- break -}}{{- end -}}
+  {{- end -}}
+  {{- if not $problem -}}{{- fail "SCA finding has no supported problem" -}}{{- end -}}
+  {{- $fields := jsonStrings $problem "id" "severity" "package_name" "package_version" -}}
+  {{- $id := or $fields.id "" -}}
+  {{- $name := or $fields.package_name "" -}}{{- $version := or $fields.package_version "" -}}
+  {{- range $location := $attributes.Locations -}}
+    {{- if eq $location.Discriminator "package" -}}
+      {{- $package := $location.AsPackageLocation -}}
+      {{- $name = or $package.Package.Name $name -}}{{- $version = or $package.Package.Version $version -}}
+      {{- break -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not (index $state.Versions $id) -}}{{- $_ := set $state.Versions $id (dict "Values" (array) "Seen" (dict)) -}}{{- end -}}
+  {{- $versions := index $state.Versions $id -}}
+  {{- if and $version (not (index $versions.Seen $version)) -}}
+    {{- $_ := set $versions "Values" (append $versions.Values $version) -}}
+    {{- $_ := set $versions.Seen $version true -}}
+  {{- end -}}
+  {{- $upgrade := "none" -}}
+  {{- with $finding.Relationships -}}{{- with .Fix -}}{{- with .Data -}}{{- with .Attributes -}}{{- with .Action -}}
+    {{- if eq .Discriminator "upgrade_package_advice" -}}
+      {{- range .AsUpgradePackageAdvice.UpgradePaths -}}
+        {{- if gt (len .DependencyPath) 1 -}}
+          {{- $_ := set $state.Fixable $id true -}}
+          {{- range slice .DependencyPath 1 -}}
+            {{- if and .Name .Version -}}{{- $upgrade = print .Name "@" .Version -}}{{- break -}}{{- end -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if ne $upgrade "none" -}}{{- break -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+  {{- $row := dict "id" $id "severity" (or $fields.severity "") "pkg" $name "fixable" "no" -}}
+  {{- if $state.Full -}}
+    {{- $cvss := "n/a" -}}
+    {{- $scores := jsonNumbers $problem "cvss_base_score" -}}
+    {{- if $scores -}}{{- $cvss = printf "%.1f" $scores.cvss_base_score -}}{{- end -}}
+    {{- $title := $attributes.Title -}}
+    {{- $runes := runes $title -}}
+    {{- if gt (len $runes) 80 -}}{{- $title = printf "%s…(+%d chars)" (runeString (slice $runes 0 80)) (sub (len $runes) 80) -}}{{- end -}}
+    {{- $_ := set $row "title" $title -}}{{- $_ := set $row "cvss" $cvss -}}{{- $_ := set $row "upgrade" $upgrade -}}
+  {{- end -}}
+  {{- $_ := set $state "SCA" (append $state.SCA $row) -}}
+{{- end -}}
+
+{{- define "toonDocument" -}}
   {{- $first := true -}}
-  {{- range $key, $value := prepareUFMToon .TestResults -}}
+  {{- range $key, $value := . -}}
     {{- if not $first }}{{ "\n" }}{{ end -}}
     {{- template "toonField" (toonContext $key $value "") -}}
     {{- $first = false -}}

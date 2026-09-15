@@ -3,6 +3,7 @@ package presenters
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,7 +28,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/utils/target"
@@ -285,11 +288,72 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+// templateDict builds the data passed between named templates.
+func templateDict(pairs ...interface{}) map[string]interface{} {
+	m := make(map[string]interface{}, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		key, ok := pairs[i].(string)
+		if ok {
+			m[key] = pairs[i+1]
+		}
+	}
+	return m
+}
+
+func templateFindings(ctx context.Context, result testapi.TestResult) ([]testapi.FindingData, error) {
+	if result == nil {
+		return nil, fmt.Errorf("test result is nil")
+	}
+	findings, _, err := result.Findings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("findings: %w", err)
+	}
+	return findings, nil
+}
+
+// jsonFields decodes requested keys only, omitting missing and null values.
+func jsonFields[T any](input json.Marshaler, names ...string) (map[string]T, error) {
+	payload, err := input.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, err
+	}
+	selected := make(map[string]T, len(names))
+	for _, name := range names {
+		raw := bytes.TrimSpace(fields[name])
+		if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+			continue
+		}
+		var value T
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		selected[name] = value
+	}
+	return selected, nil
+}
+
+func comparePackageVersions(left, right string) int {
+	leftParts, rightParts := strings.Split(left, "."), strings.Split(right, ".")
+	for i := 0; i < min(len(leftParts), len(rightParts)); i++ {
+		order := strings.Compare(leftParts[i], rightParts[i])
+		leftNumber, leftErr := strconv.Atoi(leftParts[i])
+		rightNumber, rightErr := strconv.Atoi(rightParts[i])
+		if leftErr == nil && rightErr == nil {
+			order = cmp.Compare(leftNumber, rightNumber)
+		}
+		if order != 0 {
+			return order
+		}
+	}
+	return cmp.Compare(len(leftParts), len(rightParts))
+}
+
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["prepareUFMToon"] = func(results []testapi.TestResult) (any, error) {
-		return toon.PrepareResults(context.Background(), results)
-	}
 	fnMap["toonKind"] = toon.Kind
 	fnMap["toonKey"] = toon.FormatKey
 	fnMap["toonPrimitive"] = toon.FormatPrimitive
@@ -310,7 +374,6 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
-	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
 	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
@@ -596,7 +659,6 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["severityColor"] = SeverityColor
 	fnMap["severityLetter"] = SeverityLetter
 	fnMap["toUpperCase"] = strings.ToUpper
-	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["truncateText"] = TruncateText
 	fnMap["markdownToHTML"] = MarkdownToHTML
 	fnMap["sub"] = sub
@@ -608,16 +670,6 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["readSourceLine"] = cache.ReadLine
 	fnMap["readSourceLineMarked"] = cache.ReadLineMarked
 	fnMap["resolveMessageArgs"] = resolveMessageArgs
-	fnMap["dict"] = func(pairs ...interface{}) map[string]interface{} {
-		m := make(map[string]interface{}, len(pairs)/2)
-		for i := 0; i+1 < len(pairs); i += 2 {
-			key, ok := pairs[i].(string)
-			if ok {
-				m[key] = pairs[i+1]
-			}
-		}
-		return m
-	}
 	fnMap["index3"] = func(arr [3]string, i int) string { return arr[i] }
 	fnMap["int"] = func(v interface{}) int {
 		if p, ok := v.(*int); ok && p != nil {
@@ -939,8 +991,67 @@ func applyInlineMarkdown(s string) string {
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
+	defaultMap["dict"] = templateDict
+	defaultMap["getFindings"] = templateFindings
+	defaultMap["jsonStrings"] = jsonFields[string]
+	defaultMap["jsonNumbers"] = jsonFields[float64]
+	defaultMap["getSecretsRule"] = func(problem testapi.Problem) testapi.SecretsRuleProblem {
+		value, err := problem.AsSecretsRuleProblem()
+		if err != nil {
+			return testapi.SecretsRuleProblem{}
+		}
+		return value
+	}
+	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
+		value, err := location.AsSourceLocation()
+		if err != nil {
+			return testapi.SourceLocation{}
+		}
+		return value
+	}
+	defaultMap["getInteractionID"] = func(ctx context.Context) string {
+		if value, ok := ctx.Value(networking.InteractionIdKey).(string); ok {
+			return value
+		}
+		return ""
+	}
+	defaultMap["getErrorTip"] = func(ctx context.Context) string {
+		if value, ok := ctx.Value(uitypes.ErrorTipKey).(string); ok {
+			return value
+		}
+		return ""
+	}
+	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
+	defaultMap["array"] = func(values ...any) []any { return values }
+	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
+	defaultMap["sortVersions"] = func(values []any) ([]string, error) {
+		versions := make([]string, len(values))
+		for i, value := range values {
+			version, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("version must be a string, got %T", value)
+			}
+			versions[i] = version
+		}
+		slices.SortStableFunc(versions, comparePackageVersions)
+		return versions, nil
+	}
+	defaultMap["runes"] = func(value string) []rune { return []rune(value) }
+	defaultMap["runeString"] = func(value []rune) string { return string(value) }
+	defaultMap["stringValue"] = func(value *string) string {
+		if value == nil {
+			return ""
+		}
+		return *value
+	}
+	defaultMap["number"] = func(value int) json.Number { return json.Number(strconv.Itoa(value)) }
+	defaultMap["baseName"] = filepath.Base
+	defaultMap["toLowerCase"] = strings.ToLower
+	defaultMap["trimSpace"] = strings.TrimSpace
+	defaultMap["fail"] = func(message string) (string, error) { return "", fmt.Errorf("%s", message) }
 	defaultMap["getRuntimeInfo"] = func(key string) string { return getRuntimeInfo(key, ri) }
 	defaultMap["getValueFromConfig"] = getFromConfig(config)
+	defaultMap["getStringFromConfig"] = config.GetString
 	defaultMap["sortFindingBy"] = sortFindingBy
 	defaultMap["getFieldValueFrom"] = getFieldValueFrom
 	defaultMap["fieldEquals"] = fieldEquals
