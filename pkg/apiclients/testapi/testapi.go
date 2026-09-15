@@ -278,6 +278,23 @@ func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
 // GetWarnings returns any API warnings encountered during the test execution.
 func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
 
+// ErrorsAsSnykErrors reconstructs errors (as returned by TestResult.GetErrors() or
+// GetWarnings()) as error-catalog snyk_errors.Error values, reusing the same JSON:API
+// parsing applied to non-2xx responses elsewhere in this client. Returns (nil, nil)
+// when errs is nil or empty.
+func ErrorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, error) {
+	if errs == nil || len(*errs) == 0 {
+		return nil, nil
+	}
+
+	body, err := json.Marshal(map[string]any{"errors": *errs})
+	if err != nil {
+		return nil, fmt.Errorf("marshaling test errors for snyk_errors conversion: %w", err)
+	}
+
+	return snyk_errors.FromJSONAPIErrorBytes(body)
+}
+
 // GetTestID returns the final Test ID.
 func (r *testResult) GetTestID() *uuid.UUID { return r.TestID }
 
