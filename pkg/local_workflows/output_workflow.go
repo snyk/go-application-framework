@@ -28,8 +28,11 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_HTML_FILE, "", "Write html output to file")
 	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_TOON, false, "Print toon output to console")
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_TOON_FILE, "", "Write toon output to file")
+	outputConfig.Bool("full", false, "Include all TOON fields")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
+
+	engine.GetConfiguration().AddAlternativeKeys(output_workflow.OUTPUT_CONFIG_KEY_TOON_FULL, []string{"full"})
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
