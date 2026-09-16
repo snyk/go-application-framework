@@ -220,6 +220,44 @@ func TestCollectContributors_ReadsShallowDetachedClone(t *testing.T) {
 	assert.Equal(t, []string{"carol@example.com"}, emails(contributors))
 }
 
+// git permits these extensions while core.repositoryFormatVersion is 0, so a
+// repository declaring one has to stay readable. Azure Pipelines enables
+// worktreeConfig on every checkout, and go-git rejects all three.
+func TestCollectContributors_ReadsRepoDeclaringExtensionPermittedAtFormatVersion0(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := map[string]string{
+		"extensions.worktreeConfig":  "true",
+		"extensions.partialClone":    "origin",
+		"extensions.preciousObjects": "true",
+	}
+
+	for key, value := range tests {
+		t.Run(key, func(t *testing.T) {
+			repo := newTestRepo(t,
+				commit{email: "alice@example.com", when: now.AddDate(0, 0, -1)},
+			).withConfig(key, value)
+
+			contributors, err := collectContributors(t.Context(), repo.path(), now)
+			require.NoError(t, err, "an extension go-git does not recognize must not stop the repository being read")
+			assert.Equal(t, []string{"alice@example.com"}, emails(contributors))
+		})
+	}
+}
+
+func TestCollectContributors_ReadsAzurePipelinesCheckout(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	repo := newTestRepo(t,
+		commit{email: "alice@example.com", when: now.AddDate(0, 0, -2)},
+		commit{email: "carol@example.com", when: now.AddDate(0, 0, -1)},
+	).azurePipelinesCheckout()
+
+	contributors, err := collectContributors(t.Context(), repo.path(), now)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"carol@example.com"}, emails(contributors), "depth 1 holds only the checked out commit")
+}
+
 func TestCollectContributors_IncludesCommitsFromLinkedWorktree(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 
