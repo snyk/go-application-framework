@@ -1,15 +1,15 @@
 // Package machineid resolves and persists a single machine identifier shared by every Snyk
-// product on the same machine. It is the one place that implements the resolution precedence
-// (existing stored value, an externally supplied value, an OS-derived identifier, an opt-in
-// legacy value, or a freshly generated one) so every consumer of this framework converges on the
-// same value.
+// product on the same machine. The identifier is an opaque string with no defined format: it is
+// stored and reported exactly as supplied by whichever source produced it. It is the one place
+// that implements the resolution precedence (existing stored value, an externally supplied value,
+// an OS-derived identifier, an opt-in legacy value, or a freshly generated one) so every consumer
+// of this framework converges on the same value.
 package machineid
 
 import (
 	"context"
 	"errors"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -33,11 +33,6 @@ const (
 	SourceGenerated Source = "generated"
 )
 
-// ErrInvalidMachineID is returned by Validate when a value does not meet the required format.
-var ErrInvalidMachineID = errors.New("machineid: value is not a valid machine identifier")
-
-var machineIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$`)
-
 // lockRetryDelay is how often Lock retries acquiring the storage or shared-file lock while blocked.
 const lockRetryDelay = 100 * time.Millisecond
 
@@ -45,18 +40,11 @@ const lockRetryDelay = 100 * time.Millisecond
 // current machine's real one.
 var osMachineID = osid.ID
 
-// Validate trims whitespace, strips one pair of surrounding braces, and checks the result against
-// the shared charset (letters, digits, and `._:@-`, starting with a letter or digit, up to 128
-// characters). Case is preserved.
-func Validate(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if len(trimmed) >= 2 && strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
-		trimmed = trimmed[1 : len(trimmed)-1]
-	}
-	if !machineIDPattern.MatchString(trimmed) {
-		return "", ErrInvalidMachineID
-	}
-	return trimmed, nil
+// hasValue reports whether raw is more than whitespace. This is presence, not validation: the
+// precedence chain uses it to decide whether a candidate source supplied anything at all, and the
+// value itself is otherwise adopted unexamined, with no format, charset, or length constraint.
+func hasValue(raw string) bool {
+	return strings.TrimSpace(raw) != ""
 }
 
 // generate produces a fresh, lowercase UUIDv4.
@@ -65,11 +53,11 @@ func generate() string {
 }
 
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
-// the precedence order: an existing valid value (returned with its stored source unchanged), the
-// external channel (configuration.CLIENT_MACHINE_ID), the OS machine identifier, an opt-in legacy
-// file, or a freshly generated UUID. A value adopted from any source but the OS identifier is
-// persisted into the shared file and into configuration storage; the OS identifier is persisted
-// into configuration storage only, since every product derives it identically.
+// the precedence order: an existing stored value (returned unchanged), the external channel
+// (configuration.CLIENT_MACHINE_ID), the OS machine identifier, an opt-in legacy file, or a
+// freshly generated UUID. A value adopted from any source but the OS identifier is persisted into
+// the shared file and into configuration storage; the OS identifier is persisted into
+// configuration storage only, since every product derives it identically.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	var o resolveOptions
 	for _, opt := range opts {
@@ -81,36 +69,26 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 }
 
 func resolve(config configuration.Configuration, existingValue any, o resolveOptions) (string, error) {
-	if s, ok := existingValue.(string); ok {
-		if canonical, err := Validate(s); err == nil {
-			return canonical, nil
-		}
+	if s, ok := existingValue.(string); ok && hasValue(s) {
+		return s, nil
 	}
 
-	if sf := readSharedFile(sharedFilePaths()); sf != nil {
-		if canonical, err := Validate(sf.MachineID); err == nil {
-			return adopt(config, canonical, Source(sf.IdentifierSource), false)
-		}
+	if sf := readSharedFile(sharedFilePaths()); sf != nil && hasValue(sf.MachineID) {
+		return adopt(config, sf.MachineID, Source(sf.IdentifierSource), false)
 	}
 
-	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); raw != "" {
-		if canonical, err := Validate(raw); err == nil {
-			return adopt(config, canonical, SourceProvided, true)
-		}
+	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); hasValue(raw) {
+		return adopt(config, raw, SourceProvided, true)
 	}
 
-	if id, err := osMachineID(); err == nil {
-		if canonical, err := Validate(id); err == nil {
-			return adopt(config, canonical, SourceOS, false)
-		}
+	if id, err := osMachineID(); err == nil && hasValue(id) {
+		return adopt(config, id, SourceOS, false)
 	}
 
 	if o.legacyPath != "" && o.legacyParse != nil {
 		if data, err := os.ReadFile(o.legacyPath); err == nil {
-			if id, err := o.legacyParse(data); err == nil {
-				if canonical, err := Validate(id); err == nil {
-					return adopt(config, canonical, SourceLegacy, true)
-				}
+			if id, err := o.legacyParse(data); err == nil && hasValue(id) {
+				return adopt(config, id, SourceLegacy, true)
 			}
 		}
 	}
@@ -131,13 +109,13 @@ func adopt(config configuration.Configuration, id string, source Source, writeSh
 	return id, nil
 }
 
-// adoptOrWriteSharedFile keeps whatever valid value the shared file already holds; otherwise it
-// writes the candidate. createDir must be false for the machine-wide path.
+// adoptOrWriteSharedFile keeps whatever value the shared file already holds; otherwise it writes
+// the candidate. createDir must be false for the machine-wide path.
 func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, candidateSource Source) (string, Source) {
 	finalID, finalSource := candidateID, candidateSource
 	err := writeSharedFileValue(path, createDir, func(sf *SharedFile) {
-		if canonical, verr := Validate(sf.MachineID); verr == nil {
-			finalID, finalSource = canonical, Source(sf.IdentifierSource)
+		if hasValue(sf.MachineID) {
+			finalID, finalSource = sf.MachineID, Source(sf.IdentifierSource)
 			return
 		}
 		sf.MachineID = candidateID
@@ -174,13 +152,13 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 	defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
 
 	refreshed := configuration.NewInMemory()
-	//nolint:errcheck // a refresh miss just leaves refreshed empty, which the Validate check below treats as "nothing stored yet"
+	//nolint:errcheck // a refresh miss just leaves refreshed empty, which the hasValue check below treats as "nothing stored yet"
 	_ = storage.Refresh(refreshed, configuration.MACHINE_ID)
-	//nolint:errcheck // a refresh miss just leaves refreshed empty, which the Validate check below treats as "nothing stored yet"
+	//nolint:errcheck // a refresh miss just leaves refreshed empty, which the hasValue check below treats as "nothing stored yet"
 	_ = storage.Refresh(refreshed, configuration.MACHINE_ID_SOURCE)
 
-	if canonical, err := Validate(refreshed.GetString(configuration.MACHINE_ID)); err == nil {
-		id = canonical
+	if refreshedID := refreshed.GetString(configuration.MACHINE_ID); hasValue(refreshedID) {
+		id = refreshedID
 		source = Source(refreshed.GetString(configuration.MACHINE_ID_SOURCE))
 	} else {
 		//nolint:errcheck // a failed write here still leaves the correct value in config.Set below for this process

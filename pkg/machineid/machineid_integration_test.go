@@ -24,8 +24,7 @@ func TestIntegration_NoStorageResolvesWithoutPersisting(t *testing.T) {
 	require.NoError(t, err)
 	id, ok := value.(string)
 	require.True(t, ok)
-	_, err = Validate(id)
-	require.NoError(t, err)
+	require.True(t, hasValue(id))
 }
 
 // TestIntegration_EnsurePersistedForcesResolution exercises EnsurePersisted directly, for a
@@ -36,8 +35,7 @@ func TestIntegration_EnsurePersistedForcesResolution(t *testing.T) {
 
 	id, err := EnsurePersisted(config)
 	require.NoError(t, err)
-	_, err = Validate(id)
-	require.NoError(t, err)
+	require.True(t, hasValue(id))
 	require.Equal(t, id, readSnykJSON(t)[configuration.MACHINE_ID])
 
 	again, err := EnsurePersisted(config)
