@@ -258,8 +258,11 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			defer mockCtl.Finish()
 
 			stdoutConfig := configuration.NewWithOpts()
-			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON, true)
-			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FULL, full)
+			mode := "compact"
+			if full {
+				mode = "full"
+			}
+			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON, mode)
 			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FEEDBACK, "Share feedback using the host command.")
 			outputFile := filepath.Join(t.TempDir(), "results.toon")
 			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FILE, outputFile)
@@ -303,7 +306,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
 			header := "interaction_id: interaction-test\norg: unknown\nproject: unknown\n"
 			if !full {
-				header = "hint: add --full for all fields\n" + header
+				header = "hint: add --toon=full for all fields\n" + header
 			}
 			feedback := "feedback: Share feedback using the host command.\n"
 			expected = feedback + "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" + header + expected

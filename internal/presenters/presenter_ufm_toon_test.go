@@ -63,7 +63,7 @@ func TestRenderTemplate_TOON_contractGoldens(t *testing.T) {
 				golden := tc.name
 				config := configuration.NewWithOpts()
 				if full {
-					config.Set(presenters.CONFIG_TOON_FULL, true)
+					config.Set("toon", "full")
 					if tc.fullGolden != "" {
 						golden = tc.fullGolden
 					}
@@ -72,7 +72,7 @@ func TestRenderTemplate_TOON_contractGoldens(t *testing.T) {
 				require.NoError(t, err)
 				expected = bytes.TrimSuffix(expected, []byte("\n"))
 				if full {
-					expected = bytes.Replace(expected, []byte("hint: add --full for all fields\n"), nil, 1)
+					expected = bytes.Replace(expected, []byte("hint: add --toon=full for all fields\n"), nil, 1)
 				}
 
 				writer := &bytes.Buffer{}
@@ -93,7 +93,11 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 				results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", name+".json"))
 				var output bytes.Buffer
 				config := configuration.NewWithOpts()
-				config.Set(presenters.CONFIG_TOON_FULL, full)
+				mode := "compact"
+				if full {
+					mode = "full"
+				}
+				config.Set("toon", mode)
 				presenter := presenters.NewUfmRenderer(results, config, &output)
 				err := presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
 				require.NoError(t, err)
@@ -143,7 +147,11 @@ func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
 				results, err := ufm.NewSerializableTestResultFromBytes([]byte(tc.input))
 				require.NoError(t, err)
 				config := configuration.NewWithOpts()
-				config.Set(presenters.CONFIG_TOON_FULL, full)
+				mode := "compact"
+				if full {
+					mode = "full"
+				}
+				config.Set("toon", mode)
 				var output bytes.Buffer
 				presenter := presenters.NewUfmRenderer(results, config, &output)
 				ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
@@ -153,7 +161,7 @@ func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
 				}
 				assert.NotContains(t, output.String(), "results[")
 				if full || strings.Contains(output.String(), "errors:") {
-					assert.NotContains(t, output.String(), "add --full")
+					assert.NotContains(t, output.String(), "add --toon=full")
 				}
 			})
 		}
@@ -238,7 +246,11 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 		t.Run(fmt.Sprint(full), func(t *testing.T) {
 			t.Parallel()
 			config := configuration.NewWithOpts()
-			config.Set(presenters.CONFIG_TOON_FULL, full)
+			mode := "compact"
+			if full {
+				mode = "full"
+			}
+			config.Set("toon", mode)
 			config.Set(presenters.CONFIG_TOON_FEEDBACK, "Share feedback:\nUse the host feedback command.")
 			ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
 			var output bytes.Buffer
@@ -251,7 +263,7 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 			assert.Contains(t, output.String(), "secrets_error: Some files could not be scanned")
 			assert.Contains(t, output.String(), `secrets_hint: "Results are incomplete\nRetry the scan."`)
 			assert.Contains(t, output.String(), "unknown,0,rule,low")
-			assert.NotContains(t, output.String(), "add --full")
+			assert.NotContains(t, output.String(), "add --toon=full")
 			assert.NotContains(t, output.String(), "excluded")
 		})
 	}

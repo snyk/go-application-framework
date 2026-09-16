@@ -255,7 +255,11 @@ func TestTOONMapping_UnfinishedScan(t *testing.T) {
 func renderTOONResults(t *testing.T, results []testapi.TestResult, full bool) (string, error) {
 	t.Helper()
 	config := configuration.NewWithOpts()
-	config.Set(presenters.CONFIG_TOON_FULL, full)
+	mode := "compact"
+	if full {
+		mode = "full"
+	}
+	config.Set("toon", mode)
 	var output bytes.Buffer
 	presenter := presenters.NewUfmRenderer(results, config, &output)
 	err := presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
@@ -266,7 +270,7 @@ func requireTOONEqual(t *testing.T, full bool, rows, output string) {
 	t.Helper()
 	header := "feedback: \"\"\n"
 	if !full {
-		header += "hint: add --full for all fields\n"
+		header += "hint: add --toon=full for all fields\n"
 	}
 	header += "org: unknown\nproject: unknown\n"
 	require.Equal(t, header+rows, output)

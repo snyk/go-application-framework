@@ -15,7 +15,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
-const CONFIG_TOON_FULL = "toon-full"
 const CONFIG_TOON_FEEDBACK = "toon-feedback"
 
 type UfmPresenter struct {
