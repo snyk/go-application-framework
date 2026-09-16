@@ -134,8 +134,58 @@ func TestAcceptance_LegacyFileIsUsedWhenOptedIn(t *testing.T) {
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
-	require.Equal(t, "legacy-raw-value\n", value, "the identifier has no defined format; whatever parse returns is adopted byte for byte, trailing newline included")
+	require.Equal(t, "legacy-raw-value", value, "the legacy file's trailing newline is a file-format artifact, not part of the identifier")
 	require.Equal(t, string(SourceLegacy), config.GetString(configuration.MACHINE_ID_SOURCE))
+}
+
+func TestAcceptance_LegacyFileOnlyTrimsTrailingWhitespace(t *testing.T) {
+	config := newIsolatedConfig(t)
+	legacyPath := filepath.Join(t.TempDir(), "device-id")
+	raw := " \t{ABC-99}\x00WEIRD-interior\n\n"
+	require.NoError(t, os.WriteFile(legacyPath, []byte(raw), 0o644))
+	parse := func(data []byte) (string, error) { return string(data), nil }
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse)))
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, " \t{ABC-99}\x00WEIRD-interior", value, "only trailing whitespace is removed; leading whitespace, braces, control characters and case are untouched")
+}
+
+func TestAcceptance_ExternalChannelPreservesTrailingWhitespace(t *testing.T) {
+	config := newIsolatedConfig(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id\n")
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "device-managed-id\n", value, "trailing whitespace is only trimmed from the legacy file path")
+}
+
+func TestAcceptance_SharedFilePreservesTrailingWhitespace(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	sf := SharedFile{MachineID: "from-shared-file\n", IdentifierSource: string(SourceProvided)}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "from-shared-file\n", value, "trailing whitespace is only trimmed from the legacy file path")
+}
+
+func TestAcceptance_OSIdentifierPreservesTrailingWhitespace(t *testing.T) {
+	config := newIsolatedConfig(t)
+	osMachineID = func() (string, error) { return "os-derived-id\n", nil }
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "os-derived-id\n", value, "trailing whitespace is only trimmed from the legacy file path")
 }
 
 func TestAcceptance_ExternalChannelValueIsStoredExactlyAsSupplied(t *testing.T) {

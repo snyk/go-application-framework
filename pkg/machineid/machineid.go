@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	osid "github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
@@ -87,8 +88,11 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 
 	if o.legacyPath != "" && o.legacyParse != nil {
 		if data, err := os.ReadFile(o.legacyPath); err == nil {
-			if id, err := o.legacyParse(data); err == nil && hasValue(id) {
-				return adopt(config, id, SourceLegacy, true)
+			if id, err := o.legacyParse(data); err == nil {
+				id = strings.TrimRightFunc(id, unicode.IsSpace)
+				if hasValue(id) {
+					return adopt(config, id, SourceLegacy, true)
+				}
 			}
 		}
 	}
