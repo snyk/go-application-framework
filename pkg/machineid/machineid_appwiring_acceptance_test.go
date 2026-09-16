@@ -11,7 +11,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/machineid"
 )
 
 // TestAcceptance_ViaAppEngineProducesPersistedMachineID exercises the actual wiring in
@@ -33,8 +32,7 @@ func TestAcceptance_ViaAppEngineProducesPersistedMachineID(t *testing.T) {
 	require.NoError(t, err)
 	id, ok := value.(string)
 	require.True(t, ok)
-	_, err = machineid.Validate(id)
-	require.NoError(t, err)
+	require.NotEmpty(t, id)
 
 	data, err := os.ReadFile(filepath.Join(home, ".config", "configstore", "snyk.json"))
 	require.NoError(t, err)

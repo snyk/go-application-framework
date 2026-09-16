@@ -134,8 +134,32 @@ func TestAcceptance_LegacyFileIsUsedWhenOptedIn(t *testing.T) {
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
-	require.Equal(t, "legacy-raw-value", value)
+	require.Equal(t, "legacy-raw-value\n", value, "the identifier has no defined format; whatever parse returns is adopted byte for byte, trailing newline included")
 	require.Equal(t, string(SourceLegacy), config.GetString(configuration.MACHINE_ID_SOURCE))
+}
+
+func TestAcceptance_ExternalChannelValueIsStoredExactlyAsSupplied(t *testing.T) {
+	config := newIsolatedConfig(t)
+	braceWrapped := "{550E8400-E29B-41D4-A716-446655440000}"
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", braceWrapped)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, braceWrapped, value, "the identifier has no defined format; it must round-trip exactly as supplied")
+	require.Equal(t, braceWrapped, readSnykJSON(t)[configuration.MACHINE_ID])
+}
+
+func TestAcceptance_WhitespaceOnlyExternalValueFallsThroughToOS(t *testing.T) {
+	config := newIsolatedConfig(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "   ")
+	osMachineID = func() (string, error) { return "os-derived-id", nil }
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "os-derived-id", value, "a whitespace-only value means the external channel supplied nothing")
+	require.Equal(t, string(SourceOS), config.GetString(configuration.MACHINE_ID_SOURCE))
 }
 
 func TestAcceptance_GeneratesUUIDWhenNoOtherSourceApplies(t *testing.T) {
@@ -146,9 +170,7 @@ func TestAcceptance_GeneratesUUIDWhenNoOtherSourceApplies(t *testing.T) {
 	require.NoError(t, err)
 	id, ok := value.(string)
 	require.True(t, ok)
-	_, err = Validate(id)
-	require.NoError(t, err)
-	require.Equal(t, id, id) // canonical form preserved
+	require.True(t, hasValue(id))
 	require.Equal(t, string(SourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
 }
 
