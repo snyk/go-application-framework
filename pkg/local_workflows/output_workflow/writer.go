@@ -205,7 +205,7 @@ func getDefaultWriterMimeType(config configuration.Configuration) string {
 		return HTML_MIME_TYPE
 	}
 
-	if config.GetBool(OUTPUT_CONFIG_KEY_TOON) {
+	if config.GetString(OUTPUT_CONFIG_KEY_TOON) != "" {
 		return TOON_MIME_TYPE
 	}
 

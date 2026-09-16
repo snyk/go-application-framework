@@ -147,21 +147,18 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 	assert.Equal(t, "", htmlFileOutput)
 
 	toon := config.Get("toon")
-	assert.Equal(t, false, toon)
+	assert.Equal(t, "", toon)
 
 	toonFileOutput := config.Get("toon-file-output")
 	assert.Equal(t, "", toonFileOutput)
 
-	assert.Equal(t, false, config.Get("full"))
-	assert.False(t, config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_TOON_FULL))
 	entry, ok := engine.GetWorkflow(WORKFLOWID_OUTPUT_WORKFLOW)
 	require.True(t, ok)
 	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
-	require.NoError(t, flags.Parse([]string{"--full"}))
-	assert.True(t, config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_TOON_FULL))
-
-	config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON_FULL, false)
-	assert.False(t, config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_TOON_FULL))
+	require.NoError(t, flags.Parse([]string{"--toon"}))
+	assert.Equal(t, "compact", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
+	require.NoError(t, flags.Parse([]string{"--toon=full"}))
+	assert.Equal(t, "full", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
 }
 
 type testOutputDestination struct {

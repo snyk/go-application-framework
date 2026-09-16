@@ -1,7 +1,7 @@
 {{- define "main" -}}
   {{- $envelope := dict -}}
   {{- $state := dict "Envelope" $envelope "SCA" (array) "Versions" (dict) "Fixable" (dict) "Fatal" false
-                    "Full" (eq (getValueFromConfig "toon-full") "true") -}}
+                    "Full" (eq (getValueFromConfig "toon") "full") -}}
   {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
   {{- range $result := .TestResults -}}
     {{- $findings := getFindings (getContext) $result -}}
@@ -43,7 +43,7 @@
   {{- $_ := set $envelope "project" $project -}}
   {{- $_ := set $envelope "feedback" (getStringFromConfig "toon-feedback") -}}
   {{- with getInteractionID (getContext) -}}{{- $_ := set $envelope "interaction_id" . -}}{{- end -}}
-  {{- if and (not .Full) (not .Fatal) -}}{{- $_ := set $envelope "hint" "add --full for all fields" -}}{{- end -}}
+  {{- if and (not .Full) (not .Fatal) -}}{{- $_ := set $envelope "hint" "add --toon=full for all fields" -}}{{- end -}}
   {{- with getErrorTip (getContext) -}}
     {{- $tip := . -}}
     {{- if $envelope.errors -}}{{- $_ := set $envelope "hint" $tip -}}{{- end -}}

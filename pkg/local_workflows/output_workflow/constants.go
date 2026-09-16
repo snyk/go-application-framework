@@ -23,9 +23,6 @@ const (
 	TOON_MIME_TYPE                       = presenters.ApplicationTOONMimeType
 )
 
-// OUTPUT_CONFIG_KEY_TOON_FULL expands SCA fields in both TOON stdout and file output.
-const OUTPUT_CONFIG_KEY_TOON_FULL = presenters.CONFIG_TOON_FULL
-
 // OUTPUT_CONFIG_KEY_TOON_FEEDBACK supplies the host's feedback invitation for both TOON writers.
 // The feedback field is an empty string when unset.
 const OUTPUT_CONFIG_KEY_TOON_FEEDBACK = presenters.CONFIG_TOON_FEEDBACK
