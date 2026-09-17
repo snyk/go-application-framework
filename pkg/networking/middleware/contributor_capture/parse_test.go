@@ -1,6 +1,9 @@
 package contributor_capture_test
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"strings"
 	"testing"
 
@@ -10,18 +13,45 @@ import (
 	cc "github.com/snyk/go-application-framework/pkg/networking/middleware/contributor_capture"
 )
 
-func TestParseMonitorProjectID(t *testing.T) {
+// extractorTest is a body and the entity ID an extractor should find in it.
+// A body that cannot be parsed yields no ID.
+type extractorTest struct {
+	name     string
+	body     string
+	expected string
+}
+
+func runExtractorTests(t *testing.T, extract func(io.Reader) (string, error), tests []extractorTest) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := extract(strings.NewReader(tt.body))
+			assert.Equal(t, tt.expected, got)
+			if tt.expected != "" {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExtractMonitorProjectID(t *testing.T) {
 	t.Parallel()
 	const projectID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
+	runExtractorTests(t, cc.ExtractMonitorProjectID, []extractorTest{
 		{
 			name:     "valid monitor response",
 			body:     `{"id":"test","uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccc"}`,
+			expected: projectID,
+		},
+		{
+			// The field capture needs is serialized after the license policy,
+			// which is why the body is streamed rather than read to a cap.
+			name:     "uri behind a large licenses policy",
+			body:     `{"ok":true,"licensesPolicy":{"severities":` + bigLicensePolicy(2<<20) + `},"uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccc"}`,
 			expected: projectID,
 		},
 		{
@@ -34,17 +64,15 @@ func TestParseMonitorProjectID(t *testing.T) {
 			body:     `{"id":"test"}`,
 			expected: "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseMonitorProjectID([]byte(tt.body)))
-		})
-	}
+		{
+			name:     "uri is not a string",
+			body:     `{"uri":{"nested":"value"}}`,
+			expected: "",
+		},
+	})
 }
 
-func TestParseCreateTestPublishReport(t *testing.T) {
+func TestExtractCreateTestReport(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -78,6 +106,18 @@ func TestParseCreateTestPublishReport(t *testing.T) {
 			wantKnown: true,
 		},
 		{
+			name:      "monitor wins over a configured report",
+			body:      `{"data":{"attributes":{"config":{"monitor":true},"configuration":{"output":{"report":true}}}}}`,
+			expected:  false,
+			wantKnown: true,
+		},
+		{
+			name:      "neither shape present",
+			body:      `{"data":{"attributes":{"scan_type":"sca"}}}`,
+			expected:  false,
+			wantKnown: true,
+		},
+		{
 			name:      "invalid json",
 			body:      `{invalid}`,
 			expected:  false,
@@ -94,24 +134,31 @@ func TestParseCreateTestPublishReport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			report, known := cc.ParseCreateTestPublishReport([]byte(tt.body))
+
+			report, known, err := cc.ExtractCreateTestReport(strings.NewReader(tt.body))
 			assert.Equal(t, tt.expected, report)
 			assert.Equal(t, tt.wantKnown, known, "an unreadable body must not read as a declined report")
+			if tt.wantKnown {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
 		})
 	}
 }
 
-func TestParseCreateTestID(t *testing.T) {
+func TestExtractCreateTestID(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
+	runExtractorTests(t, cc.ExtractCreateTestID, []extractorTest{
 		{
 			name:     "valid id",
 			body:     `{"data":{"id":"22222222-2222-4222-8222-222222222222"}}`,
+			expected: "22222222-2222-4222-8222-222222222222",
+		},
+		{
+			name:     "id behind a large sibling",
+			body:     `{"meta":{"noise":"` + strings.Repeat("n", 1<<20) + `"},"data":{"id":"22222222-2222-4222-8222-222222222222"}}`,
 			expected: "22222222-2222-4222-8222-222222222222",
 		},
 		{
@@ -124,32 +171,32 @@ func TestParseCreateTestID(t *testing.T) {
 			body:     `{"data":{"id":"not-a-uuid"}}`,
 			expected: "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseCreateTestID([]byte(tt.body)))
-		})
-	}
+	})
 }
 
-func TestParseComponentsProjectID(t *testing.T) {
+func TestExtractComponentsProjectID(t *testing.T) {
 	t.Parallel()
+	const projectID = "44444444-4444-4444-8444-444444444444"
 
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
+	runExtractorTests(t, cc.ExtractComponentsProjectID, []extractorTest{
 		{
 			name:     "sast successful component",
-			body:     `{"data":[{"attributes":{"type":"sast","success":true,"webui":{"project_id":"44444444-4444-4444-8444-444444444444"}}}]}`,
-			expected: "44444444-4444-4444-8444-444444444444",
+			body:     `{"data":[{"attributes":{"type":"sast","success":true,"webui":{"project_id":"` + projectID + `"}}}]}`,
+			expected: projectID,
 		},
 		{
 			name:     "unsuccessful component skipped",
-			body:     `{"data":[{"attributes":{"type":"sast","success":false,"webui":{"project_id":"44444444-4444-4444-8444-444444444444"}}}]}`,
+			body:     `{"data":[{"attributes":{"type":"sast","success":false,"webui":{"project_id":"` + projectID + `"}}}]}`,
+			expected: "",
+		},
+		{
+			name:     "first successful sast component after others",
+			body:     `{"data":[{"attributes":{"type":"sca","success":true,"webui":{"project_id":"11111111-1111-4111-8111-111111111111"}}},{"attributes":{"type":"sast","success":true,"webui":{"project_id":"` + projectID + `"}}}]}`,
+			expected: projectID,
+		},
+		{
+			name:     "empty data",
+			body:     `{"data":[]}`,
 			expected: "",
 		},
 		{
@@ -157,62 +204,58 @@ func TestParseComponentsProjectID(t *testing.T) {
 			body:     `{invalid}`,
 			expected: "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseComponentsProjectID([]byte(tt.body)))
-		})
-	}
+	})
 }
 
-func TestParseIaCShareProjectIDs(t *testing.T) {
+func TestExtractIaCShareProjectID(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		body     string
-		expected []string
-	}{
+	runExtractorTests(t, cc.ExtractIaCShareProjectID, []extractorTest{
 		{
-			name:     "valid project ids",
+			// Only one entity is reported per invocation, so the first project
+			// in the response is the one taken.
+			name:     "first project id of several",
 			body:     `{"./main.tf":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","./other.tf":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","ok":true}`,
-			expected: []string{"dddddddd-dddd-4ddd-8ddd-dddddddddddd", "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"},
+			expected: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+		},
+		{
+			name:     "metadata keys skipped",
+			body:     `{"ok":true,"meta":{"isPrivate":false},"./main.tf":"dddddddd-dddd-4ddd-8ddd-dddddddddddd"}`,
+			expected: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+		},
+		{
+			name:     "non uuid values skipped",
+			body:     `{"./a.tf":"not-a-uuid","./b.tf":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"}`,
+			expected: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+		},
+		{
+			name:     "no project ids",
+			body:     `{"ok":true}`,
+			expected: "",
 		},
 		{
 			name:     "invalid json",
 			body:     `{invalid}`,
-			expected: nil,
+			expected: "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := cc.ParseIaCShareProjectIDs([]byte(tt.body))
-			if tt.expected == nil {
-				assert.Nil(t, result)
-			} else {
-				require.Len(t, result, len(tt.expected))
-				assert.ElementsMatch(t, tt.expected, result)
-			}
-		})
-	}
+	})
 }
 
-func TestParseAIBomUploadRevisionID(t *testing.T) {
+func TestExtractAIBomUploadRevisionID(t *testing.T) {
 	t.Parallel()
 	const revisionID = "19d7450b-886f-4029-9b60-1b309b85b800"
 
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
+	runExtractorTests(t, cc.ExtractAIBomUploadRevisionID, []extractorTest{
 		{
 			name:     "valid revision id",
 			body:     `{"data":{"attributes":{"upload_revision_id":"` + revisionID + `"}}}`,
+			expected: revisionID,
+		},
+		{
+			// The rest of the request is the uploaded document, which is why
+			// the request body is streamed rather than read to a cap.
+			name:     "revision id behind a large document",
+			body:     `{"data":{"attributes":{"document":"` + strings.Repeat("d", 2<<20) + `","upload_revision_id":"` + revisionID + `"}}}`,
 			expected: revisionID,
 		},
 		{
@@ -225,25 +268,14 @@ func TestParseAIBomUploadRevisionID(t *testing.T) {
 			body:     `{invalid}`,
 			expected: "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseAIBomUploadRevisionID([]byte(tt.body)))
-		})
-	}
+	})
 }
 
-func TestParseDeeproxyReportProjectID(t *testing.T) {
+func TestExtractDeeproxyReportProjectID(t *testing.T) {
 	t.Parallel()
 	const projectID = "25bcb5ba-5b16-4f56-8620-4e3a508f67ed"
 
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
+	tests := []extractorTest{
 		{
 			name:     "complete body",
 			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","snapshotId":"abc"},"analysisResults":{}}`,
@@ -270,9 +302,11 @@ func TestParseDeeproxyReportProjectID(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "truncated inside uploadResult",
+			// The scan returns at the field it wants, so what follows being
+			// truncated no longer loses an ID that was already read.
+			name:     "truncated after projectId inside uploadResult",
 			body:     `{"status":"COMPLETE","uploadResult":{"projectId":"` + projectID + `","snapshotId"`,
-			expected: "",
+			expected: projectID,
 		},
 		{
 			name:     "truncated mid project id",
@@ -319,9 +353,21 @@ func TestParseDeeproxyReportProjectID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expected, cc.ParseDeeproxyReportProjectID([]byte(tt.body)))
+
+			got, err := cc.ExtractDeeproxyReportProjectID(gzipped(t, tt.body))
+			assert.Equal(t, tt.expected, got)
+			if tt.expected != "" {
+				require.NoError(t, err)
+			}
 		})
 	}
+}
+
+func TestExtractDeeproxyReportProjectID_rejectsBodyThatIsNotGzipped(t *testing.T) {
+	t.Parallel()
+
+	_, err := cc.ExtractDeeproxyReportProjectID(strings.NewReader(`{"uploadResult":{"projectId":"25bcb5ba-5b16-4f56-8620-4e3a508f67ed"}}`))
+	require.Error(t, err)
 }
 
 func TestProjectIDFromMonitorURI(t *testing.T) {
@@ -366,4 +412,41 @@ func TestProjectIDFromMonitorURI(t *testing.T) {
 			assert.Equal(t, tt.expected, cc.ProjectIDFromMonitorURI(tt.uri))
 		})
 	}
+}
+
+// gzipped returns body as the gzip stream a deeproxy report arrives as.
+func gzipped(t *testing.T, body string) io.Reader {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	_, err := writer.Write([]byte(body))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return &buf
+}
+
+// bigLicensePolicy builds a license policy of roughly size bytes, the field
+// that pushes a monitor response past any fixed read limit.
+func bigLicensePolicy(size int) string {
+	var buf bytes.Buffer
+	buf.WriteString("{")
+	for i := 0; buf.Len() < size; i++ {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(`"LICENSE-`)
+		buf.WriteString(strings.Repeat("A", 8))
+		buf.WriteString("-")
+		buf.WriteString(strings.Repeat("0", 4))
+		buf.WriteString(`-`)
+		buf.WriteString(string(rune('a' + i%26)))
+		buf.WriteString(`":{"severity":"high","instructions":"`)
+		buf.WriteString(strings.Repeat("i", 512))
+		buf.WriteString(`"}`)
+	}
+	buf.WriteString("}")
+
+	return buf.String()
 }
