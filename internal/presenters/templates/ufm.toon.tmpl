@@ -3,10 +3,9 @@
   {{- $state := dict "Envelope" $envelope "Fatal" false "Full" (eq (getValueFromConfig "toon") "full") -}}
   {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
   {{- range $result := .TestResults -}}
-    {{- $_ := getFindings (getContext) $result -}}
-    {{- $issues := sortIssues (getIssuesFromTestResult $result) -}}
+    {{- $issues := getIssuesFromTestResultWithContext (getContext) $result -}}
     {{- template "toonDiagnostics" (dict "State" $state "Result" $result "Issues" $issues) -}}
-    {{- range $issue := $issues -}}
+    {{- range $issue := sortIssues $issues -}}
       {{- $findingType := print $issue.GetFindingType -}}
       {{- if or (eq $findingType "sca") (eq $findingType "license") -}}
         {{- template "toonSCA" (dict "State" $state "Issue" $issue) -}}
