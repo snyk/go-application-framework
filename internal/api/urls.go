@@ -13,6 +13,8 @@ const (
 	apiPattern   string = "^api\\."
 	apiPrefixDot string = API_PREFIX + "."
 	appPrefix    string = "app"
+	schemeHTTP   string = "http"
+	schemeHTTPS  string = "https"
 )
 
 var (
@@ -42,6 +44,32 @@ func isImmutableHost(host string) bool {
 	return err == nil
 }
 
+func isLocalHost(host string) bool {
+	knownLocal := map[string]bool{
+		"localhost": true,
+	}
+
+	var rawIP string
+
+	if strings.HasPrefix(host, "[") {
+		bracketEnd := strings.Index(host, "]")
+		if bracketEnd < 0 {
+			return false
+		}
+		rawIP = host[1:bracketEnd]
+	} else {
+		portlessHost := strings.Split(host, ":")[0]
+		if knownLocal[portlessHost] {
+			return true
+		}
+		rawIP = portlessHost
+	}
+
+	ip := net.ParseIP(rawIP)
+	isLocal := ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
+	return isLocal
+}
+
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	result := ""
 	url, err := url.Parse(userDefinedUrl)
@@ -67,6 +95,11 @@ func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 		url.Path = ""
 		url.Fragment = ""
 		url.RawQuery = ""
+	}
+
+	requiresSchemeUpgrade := url.Scheme == schemeHTTP && !isLocalHost(url.Host)
+	if requiresSchemeUpgrade {
+		url.Scheme = schemeHTTPS
 	}
 
 	return url, nil

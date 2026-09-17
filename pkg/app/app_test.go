@@ -240,6 +240,36 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func Test_CreateAppEngine_config_httpUpgradedToHttps(t *testing.T) {
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
+	assert.NotNil(t, engine)
+
+	err := engine.Init()
+	assert.Nil(t, err)
+
+	config := engine.GetConfiguration()
+	config.Set(configuration.API_URL, "http://api.snyk.io")
+
+	actualApiUrl := config.GetString(configuration.API_URL)
+	assert.Equal(t, "https://api.snyk.io", actualApiUrl)
+}
+
+func Test_CreateAppEngine_config_httpsUnchanged(t *testing.T) {
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
+	assert.NotNil(t, engine)
+
+	err := engine.Init()
+	assert.Nil(t, err)
+
+	config := engine.GetConfiguration()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	actualApiUrl := config.GetString(configuration.API_URL)
+	assert.Equal(t, "https://api.snyk.io", actualApiUrl)
+}
+
 func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 	tests := []struct {
 		name              string
