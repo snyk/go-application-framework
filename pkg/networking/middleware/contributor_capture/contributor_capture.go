@@ -94,7 +94,7 @@ func (m *ContributorCaptureMiddleware) RoundTrip(req *http.Request) (*http.Respo
 		return res, err
 	}
 
-	m.completeRequestCapture(state, req, res)
+	m.startResponseCapture(state, req, res)
 	return res, nil
 }
 
@@ -112,10 +112,15 @@ func (m *ContributorCaptureMiddleware) beginRequestCapture(req *http.Request) (s
 
 	switch kind {
 	case endpointAIBomUpload:
-		m.record(contributors.EntityTypeRevision, parseAIBomUploadRevisionID(m.requestBody(req)))
+		revisionID, err := scanRequestBody(req, maxScanBytes, extractAIBomUploadRevisionID)
+		m.recordResult(contributors.EntityTypeRevision, revisionID, err)
 		return state, false
 	case endpointTestCreate:
-		state.publishReport, state.publishReportKnown = parseCreateTestPublishReport(m.requestBody(req))
+		report, err := scanRequestBody(req, maxScanBytes, extractCreateTestReport)
+		if err != nil {
+			m.sink.RecordMiss(missReasonFor(err))
+		}
+		state.publishReport, state.publishReportKnown = report.report, report.known
 	default:
 	}
 
@@ -157,21 +162,10 @@ func (m *ContributorCaptureMiddleware) isKnownHost(req *http.Request) bool {
 	return false
 }
 
-// requestBody peeks req's body for parsing, returning a prefix if needed.
-// For request bodies larger than maxCaptureBodyBytes, a truncated prefix is returned
-// since parsing (e.g. JSON flag extraction) may work with just the start of the body.
-func (m *ContributorCaptureMiddleware) requestBody(req *http.Request) []byte {
-	bodyBytes, err := peekRequestBody(req, maxCaptureBodyBytes)
-	if err != nil {
-		m.sink.RecordMiss(contributors.MissBodyUnreadable)
-		return nil
-	}
-	return bodyBytes
-}
-
-// completeRequestCapture extracts and records entities from a matched
-// request's response, using the state beginRequestCapture gathered.
-func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState, req *http.Request, res *http.Response) {
+// startResponseCapture begins extracting the entity a matched request's
+// response carries, using the state beginRequestCapture gathered. It returns
+// once the body is wrapped; the outcome is recorded by the time it is closed.
+func (m *ContributorCaptureMiddleware) startResponseCapture(state captureState, req *http.Request, res *http.Response) {
 	defer m.recover()
 
 	if res.StatusCode >= http.StatusBadRequest {
@@ -179,76 +173,65 @@ func (m *ContributorCaptureMiddleware) completeRequestCapture(state captureState
 		return
 	}
 
-	parseBytes, ok := m.responseCaptureBytes(res, state.kind)
-	if !ok {
+	extract := responseExtractorFor(state.kind)
+	if extract == nil {
 		return
 	}
 
 	switch state.kind {
 	case endpointTestCreate:
-		m.recordCreatedTest(parseBytes, state.publishReport, state.publishReportKnown)
-		return
+		if !state.publishReportKnown {
+			m.sink.RecordMiss(contributors.MissBodyUnreadable)
+			return
+		}
+		publishReport := state.publishReport
+		scanResponseBody(res, maxScanBytes, extract, func(testID string, err error) {
+			m.recordCreatedTest(testID, err, publishReport)
+		})
 	case endpointTestComponents:
-		m.captureComponents(req.URL.Path, parseBytes)
+		testID := testIDFromPath(req.URL.Path)
+		switch m.testState(testID) {
+		case testNotPublishing, testCaptured:
+			return
+		case testUnknown:
+			m.sink.RecordMiss(contributors.MissNoEntity)
+			return
+		case testPending:
+		}
+		scanResponseBody(res, maxScanBytes, extract, func(projectID string, err error) {
+			m.captureComponents(testID, projectID, err)
+		})
+	default:
+		scanResponseBody(res, maxScanBytes, extract, func(projectID string, err error) {
+			m.recordResult(contributors.EntityTypeProject, projectID, err)
+		})
+	}
+}
+
+// recordResult reports a scanned entity, or why there was not one.
+func (m *ContributorCaptureMiddleware) recordResult(entityType contributors.EntityType, entityID string, err error) {
+	defer m.recover()
+
+	if err != nil || entityID == "" {
+		m.sink.RecordMiss(missReasonFor(err))
 		return
-	default:
 	}
 
-	projectIDs := projectIDsFromResponse(state.kind, parseBytes)
-	m.record(contributors.EntityTypeProject, projectIDs...)
-}
-
-// responseCaptureBytes returns the part of res's body worth parsing. Bodies need no
-// content-encoding handling here: this middleware runs above http.Transport, which
-// negotiates and undoes compression before the response reaches us.
-func (m *ContributorCaptureMiddleware) responseCaptureBytes(res *http.Response, kind endpointKind) ([]byte, bool) {
-	bodyBytes, fullyRead, err := peekResponseBody(res, kind, maxCaptureBodyBytes)
-	if err != nil {
-		m.sink.RecordMiss(contributors.MissBodyUnreadable)
-		return nil, false
-	}
-	if !fullyRead && !captureAllowsTruncatedBodyParse(kind) {
-		m.sink.RecordMiss(contributors.MissBodyTooLarge)
-		return nil, false
-	}
-
-	return bodyBytes, true
-}
-
-func captureAllowsTruncatedBodyParse(kind endpointKind) bool {
-	return kind == endpointDeeproxyReport
-}
-
-func projectIDsFromResponse(kind endpointKind, parseBytes []byte) []string {
-	switch kind {
-	case endpointRegistryMonitor:
-		return []string{parseMonitorProjectID(parseBytes)}
-	case endpointRegistryIaCShare:
-		return parseIaCShareProjectIDs(parseBytes)
-	case endpointDeeproxyReport:
-		return []string{parseDeeproxyReportProjectID(parseBytes)}
-	default:
-		return nil
-	}
+	m.sink.RecordEntity(entityType, entityID)
 }
 
 // captureComponents records the project ID a components response carries, for a
 // test that is still waiting to yield one.
-func (m *ContributorCaptureMiddleware) captureComponents(path string, parseBytes []byte) {
-	testID := testIDFromPath(path)
+func (m *ContributorCaptureMiddleware) captureComponents(testID, projectID string, err error) {
+	defer m.recover()
 
-	switch m.testState(testID) {
-	case testNotPublishing, testCaptured:
+	// A poll that landed while this one streamed may have captured it already.
+	if m.testState(testID) == testCaptured {
 		return
-	case testUnknown:
-		m.sink.RecordMiss(contributors.MissNoEntity)
-		return
-	case testPending:
 	}
 
-	projectID := parseComponentsProjectID(parseBytes)
-	if projectID == "" {
-		m.sink.RecordMiss(contributors.MissNoEntity)
+	if err != nil || projectID == "" {
+		m.sink.RecordMiss(missReasonFor(err))
 		return
 	}
 
@@ -258,13 +241,14 @@ func (m *ContributorCaptureMiddleware) captureComponents(path string, parseBytes
 
 // recordCreatedTest notes what a create-test response means for the components
 // polls that follow it.
-func (m *ContributorCaptureMiddleware) recordCreatedTest(bodyBytes []byte, publishReport, publishReportKnown bool) {
-	if !publishReportKnown {
-		m.sink.RecordMiss(contributors.MissBodyUnreadable)
+func (m *ContributorCaptureMiddleware) recordCreatedTest(testID string, err error, publishReport bool) {
+	defer m.recover()
+
+	if err != nil {
+		m.sink.RecordMiss(missReasonFor(err))
 		return
 	}
 
-	testID := parseCreateTestID(bodyBytes)
 	if testID == "" {
 		if publishReport {
 			m.sink.RecordMiss(contributors.MissNoEntity)
@@ -289,22 +273,6 @@ func (m *ContributorCaptureMiddleware) testState(testID string) testState {
 	m.pendingTests.mu.Lock()
 	defer m.pendingTests.mu.Unlock()
 	return m.pendingTests.states[testID]
-}
-
-// record reports each captured ID to the sink.
-func (m *ContributorCaptureMiddleware) record(entityType contributors.EntityType, entityIDs ...string) {
-	recorded := false
-	for _, entityID := range entityIDs {
-		if entityID == "" {
-			continue
-		}
-		m.sink.RecordEntity(entityType, entityID)
-		recorded = true
-	}
-
-	if !recorded {
-		m.sink.RecordMiss(contributors.MissNoEntity)
-	}
 }
 
 func (m *ContributorCaptureMiddleware) recover() {

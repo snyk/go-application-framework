@@ -64,12 +64,14 @@ func emit(ctx context.Context, engine workflow.Engine, item Item) (collectionRes
 
 	emitter, err := NewEmitter(engine.GetNetworkAccess().GetHttpClient(), config, logger)
 	if err != nil {
+		logger.Debug().Err(err).Msg("contributors: failed to initialize emitter")
 		return resultEmitterInitFailed, 0
 	}
 
 	count, err := emitter.Emit(ctx, dirs[0], orgUUID, item)
 	if err != nil {
 		result := emitResult(err)
+		logger.Debug().Err(err).Str("result", string(result)).Msg("contributors: failed to emit")
 		return result, count
 	}
 
