@@ -8,11 +8,13 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/ui"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -121,4 +123,18 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 	}
 
 	return local_models.TransformToLocalFindingModelFromSarif(&sarifDoc, &testSummary)
+}
+
+func TransformSarifToUFM(sarifBytes []byte, summaryBytes []byte) (testapi.TestResult, error) {
+	var testSummary json_schemas.TestSummary
+	if err := json.Unmarshal(summaryBytes, &testSummary); err != nil {
+		return nil, err
+	}
+
+	var sarifDoc sarif.SarifDocument
+	if err := json.Unmarshal(sarifBytes, &sarifDoc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
+	}
+
+	return ufm.TransformToUFMFromSarif(&sarifDoc, &testSummary)
 }

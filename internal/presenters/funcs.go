@@ -255,6 +255,209 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
+func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
+	var flows []testapi.ExecutionFlowEvidence
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, ev := range finding.Attributes.Evidence {
+			discriminator, err := ev.Discriminator()
+			if err != nil || discriminator != "execution_flow" {
+				continue
+			}
+			execFlow, err := ev.AsExecutionFlowEvidence()
+			if err == nil {
+				flows = append(flows, execFlow)
+			}
+		}
+	}
+	return flows
+}
+
+func getPolicyModificationsFromIssue(issue testapi.Issue) []testapi.PolicyModification {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes != nil && finding.Attributes.PolicyModifications != nil && len(*finding.Attributes.PolicyModifications) > 0 {
+			return *finding.Attributes.PolicyModifications
+		}
+	}
+	return nil
+}
+
+func joinPolicyModificationReasons(modifications []testapi.PolicyModification) string {
+	reasons := make([]string, 0, len(modifications))
+	for _, modification := range modifications {
+		if modification.Reason != "" {
+			reasons = append(reasons, modification.Reason)
+		}
+	}
+	return strings.Join(reasons, "; ")
+}
+
+// buildRuleIndexes maps each problem ID to its position in uniqueRules.
+func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
+	indexes := make(map[string]int, len(uniqueRules))
+	for index, issue := range uniqueRules {
+		indexes[issue.GetProblemID()] = index
+	}
+	return indexes
+}
+
+// Mirrors ufm.MetadataKeyFindingExtras / ufm.MetadataKeyCoverage; see
+// findingExtraLocal for why they can't be imported instead.
+const (
+	metadataKeyFindingExtras = "finding-extras"
+	metadataKeyCoverage      = "coverage"
+)
+
+// findingExtraLocal mirrors the JSON shape of ufm.FindingExtra for
+// deserialization when metadata arrives as map[string]interface{} (e.g. after
+// JSON round-trip). Cannot import pkg/utils/ufm directly due to an import cycle.
+type findingExtraLocal struct {
+	Fingerprints           map[string]string          `json:"fingerprints,omitempty"`
+	IsAutofixable          bool                       `json:"isAutofixable,omitempty"`
+	Arguments              []string                   `json:"arguments,omitempty"`
+	Suppression            *suppressionExtraLocal     `json:"suppression,omitempty"`
+	MessageText            string                     `json:"messageText,omitempty"`
+	MessageMarkdown        string                     `json:"messageMarkdown,omitempty"`
+	RuleIndex              int                        `json:"ruleIndex"`
+	PriorityScoreFactors   []priorityScoreFactorLocal `json:"priorityScoreFactors,omitempty"`
+	PolicyOriginalLevel    string                     `json:"policyOriginalLevel,omitempty"`
+	PolicySeverity         string                     `json:"policySeverity,omitempty"`
+	PolicyOriginalSeverity string                     `json:"policyOriginalSeverity,omitempty"`
+}
+
+type suppressionExtraLocal struct {
+	GUID       string `json:"guid,omitempty"`
+	Category   string `json:"category,omitempty"`
+	IgnoredBy  string `json:"ignoredBy,omitempty"`
+	Email      string `json:"email,omitempty"`
+	Expiration string `json:"expiration,omitempty"`
+	IgnoredOn  string `json:"ignoredOn,omitempty"`
+}
+
+type priorityScoreFactorLocal struct {
+	Label bool   `json:"label"`
+	Type  string `json:"type"`
+}
+
+// getFindingExtraFromIssue returns the SARIF details the transformation stashed
+// on the test result for one of the issue's findings, or nil when there are none.
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) *findingExtraLocal {
+	extras, ok := testResult.GetMetadataValue(metadataKeyFindingExtras).(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for _, finding := range issue.GetFindings() {
+		if finding.Id == nil {
+			continue
+		}
+		extra, found := extras[finding.Id.String()]
+		if !found {
+			continue
+		}
+		if decoded := findingExtraFromValue(extra); decoded != nil {
+			return decoded
+		}
+	}
+	return nil
+}
+
+// findingExtraFromValue normalizes a struct or map metadata value into findingExtraLocal.
+func findingExtraFromValue(value interface{}) *findingExtraLocal {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	fe := &findingExtraLocal{}
+	if err := json.Unmarshal(data, fe); err != nil {
+		return nil
+	}
+	return fe
+}
+
+type coverageLocal struct {
+	Files       int    `json:"files"`
+	IsSupported bool   `json:"isSupported"`
+	Lang        string `json:"lang"`
+	Type        string `json:"type"`
+}
+
+func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
+	raw := testResult.GetMetadataValue(metadataKeyCoverage)
+	if raw == nil {
+		return []coverageLocal{}
+	}
+
+	if arr, ok := raw.([]interface{}); ok {
+		b, err := json.Marshal(arr)
+		if err != nil {
+			return raw
+		}
+		var covs []coverageLocal
+		if err := json.Unmarshal(b, &covs); err != nil {
+			return raw
+		}
+		return covs
+	}
+
+	return raw
+}
+
+func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, p := range finding.Attributes.Problems {
+			disc, err := p.Discriminator()
+			if err != nil || disc != "snyk_code_rule" {
+				continue
+			}
+			rule, err := p.AsSnykCodeRuleProblem()
+			if err == nil {
+				return &rule
+			}
+		}
+	}
+	return nil
+}
+
+func fingerprintsJSON(extra *findingExtraLocal, fallbackID string) string {
+	var fps map[string]string
+	if extra != nil {
+		fps = extra.Fingerprints
+	}
+
+	if len(fps) == 0 {
+		fps = map[string]string{
+			"identity":              fallbackID,
+			"snyk/asset/finding/v1": fallbackID,
+		}
+	}
+
+	pairs := make([]string, 0, len(fps))
+	for k, v := range fps {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(k), strconv.Quote(v)))
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, ",\n\t\t\t\t\t\t")
+}
+
+func derefStr(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return ""
+		}
+		return fmt.Sprintf("%v", rv.Elem().Interface())
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
@@ -282,6 +485,16 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildLocationsFromIssue"] = sarif.BuildLocations
 	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
+	// UFM data access helpers
+	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
+	fnMap["getPolicyModificationsFromIssue"] = getPolicyModificationsFromIssue
+	fnMap["joinPolicyModificationReasons"] = joinPolicyModificationReasons
+	fnMap["buildRuleIndexes"] = buildRuleIndexes
+	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
+	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
+	fnMap["fingerprintsJSON"] = fingerprintsJSON
+	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
+	fnMap["derefStr"] = derefStr
 	return fnMap
 }
 
@@ -343,115 +556,6 @@ func getUnionValue(input interface{}) interface{} {
 	}
 
 	return result
-}
-
-func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
-	var flows []testapi.ExecutionFlowEvidence
-	for _, finding := range issue.GetFindings() {
-		if finding.Attributes == nil {
-			continue
-		}
-		for _, evidence := range finding.Attributes.Evidence {
-			discriminator, err := evidence.Discriminator()
-			if err != nil || discriminator != "execution_flow" {
-				continue
-			}
-			executionFlow, err := evidence.AsExecutionFlowEvidence()
-			if err == nil {
-				flows = append(flows, executionFlow)
-			}
-		}
-	}
-	return flows
-}
-
-// findingExtraLocal mirrors finding metadata after a TestResult JSON round trip.
-// Importing pkg/utils/ufm here would create an import cycle.
-type findingExtraLocal struct {
-	Arguments   []string `json:"arguments,omitempty"`
-	MessageText string   `json:"messageText,omitempty"`
-}
-
-func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) interface{} {
-	extras, ok := testResult.GetMetadataValue("finding-extras").(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	for _, finding := range issue.GetFindings() {
-		if finding.Id == nil {
-			continue
-		}
-		extra, found := extras[finding.Id.String()]
-		if !found {
-			continue
-		}
-		if value, isMap := extra.(map[string]interface{}); isMap {
-			return findingExtraFromMap(value)
-		}
-		return extra
-	}
-	return nil
-}
-
-func findingExtraFromMap(value map[string]interface{}) findingExtraLocal {
-	extra := findingExtraLocal{}
-	if arguments, ok := value["arguments"].([]interface{}); ok {
-		extra.Arguments = make([]string, len(arguments))
-		for index, argument := range arguments {
-			extra.Arguments[index] = fmt.Sprintf("%v", argument)
-		}
-	}
-	if messageText, ok := value["messageText"].(string); ok {
-		extra.MessageText = messageText
-	}
-	return extra
-}
-
-type coverageLocal struct {
-	Files       int    `json:"files"`
-	IsSupported bool   `json:"isSupported"`
-	Lang        string `json:"lang"`
-	Type        string `json:"type"`
-}
-
-func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
-	raw := testResult.GetMetadataValue("coverage")
-	if raw == nil {
-		return nil
-	}
-
-	if values, ok := raw.([]interface{}); ok {
-		data, err := json.Marshal(values)
-		if err != nil {
-			return nil
-		}
-		var coverage []coverageLocal
-		if err := json.Unmarshal(data, &coverage); err != nil {
-			return nil
-		}
-		return coverage
-	}
-
-	return raw
-}
-
-func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
-	for _, finding := range issue.GetFindings() {
-		if finding.Attributes == nil {
-			continue
-		}
-		for _, problem := range finding.Attributes.Problems {
-			discriminator, err := problem.Discriminator()
-			if err != nil || discriminator != "snyk_code_rule" {
-				continue
-			}
-			codeRule, err := problem.AsSnykCodeRuleProblem()
-			if err == nil {
-				return &codeRule
-			}
-		}
-	}
-	return nil
 }
 
 type sourceLineCache struct {
@@ -1087,12 +1191,15 @@ func toInt(v interface{}) int {
 		return val
 	case int64:
 		return int(val)
+	case uint16:
+		return int(val)
+	case uint32:
+		return int(val)
 	case float64:
 		return int(val)
 	case float32:
 		return int(val)
 	case string:
-		// Try to parse string as int
 		if i, err := strconv.Atoi(val); err == nil {
 			return i
 		}

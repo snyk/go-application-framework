@@ -10,10 +10,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 func intPtr(v int) *int {
 	return &v
+}
+
+func TestJoinPolicyModificationReasons(t *testing.T) {
+	modifications := []testapi.PolicyModification{
+		{Reason: "first reason"},
+		{Reason: ""},
+		{Reason: "second reason"},
+	}
+
+	assert.Equal(t, "first reason; second reason", joinPolicyModificationReasons(modifications))
 }
 
 func TestResolveMessageArgs(t *testing.T) {
