@@ -19,6 +19,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
+	"github.com/snyk/go-application-framework/pkg/utils/target"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -191,7 +193,7 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	}
 
 	if len(scanDoneEvent.Data.Attributes.Path) > 0 {
-		targetId, targetIdError := instrumentation.GetTargetId(scanDoneEvent.Data.Attributes.Path, instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
+		targetId, targetIdError := target.GetTargetId(scanDoneEvent.Data.Attributes.Path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 		if targetIdError != nil {
 			logger.Printf("Failed to derive target id, %v", targetIdError)
 		}
@@ -229,11 +231,29 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
+
+	// Add studio session information
 	if id := config.GetString("internal_snyk_agent_session_id"); id != "" {
-		ic.AddExtension("studio.agent.session.id", id)
+		ic.AddExtension("studio::client_session_id", id)
 	}
 	if id := config.GetString("internal_snyk_client_machine_id"); id != "" {
 		ic.AddExtension("studio::client_machine_id", id)
+	}
+
+	// Add git provenance information. The empty-path guard is required: an empty
+	// path resolves to the process working directory and would attach an
+	// unrelated repository's provenance.
+	if path := scanDoneEvent.Data.Attributes.Path; len(path) > 0 {
+		if tHash, err := git.TreeHashFromDir(path); err == nil {
+			ic.AddExtension("git.tree_hash", tHash)
+		}
+		if targetId, err := target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config)); err == nil {
+			if gitTarget, ok := target.ParseGitTargetId(targetId); ok {
+				ic.AddExtension("git.repository_name", gitTarget.Repository)
+				ic.AddExtension("git.current_commit", gitTarget.Commit)
+				ic.AddExtension("git.current_branch", gitTarget.Branch)
+			}
+		}
 	}
 
 	data, err := analytics.GetV2InstrumentationObject(ic, analytics.WithLogger(logger))
