@@ -983,11 +983,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["dict"] = templateDict
 	defaultMap["jsonStrings"] = jsonFields[string]
 	defaultMap["jsonNumbers"] = jsonFields[float64]
-	defaultMap["sortIssues"] = func(issues []testapi.Issue) []testapi.Issue {
-		sorting := slices.Clone(json_schemas.DEFAULT_SEVERITIES)
-		slices.Reverse(sorting)
-		return (&testapi.IssueSummary{Issues: issues}).GetSortedIssues(sorting)
-	}
 	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
 		value, err := location.AsSourceLocation()
 		if err != nil {
@@ -1185,6 +1180,15 @@ func sortAndFilterIssues(config configuration.Configuration) func(issues []testa
 				hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
 
 				if hasActiveIgnore == isActive && issue.GetEffectiveSeverity() == severity {
+					filteredIssues = append(filteredIssues, issue)
+				}
+			}
+		}
+		if config.GetString(configuration.FLAG_SEVERITY_THRESHOLD) == "" {
+			for _, issue := range issues {
+				ignoreDetails := issue.GetIgnoreDetails()
+				hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
+				if hasActiveIgnore == isActive && !slices.Contains(sorting, issue.GetEffectiveSeverity()) {
 					filteredIssues = append(filteredIssues, issue)
 				}
 			}
