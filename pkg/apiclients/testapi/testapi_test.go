@@ -1811,6 +1811,84 @@ func Test_GetErrorsAsSnykErrors_TitleAbsent(t *testing.T) {
 	assert.Empty(t, snykErrs[0].Title)
 }
 
+// A links.about shaped as {href, meta} (rather than a plain string) must not cause
+// ErrorsAsSnykErrors to drop the whole batch - Links is omitted from what gets
+// marshaled, so Code/Title/Detail/Status must survive regardless of how Links happens
+// to be shaped (Type is not expected to be populated, since Links isn't read at all).
+func Test_GetErrorsAsSnykErrors_LinksAboutAsObject(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	var aboutLink testapi.IoSnykApiCommonLinkProperty
+	require.NoError(t, aboutLink.FromIoSnykApiCommonLinkObject(testapi.IoSnykApiCommonLinkObject{
+		Href: "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0006",
+	}))
+	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
+		{
+			Detail: "Over the tests quota for this billing period (limit 200, used 234)",
+			Status: "429",
+			Code:   utils.Ptr("SNYK-0006"),
+			Links:  &testapi.IoSnykApiCommonErrorLink{About: &aboutLink},
+		},
+	}
+	failReason := testapi.TestOutcomeReasonPolicyBreach
+
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Fail,
+			OutcomeReason:     &failReason,
+			ApiErrors:         expectedAPIErrors,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	require.NoError(t, handle.Wait(ctx))
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// Act
+	snykErrs, err := testapi.ErrorsAsSnykErrors(result.GetErrors())
+
+	// Assert
+	require.NoError(t, err)
+	require.Len(t, snykErrs, 1)
+	assert.Equal(t, "SNYK-0006", snykErrs[0].ErrorCode)
+	assert.Equal(t, "Over the tests quota for this billing period (limit 200, used 234)", snykErrs[0].Detail)
+	assert.Empty(t, snykErrs[0].Type, "Links is deliberately not read, regardless of its shape")
+}
+
 // A test that finished without any API errors must not produce any snyk_errors.Error.
 func Test_GetErrorsAsSnykErrors_NoErrors(t *testing.T) {
 	// Arrange

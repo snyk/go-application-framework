@@ -278,6 +278,19 @@ func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
 // GetWarnings returns any API warnings encountered during the test execution.
 func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
 
+// jsonAPIErrorPayload mirrors the subset of a JSON:API error object that
+// snyk_errors.FromJSONAPIErrorBytes actually reads. Marshaling IoSnykApiCommonError
+// directly is unsafe: its Links.About is a union that can serialize as either a
+// string or a {href, meta} object, but snyk_errors expects Links.About to always be
+// a string.
+type jsonAPIErrorPayload struct {
+	ID     string `json:"id,omitempty"`
+	Code   string `json:"code,omitempty"`
+	Title  string `json:"title,omitempty"`
+	Detail string `json:"detail,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
 // ErrorsAsSnykErrors reconstructs errors (as returned by TestResult.GetErrors() or
 // GetWarnings()) as error-catalog snyk_errors.Error values, reusing the same JSON:API
 // parsing applied to non-2xx responses elsewhere in this client. Returns (nil, nil)
@@ -287,7 +300,25 @@ func ErrorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, erro
 		return nil, nil
 	}
 
-	body, err := json.Marshal(map[string]any{"errors": *errs})
+	payload := make([]jsonAPIErrorPayload, 0, len(*errs))
+	for _, e := range *errs {
+		p := jsonAPIErrorPayload{
+			Detail: e.Detail,
+			Status: e.Status,
+		}
+		if e.Code != nil {
+			p.Code = *e.Code
+		}
+		if e.Title != nil {
+			p.Title = *e.Title
+		}
+		if e.Id != nil {
+			p.ID = e.Id.String()
+		}
+		payload = append(payload, p)
+	}
+
+	body, err := json.Marshal(map[string]any{"errors": payload})
 	if err != nil {
 		return nil, fmt.Errorf("marshaling test errors for snyk_errors conversion: %w", err)
 	}
