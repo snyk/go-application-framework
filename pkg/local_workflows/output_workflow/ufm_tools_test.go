@@ -302,7 +302,8 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			if full {
 				expected = "sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:\n  \"0.0\",yes,example,\"example@1,1.5\",\"\",Example,none"
 			}
-			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
+			expected += "\nsca_summary: 1 unique vulns (2 paths) |  | 1 fixable"
+			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low\nsecrets_summary: 1 secrets | 1 low"
 			header := "interaction_id: interaction-test\norg: unknown\nproject: unknown\n"
 			if !full {
 				header = "hint: add --toon=full for all fields\n" + header

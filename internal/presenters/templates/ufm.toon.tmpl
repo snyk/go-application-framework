@@ -1,6 +1,7 @@
 {{- define "main" -}}
   {{- $envelope := dict -}}
-  {{- $state := dict "Envelope" $envelope "Fatal" false "Full" (eq (getValueFromConfig "toon") "full") -}}
+  {{- $state := dict "Envelope" $envelope "Fatal" false "Successful" (dict) "Paths" 0
+                    "Full" (eq (getValueFromConfig "toon") "full") -}}
   {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
   {{- range $result := .TestResults -}}
     {{- $issues := getIssuesFromTestResultWithContext (getContext) $result -}}
@@ -29,8 +30,42 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+  {{- template "toonSummaries" $state -}}
   {{- if .TestResults -}}{{- template "toonContextFields" $state -}}{{- end -}}
   {{- template "toonDocument" $envelope -}}
+{{- end -}}
+
+{{- define "toonSummaries" -}}
+  {{- range $scanner := array "sca" "secrets" -}}
+    {{- $rows := or (index $.Envelope $scanner) (array) -}}
+    {{- $count := len $rows -}}
+    {{- if not (or $count (index $.Successful $scanner)) -}}{{- continue -}}{{- end -}}
+    {{- $summary := "0 secrets found" -}}
+    {{- if eq $scanner "sca" -}}{{- $summary = "0 vulnerabilities found" -}}{{- end -}}
+    {{- if $count -}}
+      {{- $counts := dict -}}{{- $fixable := 0 -}}
+      {{- range $row := $rows -}}
+        {{- $severity := print $row.severity -}}
+        {{- $_ := set $counts $severity (add (or (index $counts $severity) 0) 1) -}}
+        {{- if eq (print $row.fixable) "yes" -}}{{- $fixable = add $fixable 1 -}}{{- end -}}
+      {{- end -}}
+      {{- $severities := "" -}}
+      {{- range $severity := array "critical" "high" "medium" "low" -}}
+        {{- with index $counts $severity -}}
+          {{- if $severities -}}{{- $severities = print $severities " " -}}{{- end -}}
+          {{- $severities = print $severities . " " $severity -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if eq $scanner "sca" -}}
+        {{- $paths := "" -}}
+        {{- if gt $.Paths $count -}}{{- $paths = printf " (%d paths)" $.Paths -}}{{- end -}}
+        {{- $summary = printf "%d unique vulns%s | %s | %d fixable" $count $paths $severities $fixable -}}
+      {{- else -}}
+        {{- $summary = printf "%d secrets | %s" $count $severities -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $_ := set $.Envelope (print $scanner "_summary") $summary -}}
+  {{- end -}}
 {{- end -}}
 
 {{- define "toonContextFields" -}}
@@ -100,6 +135,7 @@
   {{- end -}}
   {{- if and $errors.Message (not .Issues) -}}{{- $_ := set .State "Fatal" true -}}{{- end -}}
   {{- range $scanner, $_ := $scanners -}}
+    {{- if not $errors.Message -}}{{- $_ := set $.State.Successful $scanner true -}}{{- end -}}
     {{- if not (index $envelope $scanner) -}}{{- $_ := set $envelope $scanner (array) -}}{{- end -}}
     {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" (print $scanner "_error") "Message" $errors.Message) -}}
     {{- $warningKey := print $scanner "_warning" -}}
@@ -144,6 +180,7 @@
   {{- end -}}
   {{- if not $problem -}}{{- fail "SCA finding has no supported problem" -}}{{- end -}}
   {{- $findings := $issue.GetFindings -}}
+  {{- $_ := set $state "Paths" (add $state.Paths (len $findings)) -}}
   {{- $name := or (getIssueMetadata $issue "component-name") "" -}}
   {{- $versions := sortVersions (or (getIssueMetadata $issue "component-versions") (array)) -}}
   {{- if eq (len $findings) 1 -}}
