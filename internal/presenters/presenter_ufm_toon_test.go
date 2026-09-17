@@ -101,7 +101,7 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 				presenter := presenters.NewUfmRenderer(results, config, &output)
 				err := presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
 				require.NoError(t, err)
-				assert.Contains(t, output.String(), "findings[1]{finding_type,id,severity,title}:\n  sast,00000000-0000-4000-8000-000000000004,high,Example finding")
+				assert.Contains(t, output.String(), "findings[1]{finding_type,id,severity,title}:\n  sast,finding-4,high,Example finding")
 				assert.NotContains(t, output.String(), "results[")
 				if name == "mixed" {
 					assert.Contains(t, output.String(), "sca[1]")
@@ -133,7 +133,13 @@ func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
 				{"attributes":{"finding_type":"future","title":"Future finding","rating":{"severity":"high"},"problems":[{"source":42}]}},
 				{"attributes":{"finding_type":"future"}}]}]`,
 			[]string{"errors: Some files failed", "warnings: Partial scan", "hint: Retry the scan.",
-				"findings[2]{finding_type,id,severity,title}:\n  future,\"\",high,Future finding\n  future,\"\",\"\",\"\""},
+				"findings[2]{finding_type,id,severity,title}:\n  future,\"\",\"\",\"\"\n  future,\"\",high,Future finding"},
+		},
+		{
+			"license findings mark the sca scanner",
+			`[{"errors":[{"detail":"License failure"}],"findings":[
+				{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT"}]}}]}]`,
+			[]string{"sca_error: License failure", "sca[1]"},
 		},
 		{
 			"scanner and generic diagnostics stay separate",
@@ -218,14 +224,13 @@ func TestRenderTemplate_TOON_context(t *testing.T) {
 			config := configuration.NewWithOpts()
 			config.Set(configuration.ORGANIZATION_SLUG, tc.slug)
 			config.Set(configuration.ORGANIZATION, tc.org)
-			config.Set(configuration.WORKING_DIRECTORY, tc.directory)
+			config.Set(configuration.INPUT_DIRECTORY, tc.directory)
 			results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", "empty_sca.json"))
 			var output bytes.Buffer
 			presenter := presenters.NewUfmRenderer(results, config, &output)
 			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
 			assert.Contains(t, output.String(), "org: "+tc.expectedOrg)
 			assert.Contains(t, output.String(), "project: "+tc.expectedProject)
-			assert.Contains(t, output.String(), `feedback: ""`)
 			assert.NotContains(t, output.String(), "interaction_id:")
 		})
 	}
@@ -251,12 +256,10 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 				mode = "full"
 			}
 			config.Set("toon", mode)
-			config.Set(presenters.CONFIG_TOON_FEEDBACK, "Share feedback:\nUse the host feedback command.")
 			ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
 			var output bytes.Buffer
 			presenter := presenters.NewUfmRenderer(results, config, &output)
 			require.NoError(t, presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
-			assert.Contains(t, output.String(), `feedback: "Share feedback:\nUse the host feedback command."`)
 			assert.Contains(t, output.String(), "sca_error: Dependency scan failed")
 			assert.Contains(t, output.String(), "sca_hint: Retry the scan.")
 			assert.Contains(t, output.String(), `sca_warning: "Some manifests were skipped\nSCAN-WARNING"`)

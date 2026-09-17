@@ -23,10 +23,6 @@ const (
 	TOON_MIME_TYPE                       = presenters.ApplicationTOONMimeType
 )
 
-// OUTPUT_CONFIG_KEY_TOON_FEEDBACK supplies the host's feedback invitation for both TOON writers.
-// The feedback field is an empty string when unset.
-const OUTPUT_CONFIG_KEY_TOON_FEEDBACK = presenters.CONFIG_TOON_FEEDBACK
-
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
 var DefaultTemplateFiles = presenters.DefaultTemplateFiles
 var ApplicationSarifTemplates = presenters.ApplicationSarifTemplates

@@ -30,8 +30,9 @@ func TestTOONMapping_SCAOccurrences(t *testing.T) {
 			"locations": [{"type": "package", "package": {"name": "example", "version": "1.2"}}]
 		}}]}
 	]`)
-	requireTOONEqual(t, false, `sca[1]{fixable,id,pkg,severity}:
-  no,SNYK-EXAMPLE-1,"example@1.2,1.10",high`, output)
+	requireTOONEqual(t, false, `sca[2]{fixable,id,pkg,severity}:
+  no,SNYK-EXAMPLE-1,example@1.10,high
+  no,SNYK-EXAMPLE-1,example@1.2,medium`, output)
 }
 
 func TestTOONMapping_SecretsFallbacks(t *testing.T) {
@@ -39,17 +40,28 @@ func TestTOONMapping_SecretsFallbacks(t *testing.T) {
 
 	output := renderFindings(t, false, `[{"findings": [
 		{"attributes": {"finding_type":"secrets", "title":"fallback", "rating":{"severity":"HIGH"},
-			"problems":[{"source":"snyk_secrets_rule","id":"rule-1"},{"id":"rule-2"}],
+			"problems":[{"source":"cwe","id":"CWE-798"},{"source":"secret","id":"rule-1"},{"id":"rule-2"}],
 			"locations":[{"type":"source","file_path":"first.txt","from_line":7,"to_line":10},
 				{"type":"source","file_path":"second.txt","from_line":12}]}},
-		{"attributes": {"finding_type":"secrets", "title":"fallback"}},
-		{"attributes": {"finding_type":"secrets", "locations":[{"type":"source","from_line":"invalid"}]}},
+		{"attributes": {"finding_type":"secrets", "title":"fallback", "key":"finding-b"}},
+		{"attributes": {"finding_type":"secrets", "key":"finding-a", "locations":[{"type":"source","from_line":"invalid"}]}},
 		{}
 	]}]`)
 	requireTOONEqual(t, false, `secrets[3]{file,line,rule,severity}:
-  first.txt,7,rule-1,high
+  unknown,0,secret,low
   unknown,0,fallback,low
-  unknown,0,secret,low`, output)
+  first.txt,7,rule-1,high`, output)
+}
+
+func TestTOONMapping_SortedBySeverity(t *testing.T) {
+	t.Parallel()
+	output := renderFindings(t, false, `[{"findings":[
+		{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"a-low","severity":"low"}]}},
+		{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"b-critical","severity":"critical"}]}}
+	]}]`)
+	requireTOONEqual(t, false, `sca[2]{fixable,id,pkg,severity}:
+  no,b-critical,@,critical
+  no,a-low,@,low`, output)
 }
 
 func TestTOONMapping_StableVersions(t *testing.T) {
@@ -75,9 +87,9 @@ func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
 	}
 	output := renderFindings(t, true, `[{"findings":[`+strings.Join(findings, ",")+`]}]`)
 	requireTOONEqual(t, true, `sca[3]{cvss,fixable,id,pkg,severity,title,upgrade}:
-  "0.0",yes,second,"package-0@0,2",severity-0,Title 0,target@1
+  "3.0",yes,"","package-3@3,4",severity-3,Title 3,target@4
   "1.0",yes,first,package-1@1,severity-1,Title 1,target@2
-  "3.0",yes,"","package-3@3,4",severity-3,Title 3,target@4`, output)
+  "0.0",yes,second,"package-0@0,2",severity-0,Title 0,target@1`, output)
 }
 
 func TestTOONMapping_EmptyScanners(t *testing.T) {
@@ -130,8 +142,8 @@ func TestTOONMapping_SCASources(t *testing.T) {
 		},
 		{
 			"license package fallback",
-			`"problems":[{"source":"snyk_license","id":"license","severity":"medium","package_name":"example","package_version":"3"}]`,
-			`no,license,example@3,medium`,
+			`"problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT","severity":"medium","package_name":"example","package_version":"3"}]`,
+			`no,"snyk:lic:npm:x:MIT",example@3,medium`,
 		},
 		{
 			"null fields retain empty defaults",
@@ -268,9 +280,9 @@ func renderTOONResults(t *testing.T, results []testapi.TestResult, full bool) (s
 
 func requireTOONEqual(t *testing.T, full bool, rows, output string) {
 	t.Helper()
-	header := "feedback: \"\"\n"
+	header := ""
 	if !full {
-		header += "hint: add --toon=full for all fields\n"
+		header = "hint: add --toon=full for all fields\n"
 	}
 	header += "org: unknown\nproject: unknown\n"
 	require.Equal(t, header+rows, output)

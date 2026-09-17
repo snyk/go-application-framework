@@ -263,7 +263,6 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 				mode = "full"
 			}
 			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON, mode)
-			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FEEDBACK, "Share feedback using the host command.")
 			outputFile := filepath.Join(t.TempDir(), "results.toon")
 			stdoutConfig.Set(OUTPUT_CONFIG_KEY_TOON_FILE, outputFile)
 			stdoutConfig.Set(configuration.MAX_THREADS, 10)
@@ -308,9 +307,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			if !full {
 				header = "hint: add --toon=full for all fields\n" + header
 			}
-			feedback := "feedback: Share feedback using the host command.\n"
-			expected = feedback + "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" + header + expected
-			header = feedback + header
+			expected = "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" + header + expected
 			assert.Equal(t, expected+"\n", outputDestination.buffer.String())
 			content, err := os.ReadFile(outputFile)
 			assert.NoError(t, err)
@@ -337,7 +334,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			failedWriters := GetWritersFromConfiguration(stdoutConfig, failedDestination)
 			_, err = HandleContentTypeUnifiedModel([]workflow.Data{failedData}, ctx, failedWriters)
 			assert.NoError(t, err)
-			expectedFailure := "feedback: Share feedback using the host command.\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nsecrets: []\nsecrets_error: Scan failed"
+			expectedFailure := "interaction_id: interaction-test\norg: unknown\nproject: unknown\nsecrets: []\nsecrets_error: Scan failed"
 			assert.Equal(t, expectedFailure+"\n", failedDestination.buffer.String())
 			content, err = os.ReadFile(outputFile)
 			assert.NoError(t, err)
@@ -351,7 +348,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			genericDestination := &stubOutputDestination{}
 			_, err = HandleContentTypeUnifiedModel([]workflow.Data{genericData}, ctx, GetWritersFromConfiguration(stdoutConfig, genericDestination))
 			assert.NoError(t, err)
-			expectedFailure = "errors: Other scan failed\n" + feedback + "findings: []\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nwarnings: Partial input"
+			expectedFailure = "errors: Other scan failed\nfindings: []\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nwarnings: Partial input"
 			assert.Equal(t, expectedFailure+"\n", genericDestination.buffer.String())
 			content, err = os.ReadFile(outputFile)
 			assert.NoError(t, err)

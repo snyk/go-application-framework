@@ -2,6 +2,8 @@ package localworkflows
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -31,11 +33,28 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_TOON_FILE, "", "Write toon output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
+	engine.GetConfiguration().AddDefaultValue(output_workflow.OUTPUT_CONFIG_KEY_TOON, toonDefaultValue)
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
 
 	return err
+}
+
+// --toon is a string flag, so bool-ish values like --toon=false must not select TOON output.
+func toonDefaultValue(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	if existingValue == nil {
+		return "", nil
+	}
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(existingValue))) {
+	case "", "false", "0":
+		return "", nil
+	case "true", "compact":
+		return "compact", nil
+	case "full":
+		return "full", nil
+	}
+	return nil, fmt.Errorf("invalid value %v for --%s, expected compact or full", existingValue, output_workflow.OUTPUT_CONFIG_KEY_TOON)
 }
 
 // outputWorkflowEntryPoint defines the output entry point
@@ -45,6 +64,9 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	var finalError error
 	config := invocation.GetConfiguration()
+	if _, err := config.GetWithError(output_workflow.OUTPUT_CONFIG_KEY_TOON); err != nil {
+		return output, cli.NewInvalidFlagOptionError(err.Error())
+	}
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 
 	debugLogger := invocation.GetEnhancedLogger()

@@ -23,6 +23,10 @@ const (
 	// Value type: string
 	DataKeyComponentVersion = "component-version"
 
+	// DataKeyComponentVersions is the key for all distinct package versions seen across grouped findings
+	// Value type: []string
+	DataKeyComponentVersions = "component-versions"
+
 	// DataKeyTechnology is the key for the technology/ecosystem
 	// For SCA: package manager (e.g., "npm", "maven")
 	// For SAST: language/framework (e.g., "javascript", "python")
@@ -216,26 +220,37 @@ type issueGrouper interface {
 type idBasedIssueGrouper struct{}
 
 func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	groups := make(map[string][]*FindingData)
-
-	for _, finding := range findings {
-		if finding.Attributes == nil {
-			continue
-		}
-
+	return groupFindingsBy(findings, func(finding *FindingData) string {
 		// Extract problem ID from problems
 		problemID := g.extractProblemID(finding)
 		if problemID == "" {
 			// If no problem ID found, treat each finding as its own issue
 			problemID = g.getUniqueKey(finding)
 		}
+		return problemID
+	})
+}
 
-		groups[problemID] = append(groups[problemID], finding)
+// groupFindingsBy groups findings by key, preserving first-seen order so output is deterministic.
+func groupFindingsBy(findings []*FindingData, keyOf func(*FindingData) string) [][]*FindingData {
+	groups := make(map[string][]*FindingData)
+	var order []string
+
+	for _, finding := range findings {
+		if finding.Attributes == nil {
+			continue
+		}
+
+		key := keyOf(finding)
+		if _, seen := groups[key]; !seen {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], finding)
 	}
 
-	result := make([][]*FindingData, 0, len(groups))
-	for _, group := range groups {
-		result = append(result, group)
+	result := make([][]*FindingData, 0, len(order))
+	for _, key := range order {
+		result = append(result, groups[key])
 	}
 
 	return result
@@ -303,32 +318,18 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 type keyBasedIssueGrouper struct{}
 
 func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	groups := make(map[string][]*FindingData)
-
-	for _, finding := range findings {
-		if finding.Attributes == nil {
-			continue
+	index := 0
+	return groupFindingsBy(findings, func(finding *FindingData) string {
+		index++
+		if finding.Attributes.Key != "" {
+			return finding.Attributes.Key
 		}
-
-		key := finding.Attributes.Key
-		if key == "" {
-			// If no key, use finding ID as fallback
-			if finding.Id != nil {
-				key = finding.Id.String()
-			} else {
-				continue
-			}
+		if finding.Id != nil {
+			return finding.Id.String()
 		}
-
-		groups[key] = append(groups[key], finding)
-	}
-
-	result := make([][]*FindingData, 0, len(groups))
-	for _, group := range groups {
-		result = append(result, group)
-	}
-
-	return result
+		// Keyless, ID-less findings must not be dropped; give each its own issue.
+		return fmt.Sprintf("__finding_%d", index)
+	})
 }
 
 // issue is the concrete implementation of the Issue interface.
@@ -486,6 +487,7 @@ type issueBuilder struct {
 	problemID            string
 	packageName          string
 	packageVersion       string
+	packageVersions      []string
 	cvssScore            float32
 	isFixable            bool
 	fixedInVersions      []string
@@ -633,9 +635,22 @@ func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 		if b.packageName == "" {
 			b.packageName = pkgLoc.Package.Name
 		}
-		if b.packageVersion == "" {
-			b.packageVersion = pkgLoc.Package.Version
+		b.addPackageVersion(pkgLoc.Package.Version)
+	}
+}
+
+func (b *issueBuilder) addPackageVersion(version string) {
+	if version == "" {
+		return
+	}
+	for _, existing := range b.packageVersions {
+		if existing == version {
+			return
 		}
+	}
+	b.packageVersions = append(b.packageVersions, version)
+	if b.packageVersion == "" {
+		b.packageVersion = version
 	}
 }
 
@@ -713,9 +728,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = vulnProblem.PackageName
 	}
-	if b.packageVersion == "" {
-		b.packageVersion = vulnProblem.PackageVersion
-	}
+	b.addPackageVersion(vulnProblem.PackageVersion)
 }
 
 // processSnykLicenseProblem extracts data from a Snyk license problem
@@ -754,6 +767,7 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = licenseProblem.PackageName
 	}
+	b.addPackageVersion(licenseProblem.PackageVersion)
 }
 
 // processCveProblem extracts CVE ID
@@ -861,6 +875,9 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 		metadata[DataKeyComponent] = component
 		metadata[DataKeyComponentName] = b.packageName
 		metadata[DataKeyComponentVersion] = b.packageVersion
+		if len(b.packageVersions) > 0 {
+			metadata[DataKeyComponentVersions] = b.packageVersions
+		}
 	}
 
 	// Add technology/ecosystem

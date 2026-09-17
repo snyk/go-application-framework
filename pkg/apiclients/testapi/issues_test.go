@@ -2,6 +2,7 @@ package testapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -369,6 +370,63 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		_, _ = issue.GetData(testapi.DataKeyFixedInVersions)
 		_, _ = issue.GetData(testapi.DataKeyIsFixable)
 		_, _ = issue.GetData(testapi.DataKeyCVSSScore)
+	})
+
+	t.Run("SCA issue accumulates distinct package versions", func(t *testing.T) {
+		problem := func(raw string) testapi.Problem {
+			var value testapi.Problem
+			require.NoError(t, json.Unmarshal([]byte(raw), &value))
+			return value
+		}
+		findings := []*testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Problems: []testapi.Problem{
+						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.10"}`),
+					},
+				},
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Problems: []testapi.Problem{
+						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.2"}`),
+					},
+				},
+			},
+		}
+
+		issue, err := testapi.NewIssueFromFindings(findings)
+		require.NoError(t, err)
+
+		versions, ok := issue.GetData(testapi.DataKeyComponentVersions)
+		require.True(t, ok)
+		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
+	})
+
+	t.Run("issues keep first-seen finding order", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var findings []testapi.FindingData
+		for _, key := range []string{"zeta", "alpha", "zeta", "mid"} {
+			findings = append(findings, testapi.FindingData{Attributes: &testapi.FindingAttributes{
+				FindingType: testapi.FindingTypeSast, Key: key,
+			}})
+		}
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
+
+		for range 5 {
+			issues, err := testapi.NewIssuesFromTestResult(context.Background(), mockResult)
+			require.NoError(t, err)
+			var ids []string
+			for _, issue := range issues {
+				ids = append(ids, issue.GetID())
+			}
+			assert.Equal(t, []string{"zeta", "alpha", "mid"}, ids)
+		}
 	})
 }
 

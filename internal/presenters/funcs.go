@@ -995,12 +995,10 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getFindings"] = templateFindings
 	defaultMap["jsonStrings"] = jsonFields[string]
 	defaultMap["jsonNumbers"] = jsonFields[float64]
-	defaultMap["getSecretsRule"] = func(problem testapi.Problem) testapi.SecretsRuleProblem {
-		value, err := problem.AsSecretsRuleProblem()
-		if err != nil {
-			return testapi.SecretsRuleProblem{}
-		}
-		return value
+	defaultMap["sortIssues"] = func(issues []testapi.Issue) []testapi.Issue {
+		sorting := slices.Clone(json_schemas.DEFAULT_SEVERITIES)
+		slices.Reverse(sorting)
+		return (&testapi.IssueSummary{Issues: issues}).GetSortedIssues(sorting)
 	}
 	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
 		value, err := location.AsSourceLocation()
@@ -1024,14 +1022,22 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
 	defaultMap["array"] = func(values ...any) []any { return values }
 	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
-	defaultMap["sortVersions"] = func(values []any) ([]string, error) {
-		versions := make([]string, len(values))
-		for i, value := range values {
-			version, ok := value.(string)
-			if !ok {
-				return nil, fmt.Errorf("version must be a string, got %T", value)
+	defaultMap["sortVersions"] = func(values any) ([]string, error) {
+		var versions []string
+		switch typed := values.(type) {
+		case []string:
+			versions = append([]string(nil), typed...)
+		case []any:
+			versions = make([]string, len(typed))
+			for i, value := range typed {
+				version, ok := value.(string)
+				if !ok {
+					return nil, fmt.Errorf("version must be a string, got %T", value)
+				}
+				versions[i] = version
 			}
-			versions[i] = version
+		default:
+			return nil, fmt.Errorf("versions must be a slice, got %T", values)
 		}
 		slices.SortStableFunc(versions, comparePackageVersions)
 		return versions, nil
