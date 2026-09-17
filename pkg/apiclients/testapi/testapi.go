@@ -284,17 +284,18 @@ func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
 // string or a {href, meta} object, but snyk_errors expects Links.About to always be
 // a string.
 type jsonAPIErrorPayload struct {
-	ID     string `json:"id,omitempty"`
-	Code   string `json:"code,omitempty"`
-	Title  string `json:"title,omitempty"`
-	Detail string `json:"detail,omitempty"`
-	Status string `json:"status,omitempty"`
+	ID     string         `json:"id,omitempty"`
+	Code   string         `json:"code,omitempty"`
+	Title  string         `json:"title,omitempty"`
+	Detail string         `json:"detail,omitempty"`
+	Status string         `json:"status,omitempty"`
+	Meta   map[string]any `json:"meta,omitempty"`
 }
 
-// ErrorsAsSnykErrors reconstructs errors (as returned by TestResult.GetErrors() or
-// GetWarnings()) as error-catalog snyk_errors.Error values, reusing the same JSON:API
-// parsing applied to non-2xx responses elsewhere in this client. Returns (nil, nil)
-// when errs is nil or empty.
+// ErrorsAsSnykErrors reconstructs errors (as returned by TestResult.GetErrors()) as
+// error-catalog snyk_errors.Error values, reusing the same JSON:API parsing applied to
+// non-2xx responses elsewhere in this client. Every value gets meta.level "error".
+// Returns (nil, nil) when errs is nil or empty.
 func ErrorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, error) {
 	if errs == nil || len(*errs) == 0 {
 		return nil, nil
@@ -305,6 +306,7 @@ func ErrorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, erro
 		p := jsonAPIErrorPayload{
 			Detail: e.Detail,
 			Status: e.Status,
+			Meta:   map[string]any{"level": "error"},
 		}
 		if e.Code != nil {
 			p.Code = *e.Code

@@ -1742,6 +1742,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAsSnykErrors(t *testing.T) {
 	assert.Equal(t, "Test limit reached", snykErrs[0].Title)
 	assert.Equal(t, "Over the tests quota for this billing period (limit 200, used 234)", snykErrs[0].Detail)
 	assert.Equal(t, 429, snykErrs[0].StatusCode)
+	assert.Equal(t, "error", snykErrs[0].Level)
 }
 
 // A missing Title on the wire (as happens for upstream APIs that merge the
