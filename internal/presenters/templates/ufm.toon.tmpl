@@ -5,7 +5,16 @@
   {{- range $result := .TestResults -}}
     {{- $issues := getIssuesFromTestResultWithContext (getContext) $result -}}
     {{- template "toonDiagnostics" (dict "State" $state "Result" $result "Issues" $issues) -}}
-    {{- range $issue := sortIssues $issues -}}
+    {{- $mappedIssues := array -}}
+    {{- range $issue := reverse (sortAndFilterIssues $issues false) -}}
+      {{- $mappedIssues = append $mappedIssues $issue -}}
+    {{- end -}}
+    {{- if eq (getValueFromConfig "include-ignores") "true" -}}
+      {{- range $issue := reverse (sortAndFilterIssues $issues true) -}}
+        {{- $mappedIssues = append $mappedIssues $issue -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range $issue := $mappedIssues -}}
       {{- $findingType := print $issue.GetFindingType -}}
       {{- if or (eq $findingType "sca") (eq $findingType "license") -}}
         {{- template "toonSCA" (dict "State" $state "Issue" $issue) -}}

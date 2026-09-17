@@ -64,6 +64,56 @@ func TestTOONMapping_SortedBySeverity(t *testing.T) {
   no,a-low,@,low`, output)
 }
 
+func TestTOONMapping_FiltersByEffectiveSeverity(t *testing.T) {
+	t.Parallel()
+	output := renderFindingsWithOptions(t, `[{"findings":[
+		{"attributes":{"finding_type":"sca","rating":{"severity":"high"},
+			"policy_modifications":[{"pointer":"/rating/severity","prior":"low"}],
+			"problems":[{"source":"snyk_vuln","id":"effective-high","severity":"low"}]}},
+		{"attributes":{"finding_type":"sca","rating":{"severity":"low"},
+			"policy_modifications":[{"pointer":"/rating/severity","prior":"high"}],
+			"problems":[{"source":"snyk_vuln","id":"effective-low","severity":"high"}]}}
+	]}]`, "high", false)
+	requireTOONEqual(t, false, `sca[1]{fixable,id,pkg,severity}:
+  no,effective-high,@,low`, output)
+}
+
+func TestTOONMapping_OrdersActiveBeforeConfiguredIgnoredIssues(t *testing.T) {
+	t.Parallel()
+	input := `[{"findings":[
+		{"attributes":{"finding_type":"secrets","title":"active-low","rating":{"severity":"low"}}},
+		{"attributes":{"finding_type":"secrets","title":"ignored-critical","rating":{"severity":"critical"},"suppression":{"status":"ignored"}}},
+		{"attributes":{"finding_type":"secrets","title":"active-high","rating":{"severity":"high"}}},
+		{"attributes":{"finding_type":"secrets","title":"ignored-medium","rating":{"severity":"medium"},"suppression":{"status":"ignored"}}}
+	]}]`
+
+	requireTOONEqual(t, false, `secrets[2]{file,line,rule,severity}:
+  unknown,0,active-high,high
+  unknown,0,active-low,low`, renderFindingsWithOptions(t, input, "", false))
+	requireTOONEqual(t, false, `secrets[4]{file,line,rule,severity}:
+  unknown,0,active-high,high
+  unknown,0,active-low,low
+  unknown,0,ignored-critical,critical
+  unknown,0,ignored-medium,medium`, renderFindingsWithOptions(t, input, "", true))
+}
+
+func TestTOONMapping_FilteredIssuesRetainDiagnostics(t *testing.T) {
+	t.Parallel()
+	output := renderFindingsWithOptions(t, `[{
+		"testConfiguration":{"scan_config":{"secrets":{}}},
+		"errors":[{"detail":"partial failure"}],"warnings":[{"detail":"partial warning"}],
+		"findings":[
+			{"attributes":{"finding_type":"secrets","title":"ignored","rating":{"severity":"high"},"suppression":{"status":"ignored"}}},
+			{"attributes":{"finding_type":"secrets","title":"low","rating":{"severity":"low"}}}
+		]
+	}]`, "high", false)
+	require.Contains(t, output, "hint: add --toon=full for all fields")
+	require.Contains(t, output, "secrets: []")
+	require.Contains(t, output, "secrets_error: partial failure")
+	require.Contains(t, output, "secrets_hint: partial warning")
+	require.NotContains(t, output, "unknown,0,")
+}
+
 func TestTOONMapping_StableVersions(t *testing.T) {
 	var findings []string
 	for _, version := range []string{"1.0", "01.0", "1.0"} {
@@ -185,11 +235,30 @@ func TestTOONMapping_MalformedSCA(t *testing.T) {
 
 func renderFindings(t *testing.T, full bool, input string) string {
 	t.Helper()
+	config := configuration.NewWithOpts()
+	if full {
+		config.Set("toon", "full")
+	}
+	return renderFindingsWithConfig(t, input, config)
+}
+
+func renderFindingsWithOptions(t *testing.T, input, threshold string, includeIgnores bool) string {
+	t.Helper()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.FLAG_SEVERITY_THRESHOLD, threshold)
+	config.Set(configuration.FLAG_INCLUDE_IGNORES, includeIgnores)
+	return renderFindingsWithConfig(t, input, config)
+}
+
+func renderFindingsWithConfig(t *testing.T, input string, config configuration.Configuration) string {
+	t.Helper()
 	results, err := ufm.NewSerializableTestResultFromBytes([]byte(input))
 	require.NoError(t, err)
-	output, err := renderTOONResults(t, results, full)
+	var buffer bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &buffer)
+	err = presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
 	require.NoError(t, err)
-	return output
+	return buffer.String()
 }
 
 func TestTOONMapping_FullSCADetails(t *testing.T) {
