@@ -161,6 +161,20 @@ func (mr *MockIssueMockRecorder) GetIgnoreDetails() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIgnoreDetails", reflect.TypeOf((*MockIssue)(nil).GetIgnoreDetails))
 }
 
+// GetOriginalSeverity mocks base method.
+func (m *MockIssue) GetOriginalSeverity() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOriginalSeverity")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetOriginalSeverity indicates an expected call of GetOriginalSeverity.
+func (mr *MockIssueMockRecorder) GetOriginalSeverity() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOriginalSeverity", reflect.TypeOf((*MockIssue)(nil).GetOriginalSeverity))
+}
+
 // GetPrimaryProblem mocks base method.
 func (m *MockIssue) GetPrimaryProblem() *testapi.Problem {
 	m.ctrl.T.Helper()
