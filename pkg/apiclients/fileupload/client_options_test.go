@@ -182,8 +182,8 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
 	})
 
-	t.Run("uploads a symlink to a regular file", func(t *testing.T) {
-		ctx, fakeSealableClient, client, dir := setupOptionsTest(t, defaultLimits, files)
+	t.Run("skips a symlink to a regular file", func(t *testing.T) {
+		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files)
 
 		link := path.Join(dir.Name(), "link.go")
 		require.NoError(t, os.Symlink(path.Join(dir.Name(), "my file.go"), link))
@@ -193,12 +193,12 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		close(paths)
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.NoError(t, err)
+		require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
 
-		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
-		require.Len(t, uploadedFiles, 1)
-		assert.Equal(t, "package main", uploadedFiles[0].Content)
+		var specialFileErr *uploadrevision2.SpecialFileError
+		require.Len(t, res.SkippedFiles, 1)
+		assert.Equal(t, "link.go", res.SkippedFiles[0].Path)
+		require.ErrorAs(t, res.SkippedFiles[0].Reason, &specialFileErr)
 	})
 }
 

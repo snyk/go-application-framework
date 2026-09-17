@@ -27,6 +27,7 @@ import (
 const (
 	FF_FILE_FILTER_METACHARACTER_FIX   string = "internal_snyk_file_filter_metacharacter_fix_enabled"   // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
 	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled" // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
+	FF_FILE_FILTER_SKIP_SYMLINKS       string = "internal_snyk_file_filter_skip_symlinks_enabled"       // FF_FILE_FILTER_SKIP_SYMLINKS (boolean) skips symbolic links during file discovery to prevent reading files outside the scan root
 )
 
 // by default, all rules are valid
@@ -217,6 +218,8 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
 func (fw *FileFilter) GetAllFiles() chan string {
+	skipSymlinks := fw.config.GetBool(FF_FILE_FILTER_SKIP_SYMLINKS)
+
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
@@ -224,6 +227,10 @@ func (fw *FileFilter) GetAllFiles() chan string {
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
+			}
+
+			if skipSymlinks && d.Type()&fs.ModeSymlink != 0 {
+				return nil
 			}
 
 			if !d.IsDir() {
