@@ -246,6 +246,38 @@ func GetOriginRemote(inputDir string) (string, error) {
 	return remoteConfig.URLs[0], nil
 }
 
+// TreeHashFromDir returns the git tree hash of the current HEAD commit,
+// equivalent to `git rev-parse HEAD^{tree}`. It resolves HEAD to its commit
+// and returns the hash of that commit's root tree.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The tree hash as a hex string.
+//   - An error object (if no git repository found, HEAD cannot be resolved, or
+//     the repository has no commits).
+func TreeHashFromDir(inputDir string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve HEAD commit: %w", err)
+	}
+
+	return commit.TreeHash.String(), nil
+}
+
 // GetFirstRemote retrieves the first available remote URL from a git repository.
 //
 // Parameters:

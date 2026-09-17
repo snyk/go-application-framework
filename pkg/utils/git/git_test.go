@@ -2,11 +2,15 @@ package git
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStripGitCredentials(t *testing.T) {
@@ -175,6 +179,65 @@ func TestGetRemoteUrl_NoRemotes(t *testing.T) {
 	_, err = GetRemoteUrl(tempDir)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no remotes configured")
+}
+
+func TestTreeHashFromDir(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	repo, err := git.PlainInit(tempDir, false)
+	require.NoError(t, err)
+
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+
+	// Write a known file so the resulting tree hash is deterministic. The tree
+	// hash depends only on tracked content, not on commit metadata (author,
+	// message, timestamp), so this value is stable across runs.
+	err = os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("hello"), 0600)
+	require.NoError(t, err)
+
+	_, err = worktree.Add("test.txt")
+	require.NoError(t, err)
+
+	_, err = worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "tester",
+			Email: "tester@example.com",
+			When:  time.Unix(0, 0),
+		},
+	})
+	require.NoError(t, err)
+
+	treeHash, err := TreeHashFromDir(tempDir)
+	require.NoError(t, err)
+	// Matches `git rev-parse HEAD^{tree}` for a single file "test.txt" == "hello".
+	assert.Equal(t, "1f8f3dc0c09ab2e1e5c303031f4205c64eab8ef4", treeHash)
+}
+
+func TestTreeHashFromDir_NoGitRepo(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "not-git-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	_, err = TreeHashFromDir(tempDir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestTreeHashFromDir_NoCommits(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	_, err = git.PlainInit(tempDir, false)
+	require.NoError(t, err)
+
+	// No commits yet, so HEAD cannot be resolved.
+	_, err = TreeHashFromDir(tempDir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve HEAD")
 }
 
 func TestGetRemoteUrl_Priority(t *testing.T) {
