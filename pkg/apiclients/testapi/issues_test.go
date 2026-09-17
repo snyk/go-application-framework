@@ -420,7 +420,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		issue, err := testapi.NewIssueFromFindings(findings)
 		require.NoError(t, err)
 
-		versions, ok := issue.GetData(testapi.DataKeyComponentVersions)
+		versions, ok := issue.GetData("component-versions")
 		require.True(t, ok)
 		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
 	})

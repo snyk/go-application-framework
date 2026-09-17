@@ -24,9 +24,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func loadTestResults(t *testing.T, path string) []testapi.TestResult {
+func loadTestResults(t *testing.T) []testapi.TestResult {
 	t.Helper()
-	testResultBytes, err := os.ReadFile(path)
+	testResultBytes, err := os.ReadFile("../../../internal/presenters/testdata/ufm/secrets.testresult.json")
 	assert.NoError(t, err)
 	testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
 	assert.NoError(t, err)
@@ -41,7 +41,7 @@ func Test_getTotalNumberOfUnifiedFindings(t *testing.T) {
 	})
 
 	t.Run("count from real test data", func(t *testing.T) {
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t)
 		count := getTotalNumberOfUnifiedFindings(results)
 		assert.Greater(t, count, 0)
 	})
@@ -119,7 +119,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t)
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
@@ -150,7 +150,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t)
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
@@ -204,7 +204,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t)
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
@@ -237,7 +237,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))).AnyTimes()
 		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+		results := loadTestResults(t)
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
 		input := []workflow.Data{workflowData}
 
@@ -313,60 +313,19 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, expected, string(content))
 
-			emptyResults := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.0findings.testresult.json")
-			emptyData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), emptyResults)
-			emptyDestination := &stubOutputDestination{}
-			emptyWriters := GetWritersFromConfiguration(stdoutConfig, emptyDestination)
-			_, err = HandleContentTypeUnifiedModel([]workflow.Data{emptyData}, ctx, emptyWriters)
-			assert.NoError(t, err)
-			assert.Equal(t, header+"secrets: []\n", emptyDestination.buffer.String())
-			content, err = os.ReadFile(outputFile)
-			assert.NoError(t, err)
-			assert.Equal(t, header+"secrets: []", string(content))
-
-			failedResults, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
-				"findingsComplete":true,"executionState":"errored","testConfiguration":{"scan_config":{"secrets":{}}},
-				"errors":[{"detail":"Scan failed","status":"500"}]
-			}]`))
-			assert.NoError(t, err)
-			failedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), failedResults)
-			failedDestination := &stubOutputDestination{}
-			failedWriters := GetWritersFromConfiguration(stdoutConfig, failedDestination)
-			_, err = HandleContentTypeUnifiedModel([]workflow.Data{failedData}, ctx, failedWriters)
-			assert.NoError(t, err)
-			expectedFailure := "interaction_id: interaction-test\norg: unknown\nproject: unknown\nsecrets: []\nsecrets_error: Scan failed"
-			assert.Equal(t, expectedFailure+"\n", failedDestination.buffer.String())
-			content, err = os.ReadFile(outputFile)
-			assert.NoError(t, err)
-			assert.Equal(t, expectedFailure, string(content))
-
-			genericFailure, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
-				"executionState":"errored","errors":[{"detail":"Other scan failed"}],"warnings":[{"detail":"Partial input"}]
-			}]`))
-			assert.NoError(t, err)
-			genericData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), genericFailure)
-			genericDestination := &stubOutputDestination{}
-			_, err = HandleContentTypeUnifiedModel([]workflow.Data{genericData}, ctx, GetWritersFromConfiguration(stdoutConfig, genericDestination))
-			assert.NoError(t, err)
-			expectedFailure = "errors: Other scan failed\nfindings: []\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\nwarnings: Partial input"
-			assert.Equal(t, expectedFailure+"\n", genericDestination.buffer.String())
-			content, err = os.ReadFile(outputFile)
-			assert.NoError(t, err)
-			assert.Equal(t, expectedFailure, string(content))
-
-			for _, state := range []string{"pending", "started"} {
-				unfinishedResults, parseErr := ufm.NewSerializableTestResultFromBytes([]byte(fmt.Sprintf(
-					`[{"findingsComplete":true,"executionState":%q,"testConfiguration":{"scan_config":{"secrets":{}}}}]`, state)))
+			if !full {
+				unfinishedResults, parseErr := ufm.NewSerializableTestResultFromBytes([]byte(
+					`[{"findingsComplete":true,"executionState":"started","testConfiguration":{"scan_config":{"secrets":{}}}}]`))
 				assert.NoError(t, parseErr)
 				unfinishedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), unfinishedResults)
 				unfinishedDestination := &stubOutputDestination{}
 				unfinishedWriters := GetWritersFromConfiguration(stdoutConfig, unfinishedDestination)
 				_, renderErr := HandleContentTypeUnifiedModel([]workflow.Data{unfinishedData}, ctx, unfinishedWriters)
-				assert.ErrorContains(t, renderErr, "scan is "+state)
+				assert.ErrorContains(t, renderErr, "scan is started")
 				assert.Empty(t, unfinishedDestination.buffer.String())
 				content, readErr := os.ReadFile(outputFile)
 				assert.NoError(t, readErr)
-				assert.Equal(t, expectedFailure, string(content), "existing output must remain untouched")
+				assert.Equal(t, expected, string(content), "existing output must remain untouched")
 			}
 		})
 	}

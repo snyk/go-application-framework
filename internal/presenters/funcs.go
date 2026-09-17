@@ -363,6 +363,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
 	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
@@ -648,6 +649,7 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["severityColor"] = SeverityColor
 	fnMap["severityLetter"] = SeverityLetter
 	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["truncateText"] = TruncateText
 	fnMap["markdownToHTML"] = MarkdownToHTML
 	fnMap["sub"] = sub
@@ -659,6 +661,16 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["readSourceLine"] = cache.ReadLine
 	fnMap["readSourceLineMarked"] = cache.ReadLineMarked
 	fnMap["resolveMessageArgs"] = resolveMessageArgs
+	fnMap["dict"] = func(pairs ...interface{}) map[string]interface{} {
+		m := make(map[string]interface{}, len(pairs)/2)
+		for i := 0; i+1 < len(pairs); i += 2 {
+			key, ok := pairs[i].(string)
+			if ok {
+				m[key] = pairs[i+1]
+			}
+		}
+		return m
+	}
 	fnMap["index3"] = func(arr [3]string, i int) string { return arr[i] }
 	fnMap["int"] = func(v interface{}) int {
 		if p, ok := v.(*int); ok && p != nil {
