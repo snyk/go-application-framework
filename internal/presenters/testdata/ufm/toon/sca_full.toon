@@ -1,4 +1,3 @@
-feedback: ""
 org: unknown
 project: unknown
 sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:

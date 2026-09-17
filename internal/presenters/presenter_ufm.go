@@ -15,8 +15,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
-const CONFIG_TOON_FEEDBACK = "toon-feedback"
-
 type UfmPresenter struct {
 	TestPath         string
 	Input            []testapi.TestResult
