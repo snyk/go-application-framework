@@ -232,9 +232,9 @@ func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*Findin
 }
 
 // groupFindingsBy groups findings by key, preserving first-seen order so output is deterministic.
-func groupFindingsBy(findings []*FindingData, keyOf func(*FindingData) string) [][]*FindingData {
-	groups := make(map[string][]*FindingData)
-	var order []string
+func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) K) [][]*FindingData {
+	groups := make(map[K][]*FindingData)
+	var order []K
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -317,18 +317,23 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
+type keyBasedGroupKey struct {
+	value     string
+	generated bool
+}
+
 func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
 	index := 0
-	return groupFindingsBy(findings, func(finding *FindingData) string {
+	return groupFindingsBy(findings, func(finding *FindingData) keyBasedGroupKey {
 		index++
 		if finding.Attributes.Key != "" {
-			return finding.Attributes.Key
+			return keyBasedGroupKey{value: finding.Attributes.Key}
 		}
 		if finding.Id != nil {
-			return finding.Id.String()
+			return keyBasedGroupKey{value: finding.Id.String()}
 		}
 		// Keyless, ID-less findings must not be dropped; give each its own issue.
-		return fmt.Sprintf("__finding_%d", index)
+		return keyBasedGroupKey{value: fmt.Sprint(index), generated: true}
 	})
 }
 
