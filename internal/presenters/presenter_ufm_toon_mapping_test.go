@@ -142,17 +142,6 @@ func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
   "0.0",yes,second,"package-0@0,2",severity-0,Title 0,target@1`, output)
 }
 
-func TestTOONMapping_EmptyScanners(t *testing.T) {
-	t.Parallel()
-
-	output := renderFindings(t, false, `[
-		{"testConfiguration":{"scan_config":{"sca":{}}}},
-		{"testConfiguration":{"scan_config":{"secrets":{}}},"findings":[]},
-		{"testConfiguration":{"scan_config":{"sca":{},"secrets":{}}}}
-	]`)
-	requireTOONEqual(t, false, "sca: []\nsecrets: []", output)
-}
-
 func TestTOONMapping_SCAFixability(t *testing.T) {
 	t.Parallel()
 

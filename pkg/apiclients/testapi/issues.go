@@ -23,10 +23,6 @@ const (
 	// Value type: string
 	DataKeyComponentVersion = "component-version"
 
-	// DataKeyComponentVersions is the key for all distinct package versions seen across grouped findings
-	// Value type: []string
-	DataKeyComponentVersions = "component-versions"
-
 	// DataKeyTechnology is the key for the technology/ecosystem
 	// For SCA: package manager (e.g., "npm", "maven")
 	// For SAST: language/framework (e.g., "javascript", "python")
@@ -55,6 +51,8 @@ const (
 
 	FindingTypeLicense = "license"
 )
+
+const dataKeyComponentVersions = "component-versions"
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
 
@@ -881,7 +879,7 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 		metadata[DataKeyComponentName] = b.packageName
 		metadata[DataKeyComponentVersion] = b.packageVersion
 		if len(b.packageVersions) > 0 {
-			metadata[DataKeyComponentVersions] = b.packageVersions
+			metadata[dataKeyComponentVersions] = b.packageVersions
 		}
 	}
 

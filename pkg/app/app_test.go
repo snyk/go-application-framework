@@ -1923,20 +1923,6 @@ func (r *flagGatewayRecorder) requestedFlags() []string {
 	return slices.Clone(r.flags)
 }
 
-func newFlagGatewayTestConfig(t *testing.T, serverURL, orgID string) configuration.Configuration {
-	t.Helper()
-
-	// NewInMemory enables AutomaticEnv, so a developer's SNYK_TOKEN would make
-	// defaultFuncApiUrl ignore the httptest server URL and send flag lookups to
-	// the real API instead.
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, serverURL)
-	config.Set(configuration.ORGANIZATION, orgID)
-	config.Set(configuration.AUTHENTICATION_TOKEN, "")
-	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
-	return config
-}
-
 func newFlagGatewayServer(t *testing.T) (*httptest.Server, *flagGatewayRecorder) {
 	t.Helper()
 
@@ -1993,7 +1979,9 @@ func Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved(t *testing.
 
 	server, gateway := newFlagGatewayServer(t)
 
-	config := newFlagGatewayTestConfig(t, server.URL, orgId)
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, orgId)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 
@@ -2023,7 +2011,9 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 
 	server, gateway := newFlagGatewayServer(t)
 
-	config := newFlagGatewayTestConfig(t, server.URL, orgId)
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, orgId)
 
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 

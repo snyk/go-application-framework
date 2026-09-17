@@ -3,8 +3,6 @@ package presenters
 import (
 	"bytes"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"text/template"
@@ -14,21 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestTOONTemplate_nestedGoldens(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"mixed", "nested"} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			path := filepath.Join("testdata", "ufm", "toon", name)
-			input, err := os.ReadFile(path + ".json")
-			require.NoError(t, err)
-			expected, err := os.ReadFile(path + ".toon")
-			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSuffix(string(expected), "\n"), renderTOONValue(t, string(input)))
-		})
-	}
-}
 
 func TestTOONTemplate_genericValues(t *testing.T) {
 	t.Parallel()

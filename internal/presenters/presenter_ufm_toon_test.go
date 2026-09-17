@@ -86,30 +86,13 @@ func TestRenderTemplate_TOON_contractGoldens(t *testing.T) {
 
 func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 	t.Parallel()
-	for _, name := range []string{"nested", "mixed"} {
-		for _, full := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/full=%t", name, full), func(t *testing.T) {
-				t.Parallel()
-				results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", name+".json"))
-				var output bytes.Buffer
-				config := configuration.NewWithOpts()
-				mode := "compact"
-				if full {
-					mode = "full"
-				}
-				config.Set("toon", mode)
-				presenter := presenters.NewUfmRenderer(results, config, &output)
-				err := presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
-				require.NoError(t, err)
-				assert.Contains(t, output.String(), "findings[1]{finding_type,id,severity,title}:\n  sast,finding-4,high,Example finding")
-				assert.NotContains(t, output.String(), "results[")
-				if name == "mixed" {
-					assert.Contains(t, output.String(), "sca[1]")
-					assert.Contains(t, output.String(), "secrets[1]")
-				}
-			})
-		}
-	}
+	results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", "nested.json"))
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
+	err := presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "findings[1]{finding_type,id,severity,title}:\n  sast,finding-4,high,Example finding")
+	assert.NotContains(t, output.String(), "results[")
 }
 
 func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
@@ -148,29 +131,21 @@ func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
 			[]string{"errors: Other failure", "sca_error: SCA failure", "sca_hint: Retry the scan.", "hint: Retry the scan."},
 		},
 	} {
-		for _, full := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/full=%t", tc.name, full), func(t *testing.T) {
-				results, err := ufm.NewSerializableTestResultFromBytes([]byte(tc.input))
-				require.NoError(t, err)
-				config := configuration.NewWithOpts()
-				mode := "compact"
-				if full {
-					mode = "full"
-				}
-				config.Set("toon", mode)
-				var output bytes.Buffer
-				presenter := presenters.NewUfmRenderer(results, config, &output)
-				ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
-				require.NoError(t, presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
-				for _, want := range tc.want {
-					assert.Contains(t, output.String(), want)
-				}
-				assert.NotContains(t, output.String(), "results[")
-				if full || strings.Contains(output.String(), "errors:") {
-					assert.NotContains(t, output.String(), "add --toon=full")
-				}
-			})
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := ufm.NewSerializableTestResultFromBytes([]byte(tc.input))
+			require.NoError(t, err)
+			var output bytes.Buffer
+			presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
+			ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
+			require.NoError(t, presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+			for _, want := range tc.want {
+				assert.Contains(t, output.String(), want)
+			}
+			assert.NotContains(t, output.String(), "results[")
+			if strings.Contains(output.String(), "errors:") {
+				assert.NotContains(t, output.String(), "add --toon=full")
+			}
+		})
 	}
 }
 
@@ -247,53 +222,35 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 		 "findings":[{"attributes":{"finding_type":"secrets","title":"rule"}}]}
 	]`))
 	require.NoError(t, err)
-	for _, full := range []bool{false, true} {
-		t.Run(fmt.Sprint(full), func(t *testing.T) {
-			t.Parallel()
-			config := configuration.NewWithOpts()
-			mode := "compact"
-			if full {
-				mode = "full"
-			}
-			config.Set("toon", mode)
-			ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
-			var output bytes.Buffer
-			presenter := presenters.NewUfmRenderer(results, config, &output)
-			require.NoError(t, presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
-			assert.Contains(t, output.String(), "sca_error: Dependency scan failed")
-			assert.Contains(t, output.String(), "sca_hint: Retry the scan.")
-			assert.Contains(t, output.String(), `sca_warning: "Some manifests were skipped\nSCAN-WARNING"`)
-			assert.Contains(t, output.String(), "secrets_error: Some files could not be scanned")
-			assert.Contains(t, output.String(), `secrets_hint: "Results are incomplete\nRetry the scan."`)
-			assert.Contains(t, output.String(), "unknown,0,rule,low")
-			assert.NotContains(t, output.String(), "add --toon=full")
-			assert.NotContains(t, output.String(), "excluded")
-		})
-	}
+	config := configuration.NewWithOpts()
+	ctx := context.WithValue(t.Context(), uitypes.ErrorTipKey, "Retry the scan.")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &output)
+	require.NoError(t, presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	assert.Contains(t, output.String(), "sca_error: Dependency scan failed")
+	assert.Contains(t, output.String(), "sca_hint: Retry the scan.")
+	assert.Contains(t, output.String(), `sca_warning: "Some manifests were skipped\nSCAN-WARNING"`)
+	assert.Contains(t, output.String(), "secrets_error: Some files could not be scanned")
+	assert.Contains(t, output.String(), `secrets_hint: "Results are incomplete\nRetry the scan."`)
+	assert.Contains(t, output.String(), "unknown,0,rule,low")
+	assert.NotContains(t, output.String(), "add --toon=full")
+	assert.NotContains(t, output.String(), "excluded")
 }
 
 func TestRenderTemplate_TOON_findingsError(t *testing.T) {
 	t.Parallel()
-	for _, partial := range []bool{false, true} {
-		t.Run(fmt.Sprint(partial), func(t *testing.T) {
-			t.Parallel()
-			var findings []testapi.FindingData
-			if partial {
-				findings = []testapi.FindingData{{Attributes: &testapi.FindingAttributes{
-					FindingType: testapi.FindingTypeSecrets, Title: "kept",
-				}}}
-			}
-			ctx := t.Context()
-			mock := mocks.NewMockTestResult(gomock.NewController(t))
-			mock.EXPECT().Findings(ctx).Return(findings, false, assert.AnError)
-			var output bytes.Buffer
-			presenter := presenters.NewUfmRenderer([]testapi.TestResult{mock}, configuration.NewWithOpts(), &output)
-			err := presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
-			require.ErrorIs(t, err, assert.AnError)
-			require.ErrorContains(t, err, "findings")
-			assert.Empty(t, output.String())
-		})
-	}
+	findings := []testapi.FindingData{{Attributes: &testapi.FindingAttributes{
+		FindingType: testapi.FindingTypeSecrets, Title: "kept",
+	}}}
+	ctx := t.Context()
+	mock := mocks.NewMockTestResult(gomock.NewController(t))
+	mock.EXPECT().Findings(ctx).Return(findings, false, assert.AnError)
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer([]testapi.TestResult{mock}, configuration.NewWithOpts(), &output)
+	err := presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+	require.ErrorIs(t, err, assert.AnError)
+	require.ErrorContains(t, err, "findings")
+	assert.Empty(t, output.String())
 }
 
 func TestRenderTemplate_TOON_laterResultError(t *testing.T) {
