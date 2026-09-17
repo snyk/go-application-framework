@@ -1,0 +1,6 @@
+org: unknown
+project: unknown
+sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:
+  n/a,no,SNYK-EXAMPLE-1,"example-lib@1.0.0,1.1.0","",Example finding,none
+secrets[1]{file,line,rule,severity}:
+  config.txt,7,example-secret-rule,high

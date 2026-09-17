@@ -147,10 +147,32 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 	assert.Equal(t, "", htmlFileOutput)
 
 	toon := config.Get("toon")
-	assert.Equal(t, false, toon)
+	assert.Equal(t, "", toon)
 
 	toonFileOutput := config.Get("toon-file-output")
 	assert.Equal(t, "", toonFileOutput)
+
+	entry, ok := engine.GetWorkflow(WORKFLOWID_OUTPUT_WORKFLOW)
+	require.True(t, ok)
+	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	require.NoError(t, flags.Parse([]string{"--toon"}))
+	assert.Equal(t, "compact", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
+	require.NoError(t, flags.Parse([]string{"--toon=full"}))
+	assert.Equal(t, "full", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
+
+	for flagValue, expected := range map[string]string{"true": "compact", "COMPACT": "compact", "false": "", "0": ""} {
+		require.NoError(t, flags.Parse([]string{"--toon=" + flagValue}))
+		assert.Equal(t, expected, config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON), flagValue)
+		assert.Equal(t, expected != "", output_workflow.DefaultOutputIsStructured(config), flagValue)
+	}
+
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON, false)
+	assert.Equal(t, "", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
+	assert.False(t, output_workflow.DefaultOutputIsStructured(config))
+
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON, "banana")
+	_, err = config.GetStringWithError(output_workflow.OUTPUT_CONFIG_KEY_TOON)
+	assert.ErrorContains(t, err, "banana")
 }
 
 type testOutputDestination struct {
@@ -302,6 +324,22 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.True(t, errors.As(err, &errCatalogError))
 		assert.Equal(t, cli.NewDataRenderingError("").ErrorCode, errCatalogError.ErrorCode)
 		assert.Equal(t, "unsupported output type: hammer/head", errCatalogError.Detail)
+		assert.Equal(t, "", setup.writer.String())
+	})
+
+	t.Run("should reject invalid toon values", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.AddDefaultValue(output_workflow.OUTPUT_CONFIG_KEY_TOON, toonDefaultValue)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON, "banana")
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
+
+		assert.Equal(t, []workflow.Data{}, output)
+		errCatalogError := snyk_errors.Error{}
+		assert.True(t, errors.As(err, &errCatalogError))
+		assert.Equal(t, cli.NewInvalidFlagOptionError("").ErrorCode, errCatalogError.ErrorCode)
 		assert.Equal(t, "", setup.writer.String())
 	})
 
