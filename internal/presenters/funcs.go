@@ -300,17 +300,6 @@ func templateDict(pairs ...interface{}) map[string]interface{} {
 	return m
 }
 
-func templateFindings(ctx context.Context, result testapi.TestResult) ([]testapi.FindingData, error) {
-	if result == nil {
-		return nil, fmt.Errorf("test result is nil")
-	}
-	findings, _, err := result.Findings(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("findings: %w", err)
-	}
-	return findings, nil
-}
-
 // jsonFields decodes requested keys only, omitting missing and null values.
 func jsonFields[T any](input json.Marshaler, names ...string) (map[string]T, error) {
 	payload, err := input.MarshalJSON()
@@ -992,7 +981,6 @@ func applyInlineMarkdown(s string) string {
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
 	defaultMap["dict"] = templateDict
-	defaultMap["getFindings"] = templateFindings
 	defaultMap["jsonStrings"] = jsonFields[string]
 	defaultMap["jsonNumbers"] = jsonFields[float64]
 	defaultMap["sortIssues"] = func(issues []testapi.Issue) []testapi.Issue {
@@ -1088,6 +1076,13 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["assetLink"] = assetLink
 	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	}
+	defaultMap["getIssuesFromTestResultWithContext"] = func(ctx context.Context, result testapi.TestResult) ([]testapi.Issue, error) {
+		issues, err := testapi.NewIssuesFromTestResult(ctx, result)
+		if err != nil {
+			return nil, fmt.Errorf("convert test result to issues: %w", err)
+		}
+		return issues, nil
 	}
 	defaultMap["getIssuesFromMultipleTestResults"] = func(testResults []testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		var allIssues []testapi.Issue

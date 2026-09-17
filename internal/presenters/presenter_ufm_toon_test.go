@@ -297,14 +297,24 @@ func TestRenderTemplate_TOON_findingsError(t *testing.T) {
 }
 
 func TestRenderTemplate_TOON_laterResultError(t *testing.T) {
-	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[
-		{"findings":[{"attributes":{"finding_type":"secrets","title":"valid"}}]},
-		{"findings":[{"attributes":{"finding_type":"sca","problems":[{"source":"unsupported"}]}}]}
-	]`))
-	require.NoError(t, err)
+	ctx := t.Context()
+	ctrl := gomock.NewController(t)
+	first := mocks.NewMockTestResult(ctrl)
+	first.EXPECT().Findings(ctx).Return([]testapi.FindingData{{Attributes: &testapi.FindingAttributes{
+		FindingType: testapi.FindingTypeSecrets, Title: "valid",
+	}}}, true, nil).Times(1)
+	first.EXPECT().GetTestConfiguration().Return(nil)
+	first.EXPECT().GetErrors().Return(nil)
+	first.EXPECT().GetWarnings().Return(nil)
+	first.EXPECT().GetExecutionState().Return(testapi.TestExecutionStates(""))
+	second := mocks.NewMockTestResult(ctrl)
+	second.EXPECT().Findings(ctx).Return(nil, false, assert.AnError).Times(1)
+
 	var output bytes.Buffer
-	presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), &output)
-	require.Error(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	presenter := presenters.NewUfmRenderer([]testapi.TestResult{first, second}, configuration.NewWithOpts(), &output)
+	err := presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+	require.ErrorIs(t, err, assert.AnError)
+	require.ErrorContains(t, err, "failed to extract findings")
 	assert.Empty(t, output.String())
 }
 
