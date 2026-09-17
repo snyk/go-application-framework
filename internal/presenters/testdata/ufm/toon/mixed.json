@@ -38,7 +38,7 @@
               {
                 "id": "example-secret-rule",
                 "name": "Example secret rule",
-                "source": "secret"
+                "source": "snyk_secrets_rule"
               }
             ],
             "rating": {
