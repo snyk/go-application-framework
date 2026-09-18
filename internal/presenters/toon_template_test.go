@@ -35,9 +35,8 @@ func renderTOONValue(t *testing.T, input string) string {
 	decoder := json.NewDecoder(strings.NewReader(input))
 	decoder.UseNumber()
 	require.NoError(t, decoder.Decode(&value))
-	functions := getToonTemplateFuncMap()
-	functions["getContext"] = t.Context
-	tmpl := template.New("toon").Funcs(getDefaultTemplateFuncMap(configuration.NewWithOpts(), nil)).Funcs(functions)
+	tmpl := template.New("toon").Funcs(getDefaultTemplateFuncMap(configuration.NewWithOpts(), nil)).
+		Funcs(getToonTemplateFuncMap()).Funcs(getToonContextTemplateFuncMap(t.Context()))
 	require.NoError(t, loadTemplates(ApplicationTOONTemplatesUfm, tmpl))
 	var output bytes.Buffer
 	require.NoError(t, tmpl.ExecuteTemplate(&output, "toonDocument", value))
