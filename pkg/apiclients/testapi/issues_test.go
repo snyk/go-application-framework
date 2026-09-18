@@ -474,6 +474,26 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, testapi.Package{Name: "target", Version: "2"}, target)
 	})
 
+	t.Run("SCA license problem supersedes generic Snyk problem", func(t *testing.T) {
+		var finding testapi.FindingData
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"attributes": {
+				"finding_type": "sca",
+				"problems": [
+					{"source": "snyk_code_rule", "id": "rule"},
+					{"source": "snyk_license", "id": "license"}
+				]
+			}
+		}`), &finding))
+
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+		require.NoError(t, err)
+
+		discriminator, err := issue.GetPrimaryProblem().Discriminator()
+		require.NoError(t, err)
+		assert.Equal(t, "snyk_license", discriminator)
+	})
+
 	t.Run("issues keep first-seen finding order", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
