@@ -16,14 +16,8 @@
     {{- end -}}
     {{- range $issue := $mappedIssues -}}
       {{- $findingType := print $issue.GetFindingType -}}
-      {{- if or (eq $findingType "sca") (eq $findingType "license") -}}
-        {{- template "toonSCA" (dict "State" $state "Issue" $issue) -}}
-      {{- else if or (eq $findingType "secret") (eq $findingType "secrets") -}}
-        {{- range $finding := $issue.GetFindings -}}
-          {{- with $finding.Attributes -}}
-            {{- template "toonSecrets" (dict "Envelope" $envelope "Issue" $issue "Attributes" .) -}}
-          {{- end -}}
-        {{- end -}}
+      {{- if or (eq $findingType "sca") (eq $findingType "license") (eq $findingType "secret") (eq $findingType "secrets") -}}
+        {{- template "toonProductIssue" (dict "State" $state "Issue" $issue) -}}
       {{- else -}}
         {{- template "toonFinding" (dict "Envelope" $envelope "Issue" $issue) -}}
       {{- end -}}
@@ -114,22 +108,25 @@
   {{- $_ := set .Envelope "findings" (append (or .Envelope.findings (array)) $row) -}}
 {{- end -}}
 
-{{- define "toonSecrets" -}}
-  {{- $attributes := .Attributes -}}
-  {{- $rule := or .Issue.GetProblemID $attributes.Title -}}
-  {{- $file := "unknown" -}}{{- $line := 0 -}}
-  {{- if $attributes.Locations -}}
-    {{- $location := getSourceLocation (index $attributes.Locations 0) -}}
-    {{- $file = or $location.FilePath "unknown" -}}{{- $line = $location.FromLine -}}
-  {{- end -}}
-  {{- $row := dict "rule" (or $rule "secret") "severity" (or (toLowerCase (print $attributes.Rating.Severity)) "low") "file" $file "line" (number $line) -}}
-  {{- $_ := set .Envelope "secrets" (append (or .Envelope.secrets (array)) $row) -}}
-{{- end -}}
-
-{{- define "toonSCA" -}}
+{{- define "toonProductIssue" -}}
   {{- $state := .State -}}
   {{- $issue := .Issue -}}
   {{- $envelope := $state.Envelope -}}
+  {{- $findingType := print $issue.GetFindingType -}}
+  {{- if or (eq $findingType "secret") (eq $findingType "secrets") -}}
+    {{- range $finding := $issue.GetFindings -}}
+      {{- with $finding.Attributes -}}
+        {{- $rule := or $issue.GetProblemID .Title -}}
+        {{- $file := "unknown" -}}{{- $line := 0 -}}
+        {{- if .Locations -}}
+          {{- $location := getSourceLocation (index .Locations 0) -}}
+          {{- $file = or $location.FilePath "unknown" -}}{{- $line = $location.FromLine -}}
+        {{- end -}}
+        {{- $row := dict "rule" (or $rule "secret") "severity" (or (toLowerCase (print .Rating.Severity)) "low") "file" $file "line" (number $line) -}}
+        {{- $_ := set $envelope "secrets" (append (or $envelope.secrets (array)) $row) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
   {{- $problem := $issue.GetPrimaryProblem -}}
   {{- if or (not $problem) (not (or (eq $problem.Discriminator "snyk_vuln") (eq $problem.Discriminator "snyk_license"))) -}}
     {{- fail "SCA finding has no supported problem" -}}
@@ -176,6 +173,7 @@
     {{- $_ := set $row "title" $title -}}{{- $_ := set $row "cvss" $cvss -}}{{- $_ := set $row "upgrade" $upgrade -}}
   {{- end -}}
   {{- $_ := set $envelope "sca" (append (or $envelope.sca (array)) $row) -}}
+  {{- end -}}
 {{- end -}}
 
 {{- define "toonDocument" -}}
