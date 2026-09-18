@@ -1180,15 +1180,6 @@ func sortAndFilterIssues(config configuration.Configuration) func(issues []testa
 				}
 			}
 		}
-		if config.GetString(configuration.FLAG_SEVERITY_THRESHOLD) == "" {
-			for _, issue := range issues {
-				ignoreDetails := issue.GetIgnoreDetails()
-				hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
-				if hasActiveIgnore == isActive && !slices.Contains(sorting, issue.GetEffectiveSeverity()) {
-					filteredIssues = append(filteredIssues, issue)
-				}
-			}
-		}
 		return filteredIssues
 	}
 }

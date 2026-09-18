@@ -25,7 +25,7 @@ func TestTOONMapping_SCAOccurrences(t *testing.T) {
 			"locations": [{"type": "package", "package": {"name": "example", "version": "1.10"}}]
 		}}]},
 		{"findings": [{"attributes": {
-			"finding_type": "sca",
+			"finding_type": "sca", "rating": {"severity": "medium"},
 			"problems": [{"source": "snyk_vuln", "id": "SNYK-EXAMPLE-1", "severity": "medium"}],
 			"locations": [{"type": "package", "package": {"name": "example", "version": "1.2"}}]
 		}}]}
@@ -39,25 +39,26 @@ func TestTOONMapping_SecretsFallbacks(t *testing.T) {
 	t.Parallel()
 
 	output := renderFindings(t, false, `[{"findings": [
-		{"attributes": {"finding_type":"secrets", "title":"fallback", "rating":{"severity":"HIGH"},
+		{"attributes": {"finding_type":"secrets", "title":"fallback", "rating":{"severity":"high"},
 			"problems":[{"source":"cwe","id":"CWE-798"},{"source":"secret","id":"rule-1"},{"id":"rule-2"}],
 			"locations":[{"type":"source","file_path":"first.txt","from_line":7,"to_line":10},
 				{"type":"source","file_path":"second.txt","from_line":12}]}},
-		{"attributes": {"finding_type":"secrets", "title":"fallback", "key":"finding-b"}},
-		{"attributes": {"finding_type":"secrets", "key":"finding-a", "locations":[{"type":"source","from_line":"invalid"}]}},
+		{"attributes": {"finding_type":"secrets", "title":"fallback", "key":"finding-b", "rating":{"severity":"low"}}},
+		{"attributes": {"finding_type":"secrets", "key":"finding-a", "rating":{"severity":"low"},
+			"locations":[{"type":"source","from_line":"invalid"}]}},
 		{}
 	]}]`)
 	requireTOONEqual(t, false, `secrets[3]{file,line,rule,severity}:
+  first.txt,7,rule-1,high
   unknown,0,secret,low
-  unknown,0,fallback,low
-  first.txt,7,rule-1,high`, output)
+  unknown,0,fallback,low`, output)
 }
 
 func TestTOONMapping_SortedBySeverity(t *testing.T) {
 	t.Parallel()
 	output := renderFindings(t, false, `[{"findings":[
-		{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"a-low","severity":"low"}]}},
-		{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"b-critical","severity":"critical"}]}}
+		{"attributes":{"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"a-low","severity":"low"}]}},
+		{"attributes":{"finding_type":"sca","rating":{"severity":"critical"},"problems":[{"source":"snyk_vuln","id":"b-critical","severity":"critical"}]}}
 	]}]`)
 	requireTOONEqual(t, false, `sca[2]{fixable,id,pkg,severity}:
   no,b-critical,@,critical
@@ -117,7 +118,7 @@ func TestTOONMapping_FilteredIssuesRetainDiagnostics(t *testing.T) {
 func TestTOONMapping_StableVersions(t *testing.T) {
 	var findings []string
 	for _, version := range []string{"1.0", "01.0", "1.0"} {
-		findings = append(findings, fmt.Sprintf(`{"attributes":{"finding_type":"sca",
+		findings = append(findings, fmt.Sprintf(`{"attributes":{"finding_type":"sca","rating":{"severity":"low"},
 			"problems":[{"source":"snyk_vuln","id":"same","package_name":"example","package_version":%q}]}}`, version))
 	}
 	output := renderFindings(t, false, `[{"findings":[`+strings.Join(findings, ",")+`]}]`)
@@ -129,7 +130,8 @@ func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
 	t.Parallel()
 	var findings []string
 	for i, id := range []string{"second", "first", "second", "", ""} {
-		findings = append(findings, fmt.Sprintf(`{"attributes":{"finding_type":"sca","title":"Title %d",
+		findings = append(findings, fmt.Sprintf(`{"attributes":{"finding_type":"sca","title":"Title %d","rating":{"severity":"low"},
+			"policy_modifications":[{"pointer":"/rating/severity","prior":"medium"}],
 			"problems":[{"source":"snyk_vuln","id":%q,"severity":"severity-%d","cvss_base_score":%d,
 			"package_name":"package-%d","package_version":"%d"}]},
 			"relationships":{"fix":{"data":{"attributes":{"action":{"format":"upgrade_package_advice",
@@ -156,8 +158,8 @@ func TestTOONMapping_SCAFixability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			output := renderFindings(t, false, fmt.Sprintf(`[{"findings":[
-				{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"same","is_fixable":true}]}},
-				{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln","id":"same"}]},
+				{"attributes":{"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same","is_fixable":true}]}},
+				{"attributes":{"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same"}]},
 				 "relationships":{"fix":{"data":{"attributes":{"action":%s}}}}}
 			]}]`, tc.action))
 			requireTOONEqual(t, false, fmt.Sprintf(`sca[1]{fixable,id,pkg,severity}:
@@ -173,7 +175,7 @@ func TestTOONMapping_SCASources(t *testing.T) {
 	}{
 		{
 			"prefer first vulnerability over license and other identifiers",
-			`"problems":[{"source":"snyk_license","id":"license"},{"source":"cve","id":"CVE-EXAMPLE"},
+			`"rating":{"severity":"low"},"problems":[{"source":"snyk_license","id":"license"},{"source":"cve","id":"CVE-EXAMPLE"},
 				{"source":"snyk_vuln","id":"first","severity":"high","package_name":"fallback","package_version":"3"},
 				{"source":"snyk_vuln","id":"second","severity":"low"}],
 			 "locations":[{"type":"source","file_path":"manifest"},{"type":"package","package":{"name":"installed","version":"2"}}]`,
@@ -181,12 +183,12 @@ func TestTOONMapping_SCASources(t *testing.T) {
 		},
 		{
 			"license package fallback",
-			`"problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT","severity":"medium","package_name":"example","package_version":"3"}]`,
+			`"rating":{"severity":"low"},"problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT","severity":"medium","package_name":"example","package_version":"3"}]`,
 			`no,"snyk:lic:npm:x:MIT",example@3,medium`,
 		},
 		{
 			"null fields retain empty defaults",
-			`"problems":[{"source":"snyk_vuln","id":null,"severity":null,"package_name":null,"package_version":null}]`,
+			`"rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":null,"severity":null,"package_name":null,"package_version":null}]`,
 			`no,"",@,""`,
 		},
 		{
@@ -214,7 +216,7 @@ func TestTOONMapping_MalformedSCA(t *testing.T) {
 		`"problems":[{"source":"snyk_vuln"}],"locations":[{"type":"package","package":"invalid"}]`,
 	} {
 		results, err := ufm.NewSerializableTestResultFromBytes([]byte(fmt.Sprintf(
-			`[{"findings":[{"attributes":{"finding_type":"sca",%s}}]}]`, attributes)))
+			`[{"findings":[{"attributes":{"finding_type":"sca","rating":{"severity":"low"},%s}}]}]`, attributes)))
 		require.NoError(t, err)
 		value, err := renderTOONResults(t, results, false)
 		require.Error(t, err)
@@ -262,7 +264,7 @@ func TestTOONMapping_FullSCADetails(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			input := fmt.Sprintf(`[{"findings":[{"attributes":{"finding_type":"sca","title":%q,
+			input := fmt.Sprintf(`[{"findings":[{"attributes":{"finding_type":"sca","title":%q,"rating":{"severity":"low"},
 				"problems":[{"source":"snyk_vuln","id":"example"%s}]}}]}]`, tc.title, tc.cvss)
 			output := renderFindings(t, true, input)
 			title, err := toon.FormatTabularField(tc.expectedTitle)
@@ -278,10 +280,10 @@ func TestTOONMapping_FullSCADetails(t *testing.T) {
 func TestTOONMapping_FullSCAUpgrades(t *testing.T) {
 	t.Parallel()
 	output := renderFindings(t, true, `[{"findings":[
-		{"attributes":{"finding_type":"sca","title":"without advice","problems":[{"source":"snyk_vuln","id":"same"}]}},
-		{"attributes":{"finding_type":"sca","title":"empty target","problems":[{"source":"snyk_vuln","id":"same"}]},
+		{"attributes":{"finding_type":"sca","title":"without advice","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same"}]}},
+		{"attributes":{"finding_type":"sca","title":"empty target","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same"}]},
 		 "relationships":{"fix":{"data":{"attributes":{"action":{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{},{}]}]}}}}}},
-		{"attributes":{"finding_type":"sca","title":"upgrade","problems":[{"source":"snyk_vuln","id":"same","cvss_base_score":5}]},
+		{"attributes":{"finding_type":"sca","title":"upgrade","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same","cvss_base_score":5}]},
 		 "relationships":{"fix":{"data":{"attributes":{"action":{"format":"upgrade_package_advice","upgrade_paths":[
 			{"dependency_path":[{"name":"root","version":"1"}]},
 			{"dependency_path":[{"name":"root","version":"1"},{},{"name":"example","version":"2"},{"name":"other","version":"3"}]}]}}}}}}
@@ -293,9 +295,9 @@ func TestTOONMapping_FullSCAUpgrades(t *testing.T) {
 func TestTOONMapping_CVSSValidationOnlyInFullOutput(t *testing.T) {
 	t.Parallel()
 	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{"findings":[
-		{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_vuln"}]}},
+		{"attributes":{"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln"}]}},
 		{"attributes":{
-		"finding_type":"sca","problems":[{"source":"snyk_vuln","cvss_base_score":"invalid"}]
+		"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","cvss_base_score":"invalid"}]
 	}}]}]`))
 	require.NoError(t, err)
 	_, err = renderTOONResults(t, results, false)
