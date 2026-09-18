@@ -130,19 +130,12 @@
   {{- $state := .State -}}
   {{- $issue := .Issue -}}
   {{- $envelope := $state.Envelope -}}
-  {{- $problem := false -}}
-  {{- $id := "" -}}{{- $severity := "" -}}
-  {{- range $source := array "snyk_vuln" "snyk_license" -}}
-    {{- range $candidate := $issue.GetProblems -}}
-      {{- if eq $candidate.Discriminator $source -}}
-        {{- if not $problem -}}{{- $problem = $candidate -}}{{- end -}}
-        {{- $fields := jsonStrings $candidate "id" "severity" -}}
-        {{- if not $id -}}{{- $id = or $fields.id "" -}}{{- end -}}
-        {{- if not $severity -}}{{- $severity = or $fields.severity "" -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
+  {{- $problem := $issue.GetPrimaryProblem -}}
+  {{- if or (not $problem) (not (or (eq $problem.Discriminator "snyk_vuln") (eq $problem.Discriminator "snyk_license"))) -}}
+    {{- fail "SCA finding has no supported problem" -}}
   {{- end -}}
-  {{- if not $problem -}}{{- fail "SCA finding has no supported problem" -}}{{- end -}}
+  {{- $fields := jsonStrings $problem "id" "severity" -}}
+  {{- $id := or $fields.id "" -}}{{- $severity := or $fields.severity "" -}}
   {{- $findings := $issue.GetFindings -}}
   {{- $name := or (getIssueMetadata $issue "component-name") "" -}}
   {{- $versions := sortVersions (or (getIssueMetadata $issue "component-versions") (array)) -}}
@@ -163,29 +156,8 @@
   {{- end -}}
   {{- $fixable := "no" -}}
   {{- $upgrade := "none" -}}
-  {{- range $finding := $findings -}}
-    {{- with $finding.Relationships -}}{{- with .Fix -}}{{- with .Data -}}{{- with .Attributes -}}{{- with .Action -}}
-      {{- if eq .Discriminator "upgrade_package_advice" -}}
-        {{- range .AsUpgradePackageAdvice.UpgradePaths -}}
-          {{- if gt (len .DependencyPath) 1 -}}{{- $fixable = "yes" -}}{{- end -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-  {{- end -}}
-  {{- with index $findings 0 -}}
-    {{- with .Relationships -}}{{- with .Fix -}}{{- with .Data -}}{{- with .Attributes -}}{{- with .Action -}}
-      {{- if eq .Discriminator "upgrade_package_advice" -}}
-        {{- range .AsUpgradePackageAdvice.UpgradePaths -}}
-          {{- if gt (len .DependencyPath) 1 -}}
-            {{- range slice .DependencyPath 1 -}}
-              {{- if and .Name .Version -}}{{- $upgrade = print .Name "@" .Version -}}{{- break -}}{{- end -}}
-            {{- end -}}
-          {{- end -}}
-          {{- if ne $upgrade "none" -}}{{- break -}}{{- end -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-  {{- end -}}
+  {{- if getIssueMetadata $issue "is-upgradable" -}}{{- $fixable = "yes" -}}{{- end -}}
+  {{- with getIssueMetadata $issue "upgrade-target" -}}{{- $upgrade = print .Name "@" .Version -}}{{- end -}}
   {{- if $state.Full -}}
     {{- range $candidate := $issue.GetProblems -}}
       {{- if eq $candidate.Discriminator "snyk_vuln" -}}

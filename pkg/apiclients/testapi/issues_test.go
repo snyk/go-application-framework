@@ -440,6 +440,40 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
 	})
 
+	t.Run("SCA issue normalizes primary problem and upgrade advice", func(t *testing.T) {
+		var finding testapi.FindingData
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"attributes": {
+				"finding_type": "sca",
+				"problems": [
+					{"source": "snyk_license", "id": "license"},
+					{"source": "snyk_vuln", "id": "vulnerability"}
+				]
+			},
+			"relationships": {"fix": {"data": {"attributes": {"action": {
+				"format": "upgrade_package_advice",
+				"upgrade_paths": [{"dependency_path": [{}, {"name": "target", "version": "2"}]}]
+			}}}}}
+		}`), &finding))
+
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+		require.NoError(t, err)
+
+		primary := issue.GetPrimaryProblem()
+		require.NotNil(t, primary)
+		discriminator, err := primary.Discriminator()
+		require.NoError(t, err)
+		assert.Equal(t, "snyk_vuln", discriminator)
+
+		upgradable, ok := issue.GetData(testapi.DataKeyIsUpgradable)
+		require.True(t, ok)
+		assert.Equal(t, true, upgradable)
+
+		target, ok := issue.GetData(testapi.DataKeyUpgradeTarget)
+		require.True(t, ok)
+		assert.Equal(t, testapi.Package{Name: "target", Version: "2"}, target)
+	})
+
 	t.Run("issues keep first-seen finding order", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()

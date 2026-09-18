@@ -49,6 +49,14 @@ const (
 	// Value type: string
 	DataKeyRuleShortDescription = "rule-short-description"
 
+	// DataKeyIsUpgradable indicates whether an issue has an upgrade path.
+	// Value type: bool
+	DataKeyIsUpgradable = "is-upgradable"
+
+	// DataKeyUpgradeTarget is the first direct package upgrade target.
+	// Value type: Package
+	DataKeyUpgradeTarget = "upgrade-target"
+
 	FindingTypeLicense = "license"
 )
 
@@ -493,9 +501,12 @@ type issueBuilder struct {
 	packageVersions      []string
 	cvssScore            float32
 	isFixable            bool
+	isUpgradable         bool
+	upgradeTarget        Package
 	fixedInVersions      []string
 	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem      *SnykVulnProblem
+	hasVulnerability     bool
 	sourceLocations      []SourceLocation
 	riskScore            uint16
 	reachability         *ReachabilityEvidence
@@ -538,6 +549,7 @@ func (b *issueBuilder) processFinding(finding *FindingData) {
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
 	b.extractDependencyPaths(finding)
+	b.extractUpgradeAdvice(finding, finding == b.firstFinding)
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
@@ -624,6 +636,33 @@ func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 	}
 }
 
+func (b *issueBuilder) extractUpgradeAdvice(finding *FindingData, selectTarget bool) {
+	if finding.Relationships == nil || finding.Relationships.Fix == nil ||
+		finding.Relationships.Fix.Data == nil || finding.Relationships.Fix.Data.Attributes == nil ||
+		finding.Relationships.Fix.Data.Attributes.Action == nil {
+		return
+	}
+	advice, err := finding.Relationships.Fix.Data.Attributes.Action.AsUpgradePackageAdvice()
+	if err != nil {
+		return
+	}
+	for _, path := range advice.UpgradePaths {
+		if len(path.DependencyPath) < 2 {
+			continue
+		}
+		b.isUpgradable = true
+		if !selectTarget || b.upgradeTarget.Name != "" {
+			continue
+		}
+		for _, target := range path.DependencyPath[1:] {
+			if target.Name != "" && target.Version != "" {
+				b.upgradeTarget = target
+				break
+			}
+		}
+	}
+}
+
 // extractPackageInfo extracts package name and version from package locations
 func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
@@ -667,8 +706,15 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 
 		switch discriminator {
 		case "snyk_vuln":
+			if !b.hasVulnerability {
+				b.primaryProblem = &problem
+				b.hasVulnerability = true
+			}
 			b.processSnykVulnProblem(&problem)
 		case "snyk_license":
+			if b.primaryProblem == nil {
+				b.primaryProblem = &problem
+			}
 			b.processSnykLicenseProblem(&problem)
 		case "cve":
 			b.processCveProblem(&problem)
@@ -699,8 +745,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 		return
 	}
 
-	if b.primaryProblem == nil {
-		b.primaryProblem = problem
+	if b.snykVulnProblem == nil {
 		b.snykVulnProblem = &vulnProblem
 	}
 
@@ -740,10 +785,6 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.id = id
 		b.problemID = id
-	}
-
-	if b.primaryProblem == nil {
-		b.primaryProblem = problem
 	}
 
 	// Try to extract license-specific metadata
@@ -895,6 +936,10 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 
 	// Add fix information
 	metadata[DataKeyIsFixable] = b.isFixable
+	metadata[DataKeyIsUpgradable] = b.isUpgradable
+	if b.upgradeTarget.Name != "" {
+		metadata[DataKeyUpgradeTarget] = b.upgradeTarget
+	}
 	if len(b.fixedInVersions) > 0 {
 		metadata[DataKeyFixedInVersions] = b.fixedInVersions
 	}
