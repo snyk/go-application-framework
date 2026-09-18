@@ -3,7 +3,6 @@ package presenters
 import (
 	"bufio"
 	"bytes"
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -323,22 +322,6 @@ func jsonFields[T any](input json.Marshaler, names ...string) (map[string]T, err
 		selected[name] = value
 	}
 	return selected, nil
-}
-
-func comparePackageVersions(left, right string) int {
-	leftParts, rightParts := strings.Split(left, "."), strings.Split(right, ".")
-	for i := 0; i < min(len(leftParts), len(rightParts)); i++ {
-		order := strings.Compare(leftParts[i], rightParts[i])
-		leftNumber, leftErr := strconv.Atoi(leftParts[i])
-		rightNumber, rightErr := strconv.Atoi(rightParts[i])
-		if leftErr == nil && rightErr == nil {
-			order = cmp.Compare(leftNumber, rightNumber)
-		}
-		if order != 0 {
-			return order
-		}
-	}
-	return cmp.Compare(len(leftParts), len(rightParts))
 }
 
 func getToonTemplateFuncMap() template.FuncMap {
@@ -1034,7 +1017,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		default:
 			return nil, fmt.Errorf("versions must be a slice, got %T", values)
 		}
-		slices.SortStableFunc(versions, comparePackageVersions)
+		slices.Sort(versions)
 		return versions, nil
 	}
 	defaultMap["runes"] = func(value string) []rune { return []rune(value) }
