@@ -346,7 +346,10 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			} else {
 				expected = "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" +
 					"hint: add --toon=full for all fields\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\n" +
-					"sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\"\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
+					"sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\"\n" +
+					"sca_summary: 1 unique vulns (2 paths) |  | 1 fixable\n" +
+					"secrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low\n" +
+					"secrets_summary: 1 secrets | 1 low"
 			}
 			assert.Equal(t, expected+"\n", outputDestination.buffer.String())
 			content, err := os.ReadFile(outputFile)

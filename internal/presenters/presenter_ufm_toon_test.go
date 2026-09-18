@@ -283,6 +283,7 @@ func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, output.String(), "findings[1]{finding_type,id,severity,title}:\n  sast,finding-4,high,Example finding")
 	assert.NotContains(t, output.String(), "results[")
+	assert.NotContains(t, output.String(), "_summary:")
 }
 
 func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
@@ -423,6 +424,8 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 	assert.Contains(t, output.String(), "secrets_error: Some files could not be scanned")
 	assert.Contains(t, output.String(), `secrets_hint: "Results are incomplete\nRetry the scan."`)
 	assert.Contains(t, output.String(), "unknown,0,rule,low")
+	assert.Contains(t, output.String(), "secrets_summary: 1 secrets | 1 low")
+	assert.NotContains(t, output.String(), "sca_summary:")
 	assert.NotContains(t, output.String(), "add --toon=full")
 	assert.NotContains(t, output.String(), "excluded")
 }
