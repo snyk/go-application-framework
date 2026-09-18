@@ -172,7 +172,9 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_TOON, "banana")
 	_, err = config.GetStringWithError(output_workflow.OUTPUT_CONFIG_KEY_TOON)
-	assert.ErrorContains(t, err, "banana")
+	errCatalogError := snyk_errors.Error{}
+	require.True(t, errors.As(err, &errCatalogError))
+	assert.Contains(t, errCatalogError.Detail, "banana")
 }
 
 type testOutputDestination struct {

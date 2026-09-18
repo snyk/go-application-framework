@@ -54,7 +54,7 @@ func toonDefaultValue(_ configuration.Configuration, existingValue interface{}) 
 	case "full":
 		return "full", nil
 	}
-	return nil, fmt.Errorf("invalid value %v for --%s, expected compact or full", existingValue, output_workflow.OUTPUT_CONFIG_KEY_TOON)
+	return nil, cli.NewInvalidFlagOptionError(fmt.Sprintf("invalid value %v for --%s, expected compact or full", existingValue, output_workflow.OUTPUT_CONFIG_KEY_TOON))
 }
 
 // outputWorkflowEntryPoint defines the output entry point
@@ -65,7 +65,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	var finalError error
 	config := invocation.GetConfiguration()
 	if _, err := config.GetWithError(output_workflow.OUTPUT_CONFIG_KEY_TOON); err != nil {
-		return output, cli.NewInvalidFlagOptionError(err.Error())
+		return output, err
 	}
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 
