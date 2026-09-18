@@ -122,7 +122,7 @@ func TestTOONMapping_StableVersions(t *testing.T) {
 	}
 	output := renderFindings(t, false, `[{"findings":[`+strings.Join(findings, ",")+`]}]`)
 	requireTOONEqual(t, false, `sca[1]{fixable,id,pkg,severity}:
-  no,same,"example@1.0,01.0",""`, output)
+  no,same,"example@01.0,1.0",""`, output)
 }
 
 func TestTOONMapping_SCAFirstOccurrence(t *testing.T) {
