@@ -1009,26 +1009,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
 	defaultMap["array"] = func(values ...any) []any { return values }
 	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
-	defaultMap["sortVersions"] = func(values any) ([]string, error) {
-		var versions []string
-		switch typed := values.(type) {
-		case []string:
-			versions = append([]string(nil), typed...)
-		case []any:
-			versions = make([]string, len(typed))
-			for i, value := range typed {
-				version, ok := value.(string)
-				if !ok {
-					return nil, fmt.Errorf("version must be a string, got %T", value)
-				}
-				versions[i] = version
-			}
-		default:
-			return nil, fmt.Errorf("versions must be a slice, got %T", values)
-		}
-		slices.Sort(versions)
-		return versions, nil
-	}
 	defaultMap["runes"] = func(value string) []rune { return []rune(value) }
 	defaultMap["runeString"] = func(value []rune) string { return string(value) }
 	defaultMap["stringValue"] = func(value *string) string {
