@@ -343,6 +343,26 @@ func getToonTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+func getToonContextTemplateFuncMap(ctx context.Context) template.FuncMap {
+	return template.FuncMap{
+		"getIssuesFromTestResult": func(result testapi.TestResult) ([]testapi.Issue, error) {
+			issues, err := testapi.NewIssuesFromTestResult(ctx, result)
+			if err != nil {
+				return nil, fmt.Errorf("convert test result to issues: %w", err)
+			}
+			return issues, nil
+		},
+		"getInteractionID": func() string {
+			value, _ := ctx.Value(networking.InteractionIdKey).(string)
+			return value
+		},
+		"getErrorTip": func() string {
+			value, _ := ctx.Value(uitypes.ErrorTipKey).(string)
+			return value
+		},
+	}
+}
+
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
@@ -985,18 +1005,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return value
 	}
-	defaultMap["getInteractionID"] = func(ctx context.Context) string {
-		if value, ok := ctx.Value(networking.InteractionIdKey).(string); ok {
-			return value
-		}
-		return ""
-	}
-	defaultMap["getErrorTip"] = func(ctx context.Context) string {
-		if value, ok := ctx.Value(uitypes.ErrorTipKey).(string); ok {
-			return value
-		}
-		return ""
-	}
 	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
 	defaultMap["array"] = func(values ...any) []any { return values }
 	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
@@ -1066,13 +1074,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["assetLink"] = assetLink
 	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
-	}
-	defaultMap["getIssuesFromTestResultWithContext"] = func(ctx context.Context, result testapi.TestResult) ([]testapi.Issue, error) {
-		issues, err := testapi.NewIssuesFromTestResult(ctx, result)
-		if err != nil {
-			return nil, fmt.Errorf("convert test result to issues: %w", err)
-		}
-		return issues, nil
 	}
 	defaultMap["getIssuesFromMultipleTestResults"] = func(testResults []testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		var allIssues []testapi.Issue

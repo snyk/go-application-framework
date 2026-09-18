@@ -3,7 +3,7 @@
   {{- $state := dict "Envelope" $envelope "Fatal" false "Full" (eq (getValueFromConfig "toon") "full") -}}
   {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
   {{- range $result := .TestResults -}}
-    {{- $issues := getIssuesFromTestResultWithContext (getContext) $result -}}
+    {{- $issues := getIssuesFromTestResult $result -}}
     {{- template "toonDiagnostics" (dict "State" $state "Result" $result "Issues" $issues) -}}
     {{- $mappedIssues := array -}}
     {{- range $issue := reverse (sortAndFilterIssues $issues false) -}}
@@ -39,9 +39,9 @@
   {{- $project := "unknown" -}}
   {{- with getStringFromConfig "targetDirectory" -}}{{- $project = baseName . -}}{{- end -}}
   {{- $_ := set $envelope "project" $project -}}
-  {{- with getInteractionID (getContext) -}}{{- $_ := set $envelope "interaction_id" . -}}{{- end -}}
+  {{- with getInteractionID -}}{{- $_ := set $envelope "interaction_id" . -}}{{- end -}}
   {{- if and (not .Full) (not .Fatal) -}}{{- $_ := set $envelope "hint" "add --toon=full for all fields" -}}{{- end -}}
-  {{- with getErrorTip (getContext) -}}
+  {{- with getErrorTip -}}
     {{- $tip := . -}}
     {{- if $envelope.errors -}}{{- $_ := set $envelope "hint" $tip -}}{{- end -}}
     {{- range $scanner := array "sca" "secrets" -}}

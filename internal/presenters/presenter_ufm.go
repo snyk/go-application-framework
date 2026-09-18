@@ -161,7 +161,9 @@ func (p *UfmPresenter) RenderTemplateWithContext(ctx context.Context, templateFi
 		return err
 	}
 
-	localFindingsTemplate.Funcs(template.FuncMap{"getContext": func() context.Context { return ctx }})
+	if mimeType == ApplicationTOONMimeType {
+		localFindingsTemplate.Funcs(getToonContextTemplateFuncMap(ctx))
+	}
 
 	// load files
 	err = loadTemplates(templateFiles, localFindingsTemplate)
