@@ -24,7 +24,7 @@ results[3]:
               type: source
           policy_modifications: []
           problems[1]{id,name,source}:
-            example-secret-rule,Example secret rule,snyk_secrets_rule
+            example-secret-rule,Example secret rule,secret
           rating:
             severity: high
           risk:

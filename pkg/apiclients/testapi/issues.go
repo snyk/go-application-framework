@@ -49,8 +49,18 @@ const (
 	// Value type: string
 	DataKeyRuleShortDescription = "rule-short-description"
 
+	// DataKeyIsUpgradable indicates whether an issue has an upgrade path.
+	// Value type: bool
+	DataKeyIsUpgradable = "is-upgradable"
+
+	// DataKeyUpgradeTarget is the first direct package upgrade target.
+	// Value type: Package
+	DataKeyUpgradeTarget = "upgrade-target"
+
 	FindingTypeLicense = "license"
 )
+
+const dataKeyComponentVersions = "component-versions"
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
 
@@ -216,26 +226,37 @@ type issueGrouper interface {
 type idBasedIssueGrouper struct{}
 
 func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	groups := make(map[string][]*FindingData)
-
-	for _, finding := range findings {
-		if finding.Attributes == nil {
-			continue
-		}
-
+	return groupFindingsBy(findings, func(finding *FindingData) string {
 		// Extract problem ID from problems
 		problemID := g.extractProblemID(finding)
 		if problemID == "" {
 			// If no problem ID found, treat each finding as its own issue
 			problemID = g.getUniqueKey(finding)
 		}
+		return problemID
+	})
+}
 
-		groups[problemID] = append(groups[problemID], finding)
+// groupFindingsBy groups findings by key, preserving first-seen order so output is deterministic.
+func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) K) [][]*FindingData {
+	groups := make(map[K][]*FindingData)
+	var order []K
+
+	for _, finding := range findings {
+		if finding.Attributes == nil {
+			continue
+		}
+
+		key := keyOf(finding)
+		if _, seen := groups[key]; !seen {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], finding)
 	}
 
-	result := make([][]*FindingData, 0, len(groups))
-	for _, group := range groups {
-		result = append(result, group)
+	result := make([][]*FindingData, 0, len(order))
+	for _, key := range order {
+		result = append(result, groups[key])
 	}
 
 	return result
@@ -302,33 +323,24 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
+type keyBasedGroupKey struct {
+	value     string
+	generated bool
+}
+
 func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	groups := make(map[string][]*FindingData)
-
-	for _, finding := range findings {
-		if finding.Attributes == nil {
-			continue
+	index := 0
+	return groupFindingsBy(findings, func(finding *FindingData) keyBasedGroupKey {
+		index++
+		if finding.Attributes.Key != "" {
+			return keyBasedGroupKey{value: finding.Attributes.Key}
 		}
-
-		key := finding.Attributes.Key
-		if key == "" {
-			// If no key, use finding ID as fallback
-			if finding.Id != nil {
-				key = finding.Id.String()
-			} else {
-				continue
-			}
+		if finding.Id != nil {
+			return keyBasedGroupKey{value: finding.Id.String()}
 		}
-
-		groups[key] = append(groups[key], finding)
-	}
-
-	result := make([][]*FindingData, 0, len(groups))
-	for _, group := range groups {
-		result = append(result, group)
-	}
-
-	return result
+		// Keyless, ID-less findings must not be dropped; give each its own issue.
+		return keyBasedGroupKey{value: fmt.Sprint(index), generated: true}
+	})
 }
 
 // issue is the concrete implementation of the Issue interface.
@@ -486,11 +498,16 @@ type issueBuilder struct {
 	problemID            string
 	packageName          string
 	packageVersion       string
+	packageVersions      []string
 	cvssScore            float32
 	isFixable            bool
+	isUpgradable         bool
+	upgradeTarget        Package
 	fixedInVersions      []string
 	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem      *SnykVulnProblem
+	hasVulnerability     bool
+	hasLicense           bool
 	sourceLocations      []SourceLocation
 	riskScore            uint16
 	reachability         *ReachabilityEvidence
@@ -533,6 +550,7 @@ func (b *issueBuilder) processFinding(finding *FindingData) {
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
 	b.extractDependencyPaths(finding)
+	b.extractUpgradeAdvice(finding, finding == b.firstFinding)
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
@@ -619,6 +637,33 @@ func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 	}
 }
 
+func (b *issueBuilder) extractUpgradeAdvice(finding *FindingData, selectTarget bool) {
+	if finding.Relationships == nil || finding.Relationships.Fix == nil ||
+		finding.Relationships.Fix.Data == nil || finding.Relationships.Fix.Data.Attributes == nil ||
+		finding.Relationships.Fix.Data.Attributes.Action == nil {
+		return
+	}
+	advice, err := finding.Relationships.Fix.Data.Attributes.Action.AsUpgradePackageAdvice()
+	if err != nil {
+		return
+	}
+	for _, path := range advice.UpgradePaths {
+		if len(path.DependencyPath) < 2 {
+			continue
+		}
+		b.isUpgradable = true
+		if !selectTarget || b.upgradeTarget.Name != "" {
+			continue
+		}
+		for _, target := range path.DependencyPath[1:] {
+			if target.Name != "" && target.Version != "" {
+				b.upgradeTarget = target
+				break
+			}
+		}
+	}
+}
+
 // extractPackageInfo extracts package name and version from package locations
 func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
@@ -633,9 +678,22 @@ func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 		if b.packageName == "" {
 			b.packageName = pkgLoc.Package.Name
 		}
-		if b.packageVersion == "" {
-			b.packageVersion = pkgLoc.Package.Version
+		b.addPackageVersion(pkgLoc.Package.Version)
+	}
+}
+
+func (b *issueBuilder) addPackageVersion(version string) {
+	if version == "" {
+		return
+	}
+	for _, existing := range b.packageVersions {
+		if existing == version {
+			return
 		}
+	}
+	b.packageVersions = append(b.packageVersions, version)
+	if b.packageVersion == "" {
+		b.packageVersion = version
 	}
 }
 
@@ -649,8 +707,16 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 
 		switch discriminator {
 		case "snyk_vuln":
+			if !b.hasVulnerability {
+				b.primaryProblem = &problem
+				b.hasVulnerability = true
+			}
 			b.processSnykVulnProblem(&problem)
 		case "snyk_license":
+			if !b.hasVulnerability && !b.hasLicense {
+				b.primaryProblem = &problem
+				b.hasLicense = true
+			}
 			b.processSnykLicenseProblem(&problem)
 		case "cve":
 			b.processCveProblem(&problem)
@@ -681,8 +747,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 		return
 	}
 
-	if b.primaryProblem == nil {
-		b.primaryProblem = problem
+	if b.snykVulnProblem == nil {
 		b.snykVulnProblem = &vulnProblem
 	}
 
@@ -713,9 +778,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = vulnProblem.PackageName
 	}
-	if b.packageVersion == "" {
-		b.packageVersion = vulnProblem.PackageVersion
-	}
+	b.addPackageVersion(vulnProblem.PackageVersion)
 }
 
 // processSnykLicenseProblem extracts data from a Snyk license problem
@@ -724,10 +787,6 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.id = id
 		b.problemID = id
-	}
-
-	if b.primaryProblem == nil {
-		b.primaryProblem = problem
 	}
 
 	// Try to extract license-specific metadata
@@ -754,6 +813,7 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = licenseProblem.PackageName
 	}
+	b.addPackageVersion(licenseProblem.PackageVersion)
 }
 
 // processCveProblem extracts CVE ID
@@ -861,6 +921,9 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 		metadata[DataKeyComponent] = component
 		metadata[DataKeyComponentName] = b.packageName
 		metadata[DataKeyComponentVersion] = b.packageVersion
+		if len(b.packageVersions) > 0 {
+			metadata[dataKeyComponentVersions] = b.packageVersions
+		}
 	}
 
 	// Add technology/ecosystem
@@ -875,6 +938,10 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 
 	// Add fix information
 	metadata[DataKeyIsFixable] = b.isFixable
+	metadata[DataKeyIsUpgradable] = b.isUpgradable
+	if b.upgradeTarget.Name != "" {
+		metadata[DataKeyUpgradeTarget] = b.upgradeTarget
+	}
 	if len(b.fixedInVersions) > 0 {
 		metadata[DataKeyFixedInVersions] = b.fixedInVersions
 	}

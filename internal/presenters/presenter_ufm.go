@@ -1,6 +1,7 @@
 package presenters
 
 import (
+	"context"
 	"fmt"
 	htmlTemplate "html/template"
 	"io"
@@ -145,6 +146,10 @@ func (p *UfmPresenter) RegisterMimeType(mimeType string, implFactory TemplateImp
 }
 
 func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
+	return p.RenderTemplateWithContext(context.Background(), templateFiles, mimeType)
+}
+
+func (p *UfmPresenter) RenderTemplateWithContext(ctx context.Context, templateFiles []string, mimeType string) error {
 	// Call renderHTMLTemplate() for HTML mime type
 	if _, ok := p.htmlTemplateImpl[mimeType]; ok {
 		return p.renderHTMLTemplate(templateFiles, mimeType)
@@ -154,6 +159,10 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
 		return err
+	}
+
+	if mimeType == ApplicationTOONMimeType {
+		localFindingsTemplate.Funcs(getToonContextTemplateFuncMap(ctx))
 	}
 
 	// load files

@@ -27,7 +27,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/utils/target"
@@ -285,17 +287,53 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+// templateDict builds the data passed between named templates.
+func templateDict(pairs ...interface{}) map[string]interface{} {
+	m := make(map[string]interface{}, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		key, ok := pairs[i].(string)
+		if ok {
+			m[key] = pairs[i+1]
+		}
+	}
+	return m
+}
+
+// jsonFields decodes requested keys only, omitting missing and null values.
+func jsonFields[T any](input json.Marshaler, names ...string) (map[string]T, error) {
+	payload, err := input.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, err
+	}
+	selected := make(map[string]T, len(names))
+	for _, name := range names {
+		raw := bytes.TrimSpace(fields[name])
+		if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+			continue
+		}
+		var value T
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		selected[name] = value
+	}
+	return selected, nil
+}
+
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
-	fnMap["prepareUFMToon"] = func(results []testapi.TestResult) (any, error) {
-		return toon.PrepareResults(context.Background(), results)
-	}
+	fnMap["dict"] = templateDict
 	fnMap["toonKind"] = toon.Kind
 	fnMap["toonKey"] = toon.FormatKey
 	fnMap["toonPrimitive"] = toon.FormatPrimitive
 	fnMap["toonAllPrimitive"] = toon.AllPrimitive
 	fnMap["toonTabularFields"] = toon.TabularFields
 	fnMap["toonTabularCells"] = toon.TabularCells
+	fnMap["mapTOONIssue"] = mapTOONIssue
 	fnMap["toonContext"] = func(key string, value any, indent string) any {
 		return struct {
 			Key    string
@@ -304,6 +342,32 @@ func getToonTemplateFuncMap() template.FuncMap {
 		}{key, value, indent}
 	}
 	return fnMap
+}
+
+func getToonContextTemplateFuncMap(ctx context.Context) template.FuncMap {
+	return template.FuncMap{
+		"getIssuesFromTestResult": func(result testapi.TestResult) ([]testapi.Issue, error) {
+			issues, err := testapi.NewIssuesFromTestResult(ctx, result)
+			if err != nil {
+				return nil, fmt.Errorf("convert test result to issues: %w", err)
+			}
+			return issues, nil
+		},
+		"getInteractionID": func() string {
+			value, ok := ctx.Value(networking.InteractionIdKey).(string)
+			if !ok {
+				return ""
+			}
+			return value
+		},
+		"getErrorTip": func() string {
+			value, ok := ctx.Value(uitypes.ErrorTipKey).(string)
+			if !ok {
+				return ""
+			}
+			return value
+		},
+	}
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
@@ -939,8 +1003,34 @@ func applyInlineMarkdown(s string) string {
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
+	defaultMap["jsonStrings"] = jsonFields[string]
+	defaultMap["jsonNumbers"] = jsonFields[float64]
+	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
+		value, err := location.AsSourceLocation()
+		if err != nil {
+			return testapi.SourceLocation{}
+		}
+		return value
+	}
+	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
+	defaultMap["array"] = func(values ...any) []any { return values }
+	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
+	defaultMap["runes"] = func(value string) []rune { return []rune(value) }
+	defaultMap["runeString"] = func(value []rune) string { return string(value) }
+	defaultMap["stringValue"] = func(value *string) string {
+		if value == nil {
+			return ""
+		}
+		return *value
+	}
+	defaultMap["number"] = func(value int) json.Number { return json.Number(strconv.Itoa(value)) }
+	defaultMap["baseName"] = filepath.Base
+	defaultMap["toLowerCase"] = strings.ToLower
+	defaultMap["trimSpace"] = strings.TrimSpace
+	defaultMap["fail"] = func(message string) (string, error) { return "", fmt.Errorf("%s", message) }
 	defaultMap["getRuntimeInfo"] = func(key string) string { return getRuntimeInfo(key, ri) }
 	defaultMap["getValueFromConfig"] = getFromConfig(config)
+	defaultMap["getStringFromConfig"] = config.GetString
 	defaultMap["sortFindingBy"] = sortFindingBy
 	defaultMap["getFieldValueFrom"] = getFieldValueFrom
 	defaultMap["fieldEquals"] = fieldEquals

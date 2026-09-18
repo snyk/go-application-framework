@@ -2,6 +2,7 @@ package testapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -260,6 +261,26 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		require.NotNil(t, key1Issue, "key-1 issue should exist")
 		assert.Len(t, key1Issue.GetFindings(), 2)
 	})
+
+	t.Run("keyless fallback cannot collide with a real key", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-first"}},
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Title: "fallback"}},
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-second"}},
+		}
+		mockResult.EXPECT().Findings(ctx).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.NewIssuesFromTestResult(ctx, mockResult)
+		require.NoError(t, err)
+		require.Len(t, issues, 2)
+		assert.Equal(t, []string{"real-first", "real-second"}, []string{
+			issues[0].GetFindings()[0].Attributes.Title,
+			issues[0].GetFindings()[1].Attributes.Title,
+		})
+		assert.Equal(t, "fallback", issues[1].GetFindings()[0].Attributes.Title)
+	})
 }
 
 func TestIssue_GeneralizedMethods(t *testing.T) {
@@ -369,6 +390,117 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		_, _ = issue.GetData(testapi.DataKeyFixedInVersions)
 		_, _ = issue.GetData(testapi.DataKeyIsFixable)
 		_, _ = issue.GetData(testapi.DataKeyCVSSScore)
+	})
+
+	t.Run("SCA issue accumulates distinct package versions", func(t *testing.T) {
+		problem := func(raw string) testapi.Problem {
+			var value testapi.Problem
+			require.NoError(t, json.Unmarshal([]byte(raw), &value))
+			return value
+		}
+		findings := []*testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Problems: []testapi.Problem{
+						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.10"}`),
+					},
+				},
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Problems: []testapi.Problem{
+						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.2"}`),
+					},
+				},
+			},
+		}
+
+		issue, err := testapi.NewIssueFromFindings(findings)
+		require.NoError(t, err)
+
+		versions, ok := issue.GetData("component-versions")
+		require.True(t, ok)
+		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
+	})
+
+	t.Run("SCA issue normalizes primary problem and upgrade advice", func(t *testing.T) {
+		var finding testapi.FindingData
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"attributes": {
+				"finding_type": "sca",
+				"problems": [
+					{"source": "snyk_license", "id": "license"},
+					{"source": "snyk_vuln", "id": "vulnerability"}
+				]
+			},
+			"relationships": {"fix": {"data": {"attributes": {"action": {
+				"format": "upgrade_package_advice",
+				"upgrade_paths": [{"dependency_path": [{}, {"name": "target", "version": "2"}]}]
+			}}}}}
+		}`), &finding))
+
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+		require.NoError(t, err)
+
+		primary := issue.GetPrimaryProblem()
+		require.NotNil(t, primary)
+		discriminator, err := primary.Discriminator()
+		require.NoError(t, err)
+		assert.Equal(t, "snyk_vuln", discriminator)
+
+		upgradable, ok := issue.GetData(testapi.DataKeyIsUpgradable)
+		require.True(t, ok)
+		assert.Equal(t, true, upgradable)
+
+		target, ok := issue.GetData(testapi.DataKeyUpgradeTarget)
+		require.True(t, ok)
+		assert.Equal(t, testapi.Package{Name: "target", Version: "2"}, target)
+	})
+
+	t.Run("SCA license problem supersedes generic Snyk problem", func(t *testing.T) {
+		var finding testapi.FindingData
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"attributes": {
+				"finding_type": "sca",
+				"problems": [
+					{"source": "snyk_code_rule", "id": "rule"},
+					{"source": "snyk_license", "id": "license"}
+				]
+			}
+		}`), &finding))
+
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+		require.NoError(t, err)
+
+		discriminator, err := issue.GetPrimaryProblem().Discriminator()
+		require.NoError(t, err)
+		assert.Equal(t, "snyk_license", discriminator)
+	})
+
+	t.Run("issues keep first-seen finding order", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var findings []testapi.FindingData
+		for _, key := range []string{"zeta", "alpha", "zeta", "mid"} {
+			findings = append(findings, testapi.FindingData{Attributes: &testapi.FindingAttributes{
+				FindingType: testapi.FindingTypeSast, Key: key,
+			}})
+		}
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
+
+		for range 5 {
+			issues, err := testapi.NewIssuesFromTestResult(context.Background(), mockResult)
+			require.NoError(t, err)
+			var ids []string
+			for _, issue := range issues {
+				ids = append(ids, issue.GetID())
+			}
+			assert.Equal(t, []string{"zeta", "alpha", "mid"}, ids)
+		}
 	})
 }
 

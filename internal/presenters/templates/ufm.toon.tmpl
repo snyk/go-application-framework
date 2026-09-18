@@ -1,6 +1,108 @@
 {{- define "main" -}}
+  {{- $envelope := dict -}}
+  {{- $state := dict "Envelope" $envelope "Fatal" false "Full" (eq (getValueFromConfig "toon") "full") -}}
+  {{- /* Prepare every result before writing: a later error must leave the destination untouched. */ -}}
+  {{- range $result := .TestResults -}}
+    {{- $issues := getIssuesFromTestResult $result -}}
+    {{- template "toonDiagnostics" (dict "State" $state "Result" $result "Issues" $issues) -}}
+    {{- $mappedIssues := array -}}
+    {{- range $issue := reverse (sortAndFilterIssues $issues false) -}}
+      {{- $mappedIssues = append $mappedIssues $issue -}}
+    {{- end -}}
+    {{- if eq (getValueFromConfig "include-ignores") "true" -}}
+      {{- range $issue := reverse (sortAndFilterIssues $issues true) -}}
+        {{- $mappedIssues = append $mappedIssues $issue -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range $issue := $mappedIssues -}}
+      {{- $mapped := mapTOONIssue $issue $state.Full -}}
+      {{- range $row := $mapped.Rows -}}
+        {{- $_ := set $envelope $mapped.Section (append (or (index $envelope $mapped.Section) (array)) $row) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if .TestResults -}}{{- template "toonContextFields" $state -}}{{- end -}}
+  {{- template "toonDocument" $envelope -}}
+{{- end -}}
+
+{{- define "toonContextFields" -}}
+  {{- $envelope := .Envelope -}}
+  {{- $_ := set $envelope "org" (or (getStringFromConfig "internal_org_slug") (getStringFromConfig "org") "unknown") -}}
+  {{- $project := "unknown" -}}
+  {{- with getStringFromConfig "targetDirectory" -}}{{- $project = baseName . -}}{{- end -}}
+  {{- $_ := set $envelope "project" $project -}}
+  {{- with getInteractionID -}}{{- $_ := set $envelope "interaction_id" . -}}{{- end -}}
+  {{- if and (not .Full) (not .Fatal) -}}{{- $_ := set $envelope "hint" "add --toon=full for all fields" -}}{{- end -}}
+  {{- with getErrorTip -}}
+    {{- $tip := . -}}
+    {{- if $envelope.errors -}}{{- $_ := set $envelope "hint" $tip -}}{{- end -}}
+    {{- range $scanner := array "sca" "secrets" -}}
+      {{- if index $envelope (print $scanner "_error") -}}
+        {{- $key := print $scanner "_hint" -}}
+        {{- $message := $tip -}}
+        {{- with index $envelope $key -}}{{- $message = trimSpace (print . "\n" $tip) -}}{{- end -}}
+        {{- $_ := set $envelope $key $message -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonDiagnosticMessage" -}}
+  {{- $message := "" -}}
+  {{- with .Items -}}
+    {{- range $i, $diagnostic := . -}}
+      {{- if $i -}}{{- $message = print $message "\n" -}}{{- end -}}
+      {{- $message = print $message (or $diagnostic.Detail (stringValue $diagnostic.Title) (stringValue $diagnostic.Code) "Scanner diagnostic.") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $_ := set . "Message" $message -}}
+{{- end -}}
+
+{{- define "toonAppendMessage" -}}
+  {{- if .Message -}}
+    {{- $message := .Message -}}
+    {{- with index .Envelope .Key -}}{{- $message = print . "\n" $message -}}{{- end -}}
+    {{- $_ := set .Envelope .Key $message -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonDiagnostics" -}}
+  {{- $envelope := .State.Envelope -}}
+  {{- $scanners := dict -}}
+  {{- with .Result.GetTestConfiguration -}}{{- with .ScanConfig -}}
+    {{- if .Sca -}}{{- $_ := set $scanners "sca" true -}}{{- end -}}
+    {{- if .Secrets -}}{{- $_ := set $scanners "secrets" true -}}{{- end -}}
+  {{- end -}}{{- end -}}
+  {{- range .Issues -}}
+    {{- $findingType := print .GetFindingType -}}
+    {{- if or (eq $findingType "sca") (eq $findingType "license") -}}{{- $_ := set $scanners "sca" true -}}{{- end -}}
+    {{- if or (eq $findingType "secret") (eq $findingType "secrets") -}}{{- $_ := set $scanners "secrets" true -}}{{- end -}}
+  {{- end -}}
+  {{- $errors := dict "Items" .Result.GetErrors -}}
+  {{- $warnings := dict "Items" .Result.GetWarnings -}}
+  {{- template "toonDiagnosticMessage" $errors -}}
+  {{- template "toonDiagnosticMessage" $warnings -}}
+  {{- $state := .Result.GetExecutionState -}}
+  {{- if or (eq $state "pending") (eq $state "started") -}}{{- fail (print "scan is " $state) -}}{{- end -}}
+  {{- if and (eq $state "errored") (not $errors.Message) -}}{{- $_ := set $errors "Message" "Scan failed." -}}{{- end -}}
+  {{- if not $scanners -}}
+    {{- if not $envelope.findings -}}{{- $_ := set $envelope "findings" (array) -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" "errors" "Message" $errors.Message) -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" "warnings" "Message" $warnings.Message) -}}
+  {{- end -}}
+  {{- if and $errors.Message (not .Issues) -}}{{- $_ := set .State "Fatal" true -}}{{- end -}}
+  {{- range $scanner, $_ := $scanners -}}
+    {{- if not (index $envelope $scanner) -}}{{- $_ := set $envelope $scanner (array) -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" (print $scanner "_error") "Message" $errors.Message) -}}
+    {{- $warningKey := print $scanner "_warning" -}}
+    {{- if eq $scanner "secrets" -}}{{- $warningKey = "secrets_hint" -}}{{- end -}}
+    {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" $warningKey "Message" $warnings.Message) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "toonDocument" -}}
   {{- $first := true -}}
-  {{- range $key, $value := prepareUFMToon .TestResults -}}
+  {{- range $key, $value := . -}}
     {{- if not $first }}{{ "\n" }}{{ end -}}
     {{- template "toonField" (toonContext $key $value "") -}}
     {{- $first = false -}}
