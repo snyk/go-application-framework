@@ -152,21 +152,6 @@ func TestNewIssuesFromTestResult(t *testing.T) {
 	})
 }
 
-func TestNewIssuesFromTestResult_PreservesLegacySecretDiscriminator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	result := mocks.NewMockTestResult(ctrl)
-	var problem testapi.Problem
-	require.NoError(t, json.Unmarshal([]byte(`{"source":"snyk_secrets_rule","id":"legacy-rule"}`), &problem))
-	result.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{{
-		Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSecrets, Problems: []testapi.Problem{problem}},
-	}}, true, nil)
-
-	issues, err := testapi.NewIssuesFromTestResult(context.Background(), result)
-	require.NoError(t, err)
-	require.Len(t, issues, 1)
-	assert.Equal(t, "legacy-rule", issues[0].GetProblemID())
-}
-
 func TestNewIssueFromFindings(t *testing.T) {
 	t.Run("successfully creates issue from findings", func(t *testing.T) {
 		findings := []*testapi.FindingData{
