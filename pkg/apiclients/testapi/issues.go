@@ -722,7 +722,7 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCveProblem(&problem)
 		case "cwe":
 			b.processCweProblem(&problem)
-		case "secret", "snyk_secrets_rule":
+		case "secret":
 			b.processSecretsRuleProblem(&problem)
 		}
 
