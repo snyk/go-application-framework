@@ -275,13 +275,13 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			ctx.EXPECT().Context().Return(invocationContext).AnyTimes()
 
 			results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{"findings":[{"attributes":{
-	            "finding_type":"secret","title":"example-rule","description":"excluded",
+	            "finding_type":"secret","title":"example-rule","description":"excluded","rating":{"severity":"low"},
 	            "locations":[{"type":"source","file_path":"example.txt","from_line":5,"to_line":8}]
 	        }}, {"id":"00000000-0000-4000-8000-000000000002","attributes":{
-	            "finding_type":"sca","title":"Example","problems":[{"source":"snyk_vuln","id":"example","cvss_base_score":0}],
+	            "finding_type":"sca","title":"Example","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"example","cvss_base_score":0}],
 	            "locations":[{"type":"package","package":{"name":"example","version":"1"}}]
 	        }}, {"id":"00000000-0000-4000-8000-000000000004","attributes":{
-	            "finding_type":"sca","title":"Later occurrence","problems":[{"source":"snyk_vuln","id":"example"}],
+	            "finding_type":"sca","title":"Later occurrence","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"example"}],
 	            "locations":[{"type":"package","package":{"name":"example","version":"1.5"}}]
 	        },"relationships":{"fix":{"data":{"attributes":{"action":{"format":"upgrade_package_advice",
 	            "upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"},{"name":"example","version":"2"}]}]}

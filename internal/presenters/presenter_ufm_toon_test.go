@@ -116,12 +116,12 @@ func TestRenderTemplate_TOON_genericDiagnostics(t *testing.T) {
 				{"attributes":{"finding_type":"future","title":"Future finding","rating":{"severity":"high"},"problems":[{"source":42}]}},
 				{"attributes":{"finding_type":"future"}}]}]`,
 			[]string{"errors: Some files failed", "warnings: Partial scan", "hint: Retry the scan.",
-				"findings[2]{finding_type,id,severity,title}:\n  future,\"\",\"\",\"\"\n  future,\"\",high,Future finding"},
+				"findings[1]{finding_type,id,severity,title}:\n  future,\"\",high,Future finding"},
 		},
 		{
 			"license findings mark the sca scanner",
 			`[{"errors":[{"detail":"License failure"}],"findings":[
-				{"attributes":{"finding_type":"sca","problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT"}]}}]}]`,
+				{"attributes":{"finding_type":"sca","rating":{"severity":"low"},"problems":[{"source":"snyk_license","id":"snyk:lic:npm:x:MIT"}]}}]}]`,
 			[]string{"sca_error: License failure", "sca[1]"},
 		},
 		{
@@ -154,7 +154,7 @@ func TestRenderTemplate_TOON_controlCharacters(t *testing.T) {
 
 	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{
 		"findings": [{"type": "findings", "attributes": {
-			"finding_type": "secrets", "title": "bad\u0001title",
+			"finding_type": "secrets", "title": "bad\u0001title", "rating": {"severity": "low"},
 			"problems": [{"source": "new_product", "details": {"key\u0001\\n\n\"": "value"}}]
 		}}]
 	}]`))
@@ -219,7 +219,7 @@ func TestRenderTemplate_TOON_scanDiagnostics(t *testing.T) {
 		 "warnings":[{"title":"Some manifests were skipped"},{"code":"SCAN-WARNING"}]},
 		{"findingsComplete":true,"errors":[{"detail":"Some files could not be scanned"}],
 		 "warnings":[{"detail":"Results are incomplete"}],
-		 "findings":[{"attributes":{"finding_type":"secrets","title":"rule"}}]}
+		 "findings":[{"attributes":{"finding_type":"secrets","title":"rule","rating":{"severity":"low"}}}]}
 	]`))
 	require.NoError(t, err)
 	config := configuration.NewWithOpts()
@@ -279,7 +279,7 @@ func TestRenderTemplate_TOON_secretFindingTypes(t *testing.T) {
 	for _, kind := range []string{"secret", "secrets"} {
 		t.Run(kind, func(t *testing.T) {
 			results, err := ufm.NewSerializableTestResultFromBytes([]byte(fmt.Sprintf(`[
-				{"findings":[{"attributes":{"finding_type":%q,"title":"rule"}}]}
+				{"findings":[{"attributes":{"finding_type":%q,"title":"rule","rating":{"severity":"low"}}}]}
 			]`, kind)))
 			require.NoError(t, err)
 			var output bytes.Buffer
