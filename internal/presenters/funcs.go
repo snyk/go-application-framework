@@ -343,6 +343,7 @@ func comparePackageVersions(left, right string) int {
 
 func getToonTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
+	fnMap["dict"] = templateDict
 	fnMap["toonKind"] = toon.Kind
 	fnMap["toonKey"] = toon.FormatKey
 	fnMap["toonPrimitive"] = toon.FormatPrimitive
@@ -992,7 +993,6 @@ func applyInlineMarkdown(s string) string {
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
-	defaultMap["dict"] = templateDict
 	defaultMap["jsonStrings"] = jsonFields[string]
 	defaultMap["jsonNumbers"] = jsonFields[float64]
 	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
