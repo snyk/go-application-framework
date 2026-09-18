@@ -15,11 +15,9 @@
       {{- end -}}
     {{- end -}}
     {{- range $issue := $mappedIssues -}}
-      {{- $findingType := print $issue.GetFindingType -}}
-      {{- if or (eq $findingType "sca") (eq $findingType "license") (eq $findingType "secret") (eq $findingType "secrets") -}}
-        {{- template "toonProductIssue" (dict "State" $state "Issue" $issue) -}}
-      {{- else -}}
-        {{- template "toonFinding" (dict "Envelope" $envelope "Issue" $issue) -}}
+      {{- $mapped := mapTOONIssue $issue $state.Full -}}
+      {{- range $row := $mapped.Rows -}}
+        {{- $_ := set $envelope $mapped.Section (append (or (index $envelope $mapped.Section) (array)) $row) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -99,80 +97,6 @@
     {{- $warningKey := print $scanner "_warning" -}}
     {{- if eq $scanner "secrets" -}}{{- $warningKey = "secrets_hint" -}}{{- end -}}
     {{- template "toonAppendMessage" (dict "Envelope" $envelope "Key" $warningKey "Message" $warnings.Message) -}}
-  {{- end -}}
-{{- end -}}
-
-{{- define "toonFinding" -}}
-  {{- $issue := .Issue -}}
-  {{- $row := dict "id" $issue.GetID "finding_type" (print $issue.GetFindingType) "title" $issue.GetTitle "severity" (print $issue.GetEffectiveSeverity) -}}
-  {{- $_ := set .Envelope "findings" (append (or .Envelope.findings (array)) $row) -}}
-{{- end -}}
-
-{{- define "toonProductIssue" -}}
-  {{- $state := .State -}}
-  {{- $issue := .Issue -}}
-  {{- $envelope := $state.Envelope -}}
-  {{- $findingType := print $issue.GetFindingType -}}
-  {{- if or (eq $findingType "secret") (eq $findingType "secrets") -}}
-    {{- range $finding := $issue.GetFindings -}}
-      {{- with $finding.Attributes -}}
-        {{- $rule := or $issue.GetProblemID .Title -}}
-        {{- $file := "unknown" -}}{{- $line := 0 -}}
-        {{- if .Locations -}}
-          {{- $location := getSourceLocation (index .Locations 0) -}}
-          {{- $file = or $location.FilePath "unknown" -}}{{- $line = $location.FromLine -}}
-        {{- end -}}
-        {{- $row := dict "rule" (or $rule "secret") "severity" (or (toLowerCase (print .Rating.Severity)) "low") "file" $file "line" (number $line) -}}
-        {{- $_ := set $envelope "secrets" (append (or $envelope.secrets (array)) $row) -}}
-      {{- end -}}
-    {{- end -}}
-  {{- else -}}
-  {{- $problem := $issue.GetPrimaryProblem -}}
-  {{- if or (not $problem) (not (or (eq $problem.Discriminator "snyk_vuln") (eq $problem.Discriminator "snyk_license"))) -}}
-    {{- fail "SCA finding has no supported problem" -}}
-  {{- end -}}
-  {{- $fields := jsonStrings $problem "id" "severity" -}}
-  {{- $id := or $fields.id "" -}}{{- $severity := or $fields.severity "" -}}
-  {{- $findings := $issue.GetFindings -}}
-  {{- $name := or (getIssueMetadata $issue "component-name") "" -}}
-  {{- $versions := sortVersions (or (getIssueMetadata $issue "component-versions") (array)) -}}
-  {{- if eq (len $findings) 1 -}}
-    {{- $fields := jsonStrings $problem "package_name" "package_version" -}}
-    {{- $name = or $fields.package_name $name -}}
-    {{- $version := or $fields.package_version "" -}}
-    {{- with index $findings 0 -}}{{- with .Attributes -}}
-      {{- range $location := .Locations -}}
-        {{- if eq $location.Discriminator "package" -}}
-          {{- $package := $location.AsPackageLocation -}}
-          {{- $name = or $package.Package.Name $name -}}{{- $version = or $package.Package.Version $version -}}
-          {{- break -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}{{- end -}}
-    {{- if $version -}}{{- $versions = sortVersions (array $version) -}}{{- else -}}{{- $versions = sortVersions (array) -}}{{- end -}}
-  {{- end -}}
-  {{- $fixable := "no" -}}
-  {{- $upgrade := "none" -}}
-  {{- if getIssueMetadata $issue "is-upgradable" -}}{{- $fixable = "yes" -}}{{- end -}}
-  {{- with getIssueMetadata $issue "upgrade-target" -}}{{- $upgrade = print .Name "@" .Version -}}{{- end -}}
-  {{- if $state.Full -}}
-    {{- range $candidate := $issue.GetProblems -}}
-      {{- if eq $candidate.Discriminator "snyk_vuln" -}}
-        {{- $_ := jsonNumbers $candidate "cvss_base_score" -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-  {{- $row := dict "id" $id "severity" $severity "pkg" (print $name "@" (join $versions ",")) "fixable" $fixable -}}
-  {{- if $state.Full -}}
-    {{- $cvss := "n/a" -}}
-    {{- $scores := jsonNumbers $problem "cvss_base_score" -}}
-    {{- if $scores -}}{{- $cvss = printf "%.1f" $scores.cvss_base_score -}}{{- end -}}
-    {{- $title := $issue.GetTitle -}}
-    {{- $runes := runes $title -}}
-    {{- if gt (len $runes) 80 -}}{{- $title = printf "%s…(+%d chars)" (runeString (slice $runes 0 80)) (sub (len $runes) 80) -}}{{- end -}}
-    {{- $_ := set $row "title" $title -}}{{- $_ := set $row "cvss" $cvss -}}{{- $_ := set $row "upgrade" $upgrade -}}
-  {{- end -}}
-  {{- $_ := set $envelope "sca" (append (or $envelope.sca (array)) $row) -}}
   {{- end -}}
 {{- end -}}
 

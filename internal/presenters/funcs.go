@@ -333,6 +333,7 @@ func getToonTemplateFuncMap() template.FuncMap {
 	fnMap["toonAllPrimitive"] = toon.AllPrimitive
 	fnMap["toonTabularFields"] = toon.TabularFields
 	fnMap["toonTabularCells"] = toon.TabularCells
+	fnMap["mapTOONIssue"] = mapTOONIssue
 	fnMap["toonContext"] = func(key string, value any, indent string) any {
 		return struct {
 			Key    string
