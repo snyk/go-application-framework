@@ -507,6 +507,7 @@ type issueBuilder struct {
 	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem      *SnykVulnProblem
 	hasVulnerability     bool
+	hasLicense           bool
 	sourceLocations      []SourceLocation
 	riskScore            uint16
 	reachability         *ReachabilityEvidence
@@ -712,8 +713,9 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			}
 			b.processSnykVulnProblem(&problem)
 		case "snyk_license":
-			if b.primaryProblem == nil {
+			if !b.hasVulnerability && !b.hasLicense {
 				b.primaryProblem = &problem
+				b.hasLicense = true
 			}
 			b.processSnykLicenseProblem(&problem)
 		case "cve":
