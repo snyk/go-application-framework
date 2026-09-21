@@ -135,7 +135,7 @@ func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile))
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, fileperms.FILEPERM_666)
+	return os.WriteFile(path, data, fileperms.FILEPERM_644)
 }
 
 // removeSharedFileValue clears machine_id and identifier_source from the shared file at path,
