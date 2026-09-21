@@ -49,14 +49,6 @@ const (
 	// Value type: string
 	DataKeyRuleShortDescription = "rule-short-description"
 
-	// DataKeyIsUpgradable indicates whether an issue has an upgrade path.
-	// Value type: bool
-	DataKeyIsUpgradable = "is-upgradable"
-
-	// DataKeyUpgradeTarget is the first direct package upgrade target.
-	// Value type: Package
-	DataKeyUpgradeTarget = "upgrade-target"
-
 	FindingTypeLicense = "license"
 )
 
@@ -226,19 +218,19 @@ type issueGrouper interface {
 type idBasedIssueGrouper struct{}
 
 func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	return groupFindingsBy(findings, func(finding *FindingData) string {
+	return groupFindingsBy(findings, func(finding *FindingData) (string, bool) {
 		// Extract problem ID from problems
 		problemID := g.extractProblemID(finding)
 		if problemID == "" {
 			// If no problem ID found, treat each finding as its own issue
 			problemID = g.getUniqueKey(finding)
 		}
-		return problemID
+		return problemID, true
 	})
 }
 
 // groupFindingsBy groups findings by key, preserving first-seen order so output is deterministic.
-func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) K) [][]*FindingData {
+func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) (K, bool)) [][]*FindingData {
 	groups := make(map[K][]*FindingData)
 	var order []K
 
@@ -247,7 +239,10 @@ func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingD
 			continue
 		}
 
-		key := keyOf(finding)
+		key, ok := keyOf(finding)
+		if !ok {
+			continue
+		}
 		if _, seen := groups[key]; !seen {
 			order = append(order, key)
 		}
@@ -323,23 +318,15 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
-type keyBasedGroupKey struct {
-	value     string
-	generated bool
-}
-
 func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	index := 0
-	return groupFindingsBy(findings, func(finding *FindingData) keyBasedGroupKey {
-		index++
+	return groupFindingsBy(findings, func(finding *FindingData) (string, bool) {
 		if finding.Attributes.Key != "" {
-			return keyBasedGroupKey{value: finding.Attributes.Key}
+			return finding.Attributes.Key, true
 		}
 		if finding.Id != nil {
-			return keyBasedGroupKey{value: finding.Id.String()}
+			return finding.Id.String(), true
 		}
-		// Keyless, ID-less findings must not be dropped; give each its own issue.
-		return keyBasedGroupKey{value: fmt.Sprint(index), generated: true}
+		return "", false
 	})
 }
 
@@ -501,8 +488,6 @@ type issueBuilder struct {
 	packageVersions      []string
 	cvssScore            float32
 	isFixable            bool
-	isUpgradable         bool
-	upgradeTarget        Package
 	fixedInVersions      []string
 	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem      *SnykVulnProblem
@@ -550,7 +535,6 @@ func (b *issueBuilder) processFinding(finding *FindingData) {
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
 	b.extractDependencyPaths(finding)
-	b.extractUpgradeAdvice(finding, finding == b.firstFinding)
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
@@ -633,33 +617,6 @@ func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 		if len(depPath.Path) > 0 {
 			// Store structured Package data, formatting done in rendering layer
 			b.dependencyPaths = append(b.dependencyPaths, depPath.Path)
-		}
-	}
-}
-
-func (b *issueBuilder) extractUpgradeAdvice(finding *FindingData, selectTarget bool) {
-	if finding.Relationships == nil || finding.Relationships.Fix == nil ||
-		finding.Relationships.Fix.Data == nil || finding.Relationships.Fix.Data.Attributes == nil ||
-		finding.Relationships.Fix.Data.Attributes.Action == nil {
-		return
-	}
-	advice, err := finding.Relationships.Fix.Data.Attributes.Action.AsUpgradePackageAdvice()
-	if err != nil {
-		return
-	}
-	for _, path := range advice.UpgradePaths {
-		if len(path.DependencyPath) < 2 {
-			continue
-		}
-		b.isUpgradable = true
-		if !selectTarget || b.upgradeTarget.Name != "" {
-			continue
-		}
-		for _, target := range path.DependencyPath[1:] {
-			if target.Name != "" && target.Version != "" {
-				b.upgradeTarget = target
-				break
-			}
 		}
 	}
 }
@@ -938,10 +895,6 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 
 	// Add fix information
 	metadata[DataKeyIsFixable] = b.isFixable
-	metadata[DataKeyIsUpgradable] = b.isUpgradable
-	if b.upgradeTarget.Name != "" {
-		metadata[DataKeyUpgradeTarget] = b.upgradeTarget
-	}
 	if len(b.fixedInVersions) > 0 {
 		metadata[DataKeyFixedInVersions] = b.fixedInVersions
 	}

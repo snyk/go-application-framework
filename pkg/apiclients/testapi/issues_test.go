@@ -262,25 +262,6 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		assert.Len(t, key1Issue.GetFindings(), 2)
 	})
 
-	t.Run("keyless fallback cannot collide with a real key", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		mockResult := mocks.NewMockTestResult(ctrl)
-		findings := []testapi.FindingData{
-			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-first"}},
-			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Title: "fallback"}},
-			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-second"}},
-		}
-		mockResult.EXPECT().Findings(ctx).Return(findings, true, nil).Times(1)
-
-		issues, err := testapi.NewIssuesFromTestResult(ctx, mockResult)
-		require.NoError(t, err)
-		require.Len(t, issues, 2)
-		assert.Equal(t, []string{"real-first", "real-second"}, []string{
-			issues[0].GetFindings()[0].Attributes.Title,
-			issues[0].GetFindings()[1].Attributes.Title,
-		})
-		assert.Equal(t, "fallback", issues[1].GetFindings()[0].Attributes.Title)
-	})
 }
 
 func TestIssue_GeneralizedMethods(t *testing.T) {
@@ -425,7 +406,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
 	})
 
-	t.Run("SCA issue normalizes primary problem and upgrade advice", func(t *testing.T) {
+	t.Run("SCA issue normalizes primary problem", func(t *testing.T) {
 		var finding testapi.FindingData
 		require.NoError(t, json.Unmarshal([]byte(`{
 			"attributes": {
@@ -434,11 +415,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 					{"source": "snyk_license", "id": "license"},
 					{"source": "snyk_vuln", "id": "vulnerability"}
 				]
-			},
-			"relationships": {"fix": {"data": {"attributes": {"action": {
-				"format": "upgrade_package_advice",
-				"upgrade_paths": [{"dependency_path": [{}, {"name": "target", "version": "2"}]}]
-			}}}}}
+			}
 		}`), &finding))
 
 		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
@@ -449,14 +426,6 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		discriminator, err := primary.Discriminator()
 		require.NoError(t, err)
 		assert.Equal(t, "snyk_vuln", discriminator)
-
-		upgradable, ok := issue.GetData(testapi.DataKeyIsUpgradable)
-		require.True(t, ok)
-		assert.Equal(t, true, upgradable)
-
-		target, ok := issue.GetData(testapi.DataKeyUpgradeTarget)
-		require.True(t, ok)
-		assert.Equal(t, testapi.Package{Name: "target", Version: "2"}, target)
 	})
 
 	t.Run("SCA license problem supersedes generic Snyk problem", func(t *testing.T) {

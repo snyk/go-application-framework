@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
@@ -96,14 +97,7 @@ func mapTOONSCAIssue(issue testapi.Issue, full bool) (map[string]any, error) {
 			return nil, err
 		}
 	}
-	fixable := "no"
-	if upgradable, _ := issueData[bool](issue, testapi.DataKeyIsUpgradable); upgradable {
-		fixable = "yes"
-	}
-	upgrade := "none"
-	if target, ok := issueData[testapi.Package](issue, testapi.DataKeyUpgradeTarget); ok {
-		upgrade = target.Name + "@" + target.Version
-	}
+	fixable, upgrade := toonRemediation(issue)
 	row := map[string]any{
 		"id": fields["id"], "severity": fields["severity"],
 		"pkg": name + "@" + strings.Join(versions, ","), "fixable": fixable,
@@ -125,6 +119,30 @@ func mapTOONSCAIssue(issue testapi.Issue, full bool) (map[string]any, error) {
 		row["upgrade"] = upgrade
 	}
 	return row, nil
+}
+
+func toonRemediation(issue testapi.Issue) (fixable, target string) {
+	fixable, target = "no", "none"
+	attributes := ufm_helpers.GetFixAttributes(issue)
+	if attributes == nil || attributes.Action == nil {
+		return
+	}
+	if advice, err := attributes.Action.AsUpgradePackageAdvice(); err == nil {
+		for _, path := range advice.UpgradePaths {
+			if len(path.DependencyPath) >= 2 {
+				fixable = "yes"
+				break
+			}
+		}
+	}
+	name, version := ufm_helpers.GetDirectPackageUpgradeTarget(attributes)
+	if name == "" || version == "" {
+		name, version = ufm_helpers.GetDirectPackagePinTarget(attributes)
+	}
+	if name != "" && version != "" {
+		return "yes", name + "@" + version
+	}
+	return
 }
 
 func singleFindingComponent(finding *testapi.FindingData, problem *testapi.Problem, fallbackName string) (string, []string, error) {

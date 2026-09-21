@@ -354,17 +354,11 @@ func getToonContextTemplateFuncMap(ctx context.Context) template.FuncMap {
 			return issues, nil
 		},
 		"getInteractionID": func() string {
-			value, ok := ctx.Value(networking.InteractionIdKey).(string)
-			if !ok {
-				return ""
-			}
+			value := ctx.Value(networking.InteractionIdKey).(string)
 			return value
 		},
 		"getErrorTip": func() string {
-			value, ok := ctx.Value(uitypes.ErrorTipKey).(string)
-			if !ok {
-				return ""
-			}
+			value := ctx.Value(uitypes.ErrorTipKey).(string)
 			return value
 		},
 	}

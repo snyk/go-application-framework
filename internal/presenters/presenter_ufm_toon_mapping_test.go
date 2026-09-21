@@ -153,7 +153,7 @@ func TestTOONMapping_SCAFixability(t *testing.T) {
 		{"upgrade", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"},{"name":"example","version":"2"}]}]}`, "yes"},
 		{"root only", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{"name":"root","version":"1"}],"is_drop":true}]}`, "no"},
 		{"empty target", `{"format":"upgrade_package_advice","upgrade_paths":[{"dependency_path":[{},{}]}]}`, "yes"},
-		{"pin", `{"format":"pin_package_advice","package_name":"example","pin_version":"2"}`, "no"},
+		{"pin", `{"format":"pin_package_advice","package_name":"example","pin_version":"2"}`, "yes"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -290,6 +290,16 @@ func TestTOONMapping_FullSCAUpgrades(t *testing.T) {
 	]}]`)
 	requireTOONEqual(t, true, `sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:
   n/a,yes,same,@,"",without advice,none`, output)
+}
+
+func TestTOONMapping_FullSCAPin(t *testing.T) {
+	t.Parallel()
+	output := renderFindings(t, true, `[{"findings":[
+		{"attributes":{"finding_type":"sca","title":"pin","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"same"}]},
+		 "relationships":{"fix":{"data":{"attributes":{"action":{"format":"pin_package_advice","package_name":"example","pin_version":"2"}}}}}}
+	]}]`)
+	requireTOONEqual(t, true, `sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:
+  n/a,yes,same,@,"",pin,example@2`, output)
 }
 
 func TestTOONMapping_CVSSValidationOnlyInFullOutput(t *testing.T) {
