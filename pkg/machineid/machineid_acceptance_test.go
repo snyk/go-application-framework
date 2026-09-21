@@ -99,6 +99,27 @@ func TestAcceptance_ValueFoundInSharedFileIsAdopted(t *testing.T) {
 	require.Equal(t, "from-shared-file", readSnykJSON(t)[configuration.MACHINE_ID])
 }
 
+// TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided proves the shared file's
+// identifier_source field is validated rather than trusted outright: it is untrusted cross-process
+// input written by any Snyk product on the machine, unlike the machine id itself, which this
+// package deliberately treats as opaque and never validates.
+func TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	sf := SharedFile{MachineID: "from-shared-file", IdentifierSource: "whatever-a-tampered-or-buggy-writer-put-here"}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "from-shared-file", value)
+	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
+}
+
 func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
 	config := newIsolatedConfig(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")

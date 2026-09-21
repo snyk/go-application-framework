@@ -54,6 +54,16 @@ func generate() string {
 	return strings.ToLower(uuid.New().String())
 }
 
+// knownSource reports whether s is one of the Source constants this package defines.
+func knownSource(s Source) bool {
+	switch s {
+	case SourceProvided, SourceOS, SourceLegacy, SourceGenerated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
 // the precedence order: an existing stored value (returned unchanged), the shared file written by
 // another Snyk product, the external channel (configuration.CLIENT_MACHINE_ID), the OS machine
@@ -77,7 +87,13 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 	}
 
 	if sf := readSharedFile(sharedFilePaths()); sf != nil && hasValue(sf.MachineID) {
-		return adopt(config, sf.MachineID, Source(sf.IdentifierSource), false)
+		source := Source(sf.IdentifierSource)
+		if !knownSource(source) {
+			// identifier_source is untrusted: the shared file can be written by any Snyk product on
+			// the machine. The machine id itself is deliberately left unvalidated by design.
+			source = SourceProvided
+		}
+		return adopt(config, sf.MachineID, source, false)
 	}
 
 	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); hasValue(raw) {
