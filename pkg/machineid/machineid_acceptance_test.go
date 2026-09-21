@@ -3,6 +3,7 @@ package machineid
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -60,6 +61,9 @@ func readSnykJSON(t *testing.T) map[string]any {
 		return map[string]any{}
 	}
 	require.NoError(t, err)
+	if len(data) == 0 {
+		return map[string]any{}
+	}
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(data, &m))
 	return m
@@ -288,6 +292,104 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	second, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.NotEqual(t, first, second, "a resolution after Reset must not reuse the discarded value")
+}
+
+// resetOrderStorage wraps a real Storage and, for every Set call, records the key and whether the
+// shared file (at perUserPath) was already cleared at that moment. This proves Reset's actual
+// operation order, not just its end state: a concurrent resolve() between Reset's two steps must
+// only ever be able to observe storage already-cleared-but-file-not-yet-cleared, never the reverse.
+type resetOrderStorage struct {
+	configuration.Storage
+	perUserPath          string
+	calls                []string
+	fileClearedAtCallFor map[string]bool
+}
+
+func (s *resetOrderStorage) Set(key string, value any) error {
+	s.calls = append(s.calls, key)
+	sf := readSharedFile(pathPair{perUser: s.perUserPath})
+	s.fileClearedAtCallFor[key] = sf == nil || !hasValue(sf.MachineID)
+	return s.Storage.Set(key, value)
+}
+
+// TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeSource proves Reset's
+// two ordering fixes: the shared file is cleared before storage (so a resolve() racing between the
+// two steps still sees the old, correct value in storage rather than re-deriving and re-persisting
+// it after Reset finishes), and within storage, MACHINE_ID is deleted before MACHINE_ID_SOURCE (the
+// mirror image of mirrorIntoStorage's write order, since MACHINE_ID's absence is what a future
+// resolve() treats as "not yet resolved").
+func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeSource(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	paths := sharedFilePaths()
+	require.FileExists(t, paths.perUser)
+
+	recording := &resetOrderStorage{
+		Storage:              config.GetStorage(),
+		perUserPath:          paths.perUser,
+		fileClearedAtCallFor: map[string]bool{},
+	}
+	config.SetStorage(recording)
+
+	require.NoError(t, Reset(config))
+
+	require.Equal(t, []string{configuration.MACHINE_ID, configuration.MACHINE_ID_SOURCE}, recording.calls,
+		"MACHINE_ID must be deleted from storage before MACHINE_ID_SOURCE")
+	require.True(t, recording.fileClearedAtCallFor[configuration.MACHINE_ID],
+		"the shared file must already be cleared before storage is touched at all")
+	require.True(t, recording.fileClearedAtCallFor[configuration.MACHINE_ID_SOURCE],
+		"the shared file must already be cleared before storage is touched at all")
+}
+
+// keyFailingStorage wraps a real Storage and fails every Set call for one key, so a test can
+// simulate a crash or I/O error between the two mirrorIntoStorage writes without mocking away the
+// Refresh-based recheck path.
+type keyFailingStorage struct {
+	configuration.Storage
+	failKey string
+}
+
+func (s *keyFailingStorage) Set(key string, value any) error {
+	if key == s.failKey {
+		return errors.New("simulated storage failure")
+	}
+	return s.Storage.Set(key, value)
+}
+
+// TestAcceptance_SourceSetFailureDoesNotLeaveMachineIDDurablyPresentWithoutSource proves the
+// crash-safety invariant: MACHINE_ID must never become durably visible before MACHINE_ID_SOURCE
+// does. If persisting the source fails, the id must not be persisted either, so a later resolution
+// re-derives both together instead of reusing an id whose source was never recorded.
+func TestAcceptance_SourceSetFailureDoesNotLeaveMachineIDDurablyPresentWithoutSource(t *testing.T) {
+	config := newIsolatedConfig(t)
+	failing := &keyFailingStorage{Storage: config.GetStorage(), failKey: configuration.MACHINE_ID_SOURCE}
+	config.SetStorage(failing)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	stored := readSnykJSON(t)
+	_, sourceDurablyPresent := stored[configuration.MACHINE_ID_SOURCE]
+	require.False(t, sourceDurablyPresent, "the source failed to persist")
+	_, idDurablyPresent := stored[configuration.MACHINE_ID]
+	require.False(t, idDurablyPresent, "the id must not be durably persisted when its source failed to persist")
+
+	// A later run opens a fresh Configuration against the same underlying file.
+	second := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
+	second.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	value, err := second.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	id, ok := value.(string)
+	require.True(t, ok)
+	require.True(t, hasValue(id))
+
+	stored = readSnykJSON(t)
+	require.Equal(t, id, stored[configuration.MACHINE_ID])
+	require.NotEmpty(t, stored[configuration.MACHINE_ID_SOURCE], "the source must be persisted alongside the id once the fresh resolution succeeds")
 }
 
 type countingStorage struct {
