@@ -1,9 +1,10 @@
 // Package machineid resolves and persists a single machine identifier shared by every Snyk
 // product on the same machine. The identifier is an opaque string with no defined format: it is
 // stored and reported exactly as supplied by whichever source produced it. It is the one place
-// that implements the resolution precedence (existing stored value, an externally supplied value,
-// an OS-derived identifier, an opt-in legacy value, or a freshly generated one) so every consumer
-// of this framework converges on the same value.
+// that implements the resolution precedence (existing stored value, the shared file written by
+// another Snyk product, an externally supplied value, an OS-derived identifier, an opt-in legacy
+// value, or a freshly generated one) so every consumer of this framework converges on the same
+// value.
 package machineid
 
 import (
@@ -54,11 +55,12 @@ func generate() string {
 }
 
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
-// the precedence order: an existing stored value (returned unchanged), the external channel
-// (configuration.CLIENT_MACHINE_ID), the OS machine identifier, an opt-in legacy file, or a
-// freshly generated UUID. A value adopted from any source but the OS identifier is persisted into
-// the shared file and into configuration storage; the OS identifier is persisted into
-// configuration storage only, since every product derives it identically.
+// the precedence order: an existing stored value (returned unchanged), the shared file written by
+// another Snyk product, the external channel (configuration.CLIENT_MACHINE_ID), the OS machine
+// identifier, an opt-in legacy file, or a freshly generated UUID. A value adopted from any source
+// but the OS identifier is persisted into the shared file and into configuration storage; the OS
+// identifier is persisted into configuration storage only, since every product derives it
+// identically.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	var o resolveOptions
 	for _, opt := range opts {
@@ -141,17 +143,23 @@ func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, can
 // itself: config.GetString(configuration.MACHINE_ID) would re-invoke this very default value
 // function, since Configuration re-runs a key's default function on every lookup.
 func mirrorIntoStorage(config configuration.Configuration, id string, source Source) (string, Source) {
-	storage := config.GetStorage()
-	if storage == nil {
+	// MACHINE_ID must never become durably visible before MACHINE_ID_SOURCE does: resolve() treats
+	// a stored MACHINE_ID alone as proof that resolution is complete and never re-checks the
+	// source, so a partial write in the other order would strand every future run on an id with no
+	// recorded source.
+	persistInMemoryOnly := func() (string, Source) {
 		config.Set(configuration.MACHINE_ID, id)
 		config.Set(configuration.MACHINE_ID_SOURCE, string(source))
 		return id, source
 	}
 
+	storage := config.GetStorage()
+	if storage == nil {
+		return persistInMemoryOnly()
+	}
+
 	if err := storage.Lock(context.Background(), lockRetryDelay); err != nil {
-		config.Set(configuration.MACHINE_ID, id)
-		config.Set(configuration.MACHINE_ID_SOURCE, string(source))
-		return id, source
+		return persistInMemoryOnly()
 	}
 	defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
 
@@ -164,11 +172,11 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 	if refreshedID := refreshed.GetString(configuration.MACHINE_ID); hasValue(refreshedID) {
 		id = refreshedID
 		source = Source(refreshed.GetString(configuration.MACHINE_ID_SOURCE))
+	} else if err := storage.Set(configuration.MACHINE_ID_SOURCE, string(source)); err != nil {
+		return persistInMemoryOnly()
 	} else {
 		//nolint:errcheck // a failed write here still leaves the correct value in config.Set below for this process
 		_ = storage.Set(configuration.MACHINE_ID, id)
-		//nolint:errcheck // a failed write here still leaves the correct value in config.Set below for this process
-		_ = storage.Set(configuration.MACHINE_ID_SOURCE, string(source))
 	}
 
 	config.Set(configuration.MACHINE_ID, id)
@@ -195,10 +203,26 @@ func EnsurePersisted(config configuration.Configuration) (string, error) {
 func Reset(config configuration.Configuration) error {
 	var resultErr error
 
+	// The shared file is cleared before storage so that a resolve() racing with Reset can only ever
+	// observe storage already cleared while the shared file still holds the old value (harmless: it
+	// re-adopts the value Reset is about to discard anyway), never the reverse, which would let a
+	// stale value survive Reset by being re-persisted into storage after Reset's own clear.
+	paths := sharedFilePaths()
+	for _, p := range []string{paths.machineWide, paths.perUser} {
+		if p == "" {
+			continue
+		}
+		if err := removeSharedFileValue(p); err != nil {
+			resultErr = errors.Join(resultErr, err)
+		}
+	}
+
 	if storage := config.GetStorage(); storage != nil {
 		if err := storage.Lock(context.Background(), lockRetryDelay); err != nil {
 			resultErr = err
 		} else {
+			// MACHINE_ID is deleted before MACHINE_ID_SOURCE, mirroring mirrorIntoStorage's write
+			// order: MACHINE_ID's absence is what a future resolve() treats as "not yet resolved".
 			if err := storage.Set(configuration.MACHINE_ID, struct{}{}); err != nil {
 				resultErr = errors.Join(resultErr, err)
 			}
@@ -211,16 +235,6 @@ func Reset(config configuration.Configuration) error {
 
 	config.Set(configuration.MACHINE_ID, nil)
 	config.Set(configuration.MACHINE_ID_SOURCE, nil)
-
-	paths := sharedFilePaths()
-	for _, p := range []string{paths.machineWide, paths.perUser} {
-		if p == "" {
-			continue
-		}
-		if err := removeSharedFileValue(p); err != nil {
-			resultErr = errors.Join(resultErr, err)
-		}
-	}
 
 	return resultErr
 }
