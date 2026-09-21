@@ -268,6 +268,27 @@ func TestAcceptance_MachineWideDirUnwritableFallsBackToPerUser(t *testing.T) {
 	require.FileExists(t, paths.perUser)
 }
 
+// TestAcceptance_SharedFileIsNotWorldWritable proves the machine-wide shared file is written with
+// owner-write, group/other-read-only permissions, since any local process being able to rewrite the
+// machine identifier is an unnecessary exposure.
+func TestAcceptance_SharedFileIsNotWorldWritable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits behave differently on windows")
+	}
+	defer withZeroUmask(t)()
+
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	paths := sharedFilePaths()
+	info, err := os.Stat(paths.perUser)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+}
+
 func TestAcceptance_ConcurrentResolutionsConvergeOnOneValue(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
