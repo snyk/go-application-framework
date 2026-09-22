@@ -42,7 +42,7 @@ const (
 	SourceProvided Source = "provided"
 	// SourceOS means the value came from the operating system's machine identifier.
 	SourceOS Source = "os"
-	// SourceLegacy means the value came from an opt-in legacy device-id file (see WithLegacyDeviceIdFile).
+	// SourceLegacy means the value came from an opt-in legacy device-id file (see WithLegacyDeviceIDFile).
 	SourceLegacy Source = "legacy"
 	// SourceGenerated means the value was freshly generated because no other source applied.
 	SourceGenerated Source = "generated"
@@ -112,16 +112,16 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	}
 	o.logger = effectiveLogger(o.logger)
 	return func(config configuration.Configuration, existingValue any) (any, error) {
-		return resolve(config, existingValue, o)
+		return resolve(config, existingValue, o), nil
 	}
 }
 
-func resolve(config configuration.Configuration, existingValue any, o resolveOptions) (string, error) {
+func resolve(config configuration.Configuration, existingValue any, o resolveOptions) string {
 	logger := o.logger
 
 	if s, ok := existingValue.(string); ok && hasValue(s) {
 		logger.Debug().Msg("machine id: using existing stored value")
-		return s, nil
+		return s
 	}
 
 	if sf := readSharedFile(sharedFilePaths(), logger); sf != nil && hasValue(sf.MachineID) {
@@ -167,7 +167,7 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 // adopt persists id/source and returns the value that ultimately won: writeShared additionally
 // races the value into the shared file, and either step may instead surface a value a concurrent
 // writer already stored, which is what the caller ends up returning.
-func adopt(config configuration.Configuration, id string, source Source, writeShared bool, logger *zerolog.Logger) (string, error) {
+func adopt(config configuration.Configuration, id string, source Source, writeShared bool, logger *zerolog.Logger) string {
 	logger = effectiveLogger(logger)
 	if writeShared {
 		paths := sharedFilePaths()
@@ -186,8 +186,7 @@ func adopt(config configuration.Configuration, id string, source Source, writeSh
 		}
 		// If every write attempt failed, keep resolving with our own candidate (id/source unchanged).
 	}
-	id, _ = mirrorIntoStorage(config, id, source, logger)
-	return id, nil
+	return mirrorIntoStorage(config, id, source, logger)
 }
 
 // adoptOrWriteSharedFile keeps whatever value the shared file already holds; otherwise it writes
@@ -218,16 +217,16 @@ func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, can
 // The re-check after Refresh reads into a scratch in-memory Configuration rather than config
 // itself: config.GetString(configuration.MACHINE_ID) would re-invoke this very default value
 // function, since Configuration re-runs a key's default function on every lookup.
-func mirrorIntoStorage(config configuration.Configuration, id string, source Source, logger *zerolog.Logger) (string, Source) {
+func mirrorIntoStorage(config configuration.Configuration, id string, source Source, logger *zerolog.Logger) string {
 	logger = effectiveLogger(logger)
 	// MACHINE_ID must never become durably visible before MACHINE_ID_SOURCE does: resolve() treats
 	// a stored MACHINE_ID alone as proof that resolution is complete and never re-checks the
 	// source, so a partial write in the other order would strand every future run on an id with no
 	// recorded source.
-	persistInMemoryOnly := func(id string, source Source) (string, Source) {
+	persistInMemoryOnly := func(id string, source Source) string {
 		config.Set(configuration.MACHINE_ID, id)
 		config.Set(configuration.MACHINE_ID_SOURCE, string(source))
-		return id, source
+		return id
 	}
 
 	storage := config.GetStorage()
@@ -269,7 +268,7 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 	config.Set(configuration.MACHINE_ID, id)
 	config.Set(configuration.MACHINE_ID_SOURCE, string(source))
 	logger.Debug().Str("machine_id", id).Str("source", string(source)).Msg("machine id resolved")
-	return id, source
+	return id
 }
 
 // EnsurePersisted forces one resolution and returns its result, so the machine identifier is

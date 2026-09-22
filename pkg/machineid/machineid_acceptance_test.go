@@ -240,7 +240,7 @@ func TestAcceptance_LegacyFileIsUsedWhenOptedIn(t *testing.T) {
 	require.NoError(t, os.WriteFile(legacyPath, []byte("legacy-raw-value\n"), 0o644))
 	parse := func(data []byte) (string, error) { return string(data), nil }
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestAcceptance_LegacyFileOnlyTrimsTrailingWhitespace(t *testing.T) {
 	require.NoError(t, os.WriteFile(legacyPath, []byte(raw), 0o644))
 	parse := func(data []byte) (string, error) { return string(data), nil }
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -274,7 +274,7 @@ func TestAcceptance_LegacyFileParseFailureFallsThroughToGeneratedAndLogsTheError
 
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse), WithLogger(&logger)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse), WithLogger(&logger)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
