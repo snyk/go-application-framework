@@ -122,7 +122,7 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 		t.Fatal("writeSharedFileValue did not return: its lock acquisition must be bounded, not block forever")
 	}
 
-	require.Contains(t, logs.String(), path, "the swallowed lock timeout must be logged together with the file path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, path), "the swallowed lock timeout must be logged together with the file path")
 	require.Contains(t, logs.String(), "lock", "the swallowed lock timeout must be logged")
 }
 

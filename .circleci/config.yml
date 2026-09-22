@@ -35,6 +35,29 @@ jobs:
           name: Run unit tests
           command: go test ./...
 
+  macos_test:
+    macos:
+      xcode: "15.3.0"
+    resource_class: m4pro.medium
+    environment:
+      # Bump this alongside the "go" directive in go.mod.
+      GO_VERSION: "1.26.2"
+    steps:
+      - checkout
+      - run:
+          name: Install Go
+          command: |
+            set -euo pipefail
+            curl -sSfL -o go.tar.gz "https://go.dev/dl/go${GO_VERSION}.darwin-arm64.tar.gz"
+            mkdir -p "$HOME/go-toolchain"
+            tar -C "$HOME/go-toolchain" -xzf go.tar.gz
+            rm go.tar.gz
+            echo 'export PATH="$HOME/go-toolchain/go/bin:$PATH"' >> "$BASH_ENV"
+            "$HOME/go-toolchain/go/bin/go" version | grep -q "go${GO_VERSION}"
+      - run:
+          name: Run machine identity unit tests
+          command: go test ./pkg/machineid/...
+
   build:
     <<: *base_image
     steps:
@@ -96,8 +119,11 @@ workflows:
           name: Unit tests
       - windows_test:
           name: Windows tests
+      - macos_test:
+          name: macOS tests
       - build:
           name: Build
           requires:
             - Unit tests
             - Windows tests
+            - macOS tests
