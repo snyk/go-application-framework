@@ -334,7 +334,6 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
           - fullDescription:
               text: example@1
             help:
-              markdown: "* Vulnerable module: example\n* Introduced through: example@1\n"
               text: ""
             id: example
             properties:

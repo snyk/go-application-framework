@@ -1,76 +1,74 @@
 runs[2]:
-  - results[2]:
-      - fingerprints:
-          identity: secret-shared-a
-          "snyk/asset/finding/v1": secret-shared-a
-        level: warning
-        locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
-          secrets.json,1
-        message:
-          text: This file contains a medium severity Shared secret A vulnerability.
-        ruleId: SECRET-RULE-SHARED
-      - fingerprints:
-          identity: secret-shared-b
-          "snyk/asset/finding/v1": secret-shared-b
-        level: note
-        locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
-          secrets.json,1
-        message:
-          text: This file contains a low severity Shared secret B vulnerability.
-        ruleId: SECRET-RULE-SHARED
-    tool:
+  - tool:
       driver:
         informationUri: "https://docs.snyk.io/"
         name: Snyk Secrets
         rules[1]:
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-SHARED
             properties:
               tags[1]: security
+            results[2]:
+              - fingerprints:
+                  identity: secret-shared-a
+                  "snyk/asset/finding/v1": secret-shared-a
+                level: warning
+                locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
+                  secrets.json,1
+                message:
+                  text: This file contains a medium severity Shared secret A vulnerability.
+                resultIndex: 0
+              - fingerprints:
+                  identity: secret-shared-b
+                  "snyk/asset/finding/v1": secret-shared-b
+                level: note
+                locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
+                  secrets.json,1
+                message:
+                  text: This file contains a low severity Shared secret B vulnerability.
+                resultIndex: 1
             shortDescription:
               text: Medium severity - Shared secret A
         semanticVersion: ""
         version: ""
-  - results[2]:
-      - fingerprints:
-          identity: secret-a
-          "snyk/asset/finding/v1": secret-a
-        level: warning
-        locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
-          secrets.json,1
-        message:
-          text: This file contains a medium severity Secret rule A vulnerability.
-        ruleId: SECRET-RULE-A
-      - fingerprints:
-          identity: secret-b
-          "snyk/asset/finding/v1": secret-b
-        level: note
-        locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
-          secrets.json,1
-        message:
-          text: This file contains a low severity Secret rule B vulnerability.
-        ruleId: SECRET-RULE-B
-    tool:
+  - tool:
       driver:
         informationUri: "https://docs.snyk.io/"
         name: Snyk Secrets
         rules[2]:
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-A
             properties:
               tags[1]: security
+            results[1]:
+              - fingerprints:
+                  identity: secret-a
+                  "snyk/asset/finding/v1": secret-a
+                level: warning
+                locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
+                  secrets.json,1
+                message:
+                  text: This file contains a medium severity Secret rule A vulnerability.
+                resultIndex: 0
             shortDescription:
               text: Medium severity - Secret rule A
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-B
             properties:
               tags[1]: security
+            results[1]:
+              - fingerprints:
+                  identity: secret-b
+                  "snyk/asset/finding/v1": secret-b
+                level: note
+                locations[1]{physicalLocation{artifactLocation{uri},region{startLine}}}:
+                  secrets.json,1
+                message:
+                  text: This file contains a low severity Secret rule B vulnerability.
+                resultIndex: 1
             shortDescription:
               text: Low severity - Secret rule B
         semanticVersion: ""

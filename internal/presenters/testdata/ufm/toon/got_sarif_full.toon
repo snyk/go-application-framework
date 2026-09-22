@@ -1,26 +1,5 @@
 runs[1]:
-  - results[1]:
-      - fixes[1]:
-          - artifactChanges[1]:
-              - artifactLocation:
-                  uri: package-lock.json
-                replacements[1]{deletedRegion{startLine},insertedContent{text}}:
-                  1,snyk-nodejs-lockfile-parser@2.10.0
-            description:
-              text: Upgrade to snyk-nodejs-lockfile-parser@2.10.0
-        level: warning
-        locations[1]:
-          - logicalLocations[1]{fullyQualifiedName}:
-              got@11.8.2
-            physicalLocation:
-              artifactLocation:
-                uri: package-lock.json
-              region:
-                startLine: 1
-        message:
-          text: This file introduces a vulnerable got package with a medium severity vulnerability.
-        ruleId: SNYK-JS-GOT-2932019
-    tool:
+  - tool:
       driver:
         informationUri: "https://docs.snyk.io/"
         name: Snyk Open Source
@@ -30,13 +9,33 @@ runs[1]:
           - fullDescription:
               text: (CVE-2022-33987) got@11.8.2
             help:
-              markdown: "* Package Manager: npm\n* Vulnerable module: got\n* Introduced through: snyk@1.0.0-monorepo, snyk-nodejs-lockfile-parser@2.3.1 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › got@11.8.2\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › got@11.8.2\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › @yarnpkg/core@2.4.0 › got@11.8.2\n# Overview\n\nAffected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.\n# Remediation\nUpgrade `got` to version 11.8.5, 12.1.0 or higher.\n# References\n- [GitHub Diff](https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0)\n- [GitHub PR](https://github.com/sindresorhus/got/pull/2047)\n"
               text: ""
             id: SNYK-JS-GOT-2932019
             properties:
               cvssv3_baseScore: 5.4
               "security-severity": "5.4"
               tags[3]: security,CWE-601,npm
+            results[1]:
+              - fixes[1]:
+                  - artifactChanges[1]:
+                      - artifactLocation:
+                          uri: package-lock.json
+                        replacements[1]{deletedRegion{startLine},insertedContent{text}}:
+                          1,snyk-nodejs-lockfile-parser@2.10.0
+                    description:
+                      text: Upgrade to snyk-nodejs-lockfile-parser@2.10.0
+                level: warning
+                locations[1]:
+                  - logicalLocations[1]{fullyQualifiedName}:
+                      got@11.8.2
+                    physicalLocation:
+                      artifactLocation:
+                        uri: package-lock.json
+                      region:
+                        startLine: 1
+                message:
+                  text: This file introduces a vulnerable got package with a medium severity vulnerability.
+                resultIndex: 0
             shortDescription:
               text: Medium severity - Open Redirect vulnerability in got
         semanticVersion: 1.1301.0
