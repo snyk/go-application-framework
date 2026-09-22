@@ -213,6 +213,30 @@ func TestAdoptOrWriteSharedFileReportsWhenAConcurrentWriterWon(t *testing.T) {
 	require.True(t, wonByOther)
 }
 
+// TestAdoptOrWriteSharedFileStampsSerialNumberEvenWhenAConcurrentWriterWon proves a hardware serial
+// number is still recorded into the shared file's serial_number field for correlation, even when a
+// concurrent writer's value wins the race for the machine id itself: the serial is the same value on
+// this machine regardless of which candidate is adopted as the id.
+func TestAdoptOrWriteSharedFileStampsSerialNumberEvenWhenAConcurrentWriterWon(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "machine-id.json")
+	sf := sharedFile{MachineID: "race-winner-id", IdentifierSource: string(sourceGenerated)}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o644))
+
+	id, wonByOther, err := adoptOrWriteSharedFile(path, false, "5CG1234ABC", sourceSerial, "test", false, nil)
+	require.NoError(t, err)
+	require.Equal(t, "race-winner-id", id)
+	require.True(t, wonByOther)
+
+	written, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(written, &raw))
+	require.Equal(t, "5CG1234ABC", raw["serial_number"])
+}
+
 func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
 	config := newIsolatedConfig(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")
@@ -965,6 +989,250 @@ func TestAcceptance_SharedFileWritePreservesUnknownFields(t *testing.T) {
 	require.Equal(t, "5CG1234ABC", raw["serial_number"])
 	require.Equal(t, "some-host", raw["hostname"])
 	require.Equal(t, "keep-me", raw["a_future_field_this_version_does_not_know_about"])
+}
+
+// TestAcceptance_HardwareIdentityDisabledByDefaultNeverTouchesHardware proves the default chain
+// (no WithHardwareIdentity) never reads the hardware serial number or the hostname: ordinary CLI,
+// IDE, and MCP consumers must keep resolving exactly as before this option existed.
+func TestAcceptance_HardwareIdentityDisabledByDefaultNeverTouchesHardware(t *testing.T) {
+	config := newIsolatedConfig(t)
+	originalSerial := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		t.Fatal("default resolution must never read the hardware serial number")
+		return "", false
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = originalSerial })
+	originalHostname := hostnameFunc
+	hostnameFunc = func() (string, error) {
+		t.Fatal("default resolution must never read the hostname")
+		return "", nil
+	}
+	t.Cleanup(func() { hostnameFunc = originalHostname })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+}
+
+// TestAcceptance_HardwareSerialNumberIsAdoptedAndPersisted proves a hardware serial number read
+// with WithHardwareIdentity wins as the machine id and is persisted to the shared file, in both the
+// machine_id and serial_number fields, so a later unprivileged resolution can pick it up.
+func TestAcceptance_HardwareSerialNumberIsAdoptedAndPersisted(t *testing.T) {
+	config := newIsolatedConfig(t)
+	original := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		return "5CG1234ABC", true
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = original })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "5CG1234ABC", value)
+	require.Equal(t, string(sourceSerial), config.GetString(configuration.MACHINE_ID_SOURCE))
+
+	sf := readSharedFile(sharedFilePaths(), nil)
+	require.NotNil(t, sf)
+	require.Equal(t, "5CG1234ABC", sf.MachineID)
+	require.Equal(t, "5CG1234ABC", sf.SerialNumber)
+}
+
+// TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValue proves a freshly read
+// serial number does not clobber a machine id the shared file already carries, matching how a
+// generated or migrated-legacy value behaves: it is still recorded in serial_number for
+// correlation, but the machine id itself stays whatever was already established.
+func TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValue(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	sf := sharedFile{MachineID: "already-established-id", IdentifierSource: string(sourceGenerated)}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+
+	original := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		return "5CG1234ABC", true
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = original })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "already-established-id", value, "a value already established in the shared file must not be clobbered by a freshly read serial number")
+
+	updated, err := os.ReadFile(paths.perUser)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(updated, &raw))
+	require.Equal(t, "5CG1234ABC", raw["serial_number"], "the serial number must still be recorded for correlation even though it did not win as the machine id")
+}
+
+// TestAcceptance_PlaceholderHardwareSerialNumberFallsThroughToGeneratedID covers the single most
+// likely real-world failure mode: a manufacturer placeholder in place of a real serial number must
+// fall through rather than becoming the machine identity.
+func TestAcceptance_PlaceholderHardwareSerialNumberFallsThroughToGeneratedID(t *testing.T) {
+	config := newIsolatedConfig(t)
+	originalSerial := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		return "To be filled by O.E.M.", true
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = originalSerial })
+	originalHostname := hostnameFunc
+	hostnameFunc = func() (string, error) { return "", errors.New("no hostname on this test host") }
+	t.Cleanup(func() { hostnameFunc = originalHostname })
+
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity(), WithLogger(&logger)))
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	id, ok := value.(string)
+	require.True(t, ok)
+	require.True(t, valid(id))
+	require.NotEqual(t, "To be filled by O.E.M.", id)
+	require.Equal(t, string(sourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
+	require.Contains(t, logs.String(), "hardware serial number failed validation")
+}
+
+// TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies proves the hostname source is tried
+// immediately before minting a fresh id, and, unlike a hardware serial number, is not itself written
+// into the shared file's machine_id field: every process derives the same hostname independently, so
+// it needs no propagation channel to converge.
+func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
+	config := newIsolatedConfig(t)
+	original := hostnameFunc
+	hostnameFunc = func() (string, error) { return "my-laptop.local", nil }
+	t.Cleanup(func() { hostnameFunc = original })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "my-laptop.local", value)
+	require.Equal(t, string(sourceHostname), config.GetString(configuration.MACHINE_ID_SOURCE))
+
+	sf := readSharedFile(sharedFilePaths(), nil)
+	require.Nil(t, sf, "a hostname-sourced id is not written to the shared file's machine_id field")
+
+	data, err := os.ReadFile(sharedFilePaths().perUser)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	require.Equal(t, "my-laptop.local", raw["hostname"], "the hostname is still recorded for other tooling's correlation use")
+	require.Empty(t, raw["machine_id"])
+}
+
+// TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWins proves the hostname
+// read during a resolution is recorded into the shared file for correlation even when it loses the
+// race for the machine id itself to a higher-precedence source.
+func TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWins(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	sf := sharedFile{MachineID: "from-shared-file", IdentifierSource: string(sourcePersisted)}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+
+	original := hostnameFunc
+	hostnameFunc = func() (string, error) { return "my-laptop.local", nil }
+	t.Cleanup(func() { hostnameFunc = original })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "from-shared-file", value, "the shared file's already-established id must win over a freshly read hostname")
+
+	updated, err := os.ReadFile(paths.perUser)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(updated, &raw))
+	require.Equal(t, "my-laptop.local", raw["hostname"], "the hostname must still be recorded for correlation even though it did not win as the machine id")
+}
+
+// TestAcceptance_HardwareSerialNumberPropagatesToUnprivilegedResolution is the acceptance scenario
+// this package's opt-in hardware sources exist for: a privileged, WithHardwareIdentity-enabled
+// resolution reads a serial number and persists it, and a later resolution with the option disabled
+// (standing in for an unprivileged component) picks up the very same identifier from the shared
+// file rather than minting a second identity for the same machine.
+func TestAcceptance_HardwareSerialNumberPropagatesToUnprivilegedResolution(t *testing.T) {
+	privilegedConfig := newIsolatedConfig(t)
+	original := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		return "5CG1234ABC", true
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = original })
+
+	privilegedConfig.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+	privileged, err := privilegedConfig.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "5CG1234ABC", privileged)
+
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		t.Fatal("an unprivileged resolution must never attempt to read the hardware serial number")
+		return "", false
+	}
+
+	unprivilegedConfig := configuration.NewInMemory()
+	unprivilegedConfig.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	unprivileged, err := unprivilegedConfig.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	require.Equal(t, privileged, unprivileged, "an unprivileged resolution must pick up the id a privileged one persisted to the shared file, not mint a new one")
+	require.Equal(t, string(sourcePersisted), unprivilegedConfig.GetString(configuration.MACHINE_ID_SOURCE))
+}
+
+// TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution mirrors
+// TestAcceptance_NoFurtherIOAfterFirstResolution for the hardware-serial-sourced path: once resolved
+// and persisted, a second resolution must reuse the stored value without reading the hardware again
+// or rewriting the shared file.
+func TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution(t *testing.T) {
+	config := newIsolatedConfig(t)
+	readCount := 0
+	original := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
+		readCount++
+		return "5CG1234ABC", true
+	}
+	t.Cleanup(func() { readHardwareSerialFunc = original })
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, readCount)
+
+	paths := sharedFilePaths()
+	info, statErr := os.Stat(paths.perUser)
+	require.NoError(t, statErr)
+	mtimeAfterFirst := info.ModTime()
+
+	_, err = config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, readCount, "a second resolution must not read the hardware serial number again")
+
+	info, err = os.Stat(paths.perUser)
+	require.NoError(t, err)
+	require.Equal(t, mtimeAfterFirst, info.ModTime(), "a second resolution must not rewrite the shared file")
+}
+
+// TestAcceptance_HardwareIdentityNeverFailsRegardlessOfWhatTheHardwareReports exercises the real,
+// unmocked platform-specific hardware serial number reader for whichever OS this test runs on. A CI
+// runner's serial number is frequently empty or a manufacturer placeholder; resolution must fall
+// through to the next source and still produce a usable identifier, never fail.
+func TestAcceptance_HardwareIdentityNeverFailsRegardlessOfWhatTheHardwareReports(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithHardwareIdentity()))
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	id, ok := value.(string)
+	require.True(t, ok)
+	require.True(t, valid(id))
+
+	source := idSource(config.GetString(configuration.MACHINE_ID_SOURCE))
+	require.True(t, knownSource(source), "source %q must be one of this package's known values", source)
 }
 
 // TestAcceptance_PerUserDirBlockedByExistingFileDoesNotPreventResolution proves resolution
