@@ -17,6 +17,8 @@ import (
 
 // Storage persists configuration values that outlive a single process run.
 type Storage interface {
+	// Set persists value under key. If IsKeyDeleted(value) is true, the implementation must
+	// remove key from storage instead of persisting the value.
 	Set(key string, value any) error
 	Refresh(config Configuration, key string) error
 	Lock(ctx context.Context, retryDelay time.Duration) error
@@ -41,13 +43,17 @@ func (*EmptyStorage) Unlock() error {
 	return nil
 }
 
-// keyDeleted is a marker value which, when set, causes a key to be deleted from
-// stored configuration.
-var keyDeleted = struct{}{}
+// deletedMarker is a distinct type so an arbitrary struct{}{} value built by unrelated code is
+// never mistaken for the Deleted sentinel below; only IsKeyDeleted(Deleted) is true.
+type deletedMarker struct{}
 
-// IsKeyDeleted reports whether val is the internal key-deleted marker used by Unset().
+// Deleted is the sentinel value a Storage.Set implementation must recognize, via IsKeyDeleted,
+// as "remove this key" rather than a value to persist.
+var Deleted any = deletedMarker{}
+
+// IsKeyDeleted reports whether val is the Deleted sentinel used by Unset().
 func IsKeyDeleted(val any) bool {
-	return val == keyDeleted
+	return val == Deleted
 }
 
 type JsonStorage struct {
@@ -123,9 +129,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 		key = tmpKey
 	}
 
-	if _, ok := value.(struct{}); ok {
-		// See implementation of Configuration.Unset; when marker value is set,
-		// key is deleted from config before writing.
+	if IsKeyDeleted(value) {
 		delete(config, key)
 	} else {
 		config[key] = value

@@ -96,6 +96,36 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) { //nolint:tparallel
 	})
 }
 
+func Test_JsonStorage_Set_DeletedSentinelDeletesKey(t *testing.T) {
+	t.Parallel()
+	preExisting := map[string]string{key: expectedValue}
+	data, err := json.Marshal(preExisting)
+	assert.NoError(t, err)
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	assert.NoError(t, os.WriteFile(configFile, data, 0666))
+	storage := configuration.NewJsonStorage(configFile)
+
+	err = storage.Set(key, configuration.Deleted)
+
+	assert.NoError(t, err)
+	storedConfig := readStoredConfigFile(t, configFile)
+	assert.NotContains(t, storedConfig, key)
+}
+
+func Test_JsonStorage_Set_ArbitraryEmptyStructIsStoredNotDeleted(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	storage := configuration.NewJsonStorage(configFile)
+
+	// A plain struct{}{} built by some other package must not be mistaken for the
+	// configuration.Deleted sentinel: only IsKeyDeleted(value) may trigger deletion.
+	err := storage.Set(key, struct{}{})
+
+	assert.NoError(t, err)
+	storedConfig := readStoredConfigFile(t, configFile)
+	assert.Contains(t, storedConfig, key)
+}
+
 func Test_JsonStorage_Set_BrokenConfigFile(t *testing.T) {
 	// Arrange
 	t.Parallel()
