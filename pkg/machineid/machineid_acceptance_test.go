@@ -371,6 +371,30 @@ func TestAcceptance_SharedFileIsNotWorldWritable(t *testing.T) {
 	require.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 }
 
+// TestAcceptance_DirWritableConcurrentCallsDoNotRace proves dirWritable's probe file name is
+// unique per call: naming it after the PID alone is not unique within a process, so concurrent
+// resolutions race each other on O_EXCL and on the following os.Remove, and a writable directory
+// gets reported unwritable, sending some resolutions to the machine-wide shared file and others to
+// the per-user one.
+func TestAcceptance_DirWritableConcurrentCallsDoNotRace(t *testing.T) {
+	dir := t.TempDir()
+	const goroutines = 32
+	results := make([]bool, goroutines)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i] = dirWritable(dir)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, ok := range results {
+		require.True(t, ok, "call %d: a writable directory must be reported writable even under concurrent calls from the same process", i)
+	}
+}
+
 func TestAcceptance_ConcurrentResolutionsConvergeOnOneValue(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())

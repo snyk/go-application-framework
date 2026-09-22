@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 
 	"github.com/gofrs/flock"
 
@@ -86,15 +85,19 @@ func readSharedFile(paths pathPair) *SharedFile {
 }
 
 // dirWritable reports whether the current process can create files in dir, without leaving one
-// behind.
+// behind. os.CreateTemp gives each call a unique probe name, unlike naming the probe after the
+// PID alone, which is not unique within a process and races concurrent callers on O_EXCL and on
+// the following os.Remove; os.CreateTemp is also more reliable than os.OpenFile on Windows, where
+// directory permission bits are not enforced but ACLs are (see the matching probe in
+// pkg/local_workflows/doctor_workflow/livecheck/cache/cache.go).
 func dirWritable(dir string) bool {
-	probe := filepath.Join(dir, ".snyk-write-probe-"+strconv.Itoa(os.Getpid()))
-	f, err := os.OpenFile(probe, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileperms.FILEPERM_666)
+	f, err := os.CreateTemp(dir, ".snyk-write-probe-*")
 	if err != nil {
 		return false
 	}
+	name := f.Name()
 	_ = f.Close()
-	_ = os.Remove(probe)
+	_ = os.Remove(name)
 	return true
 }
 
