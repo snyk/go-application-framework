@@ -250,10 +250,10 @@ func Reset(config configuration.Configuration) error {
 		} else {
 			// MACHINE_ID is deleted before MACHINE_ID_SOURCE, mirroring mirrorIntoStorage's write
 			// order: MACHINE_ID's absence is what a future resolve() treats as "not yet resolved".
-			if err := storage.Set(configuration.MACHINE_ID, struct{}{}); err != nil {
+			if err := storage.Set(configuration.MACHINE_ID, configuration.Deleted); err != nil {
 				resultErr = errors.Join(resultErr, err)
 			}
-			if err := storage.Set(configuration.MACHINE_ID_SOURCE, struct{}{}); err != nil {
+			if err := storage.Set(configuration.MACHINE_ID_SOURCE, configuration.Deleted); err != nil {
 				resultErr = errors.Join(resultErr, err)
 			}
 			_ = storage.Unlock() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
