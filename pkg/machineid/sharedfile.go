@@ -28,9 +28,10 @@ const (
 const defaultWriterIdentity = "go-application-framework"
 
 // sharedFile is the schema of the machine-identity file shared by every Snyk product on the
-// machine. GAF only ever writes machine_id, identifier_source, schema_version, scope,
-// first_seen_at, updated_at and writer; serial_number, hostname and snyk_machine_id may be
-// populated by other tooling and are preserved, not interpreted, by GAF.
+// machine. GAF always writes machine_id, identifier_source, schema_version, scope,
+// first_seen_at, updated_at and writer; it also writes serial_number and hostname when Resolve
+// is called with WithHardwareIdentity and a value was read. snyk_machine_id may be populated by
+// other tooling and is preserved, not interpreted, by GAF.
 type sharedFile struct {
 	MachineID        string `json:"machine_id"`
 	IdentifierSource string `json:"identifier_source"`
