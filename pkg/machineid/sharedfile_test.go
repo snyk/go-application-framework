@@ -126,6 +126,18 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 	require.Contains(t, logs.String(), "lock", "the swallowed lock timeout must be logged")
 }
 
+// TestSelectWritePathFallsBackToPerUserWhenMachineWideIsEmpty guards against filepath.Dir("")
+// resolving to ".": with no machine-wide candidate (e.g. ProgramData unset on Windows),
+// selectWritePath must not stat/probe the process's current working directory and mistake a
+// writable cwd for a writable machine-wide shared file directory.
+func TestSelectWritePathFallsBackToPerUserWhenMachineWideIsEmpty(t *testing.T) {
+	perUser := filepath.Join(t.TempDir(), "machine-id.json")
+
+	got := selectWritePath(pathPair{machineWide: "", perUser: perUser}, nil)
+
+	require.Equal(t, perUser, got)
+}
+
 // TestDefaultSharedFilePathsNeverProducesARelativePath guards against defaultSharedFilePaths
 // returning a path relative to the current working directory when the OS environment it depends
 // on (ProgramData/APPDATA on Windows, $HOME elsewhere) is empty or unavailable. A relative path

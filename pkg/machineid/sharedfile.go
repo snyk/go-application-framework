@@ -154,21 +154,23 @@ func dirWritable(dir string) bool {
 // platform (Windows) where an unprivileged process can otherwise pre-seed it.
 func selectWritePath(paths pathPair, logger *zerolog.Logger) string {
 	logger = effectiveLogger(logger)
-	dir := filepath.Dir(paths.machineWide)
-	if info, err := os.Stat(dir); err == nil && info.IsDir() && dirWritable(dir) {
-		logger.Debug().Str("path", paths.machineWide).Str("scope", scopeMachine).Msg("machine id: machine-wide shared file directory is writable, writing there")
-		return paths.machineWide
-	}
-	if runtime.GOOS == "windows" && paths.machineWide != "" {
-		if mkdirErr := os.MkdirAll(dir, fileperms.FILEPERM_755); mkdirErr == nil {
-			if secureErr := secureDir(dir); secureErr != nil {
-				logger.Debug().Err(secureErr).Str("path", dir).Msg("machine id: failed to lock down machine-wide shared file directory ACL, not using it")
-			} else if dirWritable(dir) {
-				logger.Debug().Str("path", paths.machineWide).Str("scope", scopeMachine).Msg("machine id: created and ACL-locked machine-wide shared file directory, writing there")
-				return paths.machineWide
+	if paths.machineWide != "" {
+		dir := filepath.Dir(paths.machineWide)
+		if info, err := os.Stat(dir); err == nil && info.IsDir() && dirWritable(dir) {
+			logger.Debug().Str("path", paths.machineWide).Str("scope", scopeMachine).Msg("machine id: machine-wide shared file directory is writable, writing there")
+			return paths.machineWide
+		}
+		if runtime.GOOS == "windows" {
+			if mkdirErr := os.MkdirAll(dir, fileperms.FILEPERM_755); mkdirErr == nil {
+				if secureErr := secureDir(dir); secureErr != nil {
+					logger.Debug().Err(secureErr).Str("path", dir).Msg("machine id: failed to lock down machine-wide shared file directory ACL, not using it")
+				} else if dirWritable(dir) {
+					logger.Debug().Str("path", paths.machineWide).Str("scope", scopeMachine).Msg("machine id: created and ACL-locked machine-wide shared file directory, writing there")
+					return paths.machineWide
+				}
+			} else {
+				logger.Debug().Err(mkdirErr).Str("path", dir).Msg("machine id: could not create machine-wide shared file directory")
 			}
-		} else {
-			logger.Debug().Err(mkdirErr).Str("path", dir).Msg("machine id: could not create machine-wide shared file directory")
 		}
 	}
 	logger.Debug().Str("path", paths.perUser).Str("scope", scopeUser).Msg("machine id: machine-wide shared file directory unavailable, writing to per-user path")

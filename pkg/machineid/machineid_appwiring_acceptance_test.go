@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -32,6 +33,8 @@ func TestAcceptance_ViaAppEngineProducesPersistedMachineID(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("ProgramData", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
 
 	_, err := configuration.CreateConfigurationFile("snyk.json")
@@ -63,6 +66,8 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("ProgramData", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
 
 	_, err := configuration.CreateConfigurationFile("snyk.json")
@@ -88,6 +93,19 @@ func TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve(t *testing.T)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	programData := t.TempDir()
+	t.Setenv("ProgramData", programData)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+
+	// On Windows, the shared file's machine-wide directory is only ever used by this process
+	// when it already exists and is writable (see selectWritePath); pre-creating it, like a
+	// privileged installer would have, makes the write destination deterministic instead of
+	// depending on whether the CI account can ACL-lock a directory it creates itself.
+	sharedFilePath := filepath.Join(home, ".snyk", "machine-id.json")
+	if runtime.GOOS == "windows" {
+		sharedFilePath = filepath.Join(programData, "Snyk", "machine-id.json")
+		require.NoError(t, os.MkdirAll(filepath.Dir(sharedFilePath), 0o755))
+	}
 
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
@@ -102,7 +120,7 @@ func TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve(t *testing.T)
 	_, err = engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(filepath.Join(home, ".snyk", "machine-id.json"))
+	data, err := os.ReadFile(sharedFilePath)
 	require.NoError(t, err)
 	var sf map[string]any
 	require.NoError(t, json.Unmarshal(data, &sf))
