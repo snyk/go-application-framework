@@ -29,7 +29,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 	valueA := strings.Repeat("A", 64*1024)
 	valueB := strings.Repeat("B", 64*1024)
 
-	require.NoError(t, writeSharedFileValue(path, false, func(sf *SharedFile) {
+	require.NoError(t, writeSharedFileValue(path, false, "test", func(sf *sharedFile) {
 		sf.MachineID = valueA
 	}, nil))
 
@@ -51,7 +51,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 			}
 			toggle = !toggle
 			//nolint:errcheck // best-effort background writer racing the readers below; failures are not this test's concern
-			_ = writeSharedFileValue(path, false, func(sf *SharedFile) {
+			_ = writeSharedFileValue(path, false, "test", func(sf *sharedFile) {
 				sf.MachineID = v
 			}, nil)
 		}
@@ -70,7 +70,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				var sf SharedFile
+				var sf sharedFile
 				if err := json.Unmarshal(data, &sf); err != nil {
 					atomic.AddInt64(&readErrs, 1)
 					continue
@@ -110,7 +110,7 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- writeSharedFileValue(path, false, func(sf *SharedFile) {
+		done <- writeSharedFileValue(path, false, "test", func(sf *sharedFile) {
 			sf.MachineID = "some-id"
 		}, &logger)
 	}()
@@ -135,7 +135,7 @@ func TestDefaultSharedFilePathsNeverProducesARelativePath(t *testing.T) {
 	switch runtime.GOOS {
 	case "windows":
 		t.Setenv("ProgramData", "")
-		t.Setenv("APPDATA", "")
+		t.Setenv("LOCALAPPDATA", "")
 	default:
 		t.Setenv("HOME", "")
 		t.Setenv("USERPROFILE", "")
