@@ -1102,6 +1102,9 @@ func TestAcceptance_PlaceholderHardwareSerialNumberFallsThroughToGeneratedID(t *
 // it needs no propagation channel to converge.
 func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
 	config := newIsolatedConfig(t)
+	originalSerial := readHardwareSerialFunc
+	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) { return "", false }
+	t.Cleanup(func() { readHardwareSerialFunc = originalSerial })
 	original := hostnameFunc
 	hostnameFunc = func() (string, error) { return "my-laptop.local", nil }
 	t.Cleanup(func() { hostnameFunc = original })
