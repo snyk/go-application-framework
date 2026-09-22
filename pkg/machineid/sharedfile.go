@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/gofrs/flock"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/fileperms"
 )
@@ -76,22 +77,27 @@ func defaultSharedFilePaths() pathPair {
 // carries no machine_id (for example one written by other tooling per the SharedFile doc comment) is
 // skipped rather than treated as the answer, so it cannot shadow a later candidate that does hold the
 // shared id.
-func readSharedFile(paths pathPair) *SharedFile {
+func readSharedFile(paths pathPair, logger *zerolog.Logger) *SharedFile {
+	logger = effectiveLogger(logger)
 	for _, p := range []string{paths.machineWide, paths.perUser} {
 		if p == "" {
 			continue
 		}
 		data, err := os.ReadFile(p)
 		if err != nil {
+			logger.Debug().Err(err).Str("path", p).Msg("machine id: shared file candidate could not be read")
 			continue
 		}
 		var sf SharedFile
 		if err := json.Unmarshal(data, &sf); err != nil {
+			logger.Debug().Err(err).Str("path", p).Msg("machine id: shared file candidate failed to parse")
 			continue
 		}
 		if !hasValue(sf.MachineID) {
+			logger.Debug().Str("path", p).Msg("machine id: shared file candidate parsed but carried no machine id")
 			continue
 		}
+		logger.Debug().Str("path", p).Msg("machine id: shared file candidate carries a machine id")
 		return &sf
 	}
 	return nil
@@ -117,11 +123,14 @@ func dirWritable(dir string) bool {
 // selectWritePath picks the machine-wide path when its directory already exists and is writable
 // by the current process, otherwise the per-user path. It never creates the machine-wide
 // directory.
-func selectWritePath(paths pathPair) string {
+func selectWritePath(paths pathPair, logger *zerolog.Logger) string {
+	logger = effectiveLogger(logger)
 	dir := filepath.Dir(paths.machineWide)
 	if info, err := os.Stat(dir); err == nil && info.IsDir() && dirWritable(dir) {
+		logger.Debug().Str("path", paths.machineWide).Msg("machine id: machine-wide shared file directory is writable, writing there")
 		return paths.machineWide
 	}
+	logger.Debug().Str("path", paths.perUser).Msg("machine id: machine-wide shared file directory unavailable, writing to per-user path")
 	return paths.perUser
 }
 
@@ -134,7 +143,8 @@ func selectWritePath(paths pathPair) string {
 // truncated and written in place: a reader (readSharedFile uses a bare os.ReadFile, with no lock
 // of its own) racing an in-place write could otherwise observe a truncated or partially-written
 // file. The rename means every reader sees either the previous complete file or the next one.
-func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile)) error {
+func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile), logger *zerolog.Logger) error {
+	logger = effectiveLogger(logger)
 	dir := filepath.Dir(path)
 	// The lock file lives next to path, so its directory must exist before flock creates it;
 	// MkdirAll has to run before Lock, not after.
@@ -149,9 +159,11 @@ func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile))
 	defer cancel()
 	locked, lockErr := lock.TryLockContext(ctx, lockRetryDelay)
 	if lockErr != nil {
+		logger.Debug().Err(lockErr).Str("path", path).Msg("machine id: failed to acquire shared file lock")
 		return lockErr
 	}
 	if !locked {
+		logger.Debug().Str("path", path).Msg("machine id: timed out waiting for shared file lock")
 		return fmt.Errorf("timed out after %s waiting for lock on %s", lockTimeout, lock.Path())
 	}
 	defer func() { _ = lock.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
@@ -191,12 +203,12 @@ func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile))
 
 // removeSharedFileValue clears machine_id and identifier_source from the shared file at path,
 // leaving any other fields (populated by other tooling) untouched. A missing file is not an error.
-func removeSharedFileValue(path string) error {
+func removeSharedFileValue(path string, logger *zerolog.Logger) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
 	}
 	return writeSharedFileValue(path, false, func(sf *SharedFile) {
 		sf.MachineID = ""
 		sf.IdentifierSource = ""
-	})
+	}, logger)
 }

@@ -1,9 +1,12 @@
 package machineid
 
+import "github.com/rs/zerolog"
+
 // resolveOptions holds the configuration for a single Resolve call, built from ResolveOption values.
 type resolveOptions struct {
 	legacyPath  string
 	legacyParse func([]byte) (string, error)
+	logger      *zerolog.Logger
 }
 
 // ResolveOption configures optional behavior of Resolve.
@@ -19,5 +22,14 @@ func WithLegacyDeviceIdFile(path string, parse func([]byte) (string, error)) Res
 	return func(o *resolveOptions) {
 		o.legacyPath = path
 		o.legacyParse = parse
+	}
+}
+
+// WithLogger sets the logger used to trace resolution decisions at Debug level, including errors
+// that resolution otherwise swallows so a run can still produce a value. If unset, Resolve uses a
+// no-op logger.
+func WithLogger(logger *zerolog.Logger) ResolveOption {
+	return func(o *resolveOptions) {
+		o.logger = logger
 	}
 }

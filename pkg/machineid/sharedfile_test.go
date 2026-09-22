@@ -1,6 +1,7 @@
 package machineid
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +31,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 
 	require.NoError(t, writeSharedFileValue(path, false, func(sf *SharedFile) {
 		sf.MachineID = valueA
-	}))
+	}, nil))
 
 	stop := make(chan struct{})
 	var writerWG sync.WaitGroup
@@ -51,7 +53,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 			//nolint:errcheck // best-effort background writer racing the readers below; failures are not this test's concern
 			_ = writeSharedFileValue(path, false, func(sf *SharedFile) {
 				sf.MachineID = v
-			})
+			}, nil)
 		}
 	}()
 
@@ -103,11 +105,14 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 	lockTimeout = 50 * time.Millisecond
 	t.Cleanup(func() { lockTimeout = original })
 
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
 	done := make(chan error, 1)
 	go func() {
 		done <- writeSharedFileValue(path, false, func(sf *SharedFile) {
 			sf.MachineID = "some-id"
-		})
+		}, &logger)
 	}()
 
 	select {
@@ -116,6 +121,9 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("writeSharedFileValue did not return: its lock acquisition must be bounded, not block forever")
 	}
+
+	require.Contains(t, logs.String(), path, "the swallowed lock timeout must be logged together with the file path")
+	require.Contains(t, logs.String(), "lock", "the swallowed lock timeout must be logged")
 }
 
 // TestDefaultSharedFilePathsNeverProducesARelativePath guards against defaultSharedFilePaths

@@ -1,6 +1,7 @@
 package machineid
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configtest"
@@ -197,7 +199,7 @@ func TestAdoptOrWriteSharedFileValidatesRaceWinnersSource(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 
-	id, source, err := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided)
+	id, source, err := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided, nil)
 	require.NoError(t, err)
 	require.Equal(t, "race-winner-id", id)
 	require.Equal(t, SourceProvided, source)
@@ -214,7 +216,7 @@ func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
 	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
 	require.Equal(t, "device-managed-id", readSnykJSON(t)[configuration.MACHINE_ID])
 
-	sf := readSharedFile(sharedFilePaths())
+	sf := readSharedFile(sharedFilePaths(), nil)
 	require.NotNil(t, sf)
 	require.Equal(t, "device-managed-id", sf.MachineID)
 }
@@ -229,7 +231,7 @@ func TestAcceptance_OSIdentifierIsUsedAndNotWrittenToSharedFile(t *testing.T) {
 	require.Equal(t, "os-derived-id", value)
 	require.Equal(t, string(SourceOS), config.GetString(configuration.MACHINE_ID_SOURCE))
 	require.Equal(t, "os-derived-id", readSnykJSON(t)[configuration.MACHINE_ID])
-	require.Nil(t, readSharedFile(sharedFilePaths()), "OS-derived values must never be written to the shared file")
+	require.Nil(t, readSharedFile(sharedFilePaths(), nil), "OS-derived values must never be written to the shared file")
 }
 
 func TestAcceptance_LegacyFileIsUsedWhenOptedIn(t *testing.T) {
@@ -258,6 +260,31 @@ func TestAcceptance_LegacyFileOnlyTrimsTrailingWhitespace(t *testing.T) {
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.Equal(t, " \t{ABC-99}\x00WEIRD-interior", value, "only trailing whitespace is removed; leading whitespace, braces, control characters and case are untouched")
+}
+
+// TestAcceptance_LegacyFileParseFailureFallsThroughToGeneratedAndLogsTheError proves a legacy
+// device-id file that fails to parse is treated as no source at all (resolution falls through to
+// generating a fresh id) while still logging the swallowed parse error and the file's path.
+func TestAcceptance_LegacyFileParseFailureFallsThroughToGeneratedAndLogsTheError(t *testing.T) {
+	config := newIsolatedConfig(t)
+	legacyPath := filepath.Join(t.TempDir(), "device-id")
+	require.NoError(t, os.WriteFile(legacyPath, []byte("unparsable-content"), 0o644))
+	parseErr := errors.New("simulated legacy file parse failure")
+	parse := func(data []byte) (string, error) { return "", parseErr }
+
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse), WithLogger(&logger)))
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	id, ok := value.(string)
+	require.True(t, ok)
+	require.True(t, hasValue(id))
+	require.Equal(t, string(SourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
+
+	require.Contains(t, logs.String(), parseErr.Error(), "the swallowed legacy file parse failure must be logged")
+	require.Contains(t, logs.String(), legacyPath, "the swallowed legacy file parse failure must be logged together with its path")
 }
 
 func TestAcceptance_ExternalChannelPreservesTrailingWhitespace(t *testing.T) {
@@ -322,7 +349,9 @@ func TestAcceptance_WhitespaceOnlyExternalValueFallsThroughToOS(t *testing.T) {
 
 func TestAcceptance_GeneratesUUIDWhenNoOtherSourceApplies(t *testing.T) {
 	config := newIsolatedConfig(t)
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLogger(&logger)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -330,6 +359,8 @@ func TestAcceptance_GeneratesUUIDWhenNoOtherSourceApplies(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, hasValue(id))
 	require.Equal(t, string(SourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
+
+	require.Contains(t, logs.String(), os.ErrNotExist.Error(), "the swallowed OS machine id lookup failure must be logged")
 }
 
 func TestAcceptance_MachineWideDirUnwritableFallsBackToPerUser(t *testing.T) {
@@ -363,7 +394,9 @@ func TestAcceptance_MachineWideWriteFailureFallsBackToPerUser(t *testing.T) {
 	// still pass, but writeSharedFileValue's final os.Rename onto it fails.
 	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLogger(&logger)))
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	id, ok := value.(string)
@@ -371,6 +404,7 @@ func TestAcceptance_MachineWideWriteFailureFallsBackToPerUser(t *testing.T) {
 	require.True(t, hasValue(id))
 
 	require.FileExists(t, paths.perUser, "a write-level failure on the machine-wide path must still fall back to the per-user file")
+	require.Contains(t, logs.String(), paths.machineWide, "the swallowed machine-wide shared file write failure must be logged together with its path")
 }
 
 // TestAcceptance_SharedFileIsNotWorldWritable proves the machine-wide shared file is written with
@@ -452,10 +486,10 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	first, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.NoError(t, Reset(config))
+	require.NoError(t, Reset(config, nil))
 
 	require.Empty(t, readSnykJSON(t)[configuration.MACHINE_ID])
-	sf := readSharedFile(sharedFilePaths())
+	sf := readSharedFile(sharedFilePaths(), nil)
 	if sf != nil {
 		require.Empty(t, sf.MachineID)
 	}
@@ -504,7 +538,7 @@ func TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
 	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
 
-	err = Reset(config)
+	err = Reset(config, nil)
 	require.Error(t, err)
 	mu, ok := err.(multiUnwrapper)
 	require.True(t, ok, "Reset's error must join both shared-file removal failures, not discard one")
@@ -522,7 +556,7 @@ func TestAcceptance_ResetSurfacesStorageLockErrorWhenSharedFileClearSucceeds(t *
 
 	config.SetStorage(&lockFailingStorage{Storage: config.GetStorage()})
 
-	err = Reset(config)
+	err = Reset(config, nil)
 	require.Error(t, err)
 }
 
@@ -579,7 +613,7 @@ func TestAcceptance_ResetDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *test
 
 	done := make(chan error, 1)
 	go func() {
-		done <- Reset(config)
+		done <- Reset(config, nil)
 	}()
 
 	select {
@@ -603,7 +637,7 @@ type resetOrderStorage struct {
 
 func (s *resetOrderStorage) Set(key string, value any) error {
 	s.calls = append(s.calls, key)
-	sf := readSharedFile(pathPair{perUser: s.perUserPath})
+	sf := readSharedFile(pathPair{perUser: s.perUserPath}, nil)
 	s.fileClearedAtCallFor[key] = sf == nil || !hasValue(sf.MachineID)
 	return s.Storage.Set(key, value)
 }
@@ -630,7 +664,7 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 	}
 	config.SetStorage(recording)
 
-	require.NoError(t, Reset(config))
+	require.NoError(t, Reset(config, nil))
 
 	require.Equal(t, []string{configuration.MACHINE_ID, configuration.MACHINE_ID_SOURCE}, recording.calls,
 		"MACHINE_ID must be deleted from storage before MACHINE_ID_SOURCE")
@@ -656,7 +690,7 @@ func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleare
 	require.NoError(t, writeSharedFileValue(paths.machineWide, false, func(sf *SharedFile) {
 		sf.MachineID = "original-id"
 		sf.IdentifierSource = string(SourceOS)
-	}))
+	}, nil))
 
 	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
 	_, err := config.GetWithError(configuration.MACHINE_ID)
@@ -670,7 +704,7 @@ func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleare
 	require.NoError(t, os.Chmod(dir, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir's cleanup can remove dir
 
-	err = Reset(config)
+	err = Reset(config, nil)
 	require.Error(t, err)
 
 	require.Equal(t, "original-id", readSnykJSON(t)[configuration.MACHINE_ID],
@@ -700,7 +734,9 @@ func TestAcceptance_SourceSetFailureDoesNotLeaveMachineIDDurablyPresentWithoutSo
 	config := newIsolatedConfig(t)
 	failing := &keyFailingStorage{Storage: config.GetStorage(), failKey: configuration.MACHINE_ID_SOURCE}
 	config.SetStorage(failing)
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLogger(&logger)))
 
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -710,6 +746,7 @@ func TestAcceptance_SourceSetFailureDoesNotLeaveMachineIDDurablyPresentWithoutSo
 	require.False(t, sourceDurablyPresent, "the source failed to persist")
 	_, idDurablyPresent := stored[configuration.MACHINE_ID]
 	require.False(t, idDurablyPresent, "the id must not be durably persisted when its source failed to persist")
+	require.Contains(t, logs.String(), "simulated storage failure", "the swallowed storage.Set failure must be logged")
 
 	// A later run opens a fresh Configuration against the same underlying file.
 	second := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
