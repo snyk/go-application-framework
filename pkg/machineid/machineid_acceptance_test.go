@@ -549,7 +549,7 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	first, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.NoError(t, Reset(config))
+	require.NoError(t, reset(config))
 
 	require.Empty(t, readSnykJSON(t)[configuration.MACHINE_ID])
 	sf := readSharedFile(sharedFilePaths(), nil)
@@ -562,8 +562,8 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	require.NotEqual(t, first, second, "a resolution after reset must not reuse the discarded value")
 }
 
-// TestAcceptance_ResetLogsSharedFileLockTimeout proves a logger passed to Reset via WithLogger
-// reaches the shared file removal Reset performs, not just the resolution Resolve wires it into.
+// TestAcceptance_ResetLogsSharedFileLockTimeout proves a logger passed to reset via WithLogger
+// reaches the shared file removal reset performs, not just the resolution Resolve wires it into.
 func TestAcceptance_ResetLogsSharedFileLockTimeout(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
@@ -582,9 +582,9 @@ func TestAcceptance_ResetLogsSharedFileLockTimeout(t *testing.T) {
 
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	err = Reset(config, WithLogger(&logger))
-	require.Error(t, err, "Reset must surface a shared file lock that can never be acquired")
-	require.Contains(t, logs.String(), "lock", "a logger passed to Reset must reach the shared file removal it performs")
+	err = reset(config, WithLogger(&logger))
+	require.Error(t, err, "reset must surface a shared file lock that can never be acquired")
+	require.Contains(t, logs.String(), "lock", "a logger passed to reset must reach the shared file removal it performs")
 }
 
 // lockFailingStorage wraps a real Storage and fails every Lock call, so a test can simulate a
@@ -626,7 +626,7 @@ func TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
 	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
 
-	err = reset(config, nil)
+	err = reset(config)
 	require.Error(t, err)
 	mu, ok := err.(multiUnwrapper)
 	require.True(t, ok, "reset's error must join both shared-file removal failures, not discard one")
@@ -644,7 +644,7 @@ func TestAcceptance_ResetSurfacesStorageLockErrorWhenSharedFileClearSucceeds(t *
 
 	config.SetStorage(&lockFailingStorage{Storage: config.GetStorage()})
 
-	err = reset(config, nil)
+	err = reset(config)
 	require.Error(t, err)
 }
 
@@ -706,7 +706,7 @@ func TestAcceptance_ResetDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *test
 
 	done := make(chan error, 1)
 	go func() {
-		done <- reset(config, nil)
+		done <- reset(config)
 	}()
 
 	select {
@@ -757,7 +757,7 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 	}
 	config.SetStorage(recording)
 
-	require.NoError(t, reset(config, nil))
+	require.NoError(t, reset(config))
 
 	require.Equal(t, []string{configuration.MACHINE_ID, configuration.MACHINE_ID_SOURCE}, recording.calls,
 		"MACHINE_ID must be deleted from storage before MACHINE_ID_SOURCE")
@@ -797,7 +797,7 @@ func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleare
 	require.NoError(t, os.Chmod(dir, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir's cleanup can remove dir
 
-	err = reset(config, nil)
+	err = reset(config)
 	require.Error(t, err)
 
 	require.Equal(t, "original-id", readSnykJSON(t)[configuration.MACHINE_ID],

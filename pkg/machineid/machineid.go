@@ -302,27 +302,20 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source idS
 	return finalize(id, source)
 }
 
-// Reset clears the resolved machine identifier from configuration storage and from the shared
+// reset clears the resolved machine identifier from configuration storage and from the shared
 // file, so the next Resolve call starts over from the top of the precedence order documented on
-// the package instead of reusing the value from a previous run.
-func Reset(config configuration.Configuration, opts ...ResolveOption) error {
-	var o resolveOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return reset(config, effectiveLogger(o.logger))
-}
-
-// reset removes the stored machine identifier and its source from configuration storage and from
-// the shared file, under the same locks Resolve uses. The next resolution runs the precedence
-// order from the top.
+// the package instead of reusing the value from a previous run, under the same locks Resolve uses.
 //
 // If a shared-file candidate cannot be cleared, reset stops there and leaves storage untouched
 // rather than clearing what it can: readSharedFile takes a shared file ahead of storage, so a
 // candidate reset failed to clear would still win the next resolution regardless of what happened
 // to storage, making a storage clear in that case pure loss with no corresponding benefit.
-func reset(config configuration.Configuration, logger *zerolog.Logger) error {
-	logger = effectiveLogger(logger)
+func reset(config configuration.Configuration, opts ...ResolveOption) error {
+	var o resolveOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	logger := effectiveLogger(o.logger)
 	var resultErr error
 
 	// The shared file is cleared before storage so that a resolve() racing with reset can only ever
