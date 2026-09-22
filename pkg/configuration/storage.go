@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofrs/flock"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/internal/fileperms"
 )
@@ -17,6 +19,8 @@ import (
 
 // Storage persists configuration values that outlive a single process run.
 type Storage interface {
+	// Set persists value under key. If IsKeyDeleted(value) is true, the implementation must
+	// remove key from storage instead of persisting the value.
 	Set(key string, value any) error
 	Refresh(config Configuration, key string) error
 	Lock(ctx context.Context, retryDelay time.Duration) error
@@ -41,13 +45,17 @@ func (*EmptyStorage) Unlock() error {
 	return nil
 }
 
-// keyDeleted is a marker value which, when set, causes a key to be deleted from
-// stored configuration.
-var keyDeleted = struct{}{}
+// deletedMarker is a distinct type so an arbitrary struct{}{} value built by unrelated code is
+// never mistaken for the Deleted sentinel below; only IsKeyDeleted(Deleted) is true.
+type deletedMarker struct{}
 
-// IsKeyDeleted reports whether val is the internal key-deleted marker used by Unset().
+// Deleted is the sentinel value a Storage.Set implementation must recognize, via IsKeyDeleted,
+// as "remove this key" rather than a value to persist.
+var Deleted any = deletedMarker{}
+
+// IsKeyDeleted reports whether val is the Deleted sentinel used by Unset().
 func IsKeyDeleted(val any) bool {
-	return val == keyDeleted
+	return val == Deleted
 }
 
 type JsonStorage struct {
@@ -55,6 +63,15 @@ type JsonStorage struct {
 	config   Configuration
 	fileLock *flock.Flock
 	mutex    sync.Mutex
+
+	// inProcess and lockHeld close a gap in *flock.Flock: its OS-level lock only
+	// guards against other processes, so two goroutines sharing this same
+	// JsonStorage in one process would otherwise both be granted Lock() at once.
+	// inProcess is a binary semaphore acquired by Lock and released by Unlock;
+	// lockHeld records whether this instance currently holds it, so a failed
+	// Lock never skews the count and an unmatched Unlock is a safe no-op.
+	inProcess *semaphore.Weighted
+	lockHeld  int32
 }
 
 type JsonOption func(*JsonStorage)
@@ -67,8 +84,9 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path:     path,
-		fileLock: flock.New(path + ".lock"),
+		path:      path,
+		fileLock:  flock.New(path + ".lock"),
+		inProcess: semaphore.NewWeighted(1),
 	}
 
 	for _, opt := range options {
@@ -123,9 +141,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 		key = tmpKey
 	}
 
-	if _, ok := value.(struct{}); ok {
-		// See implementation of Configuration.Unset; when marker value is set,
-		// key is deleted from config before writing.
+	if IsKeyDeleted(value) {
 		delete(config, key)
 	} else {
 		config[key] = value
@@ -156,10 +172,26 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	if err := s.inProcess.Acquire(ctx, 1); err != nil {
+		return err
+	}
+
 	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
-	return err
+	if err != nil {
+		s.inProcess.Release(1)
+		return err
+	}
+
+	atomic.StoreInt32(&s.lockHeld, 1)
+	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	return s.fileLock.Unlock()
+	if !atomic.CompareAndSwapInt32(&s.lockHeld, 1, 0) {
+		return nil
+	}
+
+	err := s.fileLock.Unlock()
+	s.inProcess.Release(1)
+	return err
 }
