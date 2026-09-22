@@ -109,17 +109,22 @@ func TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided(t *testing.T)
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
-	sf := SharedFile{MachineID: "from-shared-file", IdentifierSource: "whatever-a-tampered-or-buggy-writer-put-here"}
+	unknownSource := "whatever-a-tampered-or-buggy-writer-put-here"
+	sf := SharedFile{MachineID: "from-shared-file", IdentifierSource: unknownSource}
 	data, err := json.Marshal(sf)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLogger(&logger)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.Equal(t, "from-shared-file", value)
 	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
+
+	require.Contains(t, logs.String(), unknownSource, "the unrecognized identifier_source must be logged")
 }
 
 // TestAcceptance_MachineWideFileWithNoMachineIDDoesNotShadowPerUserFile proves readSharedFile keeps
@@ -577,7 +582,10 @@ func (s *blockingLockStorage) Lock(ctx context.Context, _ time.Duration) error {
 func TestAcceptance_ResolveDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.SetStorage(&blockingLockStorage{Storage: config.GetStorage()})
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLogger(&logger)))
 
 	original := lockTimeout
 	lockTimeout = 50 * time.Millisecond
@@ -595,6 +603,8 @@ func TestAcceptance_ResolveDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *te
 	case <-time.After(2 * time.Second):
 		t.Fatal("resolution did not return: storage.Lock must be bounded by lockTimeout, not block forever on context.Background()")
 	}
+
+	require.Contains(t, logs.String(), "storage lock timed out", "the swallowed storage lock timeout must be logged")
 }
 
 // TestAcceptance_ResetDoesNotBlockForeverWhenStorageLockNeverSucceeds proves Reset's storage.Lock
