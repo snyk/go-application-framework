@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -113,5 +114,30 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 		require.Error(t, err, "writeSharedFileValue must give up once the lock cannot be acquired within lockTimeout")
 	case <-time.After(2 * time.Second):
 		t.Fatal("writeSharedFileValue did not return: its lock acquisition must be bounded, not block forever")
+	}
+}
+
+// TestDefaultSharedFilePathsNeverProducesARelativePath guards against defaultSharedFilePaths
+// returning a path relative to the current working directory when the OS environment it depends
+// on (ProgramData/APPDATA on Windows, $HOME elsewhere) is empty or unavailable. A relative path
+// would resolve differently depending on the process's working directory, unlike every other
+// candidate this package produces.
+func TestDefaultSharedFilePathsNeverProducesARelativePath(t *testing.T) {
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("ProgramData", "")
+		t.Setenv("APPDATA", "")
+	default:
+		t.Setenv("HOME", "")
+		t.Setenv("USERPROFILE", "")
+		t.Setenv("XDG_CONFIG_HOME", "")
+	}
+
+	paths := defaultSharedFilePaths()
+	for name, p := range map[string]string{"machineWide": paths.machineWide, "perUser": paths.perUser} {
+		if p == "" {
+			continue
+		}
+		require.True(t, filepath.IsAbs(p), "%s must be empty or absolute, got relative path %q", name, p)
 	}
 }

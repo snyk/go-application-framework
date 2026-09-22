@@ -34,28 +34,39 @@ type pathPair struct {
 // path on Linux and macOS is a fixed OS path that a test process cannot write to without root.
 var sharedFilePaths = defaultSharedFilePaths
 
+// absOrEmpty returns p, or "" if p is not an absolute path. A relative path would resolve
+// differently depending on the process's working directory, so any candidate built from an OS
+// value that turned out empty (ProgramData/APPDATA unset, or os.UserHomeDir failing) is discarded
+// rather than used as-is; callers already treat "" as "no candidate here".
+func absOrEmpty(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return ""
+}
+
 func defaultSharedFilePaths() pathPair {
 	switch runtime.GOOS {
 	case "windows":
 		return pathPair{
-			machineWide: filepath.Join(os.Getenv("ProgramData"), "snyk", "machine-id.json"),
-			perUser:     filepath.Join(os.Getenv("APPDATA"), "snyk", "machine-id.json"),
+			machineWide: absOrEmpty(filepath.Join(os.Getenv("ProgramData"), "snyk", "machine-id.json")),
+			perUser:     absOrEmpty(filepath.Join(os.Getenv("APPDATA"), "snyk", "machine-id.json")),
 		}
 	case "darwin":
-		home, _ := os.UserHomeDir() //nolint:errcheck // best-effort; an empty home yields a relative fallback path
+		home, _ := os.UserHomeDir() //nolint:errcheck // best-effort; an empty home is handled by absOrEmpty below
 		return pathPair{
 			machineWide: "/Library/Application Support/snyk/machine-id.json",
-			perUser:     filepath.Join(home, "Library", "Application Support", "snyk", "machine-id.json"),
+			perUser:     absOrEmpty(filepath.Join(home, "Library", "Application Support", "snyk", "machine-id.json")),
 		}
 	default:
 		xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
 		if xdgConfigHome == "" {
-			home, _ := os.UserHomeDir() //nolint:errcheck // best-effort; an empty home yields a relative fallback path
+			home, _ := os.UserHomeDir() //nolint:errcheck // best-effort; an empty home is handled by absOrEmpty below
 			xdgConfigHome = filepath.Join(home, ".config")
 		}
 		return pathPair{
 			machineWide: "/etc/snyk/machine-id.json",
-			perUser:     filepath.Join(xdgConfigHome, "snyk", "machine-id.json"),
+			perUser:     absOrEmpty(filepath.Join(xdgConfigHome, "snyk", "machine-id.json")),
 		}
 	}
 }
