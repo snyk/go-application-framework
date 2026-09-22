@@ -7,10 +7,13 @@
 // Resolution tries, in order: a value already resolved earlier in this process; an explicitly
 // supplied value (configuration.CLIENT_MACHINE_ID); the shared file written by any Snyk product on
 // the machine; a legacy single-value device-id file left behind by an older product installation;
-// and finally a freshly generated UUIDv4. This package deliberately never reads a hardware serial
-// number or any other OS-derived identifier: doing so needs elevated privileges on some platforms,
-// would give this package its own, potentially divergent, notion of "the machine" from whatever an
-// installer already resolved, and duplicates validation logic better kept in one place.
+// and finally a freshly generated UUIDv4. By default this never reads a hardware serial number or
+// any other OS-derived identifier: doing so needs elevated privileges on some platforms, and an
+// unprivileged caller that could not read it would silently mint a different identity than a
+// privileged one on the very same machine. WithHardwareIdentity opts a caller into two additional
+// sources, a hardware serial number and the hostname, for the one caller responsible for creating
+// this identity in the first place; see its doc comment for the precedence and the privilege
+// sequencing this places on that caller.
 //
 // A freshly generated value that could not be written anywhere durable (the shared file and
 // configuration storage were both unavailable or failed) is still returned, but is recorded with
@@ -57,6 +60,12 @@ const (
 	// sourceEphemeral means the value was freshly generated but could not be persisted anywhere
 	// durable, so it will not survive to the next run.
 	sourceEphemeral idSource = "ephemeral"
+	// sourceSerial means the value came from the machine's hardware serial number, read only when
+	// WithHardwareIdentity is set.
+	sourceSerial idSource = "serial"
+	// sourceHostname means the value came from the machine's hostname, read only when
+	// WithHardwareIdentity is set.
+	sourceHostname idSource = "hostname"
 	// sourceUnknown means a value read back from configuration storage carried a recorded source
 	// this package does not recognize, e.g. because it was written by a newer or tampered writer.
 	sourceUnknown idSource = "unknown"
@@ -82,7 +91,7 @@ func generate() string {
 // never trust the source recorded there and always report sourcePersisted instead (see resolve).
 func knownSource(s idSource) bool {
 	switch s {
-	case sourceProvided, sourcePersisted, sourceGenerated, sourceEphemeral:
+	case sourceProvided, sourcePersisted, sourceGenerated, sourceEphemeral, sourceSerial, sourceHostname:
 		return true
 	default:
 		return false
@@ -152,6 +161,20 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 		logger.Debug().Str("reason", invalidReason(raw)).Msg("machine id: external channel value failed validation, ignoring")
 	}
 
+	// Both reads happen up front, before any source below has a chance to win, so a hostname read
+	// during this same resolution can still be recorded into the shared file (via the deferred call
+	// below) even when a higher-precedence source ends up winning the machine id itself.
+	serialCandidate := readSerialCandidate(o.hardwareIdentity, logger)
+	hostnameCandidate := readHostnameCandidate(o.hardwareIdentity, logger)
+	if o.hardwareIdentity {
+		defer recordHostnameMetadata(hostnameCandidate, writer, logger)
+	}
+
+	if !blank(serialCandidate) {
+		logger.Debug().Msg("machine id: adopting value from hardware serial number")
+		return adopt(config, serialCandidate, sourceSerial, true, writer, logger)
+	}
+
 	if sf := readSharedFile(sharedFilePaths(), logger); sf != nil {
 		logger.Debug().Msg("machine id: adopting value from shared file")
 		return adopt(config, sf.MachineID, sourcePersisted, false, writer, logger)
@@ -160,6 +183,11 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 	if id, path, ok := readLegacyDeviceID(legacyDeviceIDPaths(), logger); ok {
 		logger.Debug().Str("path", path).Msg("machine id: adopting value from legacy device-id file")
 		return adopt(config, id, sourcePersisted, true, writer, logger)
+	}
+
+	if !blank(hostnameCandidate) {
+		logger.Debug().Msg("machine id: adopting value from hostname")
+		return adopt(config, hostnameCandidate, sourceHostname, false, writer, logger)
 	}
 
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
@@ -215,6 +243,12 @@ func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, can
 	logger = effectiveLogger(logger)
 	id = candidateID
 	err = writeSharedFileValue(path, createDir, writer, func(sf *sharedFile) {
+		// A hardware serial number is stamped into serial_number regardless of which value wins the
+		// machine_id race below: other Snyk products use it for correlation, and it is the same value
+		// on this machine no matter which concurrent writer's candidate is adopted as the id.
+		if candidateSource == sourceSerial {
+			sf.SerialNumber = candidateID
+		}
 		if !overwrite && !blank(sf.MachineID) && valid(sf.MachineID) {
 			id = sf.MachineID
 			wonByOther = true
