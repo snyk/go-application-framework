@@ -287,6 +287,25 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+func getSarifContextTemplateFuncMap(ctx context.Context) template.FuncMap {
+	return template.FuncMap{
+		"getFindingTypesFromTestResult": func(result testapi.TestResult) ([]testapi.FindingType, error) {
+			findingTypes, err := getFindingTypesFromTestResultWithContext(ctx, result)
+			if err != nil {
+				return nil, fmt.Errorf("convert test result to finding types: %w", err)
+			}
+			return findingTypes, nil
+		},
+		"getIssuesFromTestResult": func(result testapi.TestResult) ([]testapi.Issue, error) {
+			issues, err := testapi.NewIssuesFromTestResult(ctx, result)
+			if err != nil {
+				return nil, fmt.Errorf("convert test result to issues: %w", err)
+			}
+			return issues, nil
+		},
+	}
+}
+
 // templateDict builds the data passed between named templates.
 func templateDict(pairs ...interface{}) map[string]interface{} {
 	m := make(map[string]interface{}, len(pairs)/2)
@@ -1263,6 +1282,14 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 }
 
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
+	findingTypes, err := getFindingTypesFromTestResultWithContext(context.Background(), testResults)
+	if err != nil {
+		return findingTypes
+	}
+	return findingTypes
+}
+
+func getFindingTypesFromTestResultWithContext(ctx context.Context, testResults testapi.TestResult) ([]testapi.FindingType, error) {
 	findingTypes := map[testapi.FindingType]bool{}
 
 	// Add finding types from ScanConfiguration
@@ -1272,7 +1299,7 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 
 	// Add finding types derived from actual findings
 	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
-	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
+	issues, err := testapi.NewIssuesFromTestResult(ctx, testResults)
 	if err == nil {
 		for _, i := range issues {
 			findingTypes[i.GetFindingType()] = true
@@ -1281,13 +1308,13 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 
 	findingTypesList := slices.Collect(maps.Keys(findingTypes))
 	if len(findingTypesList) == 0 {
-		return []testapi.FindingType{"no findings type found"}
+		findingTypesList = []testapi.FindingType{"no findings type found"}
 	}
 
 	slices.Sort(findingTypesList)
 	slices.Reverse(findingTypesList)
 
-	return findingTypesList
+	return findingTypesList, err
 }
 
 func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []testapi.FindingType {

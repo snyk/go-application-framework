@@ -151,3 +151,20 @@ func Test_getDefaultWriterMimeType(t *testing.T) {
 		})
 	}
 }
+
+func Test_getDefaultWriterMimeType_TOONBoolCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value bool
+		want  string
+	}{
+		{name: "true selects toon", value: true, want: TOON_MIME_TYPE},
+		{name: "false keeps default", value: false, want: DEFAULT_MIME_TYPE},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(OUTPUT_CONFIG_KEY_TOON, tc.value)
+			assert.Equal(t, tc.want, getDefaultWriterMimeType(config))
+		})
+	}
+}

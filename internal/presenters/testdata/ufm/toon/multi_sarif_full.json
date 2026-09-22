@@ -1,0 +1,80 @@
+{
+  "results": [
+    {
+      "effectiveSummary": {"count": 2},
+      "executionState": "finished",
+      "metadata": {
+        "display-target-file": "secrets.json",
+        "project-name": "shared-secrets-project"
+      },
+      "findings": [
+        {
+          "attributes": {
+            "finding_type": "secrets",
+            "key": "secret-shared-a",
+            "locations": [
+              {"file_path": "config.env", "from_line": 3, "type": "source"}
+            ],
+            "problems": [{"id": "SECRET-RULE-SHARED", "source": "secret"}],
+            "rating": {"severity": "medium"},
+            "title": "Shared secret A"
+          },
+          "id": "00000000-0000-4000-8000-000000000021",
+          "type": "findings"
+        },
+        {
+          "attributes": {
+            "finding_type": "secrets",
+            "key": "secret-shared-b",
+            "locations": [
+              {"file_path": "settings.ini", "from_line": 8, "type": "source"}
+            ],
+            "problems": [{"id": "SECRET-RULE-SHARED", "source": "secret"}],
+            "rating": {"severity": "low"},
+            "title": "Shared secret B"
+          },
+          "id": "00000000-0000-4000-8000-000000000022",
+          "type": "findings"
+        }
+      ],
+      "testConfiguration": {"scan_config": {"secrets": {}}},
+      "testId": "10000000-0000-4000-8000-000000000021"
+    },
+    {
+      "effectiveSummary": {"count": 2},
+      "executionState": "finished",
+      "metadata": {
+        "display-target-file": "secrets.json",
+        "project-name": "secrets-project"
+      },
+      "findings": [
+        {
+          "attributes": {
+            "finding_type": "secrets",
+            "key": "secret-a",
+            "locations": [{"file_path": "config.env", "from_line": 3, "to_line": 4, "type": "source"}],
+            "problems": [{"id": "SECRET-RULE-A", "source": "secret"}],
+            "rating": {"severity": "medium"},
+            "title": "Secret rule A"
+          },
+          "id": "00000000-0000-4000-8000-000000000023",
+          "type": "findings"
+        },
+        {
+          "attributes": {
+            "finding_type": "secrets",
+            "key": "secret-b",
+            "locations": [{"file_path": "settings.ini", "from_line": 8, "type": "source"}],
+            "problems": [{"id": "SECRET-RULE-B", "source": "secret"}],
+            "rating": {"severity": "low"},
+            "title": "Secret rule B"
+          },
+          "id": "00000000-0000-4000-8000-000000000024",
+          "type": "findings"
+        }
+      ],
+      "testConfiguration": {"scan_config": {"secrets": {}}},
+      "testId": "10000000-0000-4000-8000-000000000022"
+    }
+  ]
+}

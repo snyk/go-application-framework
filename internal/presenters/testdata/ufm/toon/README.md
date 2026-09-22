@@ -4,6 +4,9 @@ Synthetic fixtures: JSON input (`*.json`) and exact TOON output (`*.toon`).
 Use GAF's template engine to render TOON.
 No production encoder dependency.
 
+`got_sarif_full.json` is a synthetic single-finding fixture based on the
+public got vulnerability example
+
 ## Contract
 
 - Use `{"results": [...]}`. Keep the envelope fields shown in the JSON fixtures,

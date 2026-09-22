@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 )
@@ -39,49 +40,165 @@ func TestRenderTemplate_TOON_contractGoldens(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name       string
-		inputs     []string
-		fullGolden string
+		name   string
+		inputs []string
 	}{
-		{"sca", []string{"sca"}, "sca_full"},
-		{"secrets", []string{"secrets"}, ""},
-		{"empty_sca", []string{"empty_sca"}, ""},
-		{"empty_secrets", []string{"empty_secrets"}, ""},
-		{"mixed_scanners", []string{"secrets", "empty_sca", "sca", "empty_secrets"}, "mixed_scanners_full"},
-		{"no_results", []string{"no_results"}, ""},
+		{"sca", []string{"sca"}},
+		{"secrets", []string{"secrets"}},
+		{"empty_sca", []string{"empty_sca"}},
+		{"empty_secrets", []string{"empty_secrets"}},
+		{"mixed_scanners", []string{"secrets", "empty_sca", "sca", "empty_secrets"}},
+		{"no_results", []string{"no_results"}},
 	}
 
 	for _, tc := range cases {
-		for _, full := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/full=%t", tc.name, full), func(t *testing.T) {
-				t.Parallel()
-				fixtureDir := filepath.Join("testdata", "ufm", "toon")
-				var results []testapi.TestResult
-				for _, name := range tc.inputs {
-					results = append(results, loadContractTestResults(t, filepath.Join(fixtureDir, name+".json"))...)
-				}
-				golden := tc.name
-				config := configuration.NewWithOpts()
-				if full {
-					config.Set("toon", "full")
-					if tc.fullGolden != "" {
-						golden = tc.fullGolden
-					}
-				}
-				expected, err := os.ReadFile(filepath.Join(fixtureDir, golden+".toon"))
-				require.NoError(t, err)
-				expected = bytes.TrimSuffix(expected, []byte("\n"))
-				if full {
-					expected = bytes.Replace(expected, []byte("hint: add --toon=full for all fields\n"), nil, 1)
-				}
+		t.Run(fmt.Sprintf("%s/compact", tc.name), func(t *testing.T) {
+			t.Parallel()
+			fixtureDir := filepath.Join("testdata", "ufm", "toon")
+			var results []testapi.TestResult
+			for _, name := range tc.inputs {
+				results = append(results, loadContractTestResults(t, filepath.Join(fixtureDir, name+".json"))...)
+			}
+			expected, err := os.ReadFile(filepath.Join(fixtureDir, tc.name+".toon"))
+			require.NoError(t, err)
+			expected = bytes.TrimSuffix(expected, []byte("\n"))
 
-				writer := &bytes.Buffer{}
-				presenter := presenters.NewUfmRenderer(results, config, writer)
-				require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
-				assert.Equal(t, string(expected), writer.String())
-			})
-		}
+			writer := &bytes.Buffer{}
+			presenter := presenters.NewUfmRenderer(results, configuration.NewWithOpts(), writer)
+			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+			assert.Equal(t, string(expected), writer.String())
+		})
 	}
+}
+
+func TestRenderTemplate_TOON_fullUsesSARIFReport(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []any{"full", true} {
+		t.Run(fmt.Sprintf("mode=%v", mode), func(t *testing.T) {
+			t.Parallel()
+			results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", "sca.json"))
+			config := configuration.NewWithOpts()
+			config.Set("toon", mode)
+			var output bytes.Buffer
+			presenter := presenters.NewUfmRenderer(results, config, &output)
+
+			require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+			assert.Contains(t, output.String(), "runs[1]")
+			assert.NotContains(t, output.String(), "hint: add --toon=full")
+		})
+	}
+
+	t.Run("false stays compact", func(t *testing.T) {
+		results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", "sca.json"))
+		config := configuration.NewWithOpts()
+		config.Set("toon", false)
+		var output bytes.Buffer
+		presenter := presenters.NewUfmRenderer(results, config, &output)
+
+		require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+		assert.Contains(t, output.String(), "sca[")
+		assert.NotContains(t, output.String(), "runs[")
+	})
+}
+
+func TestRenderTemplate_TOON_fullUsesProvidedTemplate(t *testing.T) {
+	t.Parallel()
+
+	templatePath := filepath.Join(t.TempDir(), "toon.tmpl")
+	require.NoError(t, os.WriteFile(templatePath, []byte(`{{- define "toonDocument" -}}custom{{- end -}}`), 0600))
+
+	results := loadContractTestResults(t, filepath.Join("testdata", "ufm", "toon", "sca.json"))
+	config := configuration.NewWithOpts()
+	config.Set("toon", "full")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &output)
+
+	require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), []string{templatePath}, presenters.ApplicationTOONMimeType))
+	assert.Equal(t, "custom", output.String())
+}
+
+func TestRenderTemplate_TOON_fullRejectsUnfinishedScan(t *testing.T) {
+	t.Parallel()
+
+	for _, state := range []string{"pending", "started"} {
+		t.Run(state, func(t *testing.T) {
+			t.Parallel()
+			results, err := ufm.NewSerializableTestResultFromBytes([]byte(fmt.Sprintf(
+				`[{"executionState":%q,"findingsComplete":true,"testConfiguration":{"scan_config":{"sca":{}}}}]`, state)))
+			require.NoError(t, err)
+			config := configuration.NewWithOpts()
+			config.Set("toon", true)
+			output := bytes.NewBufferString("original")
+			presenter := presenters.NewUfmRenderer(results, config, output)
+
+			err = presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+			require.ErrorContains(t, err, "scan is "+state)
+			assert.Equal(t, "original", output.String())
+		})
+	}
+}
+
+func TestRenderTemplate_TOON_fullPreservesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[
+		{"executionState":"finished","testConfiguration":{"scan_config":{"secrets":{}}},
+		 "errors":[{"detail":"Some files failed"}],"warnings":[{"detail":"Some files skipped"}],
+		 "findings":[{"id":"00000000-0000-4000-8000-000000000001","attributes":{"finding_type":"secrets","title":"Secret rule","rating":{"severity":"medium"},
+		 "problems":[{"id":"SECRET-RULE","source":"secret"}],"locations":[{"file_path":"config.env","from_line":3,"type":"source"}]}}]}
+	]`))
+	require.NoError(t, err)
+	config := configuration.NewWithOpts()
+	config.Set("toon", "full")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &output)
+
+	require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	assert.Contains(t, output.String(), "runs[1]")
+	assert.Contains(t, output.String(), "secrets_error: Some files failed")
+	assert.Contains(t, output.String(), "secrets_hint: Some files skipped")
+	assert.NotContains(t, output.String(), "secrets: []")
+	assert.NotContains(t, output.String(), "findings: []")
+}
+
+func TestRenderTemplate_TOON_fullGolden(t *testing.T) {
+	t.Parallel()
+
+	fixtureDir := filepath.Join("testdata", "ufm", "toon")
+	results := loadContractTestResults(t, filepath.Join(fixtureDir, "got_sarif_full.json"))
+	config := configuration.NewWithOpts()
+	config.Set("toon", "full")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &output,
+		presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk"), runtimeinfo.WithVersion("1.1301.0"))),
+	)
+
+	require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	expected, err := os.ReadFile(filepath.Join(fixtureDir, "got_sarif_full.toon"))
+	require.NoError(t, err)
+	assert.Equal(t, string(bytes.TrimSuffix(expected, []byte("\n"))), output.String())
+}
+
+func TestRenderTemplate_TOON_fullPreservesRunsRulesAndResults(t *testing.T) {
+	t.Parallel()
+
+	fixtureDir := filepath.Join("testdata", "ufm", "toon")
+	results := loadContractTestResults(t, filepath.Join(fixtureDir, "multi_sarif_full.json"))
+	config := configuration.NewWithOpts()
+	config.Set("toon", "full")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer(results, config, &output)
+
+	require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
+	expected, err := os.ReadFile(filepath.Join(fixtureDir, "multi_sarif_full.toon"))
+	require.NoError(t, err)
+	assert.Equal(t, string(bytes.TrimSuffix(expected, []byte("\n"))), output.String())
+	assert.Contains(t, output.String(), "runs[2]:")
+	assert.Contains(t, output.String(), "results[2]:")
+	assert.Contains(t, output.String(), "rules[2]:")
+	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-A")
+	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-B")
 }
 
 func TestRenderTemplate_TOON_genericFindings(t *testing.T) {
@@ -271,6 +388,24 @@ func TestRenderTemplate_TOON_laterResultError(t *testing.T) {
 	presenter := presenters.NewUfmRenderer([]testapi.TestResult{first, second}, configuration.NewWithOpts(), &output)
 	err := presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
 	require.ErrorIs(t, err, assert.AnError)
+	require.ErrorContains(t, err, "failed to extract findings")
+	assert.Empty(t, output.String())
+}
+
+func TestRenderTemplate_TOON_fullFindingsErrorUsesContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	result := mocks.NewMockTestResult(ctrl)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	result.EXPECT().GetTestConfiguration().Return(nil)
+	result.EXPECT().Findings(ctx).Return(nil, false, assert.AnError)
+
+	config := configuration.NewWithOpts()
+	config.Set("toon", "full")
+	var output bytes.Buffer
+	presenter := presenters.NewUfmRenderer([]testapi.TestResult{result}, config, &output)
+	err := presenter.RenderTemplateWithContext(ctx, presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType)
+
 	require.ErrorContains(t, err, "failed to extract findings")
 	assert.Empty(t, output.String())
 }

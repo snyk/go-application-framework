@@ -150,6 +150,10 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 }
 
 func (p *UfmPresenter) RenderTemplateWithContext(ctx context.Context, templateFiles []string, mimeType string) error {
+	if mimeType == ApplicationTOONMimeType && isFullTOON(p.config) {
+		return p.renderFullTOON(ctx, templateFiles)
+	}
+
 	// Call renderHTMLTemplate() for HTML mime type
 	if _, ok := p.htmlTemplateImpl[mimeType]; ok {
 		return p.renderHTMLTemplate(templateFiles, mimeType)
@@ -190,6 +194,10 @@ func (p *UfmPresenter) RenderTemplateWithContext(ctx context.Context, templateFi
 		return err
 	}
 	return nil
+}
+
+func isFullTOON(config configuration.Configuration) bool {
+	return config.GetString("toon") == "full" || config.GetBool("toon")
 }
 
 // renderHTMLTemplate is the html/template counterpart of RenderTemplate

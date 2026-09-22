@@ -276,7 +276,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 
 			results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{"findings":[{"attributes":{
 	            "finding_type":"secret","title":"example-rule","description":"excluded","rating":{"severity":"low"},
-	            "locations":[{"type":"source","file_path":"example.txt","from_line":5,"to_line":8}]
+	            "locations":[{"type":"source","file_path":"example.txt","from_line":5,"from_column":1,"to_line":8}]
 	        }}, {"id":"00000000-0000-4000-8000-000000000002","attributes":{
 	            "finding_type":"sca","title":"Example","rating":{"severity":"low"},"problems":[{"source":"snyk_vuln","id":"example","cvss_base_score":0}],
 	            "locations":[{"type":"package","package":{"name":"example","version":"1"}}]
@@ -298,35 +298,73 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
 			assert.NoError(t, err)
 			assert.NotNil(t, remaining)
-			expected := "sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\""
+			var expected string
 			if full {
-				expected = "sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:\n  \"0.0\",yes,example,\"example@1,1.5\",\"\",Example,example@2"
+				expected = `runs[1]:
+  - results[3]:
+      - fingerprints:
+          identity: ""
+          "snyk/asset/finding/v1": ""
+        level: note
+        locations[1]{physicalLocation{artifactLocation{uri},region{endLine,startColumn,startLine}}}:
+          example.txt,8,1,5
+        message:
+          text: This file contains a low severity example-rule vulnerability.
+        ruleId: ""
+      - level: note
+        locations[1]:
+          - logicalLocations[1]{fullyQualifiedName}:
+              example@1
+        message:
+          text: This file introduces a vulnerable example package with a low severity vulnerability.
+        ruleId: example
+      - fingerprints:
+          identity: 00000000-0000-4000-8000-000000000003
+          "snyk/asset/finding/v1": 00000000-0000-4000-8000-000000000003
+        level: warning
+        locations: []
+        message:
+          text: This file contains a medium severity Future finding vulnerability.
+        ruleId: ""
+    tool:
+      driver:
+        informationUri: "https://docs.snyk.io/"
+        name: Snyk Open Source
+        rules[1]:
+          - fullDescription:
+              text: example@1
+            help:
+              markdown: "* Vulnerable module: example\n* Introduced through: example@1\n"
+              text: ""
+            id: example
+            properties:
+              tags[1]: security
+            shortDescription:
+              text: Low severity - Example vulnerability in example
+        semanticVersion: ""
+        version: ""`
+			} else {
+				expected = "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" +
+					"hint: add --toon=full for all fields\ninteraction_id: interaction-test\norg: unknown\nproject: unknown\n" +
+					"sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\"\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
 			}
-			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
-			header := "interaction_id: interaction-test\norg: unknown\nproject: unknown\n"
-			if !full {
-				header = "hint: add --toon=full for all fields\n" + header
-			}
-			expected = "findings[1]{finding_type,id,severity,title}:\n  future,00000000-0000-4000-8000-000000000003,medium,Future finding\n" + header + expected
 			assert.Equal(t, expected+"\n", outputDestination.buffer.String())
 			content, err := os.ReadFile(outputFile)
 			assert.NoError(t, err)
 			assert.Equal(t, expected, string(content))
 
-			if !full {
-				unfinishedResults, parseErr := ufm.NewSerializableTestResultFromBytes([]byte(
-					`[{"findingsComplete":true,"executionState":"started","testConfiguration":{"scan_config":{"secrets":{}}}}]`))
-				assert.NoError(t, parseErr)
-				unfinishedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), unfinishedResults)
-				unfinishedDestination := &stubOutputDestination{}
-				unfinishedWriters := GetWritersFromConfiguration(stdoutConfig, unfinishedDestination)
-				_, renderErr := HandleContentTypeUnifiedModel([]workflow.Data{unfinishedData}, ctx, unfinishedWriters)
-				assert.ErrorContains(t, renderErr, "scan is started")
-				assert.Empty(t, unfinishedDestination.buffer.String())
-				content, readErr := os.ReadFile(outputFile)
-				assert.NoError(t, readErr)
-				assert.Equal(t, expected, string(content), "existing output must remain untouched")
-			}
+			unfinishedResults, parseErr := ufm.NewSerializableTestResultFromBytes([]byte(
+				`[{"findingsComplete":true,"executionState":"started","testConfiguration":{"scan_config":{"secrets":{}}}}]`))
+			assert.NoError(t, parseErr)
+			unfinishedData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), unfinishedResults)
+			unfinishedDestination := &stubOutputDestination{}
+			unfinishedWriters := GetWritersFromConfiguration(stdoutConfig, unfinishedDestination)
+			_, renderErr := HandleContentTypeUnifiedModel([]workflow.Data{unfinishedData}, ctx, unfinishedWriters)
+			assert.ErrorContains(t, renderErr, "scan is started")
+			assert.Empty(t, unfinishedDestination.buffer.String())
+			content, readErr := os.ReadFile(outputFile)
+			assert.NoError(t, readErr)
+			assert.Equal(t, expected, string(content), "existing output must remain untouched")
 		})
 	}
 }
