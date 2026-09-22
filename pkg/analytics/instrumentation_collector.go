@@ -71,6 +71,11 @@ type instrumentationCollectorImpl struct {
 	extension           map[string]interface{}
 }
 
+// unredactableExtensionKeys hold fixed-vocabulary enum values that must never be redacted.
+var unredactableExtensionKeys = map[string]struct{}{
+	"contributors.collection_result": {},
+}
+
 type serializeOptions struct {
 	logger *zerolog.Logger
 	cfg    configuration.Configuration
@@ -154,6 +159,20 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 	ic.extension[key] = value
 }
 
+// partitionUnredactableExtensionValues splits out unredactableExtensionKeys from m.
+func partitionUnredactableExtensionValues(m map[string]interface{}) (unredactable, redactable map[string]interface{}) {
+	unredactable = make(map[string]interface{}, len(unredactableExtensionKeys))
+	redactable = make(map[string]interface{}, len(m))
+	for k, v := range m {
+		if _, ok := unredactableExtensionKeys[k]; ok {
+			unredactable[k] = v
+		} else {
+			redactable[k] = v
+		}
+	}
+	return unredactable, redactable
+}
+
 func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...serializeOptionFunc) (*api.AnalyticsRequestBody, error) {
 	t, ok := collector.(*instrumentationCollectorImpl)
 	if !ok {
@@ -188,12 +207,19 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
 	logger := options.logger
 
-	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
-	// does whole-string literal replacement, so running it over raw JSON would let a redacted
-	// value collide with an unrelated field that happens to contain the same substring.
-	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
-		scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, logging.GetScrubDictFromConfig(options.cfg))
-		d.Attributes.Interaction.Extension = &scrubbed
+	// Pulled out before either redaction pass, merged back in unchanged below.
+	var unredactable map[string]interface{}
+	if d.Attributes.Interaction.Extension != nil {
+		var redactable map[string]interface{}
+		unredactable, redactable = partitionUnredactableExtensionValues(*d.Attributes.Interaction.Extension)
+
+		// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
+		// does whole-string literal replacement, so running it over raw JSON would let a redacted
+		// value collide with an unrelated field that happens to contain the same substring.
+		if options.cfg != nil {
+			redactable = scrubExtensionMap(redactable, logging.GetScrubDictFromConfig(options.cfg))
+		}
+		d.Attributes.Interaction.Extension = &redactable
 	}
 
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
@@ -230,6 +256,14 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	if err != nil {
 		logger.Printf("failed to unmarshal sanitized extension object:: %v", err)
 		return result
+	}
+
+	for k, v := range unredactable {
+		if result.Data.Attributes.Interaction.Extension == nil {
+			m := make(map[string]interface{})
+			result.Data.Attributes.Interaction.Extension = &m
+		}
+		(*result.Data.Attributes.Interaction.Extension)[k] = v
 	}
 
 	return result
