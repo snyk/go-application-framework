@@ -127,7 +127,7 @@ func TestRecordHostnameMetadata_WritesHostnameFieldToTheSharedFile(t *testing.T)
 
 	recordHostnameMetadata("my-laptop.local", "test-writer", nil)
 
-	data, err := os.ReadFile(sharedFilePaths().perUser)
+	data, err := os.ReadFile(selectWritePath(sharedFilePaths(), nil))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))

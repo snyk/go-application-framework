@@ -79,6 +79,17 @@ func readSnykJSON(t *testing.T) map[string]any {
 	return m
 }
 
+// jsonEscapedPath returns path as zerolog would embed it inside a log line's own quotes: a raw
+// Windows path with single backslashes is never a literal substring of JSON-encoded log output,
+// which doubles them, so a require.Contains assertion against a logged path must compare against
+// this escaped form instead.
+func jsonEscapedPath(t *testing.T, path string) string {
+	t.Helper()
+	b, err := json.Marshal(path)
+	require.NoError(t, err)
+	return string(b[1 : len(b)-1])
+}
+
 func TestAcceptance_ExistingStoredValueIsReturnedUnchanged(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.Set(configuration.MACHINE_ID, "stored-value-1")
@@ -1063,11 +1074,12 @@ func TestAcceptance_HardwareSerialNumberIsAdoptedAndPersisted(t *testing.T) {
 func TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValue(t *testing.T) {
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	writePath := selectWritePath(paths, nil)
+	require.NoError(t, os.MkdirAll(filepath.Dir(writePath), 0o755))
 	sf := sharedFile{MachineID: "already-established-id", IdentifierSource: string(sourceGenerated)}
 	data, err := json.Marshal(sf)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+	require.NoError(t, os.WriteFile(writePath, data, 0o644))
 
 	original := readHardwareSerialFunc
 	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
@@ -1080,7 +1092,7 @@ func TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValu
 	require.NoError(t, err)
 	require.Equal(t, "already-established-id", value, "a value already established in the shared file must not be clobbered by a freshly read serial number")
 
-	updated, err := os.ReadFile(paths.perUser)
+	updated, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(updated, &raw))
@@ -1137,7 +1149,7 @@ func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
 	sf := readSharedFile(sharedFilePaths(), nil)
 	require.Nil(t, sf, "a hostname-sourced id is not written to the shared file's machine_id field")
 
-	data, err := os.ReadFile(sharedFilePaths().perUser)
+	data, err := os.ReadFile(selectWritePath(sharedFilePaths(), nil))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
@@ -1151,11 +1163,12 @@ func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
 func TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWins(t *testing.T) {
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	writePath := selectWritePath(paths, nil)
+	require.NoError(t, os.MkdirAll(filepath.Dir(writePath), 0o755))
 	sf := sharedFile{MachineID: "from-shared-file", IdentifierSource: string(sourcePersisted)}
 	data, err := json.Marshal(sf)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+	require.NoError(t, os.WriteFile(writePath, data, 0o644))
 
 	original := hostnameFunc
 	hostnameFunc = func() (string, error) { return "my-laptop.local", nil }
@@ -1166,7 +1179,7 @@ func TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWin
 	require.NoError(t, err)
 	require.Equal(t, "from-shared-file", value, "the shared file's already-established id must win over a freshly read hostname")
 
-	updated, err := os.ReadFile(paths.perUser)
+	updated, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(updated, &raw))
@@ -1226,7 +1239,8 @@ func TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution(t *tes
 	require.Equal(t, 1, readCount)
 
 	paths := sharedFilePaths()
-	info, statErr := os.Stat(paths.perUser)
+	writePath := selectWritePath(paths, nil)
+	info, statErr := os.Stat(writePath)
 	require.NoError(t, statErr)
 	mtimeAfterFirst := info.ModTime()
 
@@ -1234,7 +1248,7 @@ func TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution(t *tes
 	require.NoError(t, err)
 	require.Equal(t, 1, readCount, "a second resolution must not read the hardware serial number again")
 
-	info, err = os.Stat(paths.perUser)
+	info, err = os.Stat(writePath)
 	require.NoError(t, err)
 	require.Equal(t, mtimeAfterFirst, info.ModTime(), "a second resolution must not rewrite the shared file")
 }
