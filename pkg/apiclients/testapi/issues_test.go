@@ -281,7 +281,6 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		})
 		assert.Equal(t, "fallback", issues[1].GetFindings()[0].Attributes.Title)
 	})
-
 }
 
 func TestIssue_GeneralizedMethods(t *testing.T) {
