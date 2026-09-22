@@ -291,7 +291,7 @@ func TestAcceptance_LegacyFileWithLeadingWhitespaceAndControlCharactersFailsVali
 	require.True(t, ok)
 	require.True(t, valid(id))
 	require.Equal(t, string(sourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
-	require.Contains(t, logs.String(), legacyPaths.perUser, "the rejected legacy candidate must be logged together with its path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, legacyPaths.perUser), "the rejected legacy candidate must be logged together with its path")
 }
 
 // TestAcceptance_ExternalChannelValueWithTrailingWhitespaceFailsValidationAndFallsThrough proves the
@@ -440,7 +440,7 @@ func TestAcceptance_MachineWideWriteFailureFallsBackToPerUser(t *testing.T) {
 	require.True(t, valid(id))
 
 	require.FileExists(t, paths.perUser, "a write-level failure on the machine-wide path must still fall back to the per-user file")
-	require.Contains(t, logs.String(), paths.machineWide, "the swallowed machine-wide shared file write failure must be logged together with its path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, paths.machineWide), "the swallowed machine-wide shared file write failure must be logged together with its path")
 }
 
 // TestAcceptance_PerUserSharedFileIsNotGroupOrWorldReadable proves the per-user shared file is
@@ -570,7 +570,8 @@ func TestAcceptance_ResetLogsSharedFileLockTimeout(t *testing.T) {
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	held := flock.New(sharedFilePaths().perUser + ".lock")
+	writePath := selectWritePath(sharedFilePaths(), nil)
+	held := flock.New(writePath + ".lock")
 	locked, lockErr := held.TryLock()
 	require.NoError(t, lockErr)
 	require.True(t, locked)
@@ -620,11 +621,16 @@ func TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates(t *testing.T) {
 
 	paths := sharedFilePaths()
 	// Replace both shared-file candidates with directories so removeSharedFileValue's rename step
-	// cannot complete for either, forcing two independent, deterministic removal failures.
-	require.NoError(t, os.Remove(paths.perUser))
-	require.NoError(t, os.Mkdir(paths.perUser, 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
-	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
+	// cannot complete for either, forcing two independent, deterministic removal failures. Which
+	// candidate Resolve actually wrote to is platform-dependent (see selectWritePath), so both are
+	// prepared the same way regardless of which one already exists.
+	for _, p := range []string{paths.perUser, paths.machineWide} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		if _, statErr := os.Stat(p); statErr == nil {
+			require.NoError(t, os.Remove(p))
+		}
+		require.NoError(t, os.Mkdir(p, 0o755))
+	}
 
 	err = reset(config)
 	require.Error(t, err)
@@ -748,11 +754,12 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 	require.NoError(t, err)
 
 	paths := sharedFilePaths()
-	require.FileExists(t, paths.perUser)
+	writePath := selectWritePath(paths, nil)
+	require.FileExists(t, writePath)
 
 	recording := &resetOrderStorage{
 		Storage:              config.GetStorage(),
-		perUserPath:          paths.perUser,
+		perUserPath:          writePath,
 		fileClearedAtCallFor: map[string]bool{},
 	}
 	config.SetStorage(recording)
@@ -775,6 +782,9 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 // never actually changes, and would additionally throw away the still-valid stored value for no
 // benefit.
 func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleared(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits behave differently on windows")
+	}
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
 
@@ -904,13 +914,22 @@ func TestAcceptance_SharedFileSchemaFieldsAreStamped(t *testing.T) {
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(sharedFilePaths().perUser)
+	paths := sharedFilePaths()
+	writePath := selectWritePath(paths, nil)
+	data, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
 
 	require.InDelta(t, float64(schemaVersion), raw["schema_version"], 0)
-	require.Equal(t, scopeUser, raw["scope"])
+	// Which scope gets stamped follows selectWritePath's own platform-dependent choice: it is
+	// scopeMachine only when the machine-wide directory won (see writeSharedFileValue's createDir
+	// parameter), otherwise scopeUser.
+	expectedScope := scopeUser
+	if writePath == paths.machineWide {
+		expectedScope = scopeMachine
+	}
+	require.Equal(t, expectedScope, raw["scope"])
 	require.Equal(t, defaultWriterIdentity, raw["writer"])
 	firstSeenAt, ok := raw["first_seen_at"].(string)
 	require.True(t, ok)

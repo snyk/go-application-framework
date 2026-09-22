@@ -122,8 +122,19 @@ func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
 		t.Fatal("writeSharedFileValue did not return: its lock acquisition must be bounded, not block forever")
 	}
 
-	require.Contains(t, logs.String(), path, "the swallowed lock timeout must be logged together with the file path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, path), "the swallowed lock timeout must be logged together with the file path")
 	require.Contains(t, logs.String(), "lock", "the swallowed lock timeout must be logged")
+}
+
+// jsonEscapedPath returns path as zerolog would embed it inside a log line's own quotes: a raw
+// Windows path with single backslashes is never a literal substring of JSON-encoded log output,
+// which doubles them, so a require.Contains assertion against a logged path must compare against
+// this escaped form instead.
+func jsonEscapedPath(t *testing.T, path string) string {
+	t.Helper()
+	b, err := json.Marshal(path)
+	require.NoError(t, err)
+	return string(b[1 : len(b)-1])
 }
 
 // TestSelectWritePathFallsBackToPerUserWhenMachineWideIsEmpty guards against filepath.Dir("")
