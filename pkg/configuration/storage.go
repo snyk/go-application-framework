@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/internal/fileperms"
 )
@@ -66,10 +67,10 @@ type JsonStorage struct {
 	// inProcess and lockHeld close a gap in *flock.Flock: its OS-level lock only
 	// guards against other processes, so two goroutines sharing this same
 	// JsonStorage in one process would otherwise both be granted Lock() at once.
-	// inProcess is a capacity-1 gate acquired by Lock and released by Unlock;
+	// inProcess is a binary semaphore acquired by Lock and released by Unlock;
 	// lockHeld records whether this instance currently holds it, so a failed
 	// Lock never skews the count and an unmatched Unlock is a safe no-op.
-	inProcess chan struct{}
+	inProcess *semaphore.Weighted
 	lockHeld  int32
 }
 
@@ -85,7 +86,7 @@ func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
 		path:      path,
 		fileLock:  flock.New(path + ".lock"),
-		inProcess: make(chan struct{}, 1),
+		inProcess: semaphore.NewWeighted(1),
 	}
 
 	for _, opt := range options {
@@ -171,15 +172,13 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
-	select {
-	case s.inProcess <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
+	if err := s.inProcess.Acquire(ctx, 1); err != nil {
+		return err
 	}
 
 	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
 	if err != nil {
-		<-s.inProcess
+		s.inProcess.Release(1)
 		return err
 	}
 
@@ -193,6 +192,6 @@ func (s *JsonStorage) Unlock() error {
 	}
 
 	err := s.fileLock.Unlock()
-	<-s.inProcess
+	s.inProcess.Release(1)
 	return err
 }
