@@ -13,6 +13,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/machineid"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // TestAcceptance_ViaAppEngineProducesPersistedMachineID exercises the actual wiring in
@@ -75,4 +77,34 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 	require.NoError(t, err)
 
 	require.Contains(t, logs.String(), "machine id: adopting value from external channel", "the real app wiring must pass its logger into machineid.Resolve")
+}
+
+// TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve proves app.WithMachineIDOptions
+// actually reaches machineid.Resolve through the real engine wiring, not just through a unit test
+// of pkg/app in isolation: a machineid.ResolveOption passed this way must take effect exactly like
+// one baked into pkg/app.initConfiguration itself.
+func TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	_, err := configuration.CreateConfigurationFile("snyk.json")
+	require.NoError(t, err)
+
+	config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))
+	engine := app.CreateAppEngineWithOptions(
+		app.WithConfiguration(config),
+		app.WithMachineIDOptions(machineid.WithRuntimeInfo(ri)),
+	)
+
+	_, err = engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(home, ".snyk", "machine-id.json"))
+	require.NoError(t, err)
+	var sf map[string]any
+	require.NoError(t, json.Unmarshal(data, &sf))
+	require.Equal(t, "snyk-ls/9.9.9", sf["writer"], "a machineid.ResolveOption passed via WithMachineIDOptions must reach the shared file write")
 }
