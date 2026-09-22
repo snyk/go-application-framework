@@ -35,6 +35,19 @@ jobs:
           name: Run unit tests
           command: go test ./...
 
+  macos_test:
+    macos:
+      xcode: "15.3.0"
+    resource_class: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - run:
+          name: Install Go
+          command: brew install go
+      - run:
+          name: Run machine identity unit tests
+          command: go test ./pkg/machineid/...
+
   build:
     <<: *base_image
     steps:
@@ -96,8 +109,11 @@ workflows:
           name: Unit tests
       - windows_test:
           name: Windows tests
+      - macos_test:
+          name: macOS tests
       - build:
           name: Build
           requires:
             - Unit tests
             - Windows tests
+            - macOS tests
