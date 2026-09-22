@@ -79,6 +79,17 @@ func readSnykJSON(t *testing.T) map[string]any {
 	return m
 }
 
+// jsonEscapedPath returns path as zerolog would embed it inside a log line's own quotes: a raw
+// Windows path with single backslashes is never a literal substring of JSON-encoded log output,
+// which doubles them, so a require.Contains assertion against a logged path must compare against
+// this escaped form instead.
+func jsonEscapedPath(t *testing.T, path string) string {
+	t.Helper()
+	b, err := json.Marshal(path)
+	require.NoError(t, err)
+	return string(b[1 : len(b)-1])
+}
+
 func TestAcceptance_ExistingStoredValueIsReturnedUnchanged(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.Set(configuration.MACHINE_ID, "stored-value-1")
@@ -315,7 +326,7 @@ func TestAcceptance_LegacyFileWithLeadingWhitespaceAndControlCharactersFailsVali
 	require.True(t, ok)
 	require.True(t, valid(id))
 	require.Equal(t, string(sourceGenerated), config.GetString(configuration.MACHINE_ID_SOURCE))
-	require.Contains(t, logs.String(), legacyPaths.perUser, "the rejected legacy candidate must be logged together with its path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, legacyPaths.perUser), "the rejected legacy candidate must be logged together with its path")
 }
 
 // TestAcceptance_ExternalChannelValueWithTrailingWhitespaceFailsValidationAndFallsThrough proves the
@@ -464,7 +475,7 @@ func TestAcceptance_MachineWideWriteFailureFallsBackToPerUser(t *testing.T) {
 	require.True(t, valid(id))
 
 	require.FileExists(t, paths.perUser, "a write-level failure on the machine-wide path must still fall back to the per-user file")
-	require.Contains(t, logs.String(), paths.machineWide, "the swallowed machine-wide shared file write failure must be logged together with its path")
+	require.Contains(t, logs.String(), jsonEscapedPath(t, paths.machineWide), "the swallowed machine-wide shared file write failure must be logged together with its path")
 }
 
 // TestAcceptance_PerUserSharedFileIsNotGroupOrWorldReadable proves the per-user shared file is
@@ -594,7 +605,8 @@ func TestAcceptance_ResetLogsSharedFileLockTimeout(t *testing.T) {
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	held := flock.New(sharedFilePaths().perUser + ".lock")
+	writePath := selectWritePath(sharedFilePaths(), nil)
+	held := flock.New(writePath + ".lock")
 	locked, lockErr := held.TryLock()
 	require.NoError(t, lockErr)
 	require.True(t, locked)
@@ -644,11 +656,16 @@ func TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates(t *testing.T) {
 
 	paths := sharedFilePaths()
 	// Replace both shared-file candidates with directories so removeSharedFileValue's rename step
-	// cannot complete for either, forcing two independent, deterministic removal failures.
-	require.NoError(t, os.Remove(paths.perUser))
-	require.NoError(t, os.Mkdir(paths.perUser, 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
-	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
+	// cannot complete for either, forcing two independent, deterministic removal failures. Which
+	// candidate Resolve actually wrote to is platform-dependent (see selectWritePath), so both are
+	// prepared the same way regardless of which one already exists.
+	for _, p := range []string{paths.perUser, paths.machineWide} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		if _, statErr := os.Stat(p); statErr == nil {
+			require.NoError(t, os.Remove(p))
+		}
+		require.NoError(t, os.Mkdir(p, 0o755))
+	}
 
 	err = reset(config)
 	require.Error(t, err)
@@ -772,11 +789,12 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 	require.NoError(t, err)
 
 	paths := sharedFilePaths()
-	require.FileExists(t, paths.perUser)
+	writePath := selectWritePath(paths, nil)
+	require.FileExists(t, writePath)
 
 	recording := &resetOrderStorage{
 		Storage:              config.GetStorage(),
-		perUserPath:          paths.perUser,
+		perUserPath:          writePath,
 		fileClearedAtCallFor: map[string]bool{},
 	}
 	config.SetStorage(recording)
@@ -799,6 +817,9 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 // never actually changes, and would additionally throw away the still-valid stored value for no
 // benefit.
 func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleared(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits behave differently on windows")
+	}
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
 
@@ -928,13 +949,22 @@ func TestAcceptance_SharedFileSchemaFieldsAreStamped(t *testing.T) {
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(sharedFilePaths().perUser)
+	paths := sharedFilePaths()
+	writePath := selectWritePath(paths, nil)
+	data, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
 
 	require.InDelta(t, float64(schemaVersion), raw["schema_version"], 0)
-	require.Equal(t, scopeUser, raw["scope"])
+	// Which scope gets stamped follows selectWritePath's own platform-dependent choice: it is
+	// scopeMachine only when the machine-wide directory won (see writeSharedFileValue's createDir
+	// parameter), otherwise scopeUser.
+	expectedScope := scopeUser
+	if writePath == paths.machineWide {
+		expectedScope = scopeMachine
+	}
+	require.Equal(t, expectedScope, raw["scope"])
 	require.Equal(t, defaultWriterIdentity, raw["writer"])
 	firstSeenAt, ok := raw["first_seen_at"].(string)
 	require.True(t, ok)
@@ -1044,11 +1074,12 @@ func TestAcceptance_HardwareSerialNumberIsAdoptedAndPersisted(t *testing.T) {
 func TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValue(t *testing.T) {
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	writePath := selectWritePath(paths, nil)
+	require.NoError(t, os.MkdirAll(filepath.Dir(writePath), 0o755))
 	sf := sharedFile{MachineID: "already-established-id", IdentifierSource: string(sourceGenerated)}
 	data, err := json.Marshal(sf)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+	require.NoError(t, os.WriteFile(writePath, data, 0o644))
 
 	original := readHardwareSerialFunc
 	readHardwareSerialFunc = func(context.Context, *zerolog.Logger) (string, bool) {
@@ -1061,7 +1092,7 @@ func TestAcceptance_HardwareSerialNumberDefersToAlreadyEstablishedSharedFileValu
 	require.NoError(t, err)
 	require.Equal(t, "already-established-id", value, "a value already established in the shared file must not be clobbered by a freshly read serial number")
 
-	updated, err := os.ReadFile(paths.perUser)
+	updated, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(updated, &raw))
@@ -1118,7 +1149,7 @@ func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
 	sf := readSharedFile(sharedFilePaths(), nil)
 	require.Nil(t, sf, "a hostname-sourced id is not written to the shared file's machine_id field")
 
-	data, err := os.ReadFile(sharedFilePaths().perUser)
+	data, err := os.ReadFile(selectWritePath(sharedFilePaths(), nil))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
@@ -1132,11 +1163,12 @@ func TestAcceptance_HostnameIsAdoptedWhenNoOtherSourceApplies(t *testing.T) {
 func TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWins(t *testing.T) {
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	writePath := selectWritePath(paths, nil)
+	require.NoError(t, os.MkdirAll(filepath.Dir(writePath), 0o755))
 	sf := sharedFile{MachineID: "from-shared-file", IdentifierSource: string(sourcePersisted)}
 	data, err := json.Marshal(sf)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+	require.NoError(t, os.WriteFile(writePath, data, 0o644))
 
 	original := hostnameFunc
 	hostnameFunc = func() (string, error) { return "my-laptop.local", nil }
@@ -1147,7 +1179,7 @@ func TestAcceptance_HostnameMetadataIsRecordedEvenWhenAHigherPrecedenceSourceWin
 	require.NoError(t, err)
 	require.Equal(t, "from-shared-file", value, "the shared file's already-established id must win over a freshly read hostname")
 
-	updated, err := os.ReadFile(paths.perUser)
+	updated, err := os.ReadFile(writePath)
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(updated, &raw))
@@ -1207,7 +1239,8 @@ func TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution(t *tes
 	require.Equal(t, 1, readCount)
 
 	paths := sharedFilePaths()
-	info, statErr := os.Stat(paths.perUser)
+	writePath := selectWritePath(paths, nil)
+	info, statErr := os.Stat(writePath)
 	require.NoError(t, statErr)
 	mtimeAfterFirst := info.ModTime()
 
@@ -1215,7 +1248,7 @@ func TestAcceptance_NoFurtherIOOrRereadAfterFirstHardwareSerialResolution(t *tes
 	require.NoError(t, err)
 	require.Equal(t, 1, readCount, "a second resolution must not read the hardware serial number again")
 
-	info, err = os.Stat(paths.perUser)
+	info, err = os.Stat(writePath)
 	require.NoError(t, err)
 	require.Equal(t, mtimeAfterFirst, info.ModTime(), "a second resolution must not rewrite the shared file")
 }
