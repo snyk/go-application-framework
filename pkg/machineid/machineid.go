@@ -186,7 +186,7 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 	// a stored MACHINE_ID alone as proof that resolution is complete and never re-checks the
 	// source, so a partial write in the other order would strand every future run on an id with no
 	// recorded source.
-	persistInMemoryOnly := func() (string, Source) {
+	persistInMemoryOnly := func(id string, source Source) (string, Source) {
 		config.Set(configuration.MACHINE_ID, id)
 		config.Set(configuration.MACHINE_ID_SOURCE, string(source))
 		return id, source
@@ -194,13 +194,13 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 
 	storage := config.GetStorage()
 	if storage == nil {
-		return persistInMemoryOnly()
+		return persistInMemoryOnly(id, source)
 	}
 
 	lockCtx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
 	if err := storage.Lock(lockCtx, lockRetryDelay); err != nil {
-		return persistInMemoryOnly()
+		return persistInMemoryOnly(id, source)
 	}
 	defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
 
@@ -216,7 +216,7 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 		id = refreshedID
 		source = toKnownSource(refreshed.GetString(configuration.MACHINE_ID_SOURCE))
 	} else if err := storage.Set(configuration.MACHINE_ID_SOURCE, string(source)); err != nil {
-		return persistInMemoryOnly()
+		return persistInMemoryOnly(id, source)
 	} else {
 		//nolint:errcheck // a failed write here still leaves the correct value in config.Set below for this process
 		_ = storage.Set(configuration.MACHINE_ID, id)
