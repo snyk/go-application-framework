@@ -62,7 +62,7 @@ func TestContributorCaptureMiddleware_capturesProjectIDsFromVariousEndpoints(t *
 				assert.Equal(t, tt.path, r.URL.Path)
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(tt.responseBody(tt.expectedProjectID...)))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
 			rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -116,7 +116,7 @@ func TestContributorCaptureMiddleware_skipsUnmatchedRequests(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(tt.body))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
 			// Anything reaching the sink here is the leak we're guarding against.
@@ -176,7 +176,7 @@ func TestContributorCaptureMiddleware_skipsNonSuccessResponses(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_, err := w.Write([]byte(monitorBody))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}))
 			t.Cleanup(server.Close)
 			rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -226,7 +226,7 @@ func TestContributorCaptureMiddleware_preservesOversizedResponseBodyWithoutConte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(wantBody)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -342,11 +342,14 @@ func TestContributorCaptureMiddleware_doesNotTruncateOversizedCreateTestRequestB
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		assert.Equal(t, createBody, received, "the real outgoing request body must reach the server untruncated")
 		w.WriteHeader(http.StatusAccepted)
 		_, err = w.Write([]byte(`{"data":{"id":"44444444-4444-4444-8444-444444444444"}}`))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -402,7 +405,7 @@ func TestContributorCaptureMiddleware_doesNotCaptureComponents_whenTheTestWasNev
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(componentsSuccessBody(projectID))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -464,11 +467,14 @@ func TestContributorCaptureMiddleware_recoversFromSinkPanic_onRequest(t *testing
 	var gotRequestBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		gotRequestBody = body
 		w.WriteHeader(http.StatusCreated)
 		_, err = w.Write([]byte(`{"data":{"id":"ok"}}`))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	logger := zerolog.Nop()
@@ -499,7 +505,7 @@ func TestContributorCaptureMiddleware_recoversFromSinkPanic_onResponse(t *testin
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"uri":"https://app.snyk.io/org/acme/project/` + projectID + `/history/cccccccc-cccc-4ccc-8ccc-cccccccccccc"}`))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	logger := zerolog.Nop()
@@ -526,7 +532,10 @@ func TestContributorCaptureMiddleware_capturesAIBomUploadRevisionIDFromRequestBo
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		gotRequestBody = body
 		w.WriteHeader(http.StatusCreated)
 	}))
@@ -626,7 +635,7 @@ func TestContributorCaptureMiddleware_capturesDeeproxyReportProjectID(t *testing
 				"projectId": "`+projectID+`"
 			}
 		}`)))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
@@ -757,12 +766,15 @@ func newTestComponentsServer(t *testing.T, opts componentsServerOpts) *httptest.
 		case r.Method == http.MethodPost && r.URL.Path == createPath:
 			if opts.wantCreateBodyContains != "" {
 				body, err := io.ReadAll(r.Body)
-				require.NoError(t, err)
+				if !assert.NoError(t, err) {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 				assert.Contains(t, string(body), opts.wantCreateBodyContains)
 			}
 			w.WriteHeader(http.StatusAccepted)
 			_, err := w.Write([]byte(`{"data":{"id":"` + opts.testID + `"}}`))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		case r.Method == http.MethodGet && r.URL.Path == componentsPath:
 			polls++
 			w.WriteHeader(http.StatusOK)
@@ -771,7 +783,7 @@ func newTestComponentsServer(t *testing.T, opts componentsServerOpts) *httptest.
 				body = []byte(`{"data":[]}`)
 			}
 			_, err := w.Write(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
