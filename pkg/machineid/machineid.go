@@ -140,7 +140,16 @@ func adopt(config configuration.Configuration, id string, source Source, writeSh
 	if writeShared {
 		paths := sharedFilePaths()
 		path := selectWritePath(paths)
-		id, source = adoptOrWriteSharedFile(path, path == paths.perUser, id, source)
+		writtenID, writtenSource, err := adoptOrWriteSharedFile(path, path == paths.perUser, id, source)
+		if err != nil && path == paths.machineWide && paths.perUser != "" {
+			// selectWritePath's writability probe only checks the directory; a failure inside the
+			// write itself (lock, temp file, rename) still needs a fallback to the per-user file.
+			writtenID, writtenSource, err = adoptOrWriteSharedFile(paths.perUser, true, id, source)
+		}
+		if err == nil {
+			id, source = writtenID, writtenSource
+		}
+		// If every write attempt failed, keep resolving with our own candidate (id/source unchanged).
 	}
 	id, _ = mirrorIntoStorage(config, id, source)
 	return id, nil
@@ -148,7 +157,7 @@ func adopt(config configuration.Configuration, id string, source Source, writeSh
 
 // adoptOrWriteSharedFile keeps whatever value the shared file already holds; otherwise it writes
 // the candidate. createDir must be false for the machine-wide path.
-func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, candidateSource Source) (string, Source) {
+func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, candidateSource Source) (string, Source, error) {
 	finalID, finalSource := candidateID, candidateSource
 	err := writeSharedFileValue(path, createDir, func(sf *SharedFile) {
 		if hasValue(sf.MachineID) {
@@ -159,10 +168,9 @@ func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, can
 		sf.IdentifierSource = string(candidateSource)
 	})
 	if err != nil {
-		// Shared-file write failed (e.g. unwritable path); keep resolving with our own candidate.
-		return candidateID, candidateSource
+		return candidateID, candidateSource, err
 	}
-	return finalID, finalSource
+	return finalID, finalSource, nil
 }
 
 // mirrorIntoStorage persists id/source into configuration storage (snyk.json), converging with a

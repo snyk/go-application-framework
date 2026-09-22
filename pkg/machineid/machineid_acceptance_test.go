@@ -197,7 +197,8 @@ func TestAdoptOrWriteSharedFileValidatesRaceWinnersSource(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 
-	id, source := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided)
+	id, source, err := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided)
+	require.NoError(t, err)
 	require.Equal(t, "race-winner-id", id)
 	require.Equal(t, SourceProvided, source)
 }
@@ -348,6 +349,28 @@ func TestAcceptance_MachineWideDirUnwritableFallsBackToPerUser(t *testing.T) {
 	_, machineWideErr := os.Stat(paths.machineWide)
 	require.True(t, os.IsNotExist(machineWideErr), "machine-wide file must not be created when its directory is unwritable")
 	require.FileExists(t, paths.perUser)
+}
+
+// TestAcceptance_MachineWideWriteFailureFallsBackToPerUser covers the fallback selectWritePath's
+// own writability probe cannot catch: the probe only checks the directory, so a failure inside
+// writeSharedFileValue itself (the lock, the temp file, or the final rename) must still fall back
+// to the per-user file rather than silently giving up on persisting the shared value anywhere.
+func TestAcceptance_MachineWideWriteFailureFallsBackToPerUser(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
+	// Pre-create the destination as a directory: the directory-level checks in selectWritePath
+	// still pass, but writeSharedFileValue's final os.Rename onto it fails.
+	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	id, ok := value.(string)
+	require.True(t, ok)
+	require.True(t, hasValue(id))
+
+	require.FileExists(t, paths.perUser, "a write-level failure on the machine-wide path must still fall back to the per-user file")
 }
 
 // TestAcceptance_SharedFileIsNotWorldWritable proves the machine-wide shared file is written with
