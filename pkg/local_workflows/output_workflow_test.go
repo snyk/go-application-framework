@@ -156,11 +156,11 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 	require.True(t, ok)
 	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	require.NoError(t, flags.Parse([]string{"--toon"}))
-	assert.Equal(t, "compact", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
+	assert.Equal(t, "full", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
 	require.NoError(t, flags.Parse([]string{"--toon=full"}))
 	assert.Equal(t, "full", config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON))
 
-	for flagValue, expected := range map[string]string{"true": "compact", "COMPACT": "compact", "false": "", "0": ""} {
+	for flagValue, expected := range map[string]string{"true": "full", "COMPACT": "compact", "false": "", "0": ""} {
 		require.NoError(t, flags.Parse([]string{"--toon=" + flagValue}))
 		assert.Equal(t, expected, config.GetString(output_workflow.OUTPUT_CONFIG_KEY_TOON), flagValue)
 		assert.Equal(t, expected != "", output_workflow.DefaultOutputIsStructured(config), flagValue)

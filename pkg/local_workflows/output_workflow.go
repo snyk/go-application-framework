@@ -28,8 +28,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_HTML, false, "Print html output to console")
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_HTML_FILE, "", "Write html output to file")
-	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_TOON, "", "Print toon output to console (compact or full)")
-	outputConfig.Lookup(output_workflow.OUTPUT_CONFIG_KEY_TOON).NoOptDefVal = "compact"
+	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_TOON, "", "Print toon output to console (compact or full; defaults to full)")
+	outputConfig.Lookup(output_workflow.OUTPUT_CONFIG_KEY_TOON).NoOptDefVal = "full"
 	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_TOON_FILE, "", "Write toon output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
@@ -49,9 +49,9 @@ func toonDefaultValue(_ configuration.Configuration, existingValue interface{}) 
 	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(existingValue))) {
 	case "", "false", "0":
 		return "", nil
-	case "true", "compact":
+	case "compact":
 		return "compact", nil
-	case "full":
+	case "true", "full":
 		return "full", nil
 	}
 	return nil, cli.NewInvalidFlagOptionError(fmt.Sprintf("invalid value %v for --%s, expected compact or full", existingValue, output_workflow.OUTPUT_CONFIG_KEY_TOON))
