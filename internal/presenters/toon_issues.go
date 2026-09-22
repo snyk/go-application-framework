@@ -39,6 +39,10 @@ func mapTOONFinding(issue testapi.Issue) map[string]any {
 
 func mapTOONSecretIssue(issue testapi.Issue) []any {
 	rows := make([]any, 0, len(issue.GetFindings()))
+	severity := strings.ToLower(issue.GetEffectiveSeverity())
+	if severity == "" {
+		severity = "low"
+	}
 	for _, finding := range issue.GetFindings() {
 		if finding.Attributes == nil {
 			continue
@@ -60,10 +64,6 @@ func mapTOONSecretIssue(issue testapi.Issue) []any {
 				}
 				line = location.FromLine
 			}
-		}
-		severity := strings.ToLower(string(attributes.Rating.Severity))
-		if severity == "" {
-			severity = "low"
 		}
 		rows = append(rows, map[string]any{
 			"rule": rule, "severity": severity, "file": file,

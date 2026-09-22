@@ -96,6 +96,22 @@ func TestTOONMapping_FiltersByEffectiveSeverity(t *testing.T) {
 sca_summary: 1 unique vulns | 1 low | 0 fixable`, output)
 }
 
+func TestTOONMapping_SecretsUseEffectiveSeverity(t *testing.T) {
+	t.Parallel()
+	output := renderFindingsWithOptions(t, `[{
+		"findings":[
+			{"attributes":{"finding_type":"secrets","title":"first","key":"same","rating":{"severity":"high"},
+				"policy_modifications":[{"pointer":"/rating/severity","prior":"low"}],
+				"locations":[{"type":"source","file_path":"first.txt","from_line":1}]}},
+			{"attributes":{"finding_type":"secrets","title":"second","key":"same","rating":{"severity":"low"},
+				"locations":[{"type":"source","file_path":"second.txt","from_line":2}]}}
+		]}]`, "high", false)
+	requireTOONEqual(t, `secrets[2]{file,line,rule,severity}:
+  first.txt,1,first,high
+  second.txt,2,second,high
+secrets_summary: 2 secrets | 2 high`, output)
+}
+
 func TestTOONMapping_OrdersActiveBeforeConfiguredIgnoredIssues(t *testing.T) {
 	t.Parallel()
 	input := `[{"findings":[
