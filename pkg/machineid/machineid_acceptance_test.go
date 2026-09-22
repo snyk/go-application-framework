@@ -147,6 +147,61 @@ func TestAcceptance_MachineWideFileWithNoMachineIDDoesNotShadowPerUserFile(t *te
 	require.Equal(t, "from-per-user-file", value, "the per-user file's real machine id must not be orphaned by a machine-wide file that merely parses")
 }
 
+// raceWinnerStorage wraps a real Storage and simulates a concurrent writer that already stored an
+// id and source by the time this process's Lock succeeds: Refresh populates the caller's scratch
+// Configuration with winnerID/winnerSource instead of reading the real backing file.
+type raceWinnerStorage struct {
+	configuration.Storage
+	winnerID     string
+	winnerSource string
+}
+
+func (s *raceWinnerStorage) Refresh(config configuration.Configuration, key string) error {
+	switch key {
+	case configuration.MACHINE_ID:
+		config.Set(key, s.winnerID)
+	case configuration.MACHINE_ID_SOURCE:
+		config.Set(key, s.winnerSource)
+	}
+	return nil
+}
+
+// TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToProvided proves
+// mirrorIntoStorage validates identifier_source read back from a concurrent writer's storage
+// entry, the same way resolve() validates it when read from the shared file: storage is as
+// untrusted as the shared file, since any Snyk product sharing the same configuration file can
+// have written it.
+func TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToProvided(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.SetStorage(&raceWinnerStorage{
+		Storage:      config.GetStorage(),
+		winnerID:     "race-winner-id",
+		winnerSource: "whatever-a-tampered-or-buggy-writer-put-here",
+	})
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "race-winner-id", value)
+	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
+}
+
+// TestAdoptOrWriteSharedFileValidatesRaceWinnersSource proves adoptOrWriteSharedFile validates
+// identifier_source the same way resolve() does: a concurrent writer that beat this call to the
+// shared file is exactly as untrusted as one whose value was already there when resolve() started.
+func TestAdoptOrWriteSharedFileValidatesRaceWinnersSource(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "machine-id.json")
+	sf := SharedFile{MachineID: "race-winner-id", IdentifierSource: "whatever-a-tampered-or-buggy-writer-put-here"}
+	data, err := json.Marshal(sf)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o644))
+
+	id, source := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided)
+	require.Equal(t, "race-winner-id", id)
+	require.Equal(t, SourceProvided, source)
+}
+
 func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
 	config := newIsolatedConfig(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")

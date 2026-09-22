@@ -64,6 +64,19 @@ func knownSource(s Source) bool {
 	}
 }
 
+// toKnownSource converts raw into a Source, falling back to SourceProvided when raw is not one of
+// the Source constants this package defines. raw is untrusted wherever it was read back from the
+// shared file or from configuration storage: both can be written by any Snyk product on the
+// machine, or by a concurrent writer racing this process, so every read of identifier_source must
+// go through this conversion rather than a bare Source(raw) cast.
+func toKnownSource(raw string) Source {
+	s := Source(raw)
+	if knownSource(s) {
+		return s
+	}
+	return SourceProvided
+}
+
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
 // the precedence order: an existing stored value (returned unchanged), the shared file written by
 // another Snyk product, the external channel (configuration.CLIENT_MACHINE_ID), the OS machine
@@ -87,13 +100,9 @@ func resolve(config configuration.Configuration, existingValue any, o resolveOpt
 	}
 
 	if sf := readSharedFile(sharedFilePaths()); sf != nil && hasValue(sf.MachineID) {
-		source := Source(sf.IdentifierSource)
-		if !knownSource(source) {
-			// identifier_source is untrusted: the shared file can be written by any Snyk product on
-			// the machine. The machine id itself is deliberately left unvalidated by design.
-			source = SourceProvided
-		}
-		return adopt(config, sf.MachineID, source, false)
+		// identifier_source is untrusted: the shared file can be written by any Snyk product on the
+		// machine. The machine id itself is deliberately left unvalidated by design.
+		return adopt(config, sf.MachineID, toKnownSource(sf.IdentifierSource), false)
 	}
 
 	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); hasValue(raw) {
@@ -137,7 +146,7 @@ func adoptOrWriteSharedFile(path string, createDir bool, candidateID string, can
 	finalID, finalSource := candidateID, candidateSource
 	err := writeSharedFileValue(path, createDir, func(sf *SharedFile) {
 		if hasValue(sf.MachineID) {
-			finalID, finalSource = sf.MachineID, Source(sf.IdentifierSource)
+			finalID, finalSource = sf.MachineID, toKnownSource(sf.IdentifierSource)
 			return
 		}
 		sf.MachineID = candidateID
@@ -186,8 +195,10 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 	_ = storage.Refresh(refreshed, configuration.MACHINE_ID_SOURCE)
 
 	if refreshedID := refreshed.GetString(configuration.MACHINE_ID); hasValue(refreshedID) {
+		// identifier_source read back from storage is untrusted for the same reason the shared
+		// file's is: a concurrent writer racing this process for the lock can be any Snyk product.
 		id = refreshedID
-		source = Source(refreshed.GetString(configuration.MACHINE_ID_SOURCE))
+		source = toKnownSource(refreshed.GetString(configuration.MACHINE_ID_SOURCE))
 	} else if err := storage.Set(configuration.MACHINE_ID_SOURCE, string(source)); err != nil {
 		return persistInMemoryOnly()
 	} else {
