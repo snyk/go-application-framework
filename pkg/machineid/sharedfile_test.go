@@ -8,7 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,4 +82,36 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 	writerWG.Wait()
 
 	require.Zero(t, readErrs, "concurrent readers must never observe a torn or invalid write")
+}
+
+// TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld guards against writeSharedFileValue's
+// flock acquisition blocking indefinitely: a wedged holder of the lock file (a crashed process
+// that never released it, for example) must not be able to hang every future resolution forever.
+func TestWriteSharedFileValueDoesNotBlockForeverWhenLockIsHeld(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "machine-id.json")
+
+	held := flock.New(path + ".lock")
+	locked, err := held.TryLock()
+	require.NoError(t, err)
+	require.True(t, locked)
+	defer func() { _ = held.Unlock() }() //nolint:errcheck // best-effort cleanup of the test's own lock
+
+	original := lockTimeout
+	lockTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { lockTimeout = original })
+
+	done := make(chan error, 1)
+	go func() {
+		done <- writeSharedFileValue(path, false, func(sf *SharedFile) {
+			sf.MachineID = "some-id"
+		})
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err, "writeSharedFileValue must give up once the lock cannot be acquired within lockTimeout")
+	case <-time.After(2 * time.Second):
+		t.Fatal("writeSharedFileValue did not return: its lock acquisition must be bounded, not block forever")
+	}
 }

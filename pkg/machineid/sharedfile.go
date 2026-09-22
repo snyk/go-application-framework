@@ -1,7 +1,9 @@
 package machineid
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -132,10 +134,16 @@ func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile))
 	}
 
 	lock := flock.New(path + ".lock")
-	if err := lock.Lock(); err != nil {
-		return err
+	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
+	defer cancel()
+	locked, lockErr := lock.TryLockContext(ctx, lockRetryDelay)
+	if lockErr != nil {
+		return lockErr
 	}
-	defer func() { _ = lock.Unlock() }() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
+	if !locked {
+		return fmt.Errorf("timed out after %s waiting for lock on %s", lockTimeout, lock.Path())
+	}
+	defer func() { _ = lock.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
 
 	sf := SharedFile{}
 	if data, err := os.ReadFile(path); err == nil {

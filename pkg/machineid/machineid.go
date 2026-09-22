@@ -38,6 +38,12 @@ const (
 // lockRetryDelay is how often Lock retries acquiring the storage or shared-file lock while blocked.
 const lockRetryDelay = 100 * time.Millisecond
 
+// lockTimeout bounds how long a storage or shared-file lock acquisition waits before giving up, so
+// a holder that never releases (a crashed process, for example) cannot block resolution or Reset
+// forever. It is a variable so tests can substitute a short bound instead of waiting out the real
+// timeout.
+var lockTimeout = 5 * time.Second
+
 // osMachineID is a variable so tests can substitute a deterministic identifier instead of the
 // current machine's real one.
 var osMachineID = osid.ID
@@ -183,10 +189,12 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source Sou
 		return persistInMemoryOnly()
 	}
 
-	if err := storage.Lock(context.Background(), lockRetryDelay); err != nil {
+	lockCtx, cancel := context.WithTimeout(context.Background(), lockTimeout)
+	defer cancel()
+	if err := storage.Lock(lockCtx, lockRetryDelay); err != nil {
 		return persistInMemoryOnly()
 	}
-	defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
+	defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
 
 	refreshed := configuration.NewInMemory()
 	//nolint:errcheck // a refresh miss just leaves refreshed empty, which the hasValue check below treats as "nothing stored yet"
@@ -245,7 +253,9 @@ func Reset(config configuration.Configuration) error {
 	}
 
 	if storage := config.GetStorage(); storage != nil {
-		if err := storage.Lock(context.Background(), lockRetryDelay); err != nil {
+		lockCtx, cancel := context.WithTimeout(context.Background(), lockTimeout)
+		defer cancel()
+		if err := storage.Lock(lockCtx, lockRetryDelay); err != nil {
 			resultErr = errors.Join(resultErr, err)
 		} else {
 			// MACHINE_ID is deleted before MACHINE_ID_SOURCE, mirroring mirrorIntoStorage's write
@@ -256,7 +266,7 @@ func Reset(config configuration.Configuration) error {
 			if err := storage.Set(configuration.MACHINE_ID_SOURCE, configuration.Deleted); err != nil {
 				resultErr = errors.Join(resultErr, err)
 			}
-			_ = storage.Unlock() //nolint:errcheck // unlock errors are ignored, matching syncTokenRefresh in pkg/auth
+			_ = storage.Unlock() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
 		}
 	}
 

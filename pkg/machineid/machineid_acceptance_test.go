@@ -482,6 +482,70 @@ func TestAcceptance_ResetJoinsSharedFileErrorWithStorageLockError(t *testing.T) 
 	require.Len(t, mu.Unwrap(), 2)
 }
 
+// blockingLockStorage wraps a real Storage and blocks on Lock until the caller's context is done,
+// simulating a lock holder that never releases (a crashed process, for example).
+type blockingLockStorage struct {
+	configuration.Storage
+}
+
+func (s *blockingLockStorage) Lock(ctx context.Context, _ time.Duration) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestAcceptance_ResolveDoesNotBlockForeverWhenStorageLockNeverSucceeds proves storage.Lock is
+// called with a bounded context: a lock holder that never releases must not be able to hang
+// resolution forever.
+func TestAcceptance_ResolveDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.SetStorage(&blockingLockStorage{Storage: config.GetStorage()})
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	original := lockTimeout
+	lockTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { lockTimeout = original })
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := config.GetWithError(configuration.MACHINE_ID)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err, "resolution must still succeed in-memory even when storage.Lock times out")
+	case <-time.After(2 * time.Second):
+		t.Fatal("resolution did not return: storage.Lock must be bounded by lockTimeout, not block forever on context.Background()")
+	}
+}
+
+// TestAcceptance_ResetDoesNotBlockForeverWhenStorageLockNeverSucceeds proves Reset's storage.Lock
+// call is bounded the same way as resolution's.
+func TestAcceptance_ResetDoesNotBlockForeverWhenStorageLockNeverSucceeds(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	config.SetStorage(&blockingLockStorage{Storage: config.GetStorage()})
+
+	original := lockTimeout
+	lockTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { lockTimeout = original })
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Reset(config)
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err, "Reset must surface the timed-out storage lock as an error")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Reset did not return: storage.Lock must be bounded by lockTimeout, not block forever on context.Background()")
+	}
+}
+
 // resetOrderStorage wraps a real Storage and, for every Set call, records the key and whether the
 // shared file (at perUserPath) was already cleared at that moment. This proves Reset's actual
 // operation order, not just its end state: a concurrent resolve() between Reset's two steps must
