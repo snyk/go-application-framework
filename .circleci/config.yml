@@ -38,7 +38,7 @@ jobs:
   macos_test:
     macos:
       xcode: "15.3.0"
-    resource_class: macos.m1.medium.gen1
+    resource_class: m4pro.medium
     environment:
       # Bump this alongside the "go" directive in go.mod.
       GO_VERSION: "1.26.2"
