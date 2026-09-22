@@ -2,46 +2,15 @@ package presenters
 
 import (
 	"bytes"
-	"encoding/json"
 	htmlTemplate "html/template"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"text/template"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestJSONFieldSelectors(t *testing.T) {
-	tmpl, err := template.New("fields").Funcs(getDefaultTemplateFuncMap(configuration.NewWithOpts(), nil)).Parse(
-		`{{ $strings := jsonStrings . "label" }}{{ $numbers := jsonNumbers . "score" }}{{ or $strings.label "" }}|{{ if $numbers }}{{ $numbers.score }}{{ else }}missing{{ end }}`)
-	require.NoError(t, err)
-	for _, tc := range []struct {
-		name, input, expected, errorField string
-	}{
-		{"selected fields", `{"label":"example","score":7.5,"unused":[]}`, "example|7.5", ""},
-		{"missing", `{}`, "|missing", ""},
-		{"null", `{"label":null,"score":null}`, "|missing", ""},
-		{"zero", `{"label":"","score":0}`, "|0", ""},
-		{"invalid string", `{"label":42}`, "", "label"},
-		{"invalid number", `{"score":"bad"}`, "", "score"},
-		{"invalid JSON", `{`, "", "unexpected end"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var output bytes.Buffer
-			err := tmpl.Execute(&output, json.RawMessage(tc.input))
-			if tc.errorField != "" {
-				require.ErrorContains(t, err, tc.errorField)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tc.expected, output.String())
-		})
-	}
-}
 
 func intPtr(v int) *int {
 	return &v

@@ -287,15 +287,8 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
-func getSarifContextTemplateFuncMap(ctx context.Context) template.FuncMap {
+func getContextTemplateFuncMap(ctx context.Context) template.FuncMap {
 	return template.FuncMap{
-		"getFindingTypesFromTestResult": func(result testapi.TestResult) ([]testapi.FindingType, error) {
-			findingTypes, err := getFindingTypesFromTestResultWithContext(ctx, result)
-			if err != nil {
-				return nil, fmt.Errorf("convert test result to finding types: %w", err)
-			}
-			return findingTypes, nil
-		},
 		"getIssuesFromTestResult": func(result testapi.TestResult) ([]testapi.Issue, error) {
 			issues, err := testapi.NewIssuesFromTestResult(ctx, result)
 			if err != nil {
@@ -304,6 +297,18 @@ func getSarifContextTemplateFuncMap(ctx context.Context) template.FuncMap {
 			return issues, nil
 		},
 	}
+}
+
+func getSarifContextTemplateFuncMap(ctx context.Context) template.FuncMap {
+	fnMap := getContextTemplateFuncMap(ctx)
+	fnMap["getFindingTypesFromTestResult"] = func(result testapi.TestResult) ([]testapi.FindingType, error) {
+		findingTypes, err := getFindingTypesFromTestResultWithContext(ctx, result)
+		if err != nil {
+			return nil, fmt.Errorf("convert test result to finding types: %w", err)
+		}
+		return findingTypes, nil
+	}
+	return fnMap
 }
 
 // templateDict builds the data passed between named templates.
@@ -364,29 +369,22 @@ func getToonTemplateFuncMap() template.FuncMap {
 }
 
 func getToonContextTemplateFuncMap(ctx context.Context) template.FuncMap {
-	return template.FuncMap{
-		"getIssuesFromTestResult": func(result testapi.TestResult) ([]testapi.Issue, error) {
-			issues, err := testapi.NewIssuesFromTestResult(ctx, result)
-			if err != nil {
-				return nil, fmt.Errorf("convert test result to issues: %w", err)
-			}
-			return issues, nil
-		},
-		"getInteractionID": func() string {
-			value, ok := ctx.Value(networking.InteractionIdKey).(string)
-			if !ok {
-				return ""
-			}
-			return value
-		},
-		"getErrorTip": func() string {
-			value, ok := ctx.Value(uitypes.ErrorTipKey).(string)
-			if !ok {
-				return ""
-			}
-			return value
-		},
+	fnMap := getContextTemplateFuncMap(ctx)
+	fnMap["getInteractionID"] = func() string {
+		value, ok := ctx.Value(networking.InteractionIdKey).(string)
+		if !ok {
+			return ""
+		}
+		return value
 	}
+	fnMap["getErrorTip"] = func() string {
+		value, ok := ctx.Value(uitypes.ErrorTipKey).(string)
+		if !ok {
+			return ""
+		}
+		return value
+	}
+	return fnMap
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
@@ -691,16 +689,7 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["readSourceLine"] = cache.ReadLine
 	fnMap["readSourceLineMarked"] = cache.ReadLineMarked
 	fnMap["resolveMessageArgs"] = resolveMessageArgs
-	fnMap["dict"] = func(pairs ...interface{}) map[string]interface{} {
-		m := make(map[string]interface{}, len(pairs)/2)
-		for i := 0; i+1 < len(pairs); i += 2 {
-			key, ok := pairs[i].(string)
-			if ok {
-				m[key] = pairs[i+1]
-			}
-		}
-		return m
-	}
+	fnMap["dict"] = templateDict
 	fnMap["index3"] = func(arr [3]string, i int) string { return arr[i] }
 	fnMap["int"] = func(v interface{}) int {
 		if p, ok := v.(*int); ok && p != nil {
@@ -1022,27 +1011,15 @@ func applyInlineMarkdown(s string) string {
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
-	defaultMap["jsonStrings"] = jsonFields[string]
-	defaultMap["jsonNumbers"] = jsonFields[float64]
-	defaultMap["getSourceLocation"] = func(location testapi.FindingLocation) testapi.SourceLocation {
-		value, err := location.AsSourceLocation()
-		if err != nil {
-			return testapi.SourceLocation{}
-		}
-		return value
-	}
 	defaultMap["set"] = func(values map[string]any, key string, value any) map[string]any { values[key] = value; return values }
 	defaultMap["array"] = func(values ...any) []any { return values }
 	defaultMap["append"] = func(values []any, value any) []any { return append(values, value) }
-	defaultMap["runes"] = func(value string) []rune { return []rune(value) }
-	defaultMap["runeString"] = func(value []rune) string { return string(value) }
 	defaultMap["stringValue"] = func(value *string) string {
 		if value == nil {
 			return ""
 		}
 		return *value
 	}
-	defaultMap["number"] = func(value int) json.Number { return json.Number(strconv.Itoa(value)) }
 	defaultMap["baseName"] = filepath.Base
 	defaultMap["toLowerCase"] = strings.ToLower
 	defaultMap["trimSpace"] = strings.TrimSpace
@@ -1282,10 +1259,7 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 }
 
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
-	findingTypes, err := getFindingTypesFromTestResultWithContext(context.Background(), testResults)
-	if err != nil {
-		return findingTypes
-	}
+	findingTypes, _ := getFindingTypesFromTestResultWithContext(context.Background(), testResults)
 	return findingTypes
 }
 

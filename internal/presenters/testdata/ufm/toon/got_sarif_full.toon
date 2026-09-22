@@ -1,26 +1,5 @@
 runs[1]:
-  - results[1]:
-      - fixes[1]:
-          - artifactChanges[1]:
-              - artifactLocation:
-                  uri: package-lock.json
-                replacements[1]{deletedRegion{startLine},insertedContent{text}}:
-                  1,snyk-nodejs-lockfile-parser@2.10.0
-            description:
-              text: Upgrade to snyk-nodejs-lockfile-parser@2.10.0
-        level: warning
-        locations[1]:
-          - logicalLocations[1]{fullyQualifiedName}:
-              got@11.8.2
-            physicalLocation:
-              artifactLocation:
-                uri: package-lock.json
-              region:
-                startLine: 1
-        message:
-          text: This file introduces a vulnerable got package with a medium severity vulnerability.
-        ruleId: SNYK-JS-GOT-2932019
-    tool:
+  - tool:
       driver:
         informationUri: "https://docs.snyk.io/"
         name: Snyk Open Source
@@ -36,6 +15,27 @@ runs[1]:
               cvssv3_baseScore: 5.4
               "security-severity": "5.4"
               tags[3]: security,CWE-601,npm
+            results[1]:
+              - fixes[1]:
+                  - artifactChanges[1]:
+                      - artifactLocation:
+                          uri: package-lock.json
+                        replacements[1]{deletedRegion{startLine},insertedContent{text}}:
+                          1,snyk-nodejs-lockfile-parser@2.10.0
+                    description:
+                      text: Upgrade to snyk-nodejs-lockfile-parser@2.10.0
+                level: warning
+                locations[1]:
+                  - logicalLocations[1]{fullyQualifiedName}:
+                      got@11.8.2
+                    physicalLocation:
+                      artifactLocation:
+                        uri: package-lock.json
+                      region:
+                        startLine: 1
+                message:
+                  text: This file introduces a vulnerable got package with a medium severity vulnerability.
+                resultIndex: 0
             shortDescription:
               text: Medium severity - Open Redirect vulnerability in got
         semanticVersion: 1.1301.0
