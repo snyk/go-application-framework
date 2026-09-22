@@ -246,7 +246,7 @@ func Reset(config configuration.Configuration) error {
 
 	if storage := config.GetStorage(); storage != nil {
 		if err := storage.Lock(context.Background(), lockRetryDelay); err != nil {
-			resultErr = err
+			resultErr = errors.Join(resultErr, err)
 		} else {
 			// MACHINE_ID is deleted before MACHINE_ID_SOURCE, mirroring mirrorIntoStorage's write
 			// order: MACHINE_ID's absence is what a future resolve() treats as "not yet resolved".

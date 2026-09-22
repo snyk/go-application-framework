@@ -442,6 +442,46 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	require.NotEqual(t, first, second, "a resolution after Reset must not reuse the discarded value")
 }
 
+// lockFailingStorage wraps a real Storage and fails every Lock call, so a test can simulate a
+// storage lock failure independently of any shared-file failure.
+type lockFailingStorage struct {
+	configuration.Storage
+}
+
+func (s *lockFailingStorage) Lock(_ context.Context, _ time.Duration) error {
+	return errors.New("simulated lock failure")
+}
+
+// multiUnwrapper is the interface errors.Join's result implements; asserting to it lets a test
+// check that an error actually joins multiple causes, rather than just checking a string.
+type multiUnwrapper interface {
+	Unwrap() []error
+}
+
+// TestAcceptance_ResetJoinsSharedFileErrorWithStorageLockError proves that a shared-file removal
+// error is not discarded when storage.Lock also fails: Reset must join both, not let the lock
+// error overwrite the earlier shared-file error.
+func TestAcceptance_ResetJoinsSharedFileErrorWithStorageLockError(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	paths := sharedFilePaths()
+	// Replace the per-user shared file with a directory so removeSharedFileValue's rename step
+	// cannot complete, forcing a real, deterministic shared-file removal failure.
+	require.NoError(t, os.Remove(paths.perUser))
+	require.NoError(t, os.Mkdir(paths.perUser, 0o755))
+
+	config.SetStorage(&lockFailingStorage{Storage: config.GetStorage()})
+
+	err = Reset(config)
+	require.Error(t, err)
+	mu, ok := err.(multiUnwrapper)
+	require.True(t, ok, "Reset's error must join the shared-file removal error with the storage-lock error, not discard one")
+	require.Len(t, mu.Unwrap(), 2)
+}
+
 // resetOrderStorage wraps a real Storage and, for every Set call, records the key and whether the
 // shared file (at perUserPath) was already cleared at that moment. This proves Reset's actual
 // operation order, not just its end state: a concurrent resolve() between Reset's two steps must
