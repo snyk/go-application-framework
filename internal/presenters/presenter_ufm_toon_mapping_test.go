@@ -34,6 +34,20 @@ func TestTOONMapping_SCAOccurrences(t *testing.T) {
   no,SNYK-EXAMPLE-1,example@1.2,medium`, output)
 }
 
+func TestTOONMapping_GroupedSCAVersions(t *testing.T) {
+	t.Parallel()
+
+	output := renderFindings(t, `[{"findings":[
+		{"attributes":{"finding_type":"sca","rating":{"severity":"high"},
+			"problems":[{"source":"snyk_vuln","id":"same","severity":"high","package_name":"example","package_version":"1.10"}]}},
+		{"attributes":{"finding_type":"sca","rating":{"severity":"medium"},
+			"problems":[{"source":"snyk_vuln","id":"same","severity":"medium","package_name":"example","package_version":"1.2"}]}}
+	]}]`)
+	requireTOONEqual(t, `sca[1]{fixable,id,pkg,severity}:
+  no,same,"example@1.10,1.2",high
+sca_summary: 1 unique vulns (2 paths) | 1 high | 0 fixable`, output)
+}
+
 func TestTOONMapping_SecretsFallbacks(t *testing.T) {
 	t.Parallel()
 

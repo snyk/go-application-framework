@@ -87,9 +87,7 @@ func mapTOONSCAIssue(issue testapi.Issue, full bool) (map[string]any, error) {
 		return nil, err
 	}
 	name, _ := issueData[string](issue, testapi.DataKeyComponentName)
-	versions, _ := issueData[[]string](issue, "component-versions")
-	versions = slices.Clone(versions)
-	slices.Sort(versions)
+	versions := toonComponentVersions(issue)
 	findings := issue.GetFindings()
 	if len(findings) == 1 {
 		name, versions, err = singleFindingComponent(findings[0], problem, name)
@@ -119,6 +117,58 @@ func mapTOONSCAIssue(issue testapi.Issue, full bool) (map[string]any, error) {
 		row["upgrade"] = upgrade
 	}
 	return row, nil
+}
+
+func toonComponentVersions(issue testapi.Issue) []string {
+	seen := make(map[string]struct{})
+	versions := make([]string, 0)
+	add := func(version string) {
+		if version == "" {
+			return
+		}
+		if _, ok := seen[version]; ok {
+			return
+		}
+		seen[version] = struct{}{}
+		versions = append(versions, version)
+	}
+
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, location := range finding.Attributes.Locations {
+			discriminator, err := location.Discriminator()
+			if err != nil || discriminator != "package" {
+				continue
+			}
+			pkg, err := location.AsPackageLocation()
+			if err == nil {
+				add(pkg.Package.Version)
+			}
+		}
+		for _, problem := range finding.Attributes.Problems {
+			discriminator, err := problem.Discriminator()
+			if err != nil {
+				continue
+			}
+			switch discriminator {
+			case "snyk_vuln":
+				value, err := problem.AsSnykVulnProblem()
+				if err == nil {
+					add(value.PackageVersion)
+				}
+			case "snyk_license":
+				value, err := problem.AsSnykLicenseProblem()
+				if err == nil {
+					add(value.PackageVersion)
+				}
+			}
+		}
+	}
+
+	slices.Sort(versions)
+	return versions
 }
 
 func toonRemediation(issue testapi.Issue) (fixable, target string) {

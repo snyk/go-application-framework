@@ -392,39 +392,6 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		_, _ = issue.GetData(testapi.DataKeyCVSSScore)
 	})
 
-	t.Run("SCA issue accumulates distinct package versions", func(t *testing.T) {
-		problem := func(raw string) testapi.Problem {
-			var value testapi.Problem
-			require.NoError(t, json.Unmarshal([]byte(raw), &value))
-			return value
-		}
-		findings := []*testapi.FindingData{
-			{
-				Attributes: &testapi.FindingAttributes{
-					FindingType: testapi.FindingTypeSca,
-					Problems: []testapi.Problem{
-						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.10"}`),
-					},
-				},
-			},
-			{
-				Attributes: &testapi.FindingAttributes{
-					FindingType: testapi.FindingTypeSca,
-					Problems: []testapi.Problem{
-						problem(`{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.2"}`),
-					},
-				},
-			},
-		}
-
-		issue, err := testapi.NewIssueFromFindings(findings)
-		require.NoError(t, err)
-
-		versions, ok := issue.GetData("component-versions")
-		require.True(t, ok)
-		assert.ElementsMatch(t, []string{"1.10", "1.2"}, versions)
-	})
-
 	t.Run("SCA issue normalizes primary problem", func(t *testing.T) {
 		var finding testapi.FindingData
 		require.NoError(t, json.Unmarshal([]byte(`{

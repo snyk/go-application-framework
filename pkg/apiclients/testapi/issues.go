@@ -52,8 +52,6 @@ const (
 	FindingTypeLicense = "license"
 )
 
-const dataKeyComponentVersions = "component-versions"
-
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
 
 // Issue defines the interface for accessing a single aggregated security issue.
@@ -489,7 +487,6 @@ type issueBuilder struct {
 	problemID            string
 	packageName          string
 	packageVersion       string
-	packageVersions      []string
 	cvssScore            float32
 	isFixable            bool
 	fixedInVersions      []string
@@ -639,22 +636,9 @@ func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 		if b.packageName == "" {
 			b.packageName = pkgLoc.Package.Name
 		}
-		b.addPackageVersion(pkgLoc.Package.Version)
-	}
-}
-
-func (b *issueBuilder) addPackageVersion(version string) {
-	if version == "" {
-		return
-	}
-	for _, existing := range b.packageVersions {
-		if existing == version {
-			return
+		if b.packageVersion == "" {
+			b.packageVersion = pkgLoc.Package.Version
 		}
-	}
-	b.packageVersions = append(b.packageVersions, version)
-	if b.packageVersion == "" {
-		b.packageVersion = version
 	}
 }
 
@@ -739,7 +723,9 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = vulnProblem.PackageName
 	}
-	b.addPackageVersion(vulnProblem.PackageVersion)
+	if b.packageVersion == "" {
+		b.packageVersion = vulnProblem.PackageVersion
+	}
 }
 
 // processSnykLicenseProblem extracts data from a Snyk license problem
@@ -774,7 +760,9 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	if b.packageName == "" {
 		b.packageName = licenseProblem.PackageName
 	}
-	b.addPackageVersion(licenseProblem.PackageVersion)
+	if b.packageVersion == "" {
+		b.packageVersion = licenseProblem.PackageVersion
+	}
 }
 
 // processCveProblem extracts CVE ID
@@ -882,9 +870,6 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 		metadata[DataKeyComponent] = component
 		metadata[DataKeyComponentName] = b.packageName
 		metadata[DataKeyComponentVersion] = b.packageVersion
-		if len(b.packageVersions) > 0 {
-			metadata[dataKeyComponentVersions] = b.packageVersions
-		}
 	}
 
 	// Add technology/ecosystem
