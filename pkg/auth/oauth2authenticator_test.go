@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -651,4 +654,68 @@ func Test_modifyTokenUrl(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, original, o.oauthConfig.Endpoint.TokenURL)
 	})
+}
+
+// syncTokenRefresh locks the shared Configuration's Storage while refreshing the
+// token. Any other in-process caller locking that same Storage directly - as
+// pkg/machineid does while resolving a machine ID - must be excluded from that
+// critical section too, not just other oAuth2Authenticator calls.
+func Test_syncTokenRefresh_SerializesWithConcurrentStorageLock(t *testing.T) {
+	t.Parallel()
+
+	validToken := &oauth2.Token{
+		AccessToken:  "a",
+		TokenType:    "b",
+		RefreshToken: "c",
+		Expiry:       time.Now().Add(60 * time.Second).UTC(),
+	}
+
+	config := configuration.NewInMemory()
+	storage := configuration.NewJsonStorage(filepath.Join(t.TempDir(), "config.json"), configuration.WithConfiguration(config))
+	config.SetStorage(storage)
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(config)
+	err := authenticator.(*oAuth2Authenticator).persistToken(validToken) //nolint:errcheck //in this test, the type is clear
+	require.NoError(t, err)
+
+	var active int32
+	var overlapped atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// mimics pkg/machineid: locks the same Storage directly, outside of pkg/auth.
+	go func() {
+		defer wg.Done()
+		lockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := storage.Lock(lockCtx, 10*time.Millisecond); !assert.NoError(t, err) {
+			return
+		}
+		defer func() { _ = storage.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
+
+		if atomic.AddInt32(&active, 1) > 1 {
+			overlapped.Store(true)
+		}
+		time.Sleep(20 * time.Millisecond)
+		atomic.AddInt32(&active, -1)
+	}()
+
+	go func() {
+		defer wg.Done()
+		cleanup, err := authenticator.(*oAuth2Authenticator).syncTokenRefresh(context.Background()) //nolint:errcheck //in this test, the type is clear
+		defer cleanup()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		if atomic.AddInt32(&active, 1) > 1 {
+			overlapped.Store(true)
+		}
+		time.Sleep(20 * time.Millisecond)
+		atomic.AddInt32(&active, -1)
+	}()
+
+	wg.Wait()
+
+	assert.False(t, overlapped.Load(), "syncTokenRefresh and a concurrent direct Storage.Lock caller ran their locked sections at the same time")
 }
