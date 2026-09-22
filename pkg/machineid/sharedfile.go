@@ -160,19 +160,55 @@ func selectWritePath(paths pathPair, logger *zerolog.Logger) string {
 		return paths.machineWide
 	}
 	if runtime.GOOS == "windows" && paths.machineWide != "" {
-		if err := os.MkdirAll(dir, fileperms.FILEPERM_755); err == nil {
-			if err := secureDir(dir); err != nil {
-				logger.Debug().Err(err).Str("path", dir).Msg("machine id: failed to lock down machine-wide shared file directory ACL, not using it")
+		if mkdirErr := os.MkdirAll(dir, fileperms.FILEPERM_755); mkdirErr == nil {
+			if secureErr := secureDir(dir); secureErr != nil {
+				logger.Debug().Err(secureErr).Str("path", dir).Msg("machine id: failed to lock down machine-wide shared file directory ACL, not using it")
 			} else if dirWritable(dir) {
 				logger.Debug().Str("path", paths.machineWide).Str("scope", scopeMachine).Msg("machine id: created and ACL-locked machine-wide shared file directory, writing there")
 				return paths.machineWide
 			}
 		} else {
-			logger.Debug().Err(err).Str("path", dir).Msg("machine id: could not create machine-wide shared file directory")
+			logger.Debug().Err(mkdirErr).Str("path", dir).Msg("machine id: could not create machine-wide shared file directory")
 		}
 	}
 	logger.Debug().Str("path", paths.perUser).Str("scope", scopeUser).Msg("machine id: machine-wide shared file directory unavailable, writing to per-user path")
 	return paths.perUser
+}
+
+// acquireSharedFileLock locks path+".lock", bounded by lockTimeout so a holder that never releases
+// it cannot block a writer forever, and returns a function that releases it.
+func acquireSharedFileLock(path string, logger *zerolog.Logger) (unlock func(), err error) {
+	lock := flock.New(path + ".lock")
+	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
+	defer cancel()
+	locked, lockErr := lock.TryLockContext(ctx, lockRetryDelay)
+	if lockErr != nil {
+		logger.Debug().Err(lockErr).Str("path", path).Msg("machine id: failed to acquire shared file lock")
+		return nil, lockErr
+	}
+	if !locked {
+		logger.Debug().Str("path", path).Msg("machine id: timed out waiting for shared file lock")
+		return nil, fmt.Errorf("timed out after %s waiting for lock on %s", lockTimeout, lock.Path())
+	}
+	return func() { _ = lock.Unlock() }, nil //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
+}
+
+// mergeKnownSharedFileFields marshals sf and overlays its fields onto existingRaw, so a key this
+// package does not model (populated by other Snyk products, or a future schema version) survives a
+// write instead of being silently dropped by round-tripping through the sharedFile struct alone.
+func mergeKnownSharedFileFields(sf sharedFile, existingRaw map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	knownJSON, err := json.Marshal(sf)
+	if err != nil {
+		return nil, err
+	}
+	var known map[string]json.RawMessage
+	if err := json.Unmarshal(knownJSON, &known); err != nil {
+		return nil, err
+	}
+	for k, v := range known {
+		existingRaw[k] = v
+	}
+	return existingRaw, nil
 }
 
 // writeSharedFileValue serializes writers to path with flock, then applies mutate to the file's
@@ -201,23 +237,15 @@ func writeSharedFileValue(path string, createDir bool, writer string, mutate fun
 		}
 	}
 
-	lock := flock.New(path + ".lock")
-	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
-	defer cancel()
-	locked, lockErr := lock.TryLockContext(ctx, lockRetryDelay)
-	if lockErr != nil {
-		logger.Debug().Err(lockErr).Str("path", path).Msg("machine id: failed to acquire shared file lock")
-		return lockErr
+	unlock, err := acquireSharedFileLock(path, logger)
+	if err != nil {
+		return err
 	}
-	if !locked {
-		logger.Debug().Str("path", path).Msg("machine id: timed out waiting for shared file lock")
-		return fmt.Errorf("timed out after %s waiting for lock on %s", lockTimeout, lock.Path())
-	}
-	defer func() { _ = lock.Unlock() }() //nolint:errcheck // unlock errors are ignored; nothing actionable can be done with a failed unlock here
+	defer unlock()
 
 	sf := sharedFile{}
 	existingRaw := map[string]json.RawMessage{}
-	if data, err := os.ReadFile(path); err == nil {
+	if data, readErr := os.ReadFile(path); readErr == nil {
 		//nolint:errcheck // an unparsable existing file is treated as absent; mutate below fills sf from scratch
 		_ = json.Unmarshal(data, &sf)
 		//nolint:errcheck // ditto; existingRaw just stays empty, so nothing is preserved from an unparsable file
@@ -241,19 +269,12 @@ func writeSharedFileValue(path string, createDir bool, writer string, mutate fun
 	sf.UpdatedAt = now().UTC().Format(time.RFC3339)
 	sf.Writer = writer
 
-	knownJSON, err := json.Marshal(sf)
+	merged, err := mergeKnownSharedFileFields(sf, existingRaw)
 	if err != nil {
 		return err
 	}
-	var known map[string]json.RawMessage
-	if err := json.Unmarshal(knownJSON, &known); err != nil {
-		return err
-	}
-	for k, v := range known {
-		existingRaw[k] = v
-	}
 
-	data, err := json.Marshal(existingRaw)
+	data, err := json.Marshal(merged)
 	if err != nil {
 		return err
 	}

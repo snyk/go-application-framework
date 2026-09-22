@@ -302,6 +302,17 @@ func mirrorIntoStorage(config configuration.Configuration, id string, source idS
 	return finalize(id, source)
 }
 
+// Reset clears the resolved machine identifier from configuration storage and from the shared
+// file, so the next Resolve call starts over from the top of the precedence order documented on
+// the package instead of reusing the value from a previous run.
+func Reset(config configuration.Configuration, opts ...ResolveOption) error {
+	var o resolveOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return reset(config, effectiveLogger(o.logger))
+}
+
 // reset removes the stored machine identifier and its source from configuration storage and from
 // the shared file, under the same locks Resolve uses. The next resolution runs the precedence
 // order from the top.

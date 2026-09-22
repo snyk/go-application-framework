@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -548,7 +549,7 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	first, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.NoError(t, reset(config, nil))
+	require.NoError(t, Reset(config))
 
 	require.Empty(t, readSnykJSON(t)[configuration.MACHINE_ID])
 	sf := readSharedFile(sharedFilePaths(), nil)
@@ -559,6 +560,31 @@ func TestAcceptance_ResetClearsStoredValueAndSharedFile(t *testing.T) {
 	second, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.NotEqual(t, first, second, "a resolution after reset must not reuse the discarded value")
+}
+
+// TestAcceptance_ResetLogsSharedFileLockTimeout proves a logger passed to Reset via WithLogger
+// reaches the shared file removal Reset performs, not just the resolution Resolve wires it into.
+func TestAcceptance_ResetLogsSharedFileLockTimeout(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	held := flock.New(sharedFilePaths().perUser + ".lock")
+	locked, lockErr := held.TryLock()
+	require.NoError(t, lockErr)
+	require.True(t, locked)
+	defer func() { _ = held.Unlock() }() //nolint:errcheck // best-effort cleanup of the test's own lock
+
+	original := lockTimeout
+	lockTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { lockTimeout = original })
+
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	err = Reset(config, WithLogger(&logger))
+	require.Error(t, err, "Reset must surface a shared file lock that can never be acquired")
+	require.Contains(t, logs.String(), "lock", "a logger passed to Reset must reach the shared file removal it performs")
 }
 
 // lockFailingStorage wraps a real Storage and fails every Lock call, so a test can simulate a
@@ -886,9 +912,13 @@ func TestAcceptance_SharedFileSchemaFieldsAreStamped(t *testing.T) {
 	require.InDelta(t, float64(schemaVersion), raw["schema_version"], 0)
 	require.Equal(t, scopeUser, raw["scope"])
 	require.Equal(t, defaultWriterIdentity, raw["writer"])
-	_, err = time.Parse(time.RFC3339, raw["first_seen_at"].(string))
+	firstSeenAt, ok := raw["first_seen_at"].(string)
+	require.True(t, ok)
+	_, err = time.Parse(time.RFC3339, firstSeenAt)
 	require.NoError(t, err)
-	_, err = time.Parse(time.RFC3339, raw["updated_at"].(string))
+	updatedAt, ok := raw["updated_at"].(string)
+	require.True(t, ok)
+	_, err = time.Parse(time.RFC3339, updatedAt)
 	require.NoError(t, err)
 }
 
