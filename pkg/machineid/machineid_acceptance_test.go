@@ -120,6 +120,33 @@ func TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided(t *testing.T)
 	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
 }
 
+// TestAcceptance_MachineWideFileWithNoMachineIDDoesNotShadowPerUserFile proves readSharedFile keeps
+// scanning candidates rather than stopping at the first one that merely parses: a machine-wide file
+// written by other tooling (per the SharedFile doc comment, serial_number/hostname only, no
+// machine_id) must not shadow a per-user file that actually holds the shared id.
+func TestAcceptance_MachineWideFileWithNoMachineIDDoesNotShadowPerUserFile(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
+	machineWideSF := SharedFile{SerialNumber: "5CG1234ABC", Hostname: "some-host"}
+	data, err := json.Marshal(machineWideSF)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.machineWide, data, 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+	perUserSF := SharedFile{MachineID: "from-per-user-file", IdentifierSource: string(SourceProvided)}
+	data, err = json.Marshal(perUserSF)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(paths.perUser, data, 0o644))
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "from-per-user-file", value, "the per-user file's real machine id must not be orphaned by a machine-wide file that merely parses")
+}
+
 func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
 	config := newIsolatedConfig(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")

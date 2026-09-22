@@ -59,9 +59,11 @@ func defaultSharedFilePaths() pathPair {
 	}
 }
 
-// readSharedFile reads the first of the machine-wide or per-user candidates that parses
-// successfully, machine-wide taking precedence. A missing or unparsable file is not an error; it
-// is simply absent.
+// readSharedFile reads the first of the machine-wide or per-user candidates that actually carries a
+// machine id, machine-wide taking precedence. A candidate that is missing, unparsable, or parses but
+// carries no machine_id (for example one written by other tooling per the SharedFile doc comment) is
+// skipped rather than treated as the answer, so it cannot shadow a later candidate that does hold the
+// shared id.
 func readSharedFile(paths pathPair) *SharedFile {
 	for _, p := range []string{paths.machineWide, paths.perUser} {
 		if p == "" {
@@ -73,6 +75,9 @@ func readSharedFile(paths pathPair) *SharedFile {
 		}
 		var sf SharedFile
 		if err := json.Unmarshal(data, &sf); err != nil {
+			continue
+		}
+		if !hasValue(sf.MachineID) {
 			continue
 		}
 		return &sf
