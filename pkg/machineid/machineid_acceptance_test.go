@@ -481,28 +481,49 @@ type multiUnwrapper interface {
 	Unwrap() []error
 }
 
-// TestAcceptance_ResetJoinsSharedFileErrorWithStorageLockError proves that a shared-file removal
-// error is not discarded when storage.Lock also fails: Reset must join both, not let the lock
-// error overwrite the earlier shared-file error.
-func TestAcceptance_ResetJoinsSharedFileErrorWithStorageLockError(t *testing.T) {
+// TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates proves a removal failure on one
+// shared-file candidate is not discarded when the other also fails: Reset must join both errors,
+// not let the second overwrite the first.
+//
+// This no longer pairs a shared-file failure with a storage-lock failure (see
+// TestAcceptance_ResetSurfacesStorageLockErrorWhenSharedFileClearSucceeds): Reset now leaves
+// storage untouched whenever a shared-file candidate cannot be cleared (see
+// TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleared), so storage.Lock
+// is never reached once a shared-file removal has already failed.
+func TestAcceptance_ResetJoinsErrorsFromBothSharedFileCandidates(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
 	_, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
 	paths := sharedFilePaths()
-	// Replace the per-user shared file with a directory so removeSharedFileValue's rename step
-	// cannot complete, forcing a real, deterministic shared-file removal failure.
+	// Replace both shared-file candidates with directories so removeSharedFileValue's rename step
+	// cannot complete for either, forcing two independent, deterministic removal failures.
 	require.NoError(t, os.Remove(paths.perUser))
 	require.NoError(t, os.Mkdir(paths.perUser, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
+	require.NoError(t, os.Mkdir(paths.machineWide, 0o755))
+
+	err = Reset(config)
+	require.Error(t, err)
+	mu, ok := err.(multiUnwrapper)
+	require.True(t, ok, "Reset's error must join both shared-file removal failures, not discard one")
+	require.Len(t, mu.Unwrap(), 2)
+}
+
+// TestAcceptance_ResetSurfacesStorageLockErrorWhenSharedFileClearSucceeds proves storage.Lock
+// failures are still surfaced when they are the only failure: with the shared file clearing
+// successfully, Reset must still report a storage-lock failure rather than swallowing it.
+func TestAcceptance_ResetSurfacesStorageLockErrorWhenSharedFileClearSucceeds(t *testing.T) {
+	config := newIsolatedConfig(t)
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
 
 	config.SetStorage(&lockFailingStorage{Storage: config.GetStorage()})
 
 	err = Reset(config)
 	require.Error(t, err)
-	mu, ok := err.(multiUnwrapper)
-	require.True(t, ok, "Reset's error must join the shared-file removal error with the storage-lock error, not discard one")
-	require.Len(t, mu.Unwrap(), 2)
 }
 
 // blockingLockStorage wraps a real Storage and blocks on Lock until the caller's context is done,
@@ -617,6 +638,43 @@ func TestAcceptance_ResetClearsSharedFileBeforeStorageAndDeletesMachineIDBeforeS
 		"the shared file must already be cleared before storage is touched at all")
 	require.True(t, recording.fileClearedAtCallFor[configuration.MACHINE_ID_SOURCE],
 		"the shared file must already be cleared before storage is touched at all")
+}
+
+// TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleared proves the decision
+// documented on Reset: when a shared-file candidate cannot be cleared, Reset must not clear storage
+// either. readSharedFile checks the machine-wide candidate first, so a stale, still-readable value
+// left there by a failed clear would win over anything Reset does to storage on the very next
+// resolution; clearing storage anyway would look like Reset succeeded while the effective machine id
+// never actually changes, and would additionally throw away the still-valid stored value for no
+// benefit.
+func TestAcceptance_ResetLeavesStorageUntouchedWhenMachineWideFileCannotBeCleared(t *testing.T) {
+	config := newIsolatedConfig(t)
+	paths := sharedFilePaths()
+
+	dir := filepath.Dir(paths.machineWide)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, writeSharedFileValue(paths.machineWide, false, func(sf *SharedFile) {
+		sf.MachineID = "original-id"
+		sf.IdentifierSource = string(SourceOS)
+	}))
+
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	_, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	require.Equal(t, "original-id", readSnykJSON(t)[configuration.MACHINE_ID])
+
+	// Removing write permission on the directory blocks removeSharedFileValue's temp-file step
+	// (os.CreateTemp) before it ever touches the existing file, so the file on disk stays exactly as
+	// written above: a real, deterministic removal failure with the stale value still fully readable
+	// afterward, rather than the file becoming unreadable (which readSharedFile would just skip).
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir's cleanup can remove dir
+
+	err = Reset(config)
+	require.Error(t, err)
+
+	require.Equal(t, "original-id", readSnykJSON(t)[configuration.MACHINE_ID],
+		"Reset must leave storage untouched when it cannot clear a shared-file candidate that still holds a value")
 }
 
 // keyFailingStorage wraps a real Storage and fails every Set call for one key, so a test can

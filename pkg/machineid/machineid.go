@@ -243,6 +243,11 @@ func EnsurePersisted(config configuration.Configuration) (string, error) {
 // Reset removes the stored machine identifier and its source from configuration storage and from
 // the shared file, under the same locks Resolve uses. The next resolution runs the precedence
 // order from the top.
+//
+// If a shared-file candidate cannot be cleared, Reset stops there and leaves storage untouched
+// rather than clearing what it can: readSharedFile takes a shared file ahead of storage, so a
+// candidate Reset failed to clear would still win the next resolution regardless of what happened
+// to storage, making a storage clear in that case pure loss with no corresponding benefit.
 func Reset(config configuration.Configuration) error {
 	var resultErr error
 
@@ -258,6 +263,15 @@ func Reset(config configuration.Configuration) error {
 		if err := removeSharedFileValue(p); err != nil {
 			resultErr = errors.Join(resultErr, err)
 		}
+	}
+
+	// A shared-file candidate Reset could not clear still holds the old machine id, and
+	// readSharedFile takes it ahead of storage on the very next resolution, so clearing storage here
+	// would only make Reset look like it succeeded while the effective machine id never changes.
+	// Leaving storage untouched keeps it in a state Reset can still retry against, rather than
+	// discarding a value that a resolve() is about to reconstruct from the shared file anyway.
+	if resultErr != nil {
+		return resultErr
 	}
 
 	if storage := config.GetStorage(); storage != nil {

@@ -48,6 +48,7 @@ func TestWriteSharedFileValueAtomicity(t *testing.T) {
 				v = valueB
 			}
 			toggle = !toggle
+			//nolint:errcheck // best-effort background writer racing the readers below; failures are not this test's concern
 			_ = writeSharedFileValue(path, false, func(sf *SharedFile) {
 				sf.MachineID = v
 			})
