@@ -300,7 +300,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			assert.NotNil(t, remaining)
 			expected := "sca[1]{fixable,id,pkg,severity}:\n  yes,example,\"example@1,1.5\",\"\""
 			if full {
-				expected = "sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:\n  \"0.0\",yes,example,\"example@1,1.5\",\"\",Example,none"
+				expected = "sca[1]{cvss,fixable,id,pkg,severity,title,upgrade}:\n  \"0.0\",yes,example,\"example@1,1.5\",\"\",Example,example@2"
 			}
 			expected += "\nsecrets[1]{file,line,rule,severity}:\n  example.txt,5,example-rule,low"
 			header := "interaction_id: interaction-test\norg: unknown\nproject: unknown\n"

@@ -218,19 +218,19 @@ type issueGrouper interface {
 type idBasedIssueGrouper struct{}
 
 func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	return groupFindingsBy(findings, func(finding *FindingData) (string, bool) {
+	return groupFindingsBy(findings, func(finding *FindingData) string {
 		// Extract problem ID from problems
 		problemID := g.extractProblemID(finding)
 		if problemID == "" {
 			// If no problem ID found, treat each finding as its own issue
 			problemID = g.getUniqueKey(finding)
 		}
-		return problemID, true
+		return problemID
 	})
 }
 
 // groupFindingsBy groups findings by key, preserving first-seen order so output is deterministic.
-func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) (K, bool)) [][]*FindingData {
+func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingData) K) [][]*FindingData {
 	groups := make(map[K][]*FindingData)
 	var order []K
 
@@ -239,10 +239,7 @@ func groupFindingsBy[K comparable](findings []*FindingData, keyOf func(*FindingD
 			continue
 		}
 
-		key, ok := keyOf(finding)
-		if !ok {
-			continue
-		}
+		key := keyOf(finding)
 		if _, seen := groups[key]; !seen {
 			order = append(order, key)
 		}
@@ -318,15 +315,22 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
+type keyBasedGroupKey struct {
+	value     string
+	generated bool
+}
+
 func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
-	return groupFindingsBy(findings, func(finding *FindingData) (string, bool) {
+	index := 0
+	return groupFindingsBy(findings, func(finding *FindingData) keyBasedGroupKey {
+		index++
 		if finding.Attributes.Key != "" {
-			return finding.Attributes.Key, true
+			return keyBasedGroupKey{value: finding.Attributes.Key}
 		}
 		if finding.Id != nil {
-			return finding.Id.String(), true
+			return keyBasedGroupKey{value: finding.Id.String()}
 		}
-		return "", false
+		return keyBasedGroupKey{value: fmt.Sprint(index), generated: true}
 	})
 }
 

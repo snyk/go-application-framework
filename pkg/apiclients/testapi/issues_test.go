@@ -262,6 +262,26 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		assert.Len(t, key1Issue.GetFindings(), 2)
 	})
 
+	t.Run("keyless fallback cannot collide with a real key", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-first"}},
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Title: "fallback"}},
+			{Attributes: &testapi.FindingAttributes{FindingType: testapi.FindingTypeSast, Key: "__finding_2", Title: "real-second"}},
+		}
+		mockResult.EXPECT().Findings(ctx).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.NewIssuesFromTestResult(ctx, mockResult)
+		require.NoError(t, err)
+		require.Len(t, issues, 2)
+		assert.Equal(t, []string{"real-first", "real-second"}, []string{
+			issues[0].GetFindings()[0].Attributes.Title,
+			issues[0].GetFindings()[1].Attributes.Title,
+		})
+		assert.Equal(t, "fallback", issues[1].GetFindings()[0].Attributes.Title)
+	})
+
 }
 
 func TestIssue_GeneralizedMethods(t *testing.T) {
