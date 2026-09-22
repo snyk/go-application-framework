@@ -146,6 +146,19 @@ func TestTOONMapping_StableVersions(t *testing.T) {
 sca_summary: 1 unique vulns (3 paths) |  | 0 fixable`, output)
 }
 
+func TestTOONMapping_SingleFindingRetainsVersions(t *testing.T) {
+	t.Parallel()
+	output := renderFindings(t, `[{
+		"findings":[{"attributes":{"finding_type":"sca","rating":{"severity":"low"},
+			"problems":[{"source":"snyk_vuln","id":"same","package_name":"example","package_version":"1.0"}],
+			"locations":[{"type":"package","package":{"name":"example","version":"1.0"}},
+				{"type":"package","package":{"name":"example","version":"2.0"}}]}}]
+	}]`)
+	requireTOONEqual(t, `sca[1]{fixable,id,pkg,severity}:
+  no,same,"example@1.0,2.0",""
+sca_summary: 1 unique vulns |  | 0 fixable`, output)
+}
+
 func TestTOONMapping_SCAFixability(t *testing.T) {
 	t.Parallel()
 
@@ -183,7 +196,7 @@ func TestTOONMapping_SCASources(t *testing.T) {
 				{"source":"snyk_vuln","id":"first","severity":"high","package_name":"fallback","package_version":"3"},
 				{"source":"snyk_vuln","id":"second","severity":"low"}],
 			 "locations":[{"type":"source","file_path":"manifest"},{"type":"package","package":{"name":"installed","version":"2"}}]`,
-			`no,first,installed@2,high`, "1 high",
+			`no,first,"installed@2,3",high`, "1 high",
 		},
 		{
 			"license package fallback",

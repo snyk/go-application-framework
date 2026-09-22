@@ -90,9 +90,13 @@ func mapTOONSCAIssue(issue testapi.Issue, full bool) (map[string]any, error) {
 	versions := toonComponentVersions(issue)
 	findings := issue.GetFindings()
 	if len(findings) == 1 {
-		name, versions, err = singleFindingComponent(findings[0], problem, name)
+		var singleVersions []string
+		name, singleVersions, err = singleFindingComponent(findings[0], problem, name)
 		if err != nil {
 			return nil, err
+		}
+		if len(versions) == 0 {
+			versions = singleVersions
 		}
 	}
 	fixable, upgrade := toonRemediation(issue)
