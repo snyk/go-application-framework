@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -61,6 +62,15 @@ type JsonStorage struct {
 	config   Configuration
 	fileLock *flock.Flock
 	mutex    sync.Mutex
+
+	// inProcess and lockHeld close a gap in *flock.Flock: its OS-level lock only
+	// guards against other processes, so two goroutines sharing this same
+	// JsonStorage in one process would otherwise both be granted Lock() at once.
+	// inProcess is a capacity-1 gate acquired by Lock and released by Unlock;
+	// lockHeld records whether this instance currently holds it, so a failed
+	// Lock never skews the count and an unmatched Unlock is a safe no-op.
+	inProcess chan struct{}
+	lockHeld  int32
 }
 
 type JsonOption func(*JsonStorage)
@@ -73,8 +83,9 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path:     path,
-		fileLock: flock.New(path + ".lock"),
+		path:      path,
+		fileLock:  flock.New(path + ".lock"),
+		inProcess: make(chan struct{}, 1),
 	}
 
 	for _, opt := range options {
@@ -160,10 +171,28 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	select {
+	case s.inProcess <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
-	return err
+	if err != nil {
+		<-s.inProcess
+		return err
+	}
+
+	atomic.StoreInt32(&s.lockHeld, 1)
+	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	return s.fileLock.Unlock()
+	if !atomic.CompareAndSwapInt32(&s.lockHeld, 1, 0) {
+		return nil
+	}
+
+	err := s.fileLock.Unlock()
+	<-s.inProcess
+	return err
 }
