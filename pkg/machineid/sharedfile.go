@@ -116,11 +116,17 @@ func selectWritePath(paths pathPair) string {
 // current contents (or a zero SharedFile if it does not yet exist) and writes back the result.
 // createDir controls whether the parent directory may be created; it must be false for the
 // machine-wide path, whose directory GAF never creates.
+//
+// The result is written to a temp file in the same directory and renamed into place rather than
+// truncated and written in place: a reader (readSharedFile uses a bare os.ReadFile, with no lock
+// of its own) racing an in-place write could otherwise observe a truncated or partially-written
+// file. The rename means every reader sees either the previous complete file or the next one.
 func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile)) error {
+	dir := filepath.Dir(path)
 	// The lock file lives next to path, so its directory must exist before flock creates it;
 	// MkdirAll has to run before Lock, not after.
 	if createDir {
-		if err := os.MkdirAll(filepath.Dir(path), fileperms.FILEPERM_755); err != nil {
+		if err := os.MkdirAll(dir, fileperms.FILEPERM_755); err != nil {
 			return err
 		}
 	}
@@ -143,7 +149,25 @@ func writeSharedFileValue(path string, createDir bool, mutate func(*SharedFile))
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, fileperms.FILEPERM_644)
+
+	tmp, err := os.CreateTemp(dir, ".snyk-machine-id-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // no-op once the rename below has succeeded
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, fileperms.FILEPERM_644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // removeSharedFileValue clears machine_id and identifier_source from the shared file at path,
