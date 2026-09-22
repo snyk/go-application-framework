@@ -42,10 +42,13 @@ const (
 	SourceProvided Source = "provided"
 	// SourceOS means the value came from the operating system's machine identifier.
 	SourceOS Source = "os"
-	// SourceLegacy means the value came from an opt-in legacy device-id file (see WithLegacyDeviceIDFile).
+	// SourceLegacy means the value came from an opt-in legacy device-id file (see WithLegacyDeviceIdFile).
 	SourceLegacy Source = "legacy"
 	// SourceGenerated means the value was freshly generated because no other source applied.
 	SourceGenerated Source = "generated"
+	// SourceUnknown means the recorded identifier_source did not match any Source constant this
+	// package defines, e.g. because it was written by a newer or tampered writer.
+	SourceUnknown Source = "unknown"
 )
 
 // lockRetryDelay is how often Lock retries acquiring the storage or shared-file lock while blocked.
@@ -83,7 +86,7 @@ func knownSource(s Source) bool {
 	}
 }
 
-// toKnownSource converts raw into a Source, falling back to SourceProvided when raw is not one of
+// toKnownSource converts raw into a Source, falling back to SourceUnknown when raw is not one of
 // the Source constants this package defines. raw is untrusted wherever it was read back from the
 // shared file or from configuration storage: both can be written by any Snyk product on the
 // machine, or by a concurrent writer racing this process, so every read of identifier_source must
@@ -94,8 +97,8 @@ func toKnownSource(raw string, logger *zerolog.Logger) Source {
 	if knownSource(s) {
 		return s
 	}
-	logger.Debug().Str("raw_source", raw).Msg("machine id: unrecognized identifier_source, falling back to provided")
-	return SourceProvided
+	logger.Debug().Str("raw_source", raw).Msg("machine id: unrecognized identifier_source, falling back to unknown")
+	return SourceUnknown
 }
 
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing

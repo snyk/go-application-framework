@@ -101,11 +101,11 @@ func TestAcceptance_ValueFoundInSharedFileIsAdopted(t *testing.T) {
 	require.Equal(t, "from-shared-file", readSnykJSON(t)[configuration.MACHINE_ID])
 }
 
-// TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided proves the shared file's
+// TestAcceptance_SharedFileWithUnknownSourceFallsBackToUnknown proves the shared file's
 // identifier_source field is validated rather than trusted outright: it is untrusted cross-process
 // input written by any Snyk product on the machine, unlike the machine id itself, which this
 // package deliberately treats as opaque and never validates.
-func TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided(t *testing.T) {
+func TestAcceptance_SharedFileWithUnknownSourceFallsBackToUnknown(t *testing.T) {
 	config := newIsolatedConfig(t)
 	paths := sharedFilePaths()
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
@@ -122,7 +122,7 @@ func TestAcceptance_SharedFileWithUnknownSourceFallsBackToProvided(t *testing.T)
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.Equal(t, "from-shared-file", value)
-	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
+	require.Equal(t, string(SourceUnknown), config.GetString(configuration.MACHINE_ID_SOURCE))
 
 	require.Contains(t, logs.String(), unknownSource, "the unrecognized identifier_source must be logged")
 }
@@ -173,12 +173,12 @@ func (s *raceWinnerStorage) Refresh(config configuration.Configuration, key stri
 	return nil
 }
 
-// TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToProvided proves
+// TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToUnknown proves
 // mirrorIntoStorage validates identifier_source read back from a concurrent writer's storage
 // entry, the same way resolve() validates it when read from the shared file: storage is as
 // untrusted as the shared file, since any Snyk product sharing the same configuration file can
 // have written it.
-func TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToProvided(t *testing.T) {
+func TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToUnknown(t *testing.T) {
 	config := newIsolatedConfig(t)
 	config.SetStorage(&raceWinnerStorage{
 		Storage:      config.GetStorage(),
@@ -190,7 +190,7 @@ func TestAcceptance_ConcurrentWriterWithUnknownSourceInStorageFallsBackToProvide
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 	require.Equal(t, "race-winner-id", value)
-	require.Equal(t, string(SourceProvided), config.GetString(configuration.MACHINE_ID_SOURCE))
+	require.Equal(t, string(SourceUnknown), config.GetString(configuration.MACHINE_ID_SOURCE))
 }
 
 // TestAdoptOrWriteSharedFileValidatesRaceWinnersSource proves adoptOrWriteSharedFile validates
@@ -207,7 +207,7 @@ func TestAdoptOrWriteSharedFileValidatesRaceWinnersSource(t *testing.T) {
 	id, source, err := adoptOrWriteSharedFile(path, false, "candidate-id", SourceProvided, nil)
 	require.NoError(t, err)
 	require.Equal(t, "race-winner-id", id)
-	require.Equal(t, SourceProvided, source)
+	require.Equal(t, SourceUnknown, source)
 }
 
 func TestAcceptance_ExternalChannelIsAdoptedAndPersisted(t *testing.T) {
@@ -245,7 +245,7 @@ func TestAcceptance_LegacyFileIsUsedWhenOptedIn(t *testing.T) {
 	require.NoError(t, os.WriteFile(legacyPath, []byte("legacy-raw-value\n"), 0o644))
 	parse := func(data []byte) (string, error) { return string(data), nil }
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestAcceptance_LegacyFileOnlyTrimsTrailingWhitespace(t *testing.T) {
 	require.NoError(t, os.WriteFile(legacyPath, []byte(raw), 0o644))
 	parse := func(data []byte) (string, error) { return string(data), nil }
 
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestAcceptance_LegacyFileParseFailureFallsThroughToGeneratedAndLogsTheError
 
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIDFile(legacyPath, parse), WithLogger(&logger)))
+	config.AddDefaultValue(configuration.MACHINE_ID, Resolve(WithLegacyDeviceIdFile(legacyPath, parse), WithLogger(&logger)))
 
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
