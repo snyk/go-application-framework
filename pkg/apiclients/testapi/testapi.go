@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,6 +141,7 @@ type TestResult interface {
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
+	GetError() error
 	GetWarnings() *[]IoSnykApiCommonError
 
 	GetPassFail() *PassFail
@@ -277,6 +279,86 @@ func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
 
 // GetWarnings returns any API warnings encountered during the test execution.
 func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
+
+// jsonAPIErrorPayload mirrors the subset of a JSON:API error object that
+// snyk_errors.FromJSONAPIErrorBytes actually reads. Marshaling IoSnykApiCommonError
+// directly is unsafe: its Links.About is a union that can serialize as either a
+// string or a {href, meta} object, but snyk_errors expects Links.About to always be
+// a string.
+type jsonAPIErrorPayload struct {
+	ID     string         `json:"id,omitempty"`
+	Code   string         `json:"code,omitempty"`
+	Title  string         `json:"title,omitempty"`
+	Detail string         `json:"detail,omitempty"`
+	Status string         `json:"status,omitempty"`
+	Meta   map[string]any `json:"meta,omitempty"`
+}
+
+// errorsAsSnykErrors reconstructs errs as error-catalog snyk_errors.Error values,
+// reusing the same JSON:API parsing applied to non-2xx responses elsewhere in this
+// client. Every value gets meta.level "error". Returns (nil, nil) when errs is nil or
+// empty. Used only by SummarizeErrors - callers that need this should use GetError.
+func errorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, error) {
+	if errs == nil || len(*errs) == 0 {
+		return nil, nil
+	}
+
+	payload := make([]jsonAPIErrorPayload, 0, len(*errs))
+	for _, e := range *errs {
+		p := jsonAPIErrorPayload{
+			Detail: e.Detail,
+			Status: e.Status,
+			Meta:   map[string]any{"level": "error"},
+		}
+		if e.Code != nil {
+			p.Code = *e.Code
+		}
+		if e.Title != nil {
+			p.Title = *e.Title
+		}
+		if e.Id != nil {
+			p.ID = e.Id.String()
+		}
+		payload = append(payload, p)
+	}
+
+	body, err := json.Marshal(map[string]any{"errors": payload})
+	if err != nil {
+		return nil, fmt.Errorf("marshaling test errors for snyk_errors conversion: %w", err)
+	}
+
+	return snyk_errors.FromJSONAPIErrorBytes(body)
+}
+
+// SummarizeErrors turns errs (as returned by TestResult.GetErrors()) into a single error,
+// for callers that only need one error, not the full slice. It prefers reconstructing an
+// error-catalog code (e.g. SNYK-0006) that survives through errors.As, joining multiple
+// errors with errors.Join so errors.As still finds a specific one. It falls back to the
+// raw JSON:API detail strings if that conversion failed or found nothing despite errors
+// being present. Returns nil when there are no errors. Exported so other TestResult
+// implementations (e.g. ufm's jsonTestResult) can implement GetError by delegating here.
+func SummarizeErrors(errs *[]IoSnykApiCommonError) error {
+	if errs == nil || len(*errs) == 0 {
+		return nil
+	}
+
+	if snykErrs, err := errorsAsSnykErrors(errs); err == nil && len(snykErrs) > 0 {
+		causes := make([]error, len(snykErrs))
+		for i := range snykErrs {
+			causes[i] = snykErrs[i]
+		}
+		return errors.Join(causes...)
+	}
+
+	messages := make([]string, 0, len(*errs))
+	for _, e := range *errs {
+		messages = append(messages, e.Detail)
+	}
+	return errors.New(strings.Join(messages, "; "))
+}
+
+// GetError returns a single combined error summarizing GetErrors.
+func (r *testResult) GetError() error { return SummarizeErrors(r.Errors) }
 
 // GetTestID returns the final Test ID.
 func (r *testResult) GetTestID() *uuid.UUID { return r.TestID }

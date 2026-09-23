@@ -1676,6 +1676,275 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
+// Waiting on a test finished with an API error should let GetError reconstruct it as
+// a snyk_errors.Error with matching ErrorCode/Title/Detail/Level.
+func Test_Wait_Synchronous_Finished_With_GetError(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	// Status is always "500" here, matching what the Test API actually sends due to
+	// having no source for a real per-error HTTP status.
+	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
+		{Detail: "Over the tests quota for this billing period (limit 200, used 234)", Status: "500", Code: utils.Ptr("SNYK-0006"), Title: utils.Ptr("Test limit reached")},
+	}
+	failReason := testapi.TestOutcomeReasonPolicyBreach
+
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Fail,
+			OutcomeReason:     &failReason,
+			ApiErrors:         expectedAPIErrors,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	require.NoError(t, handle.Wait(ctx))
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// Act
+	getErrErr := result.GetError()
+
+	// Assert
+	require.Error(t, getErrErr)
+	var snykErr snyk_errors.Error
+	require.True(t, errors.As(getErrErr, &snykErr), "expected a snyk_errors.Error in the error chain")
+	assert.Equal(t, "SNYK-0006", snykErr.ErrorCode)
+	assert.Equal(t, "Test limit reached", snykErr.Title)
+	assert.Equal(t, "Over the tests quota for this billing period (limit 200, used 234)", snykErr.Detail)
+	assert.Equal(t, 500, snykErr.StatusCode)
+	assert.Equal(t, "error", snykErr.Level)
+}
+
+func Test_GetError_NoErrors(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	require.NoError(t, handle.Wait(ctx))
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// Act & Assert
+	assert.NoError(t, result.GetError())
+}
+
+// A missing Title on the wire (as happens for upstream APIs that merge the
+// title into the detail text rather than sending a separate field) must not
+// panic, and just produces an empty Title.
+func Test_GetError_TitleAbsent(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
+		{Detail: "Over the tests quota for this billing period (limit 200, used 234)", Status: "500", Code: utils.Ptr("SNYK-0006")},
+	}
+	failReason := testapi.TestOutcomeReasonPolicyBreach
+
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Fail,
+			OutcomeReason:     &failReason,
+			ApiErrors:         expectedAPIErrors,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	require.NoError(t, handle.Wait(ctx))
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// Act
+	getErrErr := result.GetError()
+
+	// Assert
+	require.Error(t, getErrErr)
+	var snykErr snyk_errors.Error
+	require.True(t, errors.As(getErrErr, &snykErr), "expected a snyk_errors.Error in the error chain")
+	assert.Equal(t, "SNYK-0006", snykErr.ErrorCode)
+	assert.Empty(t, snykErr.Title)
+}
+
+// A links.about shaped as {href, meta} (rather than a plain string) must not cause the
+// underlying conversion to drop the whole batch - Links is omitted from what gets
+// marshaled, so Code/Title/Detail/Status must survive regardless of how Links happens
+// to be shaped (Type is not expected to be populated, since Links isn't read at all).
+func Test_GetError_LinksAboutAsObject(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	var aboutLink testapi.IoSnykApiCommonLinkProperty
+	require.NoError(t, aboutLink.FromIoSnykApiCommonLinkObject(testapi.IoSnykApiCommonLinkObject{
+		Href: "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0006",
+	}))
+	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
+		{
+			Detail: "Over the tests quota for this billing period (limit 200, used 234)",
+			Status: "500",
+			Code:   utils.Ptr("SNYK-0006"),
+			Links:  &testapi.IoSnykApiCommonErrorLink{About: &aboutLink},
+		},
+	}
+	failReason := testapi.TestOutcomeReasonPolicyBreach
+
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Fail,
+			OutcomeReason:     &failReason,
+			ApiErrors:         expectedAPIErrors,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	require.NoError(t, handle.Wait(ctx))
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// Act
+	getErrErr := result.GetError()
+
+	// Assert
+	require.Error(t, getErrErr)
+	var snykErr snyk_errors.Error
+	require.True(t, errors.As(getErrErr, &snykErr), "expected a snyk_errors.Error in the error chain")
+	assert.Equal(t, "SNYK-0006", snykErr.ErrorCode)
+	assert.Equal(t, "Over the tests quota for this billing period (limit 200, used 234)", snykErr.Detail)
+	assert.Empty(t, snykErr.Type, "Links is deliberately not read, regardless of its shape")
+}
+
 // Helper function to assert common fields of a TestResult.
 func assertCommonTestResultFields(
 	t *testing.T,
