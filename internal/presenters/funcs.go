@@ -689,16 +689,7 @@ func getHTMLTemplateFuncMap(config configuration.Configuration) htmlTemplate.Fun
 	fnMap["readSourceLine"] = cache.ReadLine
 	fnMap["readSourceLineMarked"] = cache.ReadLineMarked
 	fnMap["resolveMessageArgs"] = resolveMessageArgs
-	fnMap["dict"] = func(pairs ...interface{}) map[string]interface{} {
-		m := make(map[string]interface{}, len(pairs)/2)
-		for i := 0; i+1 < len(pairs); i += 2 {
-			key, ok := pairs[i].(string)
-			if ok {
-				m[key] = pairs[i+1]
-			}
-		}
-		return m
-	}
+	fnMap["dict"] = templateDict
 	fnMap["index3"] = func(arr [3]string, i int) string { return arr[i] }
 	fnMap["int"] = func(v interface{}) int {
 		if p, ok := v.(*int); ok && p != nil {
@@ -1268,10 +1259,7 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 }
 
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
-	findingTypes, err := getFindingTypesFromTestResultWithContext(context.Background(), testResults)
-	if err != nil {
-		return findingTypes
-	}
+	findingTypes, _ := getFindingTypesFromTestResultWithContext(context.Background(), testResults)
 	return findingTypes
 }
 
