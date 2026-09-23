@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
@@ -94,7 +93,6 @@ func (p *UfmPresenter) buildFullTOONDocument(ctx context.Context) (map[string]an
 	return document, nil
 }
 
-//nolint:gocyclo // Validate every projection predicate before mutating each run.
 func projectFullTOONDocument(document map[string]any) {
 	runs, ok := document["runs"].([]any)
 	if !ok {
@@ -118,64 +116,9 @@ func projectFullTOONDocument(document map[string]any) {
 		if !ok {
 			continue
 		}
-
-		ruleObjects := make([]map[string]any, len(rules))
-		ruleIndexes := make(map[string]int, len(rules))
-		nestedResults := make([][]any, len(rules))
-		canNest := true
-		for index, ruleValue := range rules {
+		for _, ruleValue := range rules {
 			rule, ruleOK := ruleValue.(map[string]any)
 			if !ruleOK {
-				canNest = false
-				continue
-			}
-			ruleObjects[index] = rule
-			nestedResults[index] = []any{}
-			ruleID, idOK := rule["id"].(string)
-			if !idOK {
-				canNest = false
-				continue
-			}
-			if _, exists := ruleIndexes[ruleID]; exists {
-				canNest = false
-			}
-			ruleIndexes[ruleID] = index
-			if _, exists := rule["results"]; exists {
-				canNest = false
-			}
-		}
-
-		results, resultsOK := run["results"].([]any)
-		if !resultsOK || len(results) == 0 {
-			canNest = false
-		}
-		resultObjects := make([]map[string]any, len(results))
-		resultRuleIndexes := make([]int, len(results))
-		for index, resultValue := range results {
-			result, resultOK := resultValue.(map[string]any)
-			if !resultOK {
-				canNest = false
-				continue
-			}
-			resultObjects[index] = result
-			if _, exists := result["resultIndex"]; exists {
-				canNest = false
-			}
-			ruleID, idOK := result["ruleId"].(string)
-			if !idOK {
-				canNest = false
-				continue
-			}
-			ruleIndex, found := ruleIndexes[ruleID]
-			if !found {
-				canNest = false
-				continue
-			}
-			resultRuleIndexes[index] = ruleIndex
-		}
-
-		for _, rule := range ruleObjects {
-			if rule == nil {
 				continue
 			}
 			if _, ok := rule["id"].(string); !ok {
@@ -189,20 +132,6 @@ func projectFullTOONDocument(document map[string]any) {
 				delete(help, "markdown")
 			}
 		}
-
-		if !canNest {
-			continue
-		}
-		for index, result := range resultObjects {
-			delete(result, "ruleId")
-			result["resultIndex"] = json.Number(strconv.Itoa(index))
-			ruleIndex := resultRuleIndexes[index]
-			nestedResults[ruleIndex] = append(nestedResults[ruleIndex], result)
-		}
-		for index, rule := range ruleObjects {
-			rule["results"] = nestedResults[index]
-		}
-		delete(run, "results")
 	}
 }
 
