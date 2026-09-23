@@ -26,7 +26,8 @@ import (
 
 func loadTestResults(t *testing.T) []testapi.TestResult {
 	t.Helper()
-	testResultBytes, err := os.ReadFile("../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+	path := "../../../internal/presenters/testdata/ufm/secrets.testresult.json"
+	testResultBytes, err := os.ReadFile(path)
 	assert.NoError(t, err)
 	testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
 	assert.NoError(t, err)

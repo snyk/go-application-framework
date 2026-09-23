@@ -73,7 +73,7 @@ func Test_GetWritersFromConfiguration_TOONWriters(t *testing.T) {
 
 	t.Run("toon stdout and file output coexist", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_TOON, "compact")
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
 		config.Set(OUTPUT_CONFIG_KEY_TOON_FILE, "/tmp/x.toon")
 
 		writerMap := GetWritersFromConfiguration(config, &stubOutputDestination{})
@@ -140,11 +140,7 @@ func Test_getDefaultWriterMimeType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := configuration.NewWithOpts()
 			for _, key := range tc.configKeys {
-				if key == OUTPUT_CONFIG_KEY_TOON {
-					config.Set(key, "compact")
-				} else {
-					config.Set(key, true)
-				}
+				config.Set(key, true)
 			}
 
 			assert.Equal(t, tc.expectedMimeType, getDefaultWriterMimeType(config))

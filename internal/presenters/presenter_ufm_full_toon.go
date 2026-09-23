@@ -36,8 +36,7 @@ func (p *UfmPresenter) renderFullTOON(ctx context.Context, templateFiles []strin
 		if issuesErr != nil {
 			return fmt.Errorf("convert test result to issues: %w", issuesErr)
 		}
-		var diagnostics bytes.Buffer
-		if executeErr := toonTemplate.ExecuteTemplate(&diagnostics, "toonDiagnostics", templateDict(
+		if executeErr := toonTemplate.ExecuteTemplate(io.Discard, "toonDiagnostics", templateDict(
 			"State", state,
 			"Result", result,
 			"Issues", issues,
@@ -55,7 +54,7 @@ func (p *UfmPresenter) renderFullTOON(ctx context.Context, templateFiles []strin
 	if executeErr := toonTemplate.ExecuteTemplate(&toonOutput, "toonDocument", document); executeErr != nil {
 		return executeErr
 	}
-	_, err = io.Copy(p.writer, bytes.NewReader(toonOutput.Bytes()))
+	_, err = p.writer.Write(toonOutput.Bytes())
 	return err
 }
 

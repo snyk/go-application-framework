@@ -313,7 +313,7 @@ func Test_DefaultOutputIsStructured(t *testing.T) {
 
 	t.Run("returns true when toon output is enabled", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_TOON, "compact")
+		config.Set(OUTPUT_CONFIG_KEY_TOON, true)
 
 		result := DefaultOutputIsStructured(config)
 		assert.True(t, result)
