@@ -162,7 +162,7 @@ func TestRenderTemplate_TOON_fullPreservesDiagnostics(t *testing.T) {
 	assert.NotContains(t, output.String(), "findings: []")
 }
 
-func TestRenderTemplate_TOON_fullGoldenNestsResultUnderRule(t *testing.T) {
+func TestRenderTemplate_TOON_fullGoldenPreservesRunLevelResult(t *testing.T) {
 	t.Parallel()
 
 	fixtureDir := filepath.Join("testdata", "ufm", "toon")
@@ -178,13 +178,14 @@ func TestRenderTemplate_TOON_fullGoldenNestsResultUnderRule(t *testing.T) {
 	expected, err := os.ReadFile(filepath.Join(fixtureDir, "got_sarif_full.toon"))
 	require.NoError(t, err)
 	assert.Equal(t, string(bytes.TrimSuffix(expected, []byte("\n"))), output.String())
+	assert.Contains(t, output.String(), "runs[1]:\n  - results[1]:")
 	assert.Contains(t, output.String(), "fixes[1]:")
-	assert.Contains(t, output.String(), "resultIndex: 0")
-	assert.NotContains(t, output.String(), "ruleId:")
+	assert.Contains(t, output.String(), "ruleId: SNYK-JS-GOT-2932019")
+	assert.NotContains(t, output.String(), "resultIndex:")
 	assert.NotContains(t, output.String(), "markdown:")
 }
 
-func TestRenderTemplate_TOON_fullGoldenNestsRepeatedResultsAcrossRuns(t *testing.T) {
+func TestRenderTemplate_TOON_fullGoldenPreservesResultsAcrossRuns(t *testing.T) {
 	t.Parallel()
 
 	fixtureDir := filepath.Join("testdata", "ufm", "toon")
@@ -199,11 +200,11 @@ func TestRenderTemplate_TOON_fullGoldenNestsRepeatedResultsAcrossRuns(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, string(bytes.TrimSuffix(expected, []byte("\n"))), output.String())
 	assert.Contains(t, output.String(), "runs[2]:")
-	assert.Contains(t, output.String(), "rules[2]:")
 	assert.Contains(t, output.String(), "results[2]:")
-	assert.Contains(t, output.String(), "resultIndex: 0")
-	assert.Contains(t, output.String(), "resultIndex: 1")
-	assert.NotContains(t, output.String(), "ruleId:")
+	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-SHARED")
+	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-A")
+	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-B")
+	assert.NotContains(t, output.String(), "resultIndex:")
 	assert.NotContains(t, output.String(), "markdown:")
 }
 
@@ -221,7 +222,7 @@ func TestRenderTemplate_TOON_fullKeepsZeroResultRunFlat(t *testing.T) {
 	assert.Contains(t, output.String(), "rules: []")
 }
 
-func TestRenderTemplate_TOON_fullNestsInterleavedResultsByRule(t *testing.T) {
+func TestRenderTemplate_TOON_fullPreservesInterleavedResultsAtRunLevel(t *testing.T) {
 	t.Parallel()
 
 	results, err := ufm.NewSerializableTestResultFromBytes([]byte(`[{"executionState":"finished","findings":[
@@ -236,21 +237,21 @@ func TestRenderTemplate_TOON_fullNestsInterleavedResultsByRule(t *testing.T) {
 	presenter := presenters.NewUfmRenderer(results, config, &output)
 
 	require.NoError(t, presenter.RenderTemplateWithContext(t.Context(), presenters.ApplicationTOONTemplatesUfm, presenters.ApplicationTOONMimeType))
-	assert.Regexp(t, `(?s)id: RULE-A.*results\[2\]:.*resultIndex: 0.*resultIndex: 2.*id: RULE-B.*results\[1\]:.*resultIndex: 1`, output.String())
-	assert.NotContains(t, output.String(), "  - results[3]:")
-	assert.NotContains(t, output.String(), "ruleId:")
+	assert.Contains(t, output.String(), "runs[1]:\n  - results[3]:")
+	assert.Regexp(t, `(?s)ruleId: RULE-A.*ruleId: RULE-B.*ruleId: RULE-A`, output.String())
+	assert.NotContains(t, output.String(), "resultIndex:")
 	assert.NotContains(t, output.String(), "markdown:")
 }
 
-func TestRenderTemplate_TOON_fullPreservesNestedResultDetails(t *testing.T) {
+func TestRenderTemplate_TOON_fullPreservesResultDetails(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
 		name, fixture string
 		want          []string
 	}{
-		{"suppressions", "secrets.testresult.json", []string{"suppressions[1]{", "resultIndex:"}},
-		{"multiple locations", "secrets.duplicated-sarif-rules.testresult.json", []string{"locations[3]{", "results[5]:", "resultIndex: 4"}},
+		{"suppressions", "secrets.testresult.json", []string{"suppressions[1]{", "ruleId:"}},
+		{"multiple locations", "secrets.duplicated-sarif-rules.testresult.json", []string{"locations[3]{", "results[5]:", "ruleId:"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -267,7 +268,7 @@ func TestRenderTemplate_TOON_fullPreservesNestedResultDetails(t *testing.T) {
 			for _, want := range tc.want {
 				assert.Contains(t, output.String(), want)
 			}
-			assert.NotContains(t, output.String(), "ruleId:")
+			assert.NotContains(t, output.String(), "resultIndex:")
 			assert.NotContains(t, output.String(), "markdown:")
 		})
 	}
