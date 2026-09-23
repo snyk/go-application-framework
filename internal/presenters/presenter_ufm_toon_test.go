@@ -199,6 +199,7 @@ func TestRenderTemplate_TOON_fullPreservesRunsRulesAndResults(t *testing.T) {
 	assert.Contains(t, output.String(), "rules[2]:")
 	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-A")
 	assert.Contains(t, output.String(), "ruleId: SECRET-RULE-B")
+	assert.NotContains(t, output.String(), "markdown:")
 }
 
 func TestRenderTemplate_TOON_genericFindings(t *testing.T) {

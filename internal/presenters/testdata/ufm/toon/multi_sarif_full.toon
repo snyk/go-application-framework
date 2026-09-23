@@ -24,7 +24,6 @@ runs[2]:
         name: Snyk Secrets
         rules[1]:
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-SHARED
             properties:
@@ -58,7 +57,6 @@ runs[2]:
         name: Snyk Secrets
         rules[2]:
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-A
             properties:
@@ -66,7 +64,6 @@ runs[2]:
             shortDescription:
               text: Medium severity - Secret rule A
           - help:
-              markdown: ""
               text: ""
             id: SECRET-RULE-B
             properties:

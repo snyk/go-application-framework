@@ -81,6 +81,7 @@ func (p *UfmPresenter) buildFullTOONDocument(ctx context.Context) (map[string]an
 	if err != nil {
 		return nil, err
 	}
+	projectFullTOONDocument(document)
 	delete(document, "$schema")
 	delete(document, "version")
 	if runs, ok := document["runs"].([]any); ok {
@@ -91,6 +92,49 @@ func (p *UfmPresenter) buildFullTOONDocument(ctx context.Context) (map[string]an
 		}
 	}
 	return document, nil
+}
+
+func projectFullTOONDocument(document map[string]any) {
+	runs, ok := document["runs"].([]any)
+	if !ok {
+		return
+	}
+
+	for _, runValue := range runs {
+		run, ok := runValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		tool, ok := run["tool"].(map[string]any)
+		if !ok {
+			continue
+		}
+		driver, ok := tool["driver"].(map[string]any)
+		if !ok {
+			continue
+		}
+		rules, ok := driver["rules"].([]any)
+		if !ok {
+			continue
+		}
+
+		for _, ruleValue := range rules {
+			rule, ruleOK := ruleValue.(map[string]any)
+			if !ruleOK {
+				continue
+			}
+			if _, ok := rule["id"].(string); !ok {
+				continue
+			}
+			help, ok := rule["help"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, ok := help["markdown"].(string); ok {
+				delete(help, "markdown")
+			}
+		}
+	}
 }
 
 func fullTOONNeedsDiagnostics(result testapi.TestResult) bool {
