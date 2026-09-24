@@ -975,6 +975,11 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 		return []Issue{}, err
 	}
 
+	// Sort by ID for deterministic output
+	slices.SortFunc(issuesList, func(a, b Issue) int {
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
 	if len(findingType) == 0 {
 		return issuesList, nil
 	}
@@ -986,11 +991,6 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 			filteredIssues = append(filteredIssues, issue)
 		}
 	}
-
-	// Sort by ID for deterministic output
-	slices.SortFunc(filteredIssues, func(a, b Issue) int {
-		return strings.Compare(a.GetID(), b.GetID())
-	})
 
 	return filteredIssues, nil
 }

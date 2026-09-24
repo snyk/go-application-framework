@@ -7,38 +7,31 @@ import (
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
-const (
-	MetadataKeyFindingExtras = "finding-extras"
-	MetadataKeyCoverage      = "coverage"
-)
-
 type sarifTestResult struct {
-	findings          []testapi.FindingData
-	effectiveSummary  *testapi.FindingSummary
-	rawSummary        *testapi.FindingSummary
-	suppressedSummary *testapi.FindingSummary
-	metadata          map[string]interface{}
-	testSubject       *testapi.TestSubject
+	findings         []testapi.FindingData
+	effectiveSummary *testapi.FindingSummary
+	rawSummary       *testapi.FindingSummary
+	metadata         map[string]interface{}
+	testSubject      *testapi.TestSubject
 }
 
-func NewSarifTestResult(
+func newSarifTestResult(
 	findings []testapi.FindingData,
 	effectiveSummary *testapi.FindingSummary,
 	rawSummary *testapi.FindingSummary,
-	suppressedSummary *testapi.FindingSummary,
 	testSummary *json_schemas.TestSummary,
 	sarifDoc *sarif.SarifDocument,
 ) testapi.TestResult {
 	result := &sarifTestResult{
-		findings:          findings,
-		effectiveSummary:  effectiveSummary,
-		rawSummary:        rawSummary,
-		suppressedSummary: suppressedSummary,
-		metadata:          make(map[string]interface{}),
+		findings:         findings,
+		effectiveSummary: effectiveSummary,
+		rawSummary:       rawSummary,
+		metadata:         make(map[string]interface{}),
 	}
 
 	if testSummary != nil {
@@ -49,17 +42,26 @@ func NewSarifTestResult(
 
 	if sarifDoc != nil && len(sarifDoc.Runs) > 0 {
 		if coverage := sarifDoc.Runs[0].Properties.Coverage; len(coverage) > 0 {
-			result.metadata[MetadataKeyCoverage] = coverage
+			entries := make([]ufm_helpers.Coverage, 0, len(coverage))
+			for _, c := range coverage {
+				entries = append(entries, ufm_helpers.Coverage(c))
+			}
+			result.metadata[ufm_helpers.MetadataKeyCoverage] = entries
 		}
 	}
 
 	return result
 }
 
-func (s *sarifTestResult) GetTestID() *uuid.UUID                            { return nil }
-func (s *sarifTestResult) GetTestConfiguration() *testapi.TestConfiguration { return nil }
-func (s *sarifTestResult) GetCreatedAt() *time.Time                         { return nil }
-func (s *sarifTestResult) GetTestSubject() *testapi.TestSubject             { return s.testSubject }
+func (s *sarifTestResult) GetTestID() *uuid.UUID { return nil }
+
+// GetTestConfiguration declares a SAST scan so consumers can identify the
+// product even when there are no findings to infer it from.
+func (s *sarifTestResult) GetTestConfiguration() *testapi.TestConfiguration {
+	return &testapi.TestConfiguration{ScanConfig: &testapi.ScanConfiguration{Sast: &testapi.SastScanConfiguration{}}}
+}
+func (s *sarifTestResult) GetCreatedAt() *time.Time             { return nil }
+func (s *sarifTestResult) GetTestSubject() *testapi.TestSubject { return s.testSubject }
 func (s *sarifTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
 	return nil
 }
@@ -99,16 +101,12 @@ func (s *sarifTestResult) Findings(_ context.Context) ([]testapi.FindingData, bo
 	return s.findings, true, nil
 }
 
-const TestResultSuppressedSummary testapi.TestResultKeys = "suppressed_summary"
-
 func (s *sarifTestResult) Get(key testapi.TestResultKeys) interface{} {
 	switch key {
 	case testapi.TestResultTestSubject:
 		return s.testSubject
 	case testapi.TestResultRawSummary:
 		return s.rawSummary
-	case TestResultSuppressedSummary:
-		return s.suppressedSummary
 	case testapi.TestResultMetadata:
 		return s.metadata
 	default:

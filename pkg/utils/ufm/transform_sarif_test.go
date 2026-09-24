@@ -2,15 +2,16 @@ package ufm
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/code-client-go/scan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -257,22 +258,13 @@ func TestTransformToUFMFromSarif_SeverityThreshold(t *testing.T) {
 		result, err := TransformToUFMFromSarif(testSarifDoc(), summary, WithSeverityThreshold("high"))
 		require.NoError(t, err)
 
-		suppressed, ok := result.Get(TestResultSuppressedSummary).(*testapi.FindingSummary)
-		require.True(t, ok)
-
 		// Sub-threshold severities are gone from the findings, so reporting
-		// them in any summary would contradict what the caller can see.
-		for name, actual := range map[string]*testapi.FindingSummary{
-			"raw":        result.GetRawSummary(),
-			"suppressed": suppressed,
-		} {
-			require.NotNil(t, actual, name)
-			_, hasMedium := (*actual.CountBy)["severity"]["medium"]
-			assert.False(t, hasMedium, "%s summary still counts medium", name)
-		}
-
-		assert.Equal(t, uint32(3), result.GetRawSummary().Count)
-		assert.Equal(t, uint32(2), suppressed.Count)
+		// them in the raw summary would contradict what the caller can see.
+		raw := result.GetRawSummary()
+		require.NotNil(t, raw)
+		_, hasMedium := (*raw.CountBy)["severity"]["medium"]
+		assert.False(t, hasMedium, "raw summary still counts medium")
+		assert.Equal(t, uint32(3), raw.Count)
 	})
 
 	t.Run("keeps all findings when no threshold", func(t *testing.T) {
@@ -459,7 +451,27 @@ func TestTransformToUFMFromSarif_KeyFallback(t *testing.T) {
 	findings, _, err := result.Findings(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, "javascript/XSS|routes/index.ts:10:5", findings[1].Attributes.Key)
+	assert.Equal(t, findings[1].Id.String(), findings[1].Attributes.Key)
+}
+
+// Code can report several results with the same "0" fingerprint (same rule and
+// line, different column). Each must stay its own issue rather than being merged.
+func TestTransformToUFMFromSarif_KeepsResultsSharingPrimaryFingerprint(t *testing.T) {
+	sarifDoc := testSarifDoc()
+	sarifDoc.Runs[0].Results[1].RuleID = sarifDoc.Runs[0].Results[0].RuleID
+	sarifDoc.Runs[0].Results[1].RuleIndex = sarifDoc.Runs[0].Results[0].RuleIndex
+	sarifDoc.Runs[0].Results[1].Fingerprints = sarif.Fingerprints{
+		Num0: sarifDoc.Runs[0].Results[0].Fingerprints.Num0,
+		Num1: "different-secondary-fingerprint",
+	}
+	sarifDoc.Runs[0].Results[0].Fingerprints.Identity = ""
+
+	result, err := TransformToUFMFromSarif(sarifDoc, testSummary())
+	require.NoError(t, err)
+
+	issues, err := testapi.NewIssuesFromTestResult(context.Background(), result)
+	require.NoError(t, err)
+	assert.Len(t, issues, 2)
 }
 
 func TestTransformToUFMFromSarif_KeyFallbackDistinguishesLocations(t *testing.T) {
@@ -518,80 +530,6 @@ func TestTransformToUFMFromSarif_SummaryWithIgnores(t *testing.T) {
 	assert.Equal(t, uint32(15), raw.Count)
 	assert.Equal(t, uint32(10), (*raw.CountBy)["severity"]["high"])
 	assert.Equal(t, uint32(5), (*raw.CountBy)["severity"]["medium"])
-}
-
-func TestTranslateMetadataToTestResult(t *testing.T) {
-	result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
-	require.NoError(t, err)
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
-
-	meta := &scan.ResultMetaData{
-		WebUiUrl:   "/org/test-org/project/abc-123",
-		ProjectId:  "abc-123",
-		SnapshotId: "snap-456",
-	}
-
-	TranslateMetadataToTestResult(meta, result, config)
-
-	assert.Equal(t, "https://app.snyk.io/org/test-org/project/abc-123", result.GetMetadataValue(MetadataKeyReportURL))
-	assert.Equal(t, "abc-123", result.GetMetadataValue(MetadataKeyProjectID))
-	assert.Equal(t, "snap-456", result.GetMetadataValue(MetadataKeySnapshotID))
-}
-
-func TestTranslateMetadataToTestResult_NilMetadata(t *testing.T) {
-	result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
-	require.NoError(t, err)
-
-	config := configuration.NewWithOpts()
-
-	TranslateMetadataToTestResult(nil, result, config)
-
-	assert.Nil(t, result.GetMetadataValue(MetadataKeyReportURL))
-	assert.Nil(t, result.GetMetadataValue(MetadataKeyProjectID))
-	assert.Nil(t, result.GetMetadataValue(MetadataKeySnapshotID))
-}
-
-func TestTranslateMetadataToTestResult_EmptyFields(t *testing.T) {
-	result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
-	require.NoError(t, err)
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
-
-	meta := &scan.ResultMetaData{
-		WebUiUrl: "/org/my-org/project/xyz",
-	}
-
-	TranslateMetadataToTestResult(meta, result, config)
-
-	assert.Equal(t, "https://app.snyk.io/org/my-org/project/xyz", result.GetMetadataValue(MetadataKeyReportURL))
-	assert.Nil(t, result.GetMetadataValue(MetadataKeyProjectID))
-	assert.Nil(t, result.GetMetadataValue(MetadataKeySnapshotID))
-}
-
-func TestTranslateMetadataToTestResult_PreservesExistingMetadata(t *testing.T) {
-	result, err := TransformToUFMFromSarif(testSarifDoc(), testSummary())
-	require.NoError(t, err)
-
-	assert.Equal(t, "/test/path", result.GetMetadataValue("path"))
-	assert.Equal(t, "sast", result.GetMetadataValue("type"))
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
-
-	meta := &scan.ResultMetaData{
-		WebUiUrl:  "/org/test/project/123",
-		ProjectId: "proj-id",
-	}
-
-	TranslateMetadataToTestResult(meta, result, config)
-
-	assert.Equal(t, "/test/path", result.GetMetadataValue("path"))
-	assert.Equal(t, "sast", result.GetMetadataValue("type"))
-	assert.Equal(t, "https://app.snyk.io/org/test/project/123", result.GetMetadataValue(MetadataKeyReportURL))
-	assert.Equal(t, "proj-id", result.GetMetadataValue(MetadataKeyProjectID))
 }
 
 func TestTransformToUFMFromSarif_NilTestSummary(t *testing.T) {
@@ -708,7 +646,7 @@ func TestTransformToUFMFromSarif_FindingExtras(t *testing.T) {
 	result, err := TransformToUFMFromSarif(sarifDoc, testSummary())
 	require.NoError(t, err)
 
-	extras, ok := result.GetMetadataValue(MetadataKeyFindingExtras).(map[string]interface{})
+	extras, ok := result.GetMetadataValue(ufm_helpers.MetadataKeyFindingExtras).(map[string]interface{})
 	require.True(t, ok)
 
 	ctx := context.Background()
@@ -716,7 +654,7 @@ func TestTransformToUFMFromSarif_FindingExtras(t *testing.T) {
 	require.NoError(t, err)
 
 	firstID := findings[0].Id.String()
-	firstExtra, ok := extras[firstID].(FindingExtra)
+	firstExtra, ok := extras[firstID].(ufm_helpers.FindingExtra)
 	require.True(t, ok)
 	assert.True(t, firstExtra.IsAutofixable)
 	assert.Equal(t, []string{"arg1", "arg2"}, firstExtra.Arguments)
@@ -724,34 +662,10 @@ func TestTransformToUFMFromSarif_FindingExtras(t *testing.T) {
 	assert.Equal(t, "d3e6d95802bfa65cdee1cc840eda6a7b8422f24962e436dd01730e6116e317ec", firstExtra.Fingerprints["0"])
 
 	secondID := findings[1].Id.String()
-	secondExtra, ok := extras[secondID].(FindingExtra)
+	secondExtra, ok := extras[secondID].(ufm_helpers.FindingExtra)
 	require.True(t, ok)
 	assert.False(t, secondExtra.IsAutofixable)
 	assert.Nil(t, secondExtra.Arguments)
-}
-
-func TestTransformToUFMFromSarif_SuppressedSummary(t *testing.T) {
-	summary := &json_schemas.TestSummary{
-		Results: []json_schemas.TestSummaryResult{
-			{Severity: "high", Total: 10, Open: 3, Ignored: 7},
-			{Severity: "medium", Total: 5, Open: 1, Ignored: 4},
-		},
-		Type:      "sast",
-		Artifacts: 2,
-		Path:      "/path",
-	}
-
-	result, err := TransformToUFMFromSarif(testSarifDoc(), summary)
-	require.NoError(t, err)
-
-	suppressed := result.Get(TestResultSuppressedSummary)
-	require.NotNil(t, suppressed)
-
-	suppressedSummary, ok := suppressed.(*testapi.FindingSummary)
-	require.True(t, ok)
-	assert.Equal(t, uint32(11), suppressedSummary.Count)
-	assert.Equal(t, uint32(7), (*suppressedSummary.CountBy)["severity"]["high"])
-	assert.Equal(t, uint32(4), (*suppressedSummary.CountBy)["severity"]["medium"])
 }
 
 func TestTransformToUFMFromSarif_SuppressionExtras(t *testing.T) {
@@ -779,11 +693,11 @@ func TestTransformToUFMFromSarif_SuppressionExtras(t *testing.T) {
 	findings, _, err := result.Findings(ctx)
 	require.NoError(t, err)
 
-	extras, ok := result.GetMetadataValue(MetadataKeyFindingExtras).(map[string]interface{})
+	extras, ok := result.GetMetadataValue(ufm_helpers.MetadataKeyFindingExtras).(map[string]interface{})
 	require.True(t, ok)
 
 	firstID := findings[0].Id.String()
-	firstExtra, ok := extras[firstID].(FindingExtra)
+	firstExtra, ok := extras[firstID].(ufm_helpers.FindingExtra)
 	require.True(t, ok)
 	require.NotNil(t, firstExtra.Suppression)
 	assert.Equal(t, "3b3b7c0c-7b1e-4b0e-8b0a-0b0b0b0b0b0b", firstExtra.Suppression.GUID)
@@ -807,17 +721,42 @@ func TestTransformToUFMFromSarif_CoverageData(t *testing.T) {
 	result, err := TransformToUFMFromSarif(sarifDoc, testSummary())
 	require.NoError(t, err)
 
-	coverage := result.GetMetadataValue(MetadataKeyCoverage)
-	require.NotNil(t, coverage)
-
-	coverageSlice, ok := coverage.([]struct {
-		Files       int    `json:"files"`
-		IsSupported bool   `json:"isSupported"`
-		Lang        string `json:"lang"`
-		Type        string `json:"type"`
-	})
+	coverageSlice, ok := result.GetMetadataValue(ufm_helpers.MetadataKeyCoverage).([]ufm_helpers.Coverage)
 	require.True(t, ok)
 	assert.Len(t, coverageSlice, 2)
 	assert.Equal(t, "javascript", coverageSlice[0].Lang)
 	assert.Equal(t, 10, coverageSlice[0].Files)
+}
+
+func TestTransformToUFMFromSarif_RealData(t *testing.T) {
+	sarifBytes, err := os.ReadFile("../../local_workflows/testdata/sarif-juice-shop.json")
+	require.NoError(t, err)
+	summaryBytes, err := os.ReadFile("../../local_workflows/testdata/juice-shop-summary.json")
+	require.NoError(t, err)
+
+	var sarifDoc sarif.SarifDocument
+	require.NoError(t, json.Unmarshal(sarifBytes, &sarifDoc))
+	var testSummary json_schemas.TestSummary
+	require.NoError(t, json.Unmarshal(summaryBytes, &testSummary))
+
+	result, err := TransformToUFMFromSarif(&sarifDoc, &testSummary)
+	require.NoError(t, err)
+
+	findings, complete, err := result.Findings(context.Background())
+	require.NoError(t, err)
+	assert.True(t, complete)
+	assert.Len(t, findings, 278)
+	assert.Equal(t, testapi.TestExecutionStatesFinished, result.GetExecutionState())
+
+	countBy := *result.GetEffectiveSummary().CountBy
+	assert.Equal(t, uint32(1), countBy["severity"]["critical"])
+	assert.Equal(t, uint32(3), countBy["severity"]["high"])
+	assert.Equal(t, uint32(1), countBy["severity"]["medium"])
+	assert.Equal(t, uint32(0), countBy["severity"]["low"])
+
+	rawCountBy := *result.GetRawSummary().CountBy
+	assert.Equal(t, uint32(1), rawCountBy["severity"]["critical"])
+	assert.Equal(t, uint32(10), rawCountBy["severity"]["high"])
+	assert.Equal(t, uint32(5), rawCountBy["severity"]["medium"])
+	assert.Equal(t, uint32(2), rawCountBy["severity"]["low"])
 }

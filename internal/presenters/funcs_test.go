@@ -10,22 +10,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 func intPtr(v int) *int {
 	return &v
-}
-
-func TestJoinPolicyModificationReasons(t *testing.T) {
-	modifications := []testapi.PolicyModification{
-		{Reason: "first reason"},
-		{Reason: ""},
-		{Reason: "second reason"},
-	}
-
-	assert.Equal(t, "first reason; second reason", joinPolicyModificationReasons(modifications))
 }
 
 func TestResolveMessageArgs(t *testing.T) {
@@ -381,4 +369,10 @@ func TestMarkdownToHTMLNormalizesLineEndings(t *testing.T) {
 	assert.NotContains(t, rendered, "\r")
 	assert.NotContains(t, rendered, "line two  \n")
 	assert.NotContains(t, rendered, "\n   \n")
+}
+
+func TestDerefStr(t *testing.T) {
+	value := "help"
+	assert.Equal(t, "help", derefStr(&value))
+	assert.Equal(t, "", derefStr(nil))
 }

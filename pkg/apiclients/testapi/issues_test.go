@@ -438,6 +438,32 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 		assert.Equal(t, "sca-issue-2", issues[1].GetID())
 	})
 
+	t.Run("sorts issues by ID when no finding type filter is given", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		var findings []testapi.FindingData
+		for _, key := range []string{"issue-3", "issue-1", "issue-2"} {
+			findings = append(findings, testapi.FindingData{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         key,
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			})
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, nil)
+		require.NoError(t, err)
+		require.Len(t, issues, 3)
+		assert.Equal(t, "issue-1", issues[0].GetID())
+		assert.Equal(t, "issue-2", issues[1].GetID())
+		assert.Equal(t, "issue-3", issues[2].GetID())
+	})
+
 	t.Run("returns empty slice when no issues match finding type", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()

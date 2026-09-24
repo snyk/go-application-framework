@@ -202,59 +202,6 @@ func normalizeResults(run map[string]interface{}) {
 	}
 }
 
-// normalizeResultProperties strips result properties that this pipeline emits
-// but the recorded ground-truth SARIF predates, so the comparison stays focused
-// on the fields both sides share. Anything stripped here must be asserted
-// elsewhere: priorityScore is covered by
-// Test_UfmPresenter_SarifRendersPriorityScore.
-func normalizeResultProperties(run map[string]interface{}) {
-	results, ok := run["results"].([]interface{})
-	if !ok {
-		return
-	}
-
-	for _, resultInterface := range results {
-		result, ok := resultInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		properties, ok := result["properties"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		if policy, ok := properties["snykPolicy/v1"].(map[string]interface{}); ok {
-			reason, _ := policy["reason"].(string) //nolint:errcheck // type assertion, not error check
-			if reason == "" && len(policy) == 1 {
-				delete(properties, "snykPolicy/v1")
-			}
-		}
-
-		delete(properties, "priorityScore")
-		if len(properties) == 0 {
-			delete(result, "properties")
-		}
-	}
-}
-
-// normalizeRunProperties drops an empty run-level coverage array. The template
-// renders "coverage" unconditionally to match local_finding.sarif.tmpl, whereas
-// the recorded ground-truth SARIF omits the whole properties block when a test
-// result carries no coverage metadata. Emission is asserted by
-// Test_UfmPresenter_SarifRendersEmptyCoverage.
-func normalizeRunProperties(run map[string]interface{}) {
-	properties, ok := run["properties"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	if coverage, ok := properties["coverage"].([]interface{}); ok && len(coverage) == 0 {
-		delete(properties, "coverage")
-	}
-	if len(properties) == 0 {
-		delete(run, "properties")
-	}
-}
-
 // sortByID sorts an array of objects by their "id" field
 func sortByID(arr []interface{}) {
 	sort.Slice(arr, func(i, j int) bool {
@@ -686,10 +633,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string, ignoreSuppressi
 
 		// Normalize result messages (license issue wording)
 		normalizeResults(run)
-
-		// Normalize result properties covered by focused tests.
-		normalizeResultProperties(run)
-		normalizeRunProperties(run)
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
@@ -1955,9 +1898,15 @@ func sarifToUFM(t *testing.T, filename string, resultMetaData *scan.ResultMetaDa
 	require.NoError(t, err)
 
 	if resultMetaData != nil {
-		config := configuration.NewWithOpts()
-		config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
-		ufm.TranslateMetadataToTestResult(resultMetaData, result, config)
+		if len(resultMetaData.WebUiUrl) > 0 {
+			result.SetMetadata("report-url", "https://app.snyk.io"+resultMetaData.WebUiUrl)
+		}
+		if len(resultMetaData.ProjectId) > 0 {
+			result.SetMetadata("projectid", resultMetaData.ProjectId)
+		}
+		if len(resultMetaData.SnapshotId) > 0 {
+			result.SetMetadata("snapshotid", resultMetaData.SnapshotId)
+		}
 	}
 
 	return result
@@ -2241,8 +2190,8 @@ func Test_UfmPresenter_SarifRendersPartialMessagesAndRegions(t *testing.T) {
 	assert.NotContains(t, region, "endLine")
 }
 
-// Test_UfmPresenter_SarifRendersEmptyCoverage keeps the run-level properties
-// block unconditional, matching local_finding.sarif.tmpl.
+// Test_UfmPresenter_SarifRendersEmptyCoverage keeps the run-level coverage
+// array for Code results even when empty, matching local_finding.sarif.tmpl.
 func Test_UfmPresenter_SarifRendersEmptyCoverage(t *testing.T) {
 	input := loadSarifDoc(t, "testdata/4-high-5-medium.json")
 	input.Runs[0].Properties.Coverage = nil
@@ -2274,22 +2223,15 @@ func requireFloat64(t *testing.T, value interface{}) float64 {
 	return result
 }
 
-// Test_UfmPresenter_SarifRendersPriorityScore pins the priorityScore rendering
-// that toInt's uint16 case enables. testapi.Issue.GetRiskScore returns a uint16,
-// so before that case existed `int $riskScore` in the template always collapsed
-// to 0 and the key was never emitted. The ground-truth fixtures compared in
-// Test_UfmPresenter_Sarif predate the field and have it normalized away, which
-// makes this the only test asserting it.
-func Test_UfmPresenter_SarifRendersPriorityScore(t *testing.T) {
-	testResultBytes, err := os.ReadFile("testdata/ufm/webgoat.testresult.json")
-	require.NoError(t, err)
-
-	testResults, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
-	require.NoError(t, err)
+// Test_UfmPresenter_SarifKeepsCodeIdentityWithoutFindings pins that a Code
+// run with no findings still renders as SnykCode with its coverage, as the
+// product cannot be inferred from findings in that case.
+func Test_UfmPresenter_SarifKeepsCodeIdentityWithoutFindings(t *testing.T) {
+	result := sarifToUFM(t, "testdata/no-issues.json", nil)
 
 	writer := &bytes.Buffer{}
 	presenter := presenters.NewUfmRenderer(
-		testResults,
+		[]testapi.TestResult{result},
 		configuration.NewWithOpts(),
 		writer,
 		presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("test"))),
@@ -2298,28 +2240,47 @@ func Test_UfmPresenter_SarifRendersPriorityScore(t *testing.T) {
 
 	var output map[string]interface{}
 	require.NoError(t, json.Unmarshal(writer.Bytes(), &output))
+	run := requireStringMap(t, requireInterfaceSlice(t, output["runs"])[0])
 
-	runs := requireInterfaceSlice(t, output["runs"])
-	scoresByRuleID := map[string]float64{}
-	for _, rawResult := range requireInterfaceSlice(t, requireStringMap(t, runs[0])["results"]) {
-		result := requireStringMap(t, rawResult)
-		properties, ok := result["properties"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		score, ok := properties["priorityScore"]
-		if !ok {
-			continue
-		}
-		ruleID, ok := result["ruleId"].(string)
-		require.True(t, ok)
-		scoresByRuleID[ruleID] = requireFloat64(t, score)
-	}
+	driver := requireStringMap(t, requireStringMap(t, run["tool"])["driver"])
+	assert.Equal(t, "SnykCode", driver["name"])
+	assert.NotEmpty(t, requireStringMap(t, run["properties"])["coverage"])
+}
 
-	require.NotEmpty(t, scoresByRuleID, "risk scores from the test result must reach SARIF as priorityScore")
-	assert.Equal(t, float64(343), scoresByRuleID["SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966"])
-	for ruleID, score := range scoresByRuleID {
-		assert.Positive(t, score, "priorityScore is only emitted for non-zero risk scores (%s)", ruleID)
+// Test_UfmPresenter_SarifOmitsCodePropertiesForOtherFindingTypes pins that
+// non-Code results keep the SARIF shape they had before Code support: no
+// run-level coverage and no result-level properties.
+func Test_UfmPresenter_SarifOmitsCodePropertiesForOtherFindingTypes(t *testing.T) {
+	for _, path := range []string{
+		"testdata/ufm/webgoat.testresult.json",
+		"testdata/ufm/secrets.testresult.json",
+	} {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			testResultBytes, err := os.ReadFile(path)
+			require.NoError(t, err)
+			testResults, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			require.NoError(t, err)
+
+			writer := &bytes.Buffer{}
+			presenter := presenters.NewUfmRenderer(
+				testResults,
+				configuration.NewWithOpts(),
+				writer,
+				presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("test"))),
+			)
+			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+
+			var output map[string]interface{}
+			require.NoError(t, json.Unmarshal(writer.Bytes(), &output))
+
+			for _, rawRun := range requireInterfaceSlice(t, output["runs"]) {
+				run := requireStringMap(t, rawRun)
+				assert.NotContains(t, run, "properties")
+				for _, rawResult := range requireInterfaceSlice(t, run["results"]) {
+					assert.NotContains(t, requireStringMap(t, rawResult), "properties")
+				}
+			}
+		})
 	}
 }
 
@@ -2518,4 +2479,36 @@ func Test_UfmPresenter_Sarif_SuppressionProperties(t *testing.T) {
 		assert.NotContains(t, props, "reviewedOn")
 		assert.NotContains(t, props, "reviewedBy")
 	})
+}
+
+// Test_UfmPresenter_SarifCodeAutomationDetailsID pins the Code automation ID
+// to the shape local_finding.sarif.tmpl produces, since consumers use it to
+// categorize SARIF uploads.
+func Test_UfmPresenter_SarifCodeAutomationDetailsID(t *testing.T) {
+	for _, projectName := range []string{"", "my-project"} {
+		t.Run(projectName, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set("project-name", projectName)
+
+			writer := &bytes.Buffer{}
+			presenter := presenters.NewUfmRenderer(
+				[]testapi.TestResult{sarifToUFM(t, "testdata/4-high-5-medium.json", nil)},
+				config,
+				writer,
+			)
+			require.NoError(t, presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+
+			var output map[string]interface{}
+			require.NoError(t, json.Unmarshal(writer.Bytes(), &output))
+			run := requireStringMap(t, requireInterfaceSlice(t, output["runs"])[0])
+			id, ok := requireStringMap(t, run["automationDetails"])["id"].(string)
+			require.True(t, ok)
+
+			expectedPrefix := "Snyk/Code/"
+			if projectName != "" {
+				expectedPrefix += projectName + "/"
+			}
+			assert.Regexp(t, "^"+regexp.QuoteMeta(expectedPrefix)+automationIDTimestampRe.String(), id)
+		})
+	}
 }

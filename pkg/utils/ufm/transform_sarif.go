@@ -7,11 +7,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/code-client-go/scan"
 
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	findings_utils "github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
@@ -47,13 +46,11 @@ func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_sc
 	}
 	effectiveSummary := buildEffectiveSummary(testSummary, allowed)
 	rawSummary := buildRawSummary(testSummary, allowed)
-	suppressedSummary := buildSuppressedSummary(testSummary, allowed)
 
-	result := NewSarifTestResult(
+	result := newSarifTestResult(
 		findings,
 		effectiveSummary,
 		rawSummary,
-		suppressedSummary,
 		testSummary,
 		sarifDoc,
 	)
@@ -63,34 +60,6 @@ func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_sc
 	}
 
 	return result, nil
-}
-
-type SuppressionExtra struct {
-	GUID       string `json:"guid,omitempty"`
-	Category   string `json:"category,omitempty"`
-	IgnoredBy  string `json:"ignoredBy,omitempty"`
-	Email      string `json:"email,omitempty"`
-	Expiration string `json:"expiration,omitempty"`
-	IgnoredOn  string `json:"ignoredOn,omitempty"`
-}
-
-type PriorityScoreFactor struct {
-	Label bool   `json:"label"`
-	Type  string `json:"type"`
-}
-
-type FindingExtra struct {
-	Fingerprints           map[string]string     `json:"fingerprints,omitempty"`
-	IsAutofixable          bool                  `json:"isAutofixable,omitempty"`
-	Arguments              []string              `json:"arguments,omitempty"`
-	Suppression            *SuppressionExtra     `json:"suppression,omitempty"`
-	MessageText            string                `json:"messageText,omitempty"`
-	MessageMarkdown        string                `json:"messageMarkdown,omitempty"`
-	RuleIndex              int                   `json:"ruleIndex"`
-	PriorityScoreFactors   []PriorityScoreFactor `json:"priorityScoreFactors,omitempty"`
-	PolicyOriginalLevel    string                `json:"policyOriginalLevel,omitempty"`
-	PolicySeverity         string                `json:"policySeverity,omitempty"`
-	PolicyOriginalSeverity string                `json:"policyOriginalSeverity,omitempty"`
 }
 
 // mapUFMFindings converts every SARIF result into a finding; an empty allowedSeverities keeps all of them.
@@ -115,13 +84,12 @@ func mapUFMFindings(sarifDoc *sarif.SarifDocument, allowedSeverities []string) (
 		}
 
 		findingID := finding.Id.String()
-		extra := FindingExtra{
+		extra := ufm_helpers.FindingExtra{
 			Fingerprints:         collectFingerprints(res.Fingerprints),
 			IsAutofixable:        res.Properties.IsAutofixable,
 			Arguments:            res.Message.Arguments,
 			MessageText:          res.Message.Text,
 			MessageMarkdown:      res.Message.Markdown,
-			RuleIndex:            res.RuleIndex,
 			PriorityScoreFactors: collectPriorityScoreFactors(res),
 		}
 		if res.Properties.Policy != nil {
@@ -138,7 +106,7 @@ func mapUFMFindings(sarifDoc *sarif.SarifDocument, allowedSeverities []string) (
 	}
 
 	extras := map[string]interface{}{
-		MetadataKeyFindingExtras: perFinding,
+		ufm_helpers.MetadataKeyFindingExtras: perFinding,
 	}
 
 	return findings, extras, nil
@@ -169,13 +137,7 @@ func mapUFMFinding(res sarif.Result, rules []sarif.Rule) (testapi.FindingData, e
 		return testapi.FindingData{}, fmt.Errorf("failed to map locations: %w", err)
 	}
 
-	key := res.Fingerprints.Identity
-	if key == "" {
-		key = res.Fingerprints.Num0
-	}
-	if key == "" {
-		key = findingLocationKey(res)
-	}
+	key := findingID.String()
 
 	problems := mapUFMProblems(res, rules)
 	if codeRuleProblem := mapSnykCodeRuleProblem(res, rules); codeRuleProblem != nil {
@@ -401,13 +363,13 @@ func mapUFMPolicyModifications(res sarif.Result) *[]testapi.PolicyModification {
 	}
 }
 
-func collectSuppressionDetails(res sarif.Result) *SuppressionExtra {
+func collectSuppressionDetails(res sarif.Result) *ufm_helpers.SuppressionExtra {
 	suppression, _ := sarif_utils.GetHighestSuppression(res.Suppressions)
 	if suppression == nil {
 		return nil
 	}
 
-	extra := &SuppressionExtra{
+	extra := &ufm_helpers.SuppressionExtra{
 		GUID:      suppression.Guid,
 		Category:  string(suppression.Properties.Category),
 		IgnoredBy: suppression.Properties.IgnoredBy.Name,
@@ -450,7 +412,7 @@ func mapUFMSuppression(res sarif.Result) *testapi.Suppression {
 	}
 
 	// Relative expirations like "15 days" stay unparsed but are preserved
-	// verbatim in SuppressionExtra.Expiration.
+	// verbatim in ufm_helpers.SuppressionExtra.Expiration.
 	if suppression.Properties.Expiration != nil {
 		if t, err := time.Parse(time.RFC3339, *suppression.Properties.Expiration); err == nil {
 			ufmSuppression.ExpiresAt = &t
@@ -493,17 +455,13 @@ func buildRawSummary(testSummary *json_schemas.TestSummary, allowedSeverities []
 	return buildSummary(testSummary, allowedSeverities, func(r json_schemas.TestSummaryResult) int { return r.Total })
 }
 
-func buildSuppressedSummary(testSummary *json_schemas.TestSummary, allowedSeverities []string) *testapi.FindingSummary {
-	return buildSummary(testSummary, allowedSeverities, func(r json_schemas.TestSummaryResult) int { return r.Ignored })
-}
-
-func collectPriorityScoreFactors(res sarif.Result) []PriorityScoreFactor {
+func collectPriorityScoreFactors(res sarif.Result) []ufm_helpers.PriorityScoreFactor {
 	if len(res.Properties.PriorityScoreFactors) == 0 {
 		return nil
 	}
-	factors := make([]PriorityScoreFactor, 0, len(res.Properties.PriorityScoreFactors))
+	factors := make([]ufm_helpers.PriorityScoreFactor, 0, len(res.Properties.PriorityScoreFactors))
 	for _, f := range res.Properties.PriorityScoreFactors {
-		factors = append(factors, PriorityScoreFactor{
+		factors = append(factors, ufm_helpers.PriorityScoreFactor{
 			Label: f.Label,
 			Type:  f.Type,
 		})
@@ -536,28 +494,4 @@ func intPtr(v int) *int {
 		return nil
 	}
 	return &v
-}
-
-const (
-	MetadataKeyReportURL  = "report-url"
-	MetadataKeyProjectID  = "projectid"
-	MetadataKeySnapshotID = "snapshotid"
-)
-
-func TranslateMetadataToTestResult(resultMetaData *scan.ResultMetaData, result testapi.TestResult, config configuration.Configuration) {
-	if resultMetaData == nil || result == nil {
-		return
-	}
-
-	if len(resultMetaData.WebUiUrl) > 0 {
-		result.SetMetadata(MetadataKeyReportURL, fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl))
-	}
-
-	if len(resultMetaData.ProjectId) > 0 {
-		result.SetMetadata(MetadataKeyProjectID, resultMetaData.ProjectId)
-	}
-
-	if len(resultMetaData.SnapshotId) > 0 {
-		result.SetMetadata(MetadataKeySnapshotID, resultMetaData.SnapshotId)
-	}
 }

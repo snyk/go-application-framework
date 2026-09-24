@@ -134,14 +134,13 @@
 				{{- $problemID := $issue.GetProblemID }}
 				{{- $fingerPrintID := $issue.GetID }}
 				{{- $findingExtra := getFindingExtraFromIssue $issue $result }}
-				{{- $policyMods := getPolicyModificationsFromIssue $issue }}
 				{{- $execFlows := getExecutionFlowsFromIssue $issue }}
 				{
 					"ruleId": {{ getQuotedString $problemID }},
 					{{- if $findingExtra }}
 					"ruleIndex": {{ index $ruleIndexes $problemID }},
 					{{- end }}
-					"level": {{ getQuotedString (severityToSarifLevel $issue.GetEffectiveSeverity) }},
+					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
 					"message": {
 						{{- if and $findingExtra (or $findingExtra.MessageText $findingExtra.MessageMarkdown) }}
 						{{- if $findingExtra.MessageText }}
@@ -400,7 +399,6 @@
 						{{- end }}
 					]
 					{{- end }}
-					{{- $riskScore := $issue.GetRiskScore }}
 					{{- if $findingExtra }},
 					"properties": {
 						"isAutofixable": {{ $findingExtra.IsAutofixable }},
@@ -417,7 +415,7 @@
 							{{- end }}
 						},
 						{{- end }}
-						"priorityScore": {{ $riskScore }},
+						"priorityScore": {{ $issue.GetRiskScore }},
 						"priorityScoreFactors": [
 						{{- if $findingExtra.PriorityScoreFactors }}
 						{{- $factorSize := sub (len $findingExtra.PriorityScoreFactors) 1 }}
@@ -430,28 +428,19 @@
 						{{- end }}
 						]
 					}
-					{{- else if or $policyMods (gt (int $riskScore) 0) }},
-					"properties": {
-						{{- if $policyMods }}
-						"snykPolicy/v1": {
-							"reason": {{ getQuotedString (joinPolicyModificationReasons $policyMods) }}
-						}{{if gt (int $riskScore) 0}},{{end}}
-						{{- end }}
-						{{- if gt (int $riskScore) 0 }}
-						"priorityScore": {{ $riskScore }}
-						{{- end }}
-					}
 					{{- end }}
 				}{{if lt $index $issuesSize}},{{end}}
 				{{- end }}
 			],
-				{{- $coverage := getCoverageFromTestResult $result }}
+				{{- $isCode := eq (printf "%s" $findingType) "sast" }}
 				{{- $reportURL := index $metadata "report-url" }}
+				{{- if or $isCode $reportURL }}
 				"properties": {
+					{{- if $isCode }}
 					"coverage": [
-						{{- $coverageSlice := $coverage }}
-						{{- $covSize := sub (len $coverageSlice) 1 }}
-						{{- range $covIndex, $cov := $coverageSlice }}
+						{{- $coverage := getCoverageFromTestResult $result }}
+						{{- $covSize := sub (len $coverage) 1 }}
+						{{- range $covIndex, $cov := $coverage }}
 						{
 							"files": {{ $cov.Files }},
 							"isSupported": {{ $cov.IsSupported }},
@@ -460,7 +449,8 @@
 						}{{if lt $covIndex $covSize}},{{end}}
 						{{- end }}
 					]
-					{{- if $reportURL }},{{end}}
+					{{- end }}
+					{{- if and $isCode $reportURL }},{{end}}
 					{{- if $reportURL }}
 					{{- $projectId := index $metadata "projectid" }}
 					{{- $snapshotId := index $metadata "snapshotid" }}
@@ -475,9 +465,11 @@
 					}
 					{{- end }}
 				},
+				{{- end }}
 				"automationDetails": {
 					{{- $projectName := or (index $metadata "project-name") "" }}
-					{{- if not $projectName }} {{- $projectName = printf "%d" $resultIndex }} {{- end }}
+					{{- if $isCode }} {{- $projectName = or $projectName (getValueFromConfig "project-name") }}
+					{{- else if not $projectName }} {{- $projectName = printf "%d" $resultIndex }} {{- end }}
 					"id": {{- getQuotedString (getAutomationDetailsId $projectName (printf "%s" $findingType)) }}
 				}
 			}{{if (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}
