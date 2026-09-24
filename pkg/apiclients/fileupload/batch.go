@@ -109,9 +109,13 @@ func createUploadFile(
 
 	relPath = encodePath(relPath)
 
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewSpecialFileError(relPath, info.Mode())}
 	}
 
 	// Reading a device file would never return, so this has to be decided before the read.
