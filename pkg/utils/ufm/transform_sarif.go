@@ -64,7 +64,7 @@ func TransformToUFMFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_sc
 
 // mapUFMFindings converts every SARIF result into a finding; an empty allowedSeverities keeps all of them.
 func mapUFMFindings(sarifDoc *sarif.SarifDocument, allowedSeverities []string) ([]testapi.FindingData, map[string]interface{}, error) {
-	if len(sarifDoc.Runs) == 0 {
+	if sarifDoc == nil || len(sarifDoc.Runs) == 0 {
 		return []testapi.FindingData{}, nil, nil
 	}
 
