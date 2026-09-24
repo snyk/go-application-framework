@@ -1,133 +1,107 @@
 package contributor_capture
 
 import (
-	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"strings"
 )
 
-// parseCreateTestPublishReport reports whether a CreateTest request body asked for
-// publish_report, and whether the body was read successfully.
-func parseCreateTestPublishReport(body []byte) (report bool, known bool) {
-	// Try legacy format first (OSS/IaC/SCA)
-	var legacyReq struct {
-		Data struct {
-			Attributes struct {
-				Config struct {
-					PublishReport bool `json:"publish_report"`
-					Monitor       bool `json:"monitor"`
-				} `json:"config"`
-			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &legacyReq); err == nil {
-		cfg := legacyReq.Data.Attributes.Config
-		if cfg.Monitor {
-			return false, true
-		}
-		if cfg.PublishReport {
-			return true, true
-		}
-	}
-
-	// Try new format (Code API)
-	var newReq struct {
-		Data struct {
-			Attributes struct {
-				Configuration struct {
-					Output struct {
-						Report bool `json:"report"`
-					} `json:"output"`
-				} `json:"configuration"`
-			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &newReq); err == nil {
-		return newReq.Data.Attributes.Configuration.Output.Report, true
-	}
-
-	return false, false
-}
-
-// parseCreateTestID extracts the test ID from a successful CreateTest response.
-func parseCreateTestID(body []byte) string {
-	var resp struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return ""
-	}
-	return parseUUID(resp.Data.ID)
-}
-
-// parseAIBomUploadRevisionID extracts the upload revision ID from an AI-BOM upload request body.
-func parseAIBomUploadRevisionID(body []byte) string {
-	var req struct {
-		Data struct {
-			Attributes struct {
-				UploadRevisionID string `json:"upload_revision_id"`
-			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		return ""
-	}
-	return parseUUID(req.Data.Attributes.UploadRevisionID)
-}
-
-// parseMonitorProjectID extracts a project ID from a monitor/monitor-dependencies response.
-func parseMonitorProjectID(body []byte) string {
-	var resp struct {
-		URI string `json:"uri"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return ""
-	}
-	return projectIDFromMonitorURI(resp.URI)
-}
-
-// parseIaCShareProjectIDs extracts project IDs from an iac-cli-share-results response.
-func parseIaCShareProjectIDs(body []byte) []string {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(body, &raw); err != nil {
+// responseExtractorFor returns the extractor for the entity a response of this
+// kind carries, or nil for a kind whose entity comes from the request.
+func responseExtractorFor(kind endpointKind) bodyExtractor {
+	switch kind {
+	case endpointRegistryMonitor:
+		return extractMonitorProjectID
+	case endpointRegistryIaCShare:
+		return extractIaCShareProjectID
+	case endpointDeeproxyReport:
+		return extractDeeproxyReportProjectID
+	case endpointTestComponents:
+		return extractComponentsProjectID
+	case endpointTestCreate:
+		return extractCreateTestID
+	default:
 		return nil
 	}
-
-	seen := make(map[string]struct{})
-	var projectIDs []string
-
-	for key, value := range raw {
-		// Skip metadata keys
-		if _, isMetadata := map[string]struct{}{"ok": {}, "meta": {}}[strings.ToLower(key)]; isMetadata {
-			continue
-		}
-
-		var projectID string
-		if err := json.Unmarshal(value, &projectID); err != nil {
-			continue
-		}
-
-		projectID = strings.TrimSpace(projectID)
-		if projectID = parseUUID(projectID); projectID == "" {
-			continue
-		}
-
-		if _, exists := seen[projectID]; exists {
-			continue
-		}
-		seen[projectID] = struct{}{}
-		projectIDs = append(projectIDs, projectID)
-	}
-
-	return projectIDs
 }
 
-// parseComponentsProjectID extracts the project ID from a successful SAST component in a GetComponents response.
-func parseComponentsProjectID(body []byte) string {
-	var resp struct {
-		Data []struct {
+// extractMonitorProjectID reads the project ID from a monitor response, whose
+// uri field is serialized after licensesPolicy and so can sit megabytes in.
+func extractMonitorProjectID(r io.Reader) (string, error) {
+	uri, err := findStringField(json.NewDecoder(r), "uri")
+	if err != nil {
+		return "", err
+	}
+	return projectIDFromMonitorURI(uri), nil
+}
+
+// extractIaCShareProjectID reads the first project ID from an
+// iac-cli-share-results response, whose keys are project names. One invocation
+// reports one entity, so the first is enough.
+func extractIaCShareProjectID(r io.Reader) (string, error) {
+	var projectID string
+
+	dec := json.NewDecoder(r)
+	err := eachKey(dec, func(key string) (bool, error) {
+		if isIaCShareMetadataKey(key) {
+			return false, skipValue(dec)
+		}
+
+		value, isString, err := nextStringValue(dec)
+		if err != nil || !isString {
+			return false, err
+		}
+
+		projectID = parseUUID(value)
+		return projectID != "", nil
+	})
+
+	return projectID, err
+}
+
+func isIaCShareMetadataKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "ok", "meta":
+		return true
+	default:
+		return false
+	}
+}
+
+// extractCreateTestID reads the test ID from a create test response.
+func extractCreateTestID(r io.Reader) (string, error) {
+	id, err := findStringField(json.NewDecoder(r), "data", "id")
+	if err != nil {
+		return "", err
+	}
+	return parseUUID(id), nil
+}
+
+// extractComponentsProjectID reads the project ID of the first successful SAST
+// component of a components response.
+func extractComponentsProjectID(r io.Reader) (string, error) {
+	var projectID string
+
+	dec := json.NewDecoder(r)
+	err := walkTo(dec, []string{"data"}, func() error {
+		id, err := firstSastProjectID(dec)
+		projectID = id
+		return err
+	})
+
+	return projectID, err
+}
+
+// firstSastProjectID scans a components array for the first successful SAST
+// component. Components are decoded one at a time, so only one is ever held.
+func firstSastProjectID(dec *json.Decoder) (string, error) {
+	if err := expectDelim(dec, '['); err != nil {
+		return "", err
+	}
+
+	for dec.More() {
+		var component struct {
 			Attributes struct {
 				Type    string `json:"type"`
 				Success bool   `json:"success"`
@@ -135,80 +109,113 @@ func parseComponentsProjectID(body []byte) string {
 					ProjectID string `json:"project_id"`
 				} `json:"webui"`
 			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return ""
-	}
+		}
+		if err := dec.Decode(&component); err != nil {
+			return "", err
+		}
 
-	for _, item := range resp.Data {
-		if !strings.EqualFold(item.Attributes.Type, "sast") || !item.Attributes.Success {
+		if !strings.EqualFold(component.Attributes.Type, "sast") || !component.Attributes.Success {
 			continue
 		}
-		if projectID := parseUUID(item.Attributes.Webui.ProjectID); projectID != "" {
-			return projectID
+		if projectID := parseUUID(component.Attributes.Webui.ProjectID); projectID != "" {
+			return projectID, nil
 		}
 	}
-	return ""
+
+	return "", nil
 }
 
-// parseDeeproxyReportProjectID extracts a project ID from a legacy Code deeproxy
-// report response. It handles truncated JSON, as long as the project ID and the
-// surrounding object are present.
-func parseDeeproxyReportProjectID(body []byte) string {
-	dec := json.NewDecoder(bytes.NewReader(body))
-	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
-		return ""
+// extractDeeproxyReportProjectID reads the project ID from a legacy Code
+// deeproxy report response, which arrives gzipped.
+func extractDeeproxyReportProjectID(r io.Reader) (string, error) {
+	reader, err := gzip.NewReader(r)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	projectID, err := findStringField(json.NewDecoder(reader), "uploadResult", "projectId")
+	if err != nil {
+		return "", err
+	}
+	return parseUUID(projectID), nil
+}
+
+// extractAIBomUploadRevisionID reads the revision ID from an AI-BOM upload
+// request, whose remainder is the document being uploaded.
+func extractAIBomUploadRevisionID(r io.Reader) (string, error) {
+	revisionID, err := findStringField(json.NewDecoder(r), "data", "attributes", "upload_revision_id")
+	if err != nil {
+		return "", err
+	}
+	return parseUUID(revisionID), nil
+}
+
+// createTestReport is what a create test request says about publishing: whether
+// it asks for a report, and whether the request could be read to tell.
+type createTestReport struct {
+	report bool
+	known  bool
+}
+
+// extractCreateTestReport reports whether a create test request asks for a
+// report. Two request shapes are in use - the legacy config block and the Code
+// API's configuration block - so one pass watches for both.
+func extractCreateTestReport(r io.Reader) (createTestReport, error) {
+	var legacy struct {
+		PublishReport bool `json:"publish_report"`
+		Monitor       bool `json:"monitor"`
+	}
+	var current struct {
+		Output struct {
+			Report bool `json:"report"`
+		} `json:"output"`
 	}
 
-	for {
-		tok, err := dec.Token()
-		key, isKey := tok.(string)
-		if err != nil || !isKey {
-			return ""
-		}
-
-		if key != "uploadResult" {
-			var skipped json.RawMessage
-			if err := dec.Decode(&skipped); err != nil {
-				return ""
+	dec := json.NewDecoder(r)
+	err := walkTo(dec, []string{"data", "attributes"}, func() error {
+		return eachKey(dec, func(key string) (bool, error) {
+			switch key {
+			case "config":
+				return false, dec.Decode(&legacy)
+			case "configuration":
+				return false, dec.Decode(&current)
+			default:
+				return false, skipValue(dec)
 			}
-			continue
-		}
-
-		var uploadResult struct {
-			ProjectID string `json:"projectId"`
-		}
-		if err := dec.Decode(&uploadResult); err != nil {
-			return ""
-		}
-		return parseUUID(uploadResult.ProjectID)
+		})
+	})
+	if err != nil {
+		return createTestReport{}, err
 	}
+
+	report := current.Output.Report
+	switch {
+	case legacy.Monitor:
+		report = false
+	case legacy.PublishReport:
+		report = true
+	}
+
+	return createTestReport{report: report, known: true}, nil
 }
 
-// projectIDFromMonitorURI extracts a project ID from a monitor API response URI.
-// Handles URIs like https://app.snyk.io/org/{org}/project/{uuid}/history/{id}.
+// projectIDFromMonitorURI extracts a project ID from a monitor API response
+// URI, of the form https://app.snyk.io/org/{org}/project/{uuid}/history/{id}.
 func projectIDFromMonitorURI(uri string) string {
-	if uri == "" {
-		return ""
-	}
-
 	const projectPrefix = "/project/"
 	idx := strings.Index(uri, projectPrefix)
 	if idx < 0 {
 		return ""
 	}
 
-	uuidStart := idx + len(projectPrefix)
-	if uuidStart+36 > len(uri) {
+	start := idx + len(projectPrefix)
+	if start+uuidLen > len(uri) {
+		return ""
+	}
+	if start+uuidLen < len(uri) && uri[start+uuidLen] != '/' {
 		return ""
 	}
 
-	// Verify UUID is followed by / or end of string
-	uuidCandidate := uri[uuidStart : uuidStart+36]
-	if uuidStart+36 < len(uri) && uri[uuidStart+36] != '/' {
-		return ""
-	}
-
-	return parseUUID(uuidCandidate)
+	return parseUUID(uri[start : start+uuidLen])
 }

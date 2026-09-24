@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -169,13 +170,18 @@ func recordAuthor(latest map[string]contributors_ingest.Contributor, commit *obj
 // descriptor to avoid reopening the packfile for every object read.
 //
 // A linked worktree, whose own git directory holds neither objects nor refs, is
-// read through the common directory of the repository it belongs to.
+// read through the common directory of the repository it belongs to. A
+// repository go-git rejects for the extensions it declares is opened through
+// openRepositoryIgnoringExtensions instead.
 //
 // Callers must call the returned close func once done with the repository.
 func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 	noopClose := func() error { return nil }
 
 	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+	if gitExtensionsRejected(err) {
+		return openRepositoryIgnoringExtensions(path)
+	}
 	if err != nil {
 		return nil, noopClose, err
 	}
@@ -199,12 +205,134 @@ func openRepositoryFast(path string) (*git.Repository, func() error, error) {
 
 	st := filesystem.NewStorageWithOptions(repositoryFilesystem(gitDir), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
 
-	fast, err := git.Open(st, wtFs)
+	fast, err := git.Open(extensionTolerantStorage{st}, wtFs)
 	if err != nil {
 		_ = st.Close()
 		return repo, noopClose, nil //nolint:nilerr // use the slow repo if our fast open fails
 	}
 	return fast, st.Close, nil
+}
+
+// gitExtensionsRejected reports whether err is go-git refusing to open a
+// repository because of an extension its config declares. go-git lowercases an
+// extension name before matching it against an allow list of camelCase names,
+// so worktreeConfig, partialClone and preciousObjects - all of which git itself
+// permits at repository format version 0 - are rejected. Azure Pipelines
+// enables worktreeConfig on every checkout, so this is the common case in CI
+// rather than an edge case.
+func gitExtensionsRejected(err error) bool {
+	return errors.Is(err, git.ErrUnsupportedExtensionRepositoryFormatVersion) ||
+		errors.Is(err, git.ErrUnknownExtension)
+}
+
+// openRepositoryIgnoringExtensions opens the repository at path with the
+// extensions section of its config ignored. Only objects and refs are read from
+// it, which no extension changes, so ignoring the section cannot change what is
+// collected.
+//
+// Callers must call the returned close func once done with the repository.
+func openRepositoryIgnoringExtensions(path string) (*git.Repository, func() error, error) {
+	noopClose := func() error { return nil }
+
+	gitDir, worktreeRoot, err := detectGitDir(path)
+	if err != nil {
+		return nil, noopClose, err
+	}
+
+	var wtFs billy.Filesystem
+	if worktreeRoot != "" {
+		wtFs = osfs.New(worktreeRoot, osfs.WithBoundOS())
+	}
+
+	st := filesystem.NewStorageWithOptions(repositoryFilesystem(gitDir), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
+	repo, err := git.Open(extensionTolerantStorage{st}, wtFs)
+	if err != nil {
+		_ = st.Close()
+		return nil, noopClose, err
+	}
+
+	return repo, st.Close, nil
+}
+
+// extensionTolerantStorage reports the repository config with its extensions
+// section removed, leaving go-git's extension check nothing to reject.
+type extensionTolerantStorage struct {
+	*filesystem.Storage
+}
+
+func (s extensionTolerantStorage) Config() (*gitconfig.Config, error) {
+	cfg, err := s.Storage.Config()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Raw != nil {
+		cfg.Raw.RemoveSection("extensions")
+	}
+	return cfg, nil
+}
+
+// detectGitDir finds the git directory governing path the way
+// git.PlainOpenWithOptions with DetectDotGit does, returning it together with
+// the root of its worktree, which is empty for a bare repository. It is needed
+// because that discovery is what go-git's extension check rejects, so the git
+// directory has to be located without it.
+func detectGitDir(path string) (gitDir, worktreeRoot string, err error) {
+	dir, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", err
+	}
+
+	for {
+		dotGit := filepath.Join(dir, ".git")
+		info, statErr := os.Stat(dotGit)
+		switch {
+		case statErr == nil && info.IsDir():
+			return dotGit, dir, nil
+		case statErr == nil:
+			// A linked worktree and a submodule have a .git file pointing at
+			// the git directory holding their refs.
+			resolved, readErr := gitDirFromFile(dotGit, dir)
+			if readErr != nil {
+				return "", "", readErr
+			}
+			return resolved, dir, nil
+		case isGitDir(dir):
+			return dir, "", nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", git.ErrRepositoryNotExists
+		}
+		dir = parent
+	}
+}
+
+func gitDirFromFile(dotGitFile, dir string) (string, error) {
+	content, err := os.ReadFile(dotGitFile) //nolint:gosec // path derived from the directory being scanned
+	if err != nil {
+		return "", err
+	}
+
+	target := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(content)), "gitdir:"))
+	if target == "" {
+		return "", git.ErrRepositoryNotExists
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(dir, target)
+	}
+	return target, nil
+}
+
+// isGitDir reports whether dir is itself a git directory, as a bare
+// repository's is.
+func isGitDir(dir string) bool {
+	for _, entry := range []string{"HEAD", "objects", "refs"} {
+		if _, err := os.Stat(filepath.Join(dir, entry)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // repositoryFilesystem returns the filesystem holding the objects and refs of
