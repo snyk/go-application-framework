@@ -117,7 +117,7 @@ func (j *jsonTestResult) GetErrors() *[]testapi.IoSnykApiCommonError {
 }
 
 // GetError returns a single combined error summarizing GetErrors.
-func (j *jsonTestResult) GetError() error { return testapi.SummarizeErrors(j.Errors) }
+func (j *jsonTestResult) GetError() error { return testapi.JoinErrors(j.Errors) }
 
 // GetWarnings returns any warnings encountered during test execution.
 func (j *jsonTestResult) GetWarnings() *[]testapi.IoSnykApiCommonError {
