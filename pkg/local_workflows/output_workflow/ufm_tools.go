@@ -110,10 +110,6 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 			mimetype:  HTML_MIME_TYPE,
 			templates: presenters.ApplicationHTMLTemplatesUfm,
 		},
-		{
-			mimetype:  TOON_MIME_TYPE,
-			templates: presenters.ApplicationTOONTemplatesUfm,
-		},
 	}
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
