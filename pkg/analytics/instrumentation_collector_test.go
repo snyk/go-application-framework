@@ -327,6 +327,43 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
+	t.Run("it should never redact a hardcoded unredactable extension key", func(t *testing.T) {
+		// terms below are all substrings of the enum label added below, which must survive intact.
+		for _, terms := range [][]string{
+			{"request"},
+			{"relevant"},
+			{"relevant", "request"},
+			{"no_relevant_request"},
+			{"no"},
+		} {
+			t.Run(fmt.Sprintf("terms=%v", terms), func(t *testing.T) {
+				ic := setupBaseCollector(t)
+				expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+				cfg := configuration.NewInMemory()
+				cfg.Set(logging.REDACTION_TERMS, terms)
+
+				ic.AddExtension("contributors.collection_result", "no_relevant_request")
+
+				mockExtension := map[string]interface{}{
+					"strings":                        "hello world",
+					"contributors.collection_result": "no_relevant_request",
+				}
+
+				expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+				actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(cfg))
+				assert.NoError(t, err)
+				expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+				assert.NoError(t, err)
+				actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+				assert.NoError(t, err)
+
+				assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+			})
+		}
+	})
+
 	t.Run("it should not corrupt sibling fields when a short-form-keyed extension value is a nested object", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
