@@ -2,7 +2,9 @@ package testapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -436,6 +438,67 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 		// Verify sorting by ID
 		assert.Equal(t, "sca-issue-1", issues[0].GetID())
 		assert.Equal(t, "sca-issue-2", issues[1].GetID())
+	})
+
+	t.Run("sorts issues by ID when no finding type filter is given", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		var findings []testapi.FindingData
+		for _, key := range []string{"issue-3", "issue-1", "issue-2"} {
+			findings = append(findings, testapi.FindingData{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         key,
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			})
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, nil)
+		require.NoError(t, err)
+		require.Len(t, issues, 3)
+		assert.Equal(t, "issue-1", issues[0].GetID())
+		assert.Equal(t, "issue-2", issues[1].GetID())
+		assert.Equal(t, "issue-3", issues[2].GetID())
+	})
+
+	t.Run("groups issues of the same rule together", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		codeFinding := func(key, ruleID string) testapi.FindingData {
+			raw := fmt.Sprintf(`{
+				"attributes": {
+					"finding_type": "sast",
+					"key": %q,
+					"problems": [{"source": "snyk_code_rule", "id": %q}]
+				}
+			}`, key, ruleID)
+			var finding testapi.FindingData
+			require.NoError(t, json.Unmarshal([]byte(raw), &finding))
+			return finding
+		}
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			codeFinding("key-1", "rule-b"),
+			codeFinding("key-2", "rule-a"),
+			codeFinding("key-3", "rule-b"),
+		}
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, nil)
+		require.NoError(t, err)
+
+		var got []string
+		for _, issue := range issues {
+			got = append(got, issue.GetProblemID()+"/"+issue.GetID())
+		}
+		assert.Equal(t, []string{"rule-a/key-2", "rule-b/key-1", "rule-b/key-3"}, got)
 	})
 
 	t.Run("returns empty slice when no issues match finding type", func(t *testing.T) {

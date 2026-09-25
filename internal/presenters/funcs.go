@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"html"
 	htmlTemplate "html/template"
@@ -281,6 +280,14 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildLocationsFromIssue"] = sarif.BuildLocations
 	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
+	// UFM data access helpers
+	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
+	fnMap["buildRuleIndexes"] = buildRuleIndexes
+	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
+	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
+	fnMap["getFingerprints"] = getFingerprints
+	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
+	fnMap["derefStr"] = derefStr
 	return fnMap
 }
 
@@ -343,15 +350,19 @@ func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvid
 	return flows
 }
 
-// findingExtraLocal mirrors finding metadata after a TestResult JSON round trip.
-// Importing pkg/utils/ufm here would create an import cycle.
-type findingExtraLocal struct {
-	Arguments   []string `json:"arguments,omitempty"`
-	MessageText string   `json:"messageText,omitempty"`
+// buildRuleIndexes maps each problem ID to its position in uniqueRules.
+func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
+	indexes := make(map[string]int, len(uniqueRules))
+	for index, issue := range uniqueRules {
+		indexes[issue.GetProblemID()] = index
+	}
+	return indexes
 }
 
-func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) interface{} {
-	extras, ok := testResult.GetMetadataValue("finding-extras").(map[string]interface{})
+// getFindingExtraFromIssue returns the SARIF details the transformation stashed
+// on the test result for one of the issue's findings, or nil when there are none.
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) *ufm_helpers.FindingExtra {
+	extras, ok := testResult.GetMetadataValue(ufm_helpers.MetadataKeyFindingExtras).(map[string]interface{})
 	if !ok {
 		return nil
 	}
@@ -363,54 +374,19 @@ func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult
 		if !found {
 			continue
 		}
-		if value, isMap := extra.(map[string]interface{}); isMap {
-			return findingExtraFromMap(value)
+		if decoded, err := ufm_helpers.DecodeMetadata[ufm_helpers.FindingExtra](extra); err == nil {
+			return &decoded
 		}
-		return extra
 	}
 	return nil
 }
 
-func findingExtraFromMap(value map[string]interface{}) findingExtraLocal {
-	extra := findingExtraLocal{}
-	if arguments, ok := value["arguments"].([]interface{}); ok {
-		extra.Arguments = make([]string, len(arguments))
-		for index, argument := range arguments {
-			extra.Arguments[index] = fmt.Sprintf("%v", argument)
-		}
-	}
-	if messageText, ok := value["messageText"].(string); ok {
-		extra.MessageText = messageText
-	}
-	return extra
-}
-
-type coverageLocal struct {
-	Files       int    `json:"files"`
-	IsSupported bool   `json:"isSupported"`
-	Lang        string `json:"lang"`
-	Type        string `json:"type"`
-}
-
-func getCoverageFromTestResult(testResult testapi.TestResult) interface{} {
-	raw := testResult.GetMetadataValue("coverage")
+func getCoverageFromTestResult(testResult testapi.TestResult) ([]ufm_helpers.Coverage, error) {
+	raw := testResult.GetMetadataValue(ufm_helpers.MetadataKeyCoverage)
 	if raw == nil {
-		return nil
+		return []ufm_helpers.Coverage{}, nil
 	}
-
-	if values, ok := raw.([]interface{}); ok {
-		data, err := json.Marshal(values)
-		if err != nil {
-			return nil
-		}
-		var coverage []coverageLocal
-		if err := json.Unmarshal(data, &coverage); err != nil {
-			return nil
-		}
-		return coverage
-	}
-
-	return raw
+	return ufm_helpers.DecodeMetadata[[]ufm_helpers.Coverage](raw)
 }
 
 func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
@@ -430,6 +406,23 @@ func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem 
 		}
 	}
 	return nil
+}
+
+func getFingerprints(extra *ufm_helpers.FindingExtra, fallbackID string) map[string]string {
+	if extra != nil && len(extra.Fingerprints) > 0 {
+		return extra.Fingerprints
+	}
+	return map[string]string{
+		"identity":              fallbackID,
+		"snyk/asset/finding/v1": fallbackID,
+	}
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 type sourceLineCache struct {
