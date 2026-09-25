@@ -4,14 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -182,6 +187,18 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should send the source of interaction errors", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		ic.AddError(snyk_errors.Error{ErrorCode: "SNYK-CLI-0000", Source: "cliv2/pkg/core/errorhandling.go:37"})
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Contains(t, string(actualV2InstrumentationJson), `"source":"cliv2/pkg/core/errorhandling.go:37"`)
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {
@@ -473,4 +490,29 @@ func buildExpectedBaseObject(t *testing.T) api.AnalyticsRequestBody {
 	}
 
 	return expected
+}
+
+func Test_toInteractionError_CarriesSource(t *testing.T) {
+	withSource := toInteractionError(snyk_errors.Error{ErrorCode: "SNYK-CLI-0000", Source: "cli/main.go:12"})
+	withoutSource := toInteractionError(snyk_errors.Error{ErrorCode: "SNYK-CLI-0000"})
+
+	require.NotNil(t, withSource)
+	require.NotNil(t, withSource.Source)
+	assert.Equal(t, "cli/main.go:12", *withSource.Source)
+	require.NotNil(t, withoutSource)
+	assert.Nil(t, withoutSource.Source)
+}
+
+func newGeneralCLIFailureErrorViaHelper() snyk_errors.Error {
+	return cli.NewGeneralCLIFailureError("")
+}
+
+func Test_GeneratedErrorConstructor_RecordsCallerAsSource(t *testing.T) {
+	_, file, line, _ := runtime.Caller(0)
+	direct := cli.NewGeneralCLIFailureError("", snyk_errors.WithMeta("key", "value"))
+	viaHelper := newGeneralCLIFailureErrorViaHelper()
+
+	assert.Equal(t, file+":"+strconv.Itoa(line+1), direct.Source)
+	assert.Regexp(t, `instrumentation_collector_test\.go:\d+$`, viaHelper.Source)
+	assert.NotEqual(t, direct.Source, viaHelper.Source)
 }

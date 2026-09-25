@@ -142,6 +142,9 @@ type InteractionError struct {
 	//
 	// `https://docs.snyk.io/scan-with-snyk/error-catalog`
 	Id string `json:"id"`
+
+	// Source Where in the client's source code the error was built, as `path/to/file.ext:line`.
+	Source *string `json:"source,omitempty"`
 }
 
 // JsonApi defines model for JsonApi.

@@ -130,3 +130,5 @@ tool (
 )
 
 //replace github.com/snyk/code-client-go => ../code-client-go
+
+replace github.com/snyk/error-catalog-golang-public => ../error-catalog-golang-public

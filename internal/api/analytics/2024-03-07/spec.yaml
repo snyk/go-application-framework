@@ -309,6 +309,11 @@ components:
         code:
           type: string
           description: The HTTP specific error code.
+        # TODO(CLI-1875): source format not decided yet (plain path vs URI), agree with the errors extension plan.
+        source:
+          type: string
+          description: |
+            Where in the client's source code the error was built, as `path/to/file.ext:line`.
 
     Application:
       type: object

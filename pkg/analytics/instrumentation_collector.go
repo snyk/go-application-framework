@@ -387,6 +387,9 @@ func toInteractionError(e error) *api.InteractionError {
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
 		interactionError.Id = errorCatalogError.ErrorCode
 		interactionError.Code = &interactionErrorCode
+		if errorCatalogError.Source != "" {
+			interactionError.Source = &errorCatalogError.Source
+		}
 	}
 
 	return interactionError
