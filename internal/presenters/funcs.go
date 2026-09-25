@@ -254,112 +254,6 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
-func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
-	var flows []testapi.ExecutionFlowEvidence
-	for _, finding := range issue.GetFindings() {
-		if finding.Attributes == nil {
-			continue
-		}
-		for _, ev := range finding.Attributes.Evidence {
-			discriminator, err := ev.Discriminator()
-			if err != nil || discriminator != "execution_flow" {
-				continue
-			}
-			execFlow, err := ev.AsExecutionFlowEvidence()
-			if err == nil {
-				flows = append(flows, execFlow)
-			}
-		}
-	}
-	return flows
-}
-
-// buildRuleIndexes maps each problem ID to its position in uniqueRules.
-func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
-	indexes := make(map[string]int, len(uniqueRules))
-	for index, issue := range uniqueRules {
-		indexes[issue.GetProblemID()] = index
-	}
-	return indexes
-}
-
-// getFindingExtraFromIssue returns the SARIF details the transformation stashed
-// on the test result for one of the issue's findings, or nil when there are none.
-func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) *ufm_helpers.FindingExtra {
-	extras, ok := testResult.GetMetadataValue(ufm_helpers.MetadataKeyFindingExtras).(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	for _, finding := range issue.GetFindings() {
-		if finding.Id == nil {
-			continue
-		}
-		extra, found := extras[finding.Id.String()]
-		if !found {
-			continue
-		}
-		if decoded, err := ufm_helpers.DecodeMetadata[ufm_helpers.FindingExtra](extra); err == nil {
-			return &decoded
-		}
-	}
-	return nil
-}
-
-func getCoverageFromTestResult(testResult testapi.TestResult) ([]ufm_helpers.Coverage, error) {
-	raw := testResult.GetMetadataValue(ufm_helpers.MetadataKeyCoverage)
-	if raw == nil {
-		return []ufm_helpers.Coverage{}, nil
-	}
-	return ufm_helpers.DecodeMetadata[[]ufm_helpers.Coverage](raw)
-}
-
-func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
-	for _, finding := range issue.GetFindings() {
-		if finding.Attributes == nil {
-			continue
-		}
-		for _, p := range finding.Attributes.Problems {
-			disc, err := p.Discriminator()
-			if err != nil || disc != "snyk_code_rule" {
-				continue
-			}
-			rule, err := p.AsSnykCodeRuleProblem()
-			if err == nil {
-				return &rule
-			}
-		}
-	}
-	return nil
-}
-
-func fingerprintsJSON(extra *ufm_helpers.FindingExtra, fallbackID string) string {
-	var fps map[string]string
-	if extra != nil {
-		fps = extra.Fingerprints
-	}
-
-	if len(fps) == 0 {
-		fps = map[string]string{
-			"identity":              fallbackID,
-			"snyk/asset/finding/v1": fallbackID,
-		}
-	}
-
-	pairs := make([]string, 0, len(fps))
-	for k, v := range fps {
-		pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(k), strconv.Quote(v)))
-	}
-	slices.Sort(pairs)
-	return strings.Join(pairs, ",\n\t\t\t\t\t\t")
-}
-
-func derefStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
@@ -456,6 +350,112 @@ func getUnionValue(input interface{}) interface{} {
 	}
 
 	return result
+}
+
+func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvidence {
+	var flows []testapi.ExecutionFlowEvidence
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, evidence := range finding.Attributes.Evidence {
+			discriminator, err := evidence.Discriminator()
+			if err != nil || discriminator != "execution_flow" {
+				continue
+			}
+			executionFlow, err := evidence.AsExecutionFlowEvidence()
+			if err == nil {
+				flows = append(flows, executionFlow)
+			}
+		}
+	}
+	return flows
+}
+
+// buildRuleIndexes maps each problem ID to its position in uniqueRules.
+func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
+	indexes := make(map[string]int, len(uniqueRules))
+	for index, issue := range uniqueRules {
+		indexes[issue.GetProblemID()] = index
+	}
+	return indexes
+}
+
+// getFindingExtraFromIssue returns the SARIF details the transformation stashed
+// on the test result for one of the issue's findings, or nil when there are none.
+func getFindingExtraFromIssue(issue testapi.Issue, testResult testapi.TestResult) *ufm_helpers.FindingExtra {
+	extras, ok := testResult.GetMetadataValue(ufm_helpers.MetadataKeyFindingExtras).(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for _, finding := range issue.GetFindings() {
+		if finding.Id == nil {
+			continue
+		}
+		extra, found := extras[finding.Id.String()]
+		if !found {
+			continue
+		}
+		if decoded, err := ufm_helpers.DecodeMetadata[ufm_helpers.FindingExtra](extra); err == nil {
+			return &decoded
+		}
+	}
+	return nil
+}
+
+func getCoverageFromTestResult(testResult testapi.TestResult) ([]ufm_helpers.Coverage, error) {
+	raw := testResult.GetMetadataValue(ufm_helpers.MetadataKeyCoverage)
+	if raw == nil {
+		return []ufm_helpers.Coverage{}, nil
+	}
+	return ufm_helpers.DecodeMetadata[[]ufm_helpers.Coverage](raw)
+}
+
+func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem {
+	for _, finding := range issue.GetFindings() {
+		if finding.Attributes == nil {
+			continue
+		}
+		for _, problem := range finding.Attributes.Problems {
+			discriminator, err := problem.Discriminator()
+			if err != nil || discriminator != "snyk_code_rule" {
+				continue
+			}
+			codeRule, err := problem.AsSnykCodeRuleProblem()
+			if err == nil {
+				return &codeRule
+			}
+		}
+	}
+	return nil
+}
+
+func fingerprintsJSON(extra *ufm_helpers.FindingExtra, fallbackID string) string {
+	var fps map[string]string
+	if extra != nil {
+		fps = extra.Fingerprints
+	}
+
+	if len(fps) == 0 {
+		fps = map[string]string{
+			"identity":              fallbackID,
+			"snyk/asset/finding/v1": fallbackID,
+		}
+	}
+
+	pairs := make([]string, 0, len(fps))
+	for k, v := range fps {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(k), strconv.Quote(v)))
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, ",\n\t\t\t\t\t\t")
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 type sourceLineCache struct {
