@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/machineid"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
@@ -411,6 +412,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
 	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
+	config.AddDefaultValue(configuration.MACHINE_ID, machineid.Resolve())
 
 	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
 		pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX:   "clientFileFilterGitignore_MetaCharFix",
