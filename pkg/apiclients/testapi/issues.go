@@ -975,8 +975,11 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 		return []Issue{}, err
 	}
 
-	// Sort by ID for deterministic output
+	// Sort by problem ID, then ID, so issues of the same rule stay together and output is deterministic
 	slices.SortFunc(issuesList, func(a, b Issue) int {
+		if c := strings.Compare(a.GetProblemID(), b.GetProblemID()); c != 0 {
+			return c
+		}
 		return strings.Compare(a.GetID(), b.GetID())
 	})
 
