@@ -70,6 +70,7 @@ func (s *sarifTestResult) GetExecutionState() testapi.TestExecutionStates {
 	return testapi.TestExecutionStatesFinished
 }
 func (s *sarifTestResult) GetErrors() *[]testapi.IoSnykApiCommonError   { return nil }
+func (s *sarifTestResult) GetError() error                              { return nil }
 func (s *sarifTestResult) GetWarnings() *[]testapi.IoSnykApiCommonError { return nil }
 func (s *sarifTestResult) GetPassFail() *testapi.PassFail               { return nil }
 func (s *sarifTestResult) GetOutcomeReason() *testapi.TestOutcomeReason { return nil }
