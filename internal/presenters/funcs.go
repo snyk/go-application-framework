@@ -286,7 +286,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildRuleIndexes"] = buildRuleIndexes
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
-	fnMap["fingerprintsJSON"] = fingerprintsJSON
+	fnMap["getFingerprints"] = getFingerprints
 	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
 	fnMap["derefStr"] = derefStr
 	return fnMap
@@ -430,25 +430,14 @@ func getSnykCodeRuleFromIssue(issue testapi.Issue) *testapi.SnykCodeRuleProblem 
 	return nil
 }
 
-func fingerprintsJSON(extra *ufm_helpers.FindingExtra, fallbackID string) string {
-	var fps map[string]string
-	if extra != nil {
-		fps = extra.Fingerprints
+func getFingerprints(extra *ufm_helpers.FindingExtra, fallbackID string) map[string]string {
+	if extra != nil && len(extra.Fingerprints) > 0 {
+		return extra.Fingerprints
 	}
-
-	if len(fps) == 0 {
-		fps = map[string]string{
-			"identity":              fallbackID,
-			"snyk/asset/finding/v1": fallbackID,
-		}
+	return map[string]string{
+		"identity":              fallbackID,
+		"snyk/asset/finding/v1": fallbackID,
 	}
-
-	pairs := make([]string, 0, len(fps))
-	for k, v := range fps {
-		pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(k), strconv.Quote(v)))
-	}
-	slices.Sort(pairs)
-	return strings.Join(pairs, ",\n\t\t\t\t\t\t")
 }
 
 func derefStr(s *string) string {

@@ -215,7 +215,11 @@
 					]
 					{{- if and (ne (printf "%s" $issue.GetFindingType) "sca") (ne (printf "%s" $issue.GetFindingType) "license") }},
 					"fingerprints": {
-						{{ fingerprintsJSON $findingExtra $fingerPrintID }}
+						{{- $firstFingerprint := true }}
+						{{- range $fpKey, $fpValue := getFingerprints $findingExtra $fingerPrintID }}
+						{{- if not $firstFingerprint }},{{ end }}{{ $firstFingerprint = false }}
+						{{ getQuotedString $fpKey }}: {{ getQuotedString $fpValue }}
+						{{- end }}
 					}
 					{{- end }}
 					{{- if $fix }},
