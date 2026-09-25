@@ -35,10 +35,6 @@ var ApplicationHTMLTemplatesUfm = []string{
 	"templates/ufm.html.tmpl",
 }
 
-var ApplicationTOONTemplatesUfm = []string{
-	"templates/ufm.toon.tmpl",
-}
-
 var DefaultTemplateFilesUfm = []string{
 	"templates/ufm.human.tmpl",
 }
@@ -80,15 +76,6 @@ func NewUfmRenderer(results []testapi.TestResult, config configuration.Configura
 				}
 
 				functionMapMimeType := getSarifTemplateFuncMap()
-				return localFindingsTemplate, functionMapMimeType, nil
-			},
-			ApplicationTOONMimeType: func() (*template.Template, template.FuncMap, error) {
-				localFindingsTemplate, err := template.New(ApplicationTOONMimeType).Parse("")
-				if err != nil {
-					return nil, nil, err
-				}
-
-				functionMapMimeType := getToonTemplateFuncMap()
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},

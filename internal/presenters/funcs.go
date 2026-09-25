@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/snyk/go-application-framework/internal/presenters/toon"
 	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -289,27 +288,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["getFingerprints"] = getFingerprints
 	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
 	fnMap["derefStr"] = derefStr
-	return fnMap
-}
-
-func getToonTemplateFuncMap() template.FuncMap {
-	fnMap := template.FuncMap{}
-	fnMap["prepareUFMToon"] = func(results []testapi.TestResult) (any, error) {
-		return toon.PrepareResults(context.Background(), results)
-	}
-	fnMap["toonKind"] = toon.Kind
-	fnMap["toonKey"] = toon.FormatKey
-	fnMap["toonPrimitive"] = toon.FormatPrimitive
-	fnMap["toonAllPrimitive"] = toon.AllPrimitive
-	fnMap["toonTabularFields"] = toon.TabularFields
-	fnMap["toonTabularCells"] = toon.TabularCells
-	fnMap["toonContext"] = func(key string, value any, indent string) any {
-		return struct {
-			Key    string
-			Value  any
-			Indent string
-		}{key, value, indent}
-	}
 	return fnMap
 }
 
