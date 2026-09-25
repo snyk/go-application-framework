@@ -109,6 +109,20 @@ func (mr *MockTestResultMockRecorder) GetEffectiveSummary() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEffectiveSummary", reflect.TypeOf((*MockTestResult)(nil).GetEffectiveSummary))
 }
 
+// GetError mocks base method.
+func (m *MockTestResult) GetError() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetError")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetError indicates an expected call of GetError.
+func (mr *MockTestResultMockRecorder) GetError() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetError", reflect.TypeOf((*MockTestResult)(nil).GetError))
+}
+
 // GetErrors mocks base method.
 func (m *MockTestResult) GetErrors() *[]testapi.IoSnykApiCommonError {
 	m.ctrl.T.Helper()
