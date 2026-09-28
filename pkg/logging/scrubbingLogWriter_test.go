@@ -106,6 +106,39 @@ func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
 	require.Equal(t, "***", string(mockWriter.written), "configured redaction term should be scrubbed")
 }
 
+func TestHeuristicRedactionTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(HEURISTIC_REDACTION_TERMS, []string{"requests", "12345", "caf\u00e9", `quote"term`, "-token-"})
+	dict := GetScrubDictFromConfig(config)
+
+	t.Run("plain text uses identifier boundaries", func(t *testing.T) {
+		input := "requests requests! prerequests requests2 no_relevant_requests \u017crequests requests\u017c \u0661requests requests\u0662 -token- x-token- -token-y"
+		assert.Equal(t, "*** ***! prerequests requests2 no_relevant_requests \u017crequests requests\u017c \u0661requests requests\u0662 *** x-token- -token-y", string(ScrubValue([]byte(input), dict)))
+	})
+
+	t.Run("valid JSON only redacts decoded string values", func(t *testing.T) {
+		input := `{"requests":"requests!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"12345","caf\u00e9":"caf\u00e9!","quoted":"quote\"term"}`
+		expected := `{"requests":"***!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"***","caf\u00e9":"***!","quoted":"***"}`
+		actual := Scrub([]byte(input), dict)
+
+		assert.True(t, json.Valid(actual))
+		assert.Equal(t, expected, string(actual))
+	})
+
+	t.Run("empty term is ignored", func(t *testing.T) {
+		config.Set(HEURISTIC_REDACTION_TERMS, []string{""})
+		assert.Equal(t, "keep", string(ScrubValue([]byte("keep"), GetScrubDictFromConfig(config))))
+	})
+}
+
+func TestExplicitTermsTakePrecedenceOverHeuristicTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"secret-token"})
+	config.Set(HEURISTIC_REDACTION_TERMS, []string{"secret"})
+
+	assert.Equal(t, "credential: ***", string(ScrubValue([]byte("credential: secret-token"), GetScrubDictFromConfig(config))))
+}
+
 // TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity guards the fix for a real corruption
 // path: a consumer that wraps this writer's output in a non-JSON formatter (e.g. zerolog's
 // ConsoleWriter, which decodes the JSON zerolog encodes and re-emits human-readable prose before
@@ -139,8 +172,8 @@ func TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":  {0, regexp.MustCompile("token"), ""},
-		"secret": {0, regexp.MustCompile("secret"), ""},
+		"token":  {regex: regexp.MustCompile("token")},
+		"secret": {regex: regexp.MustCompile("secret")},
 	}
 
 	pattern := "%s for my account, including my %s"
@@ -213,9 +246,9 @@ func TestScrubbingIoWriter(t *testing.T) {
 func TestScrubFunction(t *testing.T) {
 	t.Run("scrub everything in dict", func(t *testing.T) {
 		dict := ScrubbingDict{
-			"secret":       {0, regexp.MustCompile("secret"), ""},
-			"special":      {0, regexp.MustCompile("special"), ""},
-			"be disclosed": {0, regexp.MustCompile("be disclosed"), ""},
+			"secret":       {regex: regexp.MustCompile("secret")},
+			"special":      {regex: regexp.MustCompile("special")},
+			"be disclosed": {regex: regexp.MustCompile("be disclosed")},
 		}
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
@@ -620,8 +653,8 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":    {0, regexp.MustCompile("token"), ""},
-		"password": {0, regexp.MustCompile("password"), ""},
+		"token":    {regex: regexp.MustCompile("token")},
+		"password": {regex: regexp.MustCompile("password")},
 	}
 
 	innerWriter := &mockWriter{
