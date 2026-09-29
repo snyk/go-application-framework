@@ -495,10 +495,12 @@ func redactHeuristicTerm(s, term, replacement string) string {
 		}
 		matchStart := search + idx
 		matchEnd := matchStart + len(term)
-		search = matchEnd
 		if hasIdentifierNeighbor(s, matchStart, matchEnd) {
+			// a rejected match may overlap the next valid ("a-a" in "xa-a-a")
+			search = matchStart + 1
 			continue
 		}
+		search = matchEnd
 		builder.WriteString(s[end:matchStart])
 		builder.WriteString(replacement)
 		end = matchEnd

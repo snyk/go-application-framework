@@ -139,6 +139,55 @@ func TestExplicitTermsTakePrecedenceOverHeuristicTerms(t *testing.T) {
 	assert.Equal(t, "credential: ***", string(ScrubValue([]byte("credential: secret-token"), GetScrubDictFromConfig(config))))
 }
 
+func TestRedactHeuristicTerm(t *testing.T) {
+	tests := map[string]struct{ term, input, expected string }{
+		"whole input":                   {"requests", "requests", "***"},
+		"start and end":                 {"requests", "requests x requests", "*** x ***"},
+		"adjacent hits share separator": {"requests", "requests requests requests", "*** *** ***"},
+		"punctuation is a boundary":     {"requests", "-requests. (requests)/requests", "-***. (***)/***"},
+		"letter neighbor":               {"requests", "prerequests requestsX", "prerequests requestsX"},
+		"digit neighbor":                {"requests", "1requests requests2", "1requests requests2"},
+		"underscore neighbor":           {"requests", "_requests requests_", "_requests requests_"},
+		"unicode letter neighbor":       {"requests", "\u017crequests requests\u00e9", "\u017crequests requests\u00e9"},
+		"unicode digit neighbor":        {"requests", "\u0661requests", "\u0661requests"},
+		"overlapping candidates":        {"aa", "aaa aa", "aaa ***"},
+		"overlap after rejected match":  {"a-a", "xa-a-a", "xa-***"},
+		"no hit":                        {"requests", "nothing here", "nothing here"},
+		"empty input":                   {"requests", "", ""},
+		"empty term":                    {"", "keep", "keep"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, redactHeuristicTerm(tc.input, tc.term, SANITIZE_REPLACEMENT_STRING))
+		})
+	}
+}
+
+func TestRedactHeuristicJSONValues(t *testing.T) {
+	tests := map[string]struct{ input, expected string }{
+		"key untouched, value redacted":      {`{"requests":"requests"}`, `{"requests":"***"}`},
+		"whitespace before colon":            {"{\n  \"requests\" \t: \"requests\" }", "{\n  \"requests\" \t: \"***\" }"},
+		"siblings and array elements":        {`{"a":"requests","b":["requests","x requests"],"c":{"d":"requests"}}`, `{"a":"***","b":["***","x ***"],"c":{"d":"***"}}`},
+		"top-level string":                   {`"requests"`, `"***"`},
+		"non-string scalars untouched":       {`{"a":12345,"b":true,"c":null}`, `{"a":12345,"b":true,"c":null}`},
+		"escaped quote inside value":         {`{"a":"x \"requests\" y"}`, `{"a":"x \"***\" y"}`},
+		"escaped backslash ends value":       {`{"a":"requests\\"}`, `{"a":"***\\"}`},
+		"unicode escape decodes to term":     {`{"a":"\u0072equests"}`, `{"a":"***"}`},
+		"html chars kept unescaped":          {`{"a":"<requests>&"}`, `{"a":"<***>&"}`},
+		"unchanged value keeps its bytes":    {`{"a":"caf\u00e9 \/ x"}`, `{"a":"caf\u00e9 \/ x"}`},
+		"unterminated string does not panic": {`{"a":"requests`, `{"a":"requests`},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			actual := redactHeuristicJSONValues(tc.input, "requests", SANITIZE_REPLACEMENT_STRING)
+			assert.Equal(t, tc.expected, actual)
+			if json.Valid([]byte(tc.input)) {
+				assert.True(t, json.Valid([]byte(actual)))
+			}
+		})
+	}
+}
+
 // TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity guards the fix for a real corruption
 // path: a consumer that wraps this writer's output in a non-JSON formatter (e.g. zerolog's
 // ConsoleWriter, which decodes the JSON zerolog encodes and re-emits human-readable prose before
