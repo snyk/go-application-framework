@@ -50,6 +50,7 @@ const (
 	//nolint:gosec // not a token value, a configuration key
 	AUTHENTICATION_BEARER_TOKEN    string = "snyk_oauth_token"              // AUTHENTICATION_BEARER_TOKEN (string) sets/returns OAuth access tokens  (normally this value doesn't have to be used directly)
 	AUTHENTICATION_SUBDOMAINS      string = "internal_auth_subdomain"       // AUTHENTICATION_SUBDOMAINS ([]string) array of additional subdomains to add authentication for
+	IDENTITY_MODE                  string = "snyk_identity_mode"            // IDENTITY_MODE (string) selects the identity presented to the API, "user" (default) or "machine"
 	AUTHENTICATION_ADDITIONAL_URLS string = "internal_additional_auth_urls" // AUTHENTICATION_ADDITIONAL_URLS ([]string) array of additional urls to add authentication for
 
 	// ---------

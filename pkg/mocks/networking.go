@@ -185,6 +185,20 @@ func (mr *MockNetworkAccessMockRecorder) GetHttpClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetHttpClient))
 }
 
+// GetHttpClientForIdentity mocks base method.
+func (m *MockNetworkAccess) GetHttpClientForIdentity(mode auth.IdentityMode) *http.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHttpClientForIdentity", mode)
+	ret0, _ := ret[0].(*http.Client)
+	return ret0
+}
+
+// GetHttpClientForIdentity indicates an expected call of GetHttpClientForIdentity.
+func (mr *MockNetworkAccessMockRecorder) GetHttpClientForIdentity(mode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpClientForIdentity", reflect.TypeOf((*MockNetworkAccess)(nil).GetHttpClientForIdentity), mode)
+}
+
 // GetLogger mocks base method.
 func (m *MockNetworkAccess) GetLogger() *zerolog.Logger {
 	m.ctrl.T.Helper()
@@ -197,6 +211,20 @@ func (m *MockNetworkAccess) GetLogger() *zerolog.Logger {
 func (mr *MockNetworkAccessMockRecorder) GetLogger() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogger", reflect.TypeOf((*MockNetworkAccess)(nil).GetLogger))
+}
+
+// GetMachineIdentitySource mocks base method.
+func (m *MockNetworkAccess) GetMachineIdentitySource() auth.MachineIdentitySource {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMachineIdentitySource")
+	ret0, _ := ret[0].(auth.MachineIdentitySource)
+	return ret0
+}
+
+// GetMachineIdentitySource indicates an expected call of GetMachineIdentitySource.
+func (mr *MockNetworkAccessMockRecorder) GetMachineIdentitySource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachineIdentitySource", reflect.TypeOf((*MockNetworkAccess)(nil).GetMachineIdentitySource))
 }
 
 // GetRoundTripper mocks base method.
@@ -261,4 +289,16 @@ func (m *MockNetworkAccess) SetLogger(logger *zerolog.Logger) {
 func (mr *MockNetworkAccessMockRecorder) SetLogger(logger interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockNetworkAccess)(nil).SetLogger), logger)
+}
+
+// SetMachineIdentitySource mocks base method.
+func (m *MockNetworkAccess) SetMachineIdentitySource(source auth.MachineIdentitySource) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetMachineIdentitySource", source)
+}
+
+// SetMachineIdentitySource indicates an expected call of SetMachineIdentitySource.
+func (mr *MockNetworkAccessMockRecorder) SetMachineIdentitySource(source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMachineIdentitySource", reflect.TypeOf((*MockNetworkAccess)(nil).SetMachineIdentitySource), source)
 }

@@ -38,8 +38,40 @@ var (
 	ErrAuthTimedOut = errors.New("authentication failed (timeout)")
 )
 
-func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
+// CreateAuthenticatorOption customizes CreateAuthenticator.
+type CreateAuthenticatorOption func(*createAuthenticatorOptions)
+
+type createAuthenticatorOptions struct {
+	machineSource MachineIdentitySource
+}
+
+// WithMachineIdentitySource makes a machine identity available for selection. It is only used
+// when the identity mode resolves to machine.
+func WithMachineIdentitySource(source MachineIdentitySource) CreateAuthenticatorOption {
+	return func(o *createAuthenticatorOptions) {
+		o.machineSource = source
+	}
+}
+
+// CreateAuthenticator returns the authenticator for the identity mode found in configuration.
+func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client, opts ...CreateAuthenticatorOption) Authenticator {
+	return CreateAuthenticatorForMode(IdentityModeFromConfiguration(config), config, httpClient, opts...)
+}
+
+// CreateAuthenticatorForMode returns the authenticator for an explicit identity mode, which lets a
+// caller pick the machine or the user identity for a single request regardless of configuration.
+func CreateAuthenticatorForMode(mode IdentityMode, config configuration.Configuration, httpClient *http.Client, opts ...CreateAuthenticatorOption) Authenticator {
 	var authenticator Authenticator
+
+	options := createAuthenticatorOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	// machine identity never falls back to user credentials, a missing source is an explicit failure
+	if mode == IdentityModeMachine {
+		return NewMachineIdentityAuthenticator(options.machineSource)
+	}
 
 	// try oauth authenticator
 	tmpAuthenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))

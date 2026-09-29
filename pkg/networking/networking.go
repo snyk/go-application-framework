@@ -49,8 +49,16 @@ type NetworkAccess interface {
 	AddErrorHandler(networktypes.ErrorHandlerFunc)
 	// GetErrorHandler returns the registered error handler.
 	GetErrorHandler() networktypes.ErrorHandlerFunc
-	// GetAuthenticator returns the authenticator.
+	// GetAuthenticator returns the authenticator for the configured identity mode.
 	GetAuthenticator() auth.Authenticator
+	// SetMachineIdentitySource registers the host owned machine identity. It is presented as a TLS
+	// client certificate and a DPoP proof whenever the machine identity mode is selected.
+	SetMachineIdentitySource(source auth.MachineIdentitySource)
+	// GetMachineIdentitySource returns the registered machine identity source, or nil.
+	GetMachineIdentitySource() auth.MachineIdentitySource
+	// GetHttpClientForIdentity returns an authenticated client for one explicit identity mode,
+	// so a caller can act as the machine for one request and as the user for the next.
+	GetHttpClientForIdentity(mode auth.IdentityMode) *http.Client
 	// AddMiddleware registers a middleware wrapping the underlying http.RoundTripper,
 	// outside all internal middleware. Each registration wraps the previous one, so the
 	// last registered is the outermost: it sees a request first and its response last.
@@ -76,6 +84,7 @@ type networkImpl struct {
 	middleware     []networktypes.MiddlewareFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
+	machineSource  auth.MachineIdentitySource
 }
 
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -202,9 +211,13 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 }
 
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
+	return n.getUnauthorizedRoundTripperForIdentity(auth.IdentityModeFromConfiguration(n.config))
+}
+
+func (n *networkImpl) getUnauthorizedRoundTripperForIdentity(mode auth.IdentityMode) http.RoundTripper {
 	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
-	var crt http.RoundTripper = n.configureRoundTripper(transport)
+	var crt http.RoundTripper = n.configureRoundTripperForIdentity(transport, mode)
 
 	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, middleware.WithErrorHandler(n.errorHandler))
 
@@ -226,16 +239,27 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 }
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
-	rt := n.getUnauthorizedRoundTripper()
-	return middleware.NewAuthHeaderMiddlewareWithLogger(n.config, n.GetAuthenticator(), rt, n.logger)
+	return n.getRoundTripperForIdentity(auth.IdentityModeFromConfiguration(n.config))
+}
+
+func (n *networkImpl) getRoundTripperForIdentity(mode auth.IdentityMode) http.RoundTripper {
+	rt := n.getUnauthorizedRoundTripperForIdentity(mode)
+	return middleware.NewAuthHeaderMiddlewareWithLogger(n.config, n.getAuthenticatorForIdentity(mode), rt, n.logger)
 }
 
 func (n *networkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
+	return n.configureRoundTripperForIdentity(base, auth.IdentityModeFromConfiguration(n.config))
+}
+
+func (n *networkImpl) configureRoundTripperForIdentity(base *http.Transport, mode auth.IdentityMode) *http.Transport {
 	// configure insecure
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
 	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
 	transport := base.Clone()
 	transport = middleware.ApplyTlsConfig(transport, insecure, n.caPool)
+	if mode == auth.IdentityModeMachine {
+		transport = middleware.ApplyMachineIdentityTlsConfig(transport, n.machineSource, n.logger)
+	}
 	transport = middleware.ConfigureProxy(transport, n.logger, n.proxy, authenticationMechanism)
 	return transport
 }
@@ -250,6 +274,20 @@ func (n *networkImpl) GetUnauthorizedHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.getUnauthorizedRoundTripper()
 	return &client
+}
+
+func (n *networkImpl) GetHttpClientForIdentity(mode auth.IdentityMode) *http.Client {
+	client := *http.DefaultClient
+	client.Transport = n.getRoundTripperForIdentity(mode)
+	return &client
+}
+
+func (n *networkImpl) SetMachineIdentitySource(source auth.MachineIdentitySource) {
+	n.machineSource = source
+}
+
+func (n *networkImpl) GetMachineIdentitySource() auth.MachineIdentitySource {
+	return n.machineSource
 }
 
 func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
@@ -269,8 +307,13 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 }
 
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
+	return n.getAuthenticatorForIdentity(auth.IdentityModeFromConfiguration(n.config))
+}
+
+func (n *networkImpl) getAuthenticatorForIdentity(mode auth.IdentityMode) auth.Authenticator {
+	// auth requests themselves are never authenticated, and never carry the machine certificate
 	authClient := n.GetUnauthorizedHttpClient()
-	return auth.CreateAuthenticator(n.config, authClient)
+	return auth.CreateAuthenticatorForMode(mode, n.config, authClient, auth.WithMachineIdentitySource(n.machineSource))
 }
 
 func (n *networkImpl) SetLogger(logger *zerolog.Logger) {
@@ -298,6 +341,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
 		middleware:     slices.Clone(n.middleware),
+		machineSource:  n.machineSource,
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {
