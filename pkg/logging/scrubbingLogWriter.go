@@ -466,12 +466,14 @@ func redactHeuristicJSONValues(s, term, replacement string) string {
 		if redacted == value {
 			continue
 		}
-		encoded, err := json.Marshal(redacted)
-		if err != nil {
+		var encoded strings.Builder
+		encoder := json.NewEncoder(&encoded)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(redacted); err != nil {
 			continue
 		}
 		builder.WriteString(s[lastTokenEnd:tokenStart])
-		builder.Write(encoded)
+		builder.WriteString(strings.TrimSuffix(encoded.String(), "\n"))
 		lastTokenEnd = tokenEnd
 	}
 	builder.WriteString(s[lastTokenEnd:])

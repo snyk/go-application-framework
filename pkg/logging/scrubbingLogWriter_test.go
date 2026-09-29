@@ -117,8 +117,8 @@ func TestHeuristicRedactionTerms(t *testing.T) {
 	})
 
 	t.Run("valid JSON only redacts decoded string values", func(t *testing.T) {
-		input := `{"requests":"requests!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"12345","caf\u00e9":"caf\u00e9!","quoted":"quote\"term"}`
-		expected := `{"requests":"***!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"***","caf\u00e9":"***!","quoted":"***"}`
+		input := `{"requests":"requests!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"12345","caf\u00e9":"caf\u00e9!","quoted":"quote\"term","html":"<requests>&"}`
+		expected := `{"requests":"***!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"***","caf\u00e9":"***!","quoted":"***","html":"<***>&"}`
 		actual := Scrub([]byte(input), dict)
 
 		assert.True(t, json.Valid(actual))
