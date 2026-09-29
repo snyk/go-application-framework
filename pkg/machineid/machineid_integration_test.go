@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configtest"
@@ -24,23 +25,7 @@ func TestIntegration_NoStorageResolvesWithoutPersisting(t *testing.T) {
 	require.NoError(t, err)
 	id, ok := value.(string)
 	require.True(t, ok)
-	require.True(t, hasValue(id))
-}
-
-// TestIntegration_EnsurePersistedForcesResolution exercises EnsurePersisted directly, for a
-// consumer that never calls GetWithError on its own (for example a run that emits no analytics).
-func TestIntegration_EnsurePersistedForcesResolution(t *testing.T) {
-	config := newIsolatedConfig(t)
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
-
-	id, err := EnsurePersisted(config)
-	require.NoError(t, err)
-	require.True(t, hasValue(id))
-	require.Equal(t, id, readSnykJSON(t)[configuration.MACHINE_ID])
-
-	again, err := EnsurePersisted(config)
-	require.NoError(t, err)
-	require.Equal(t, id, again)
+	require.True(t, valid(id))
 }
 
 // TestIntegration_SeparateConfigurationsConvergeThroughSharedStorageFile is the acceptance
@@ -65,9 +50,6 @@ func TestIntegration_SeparateConfigurationsConvergeThroughSharedStorageFile(t *t
 	}
 	t.Cleanup(func() { sharedFilePaths = defaultSharedFilePaths })
 
-	osMachineID = func() (string, error) { return "", os.ErrNotExist }
-	t.Cleanup(func() { osMachineID = osidFallback })
-
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
 
@@ -81,9 +63,11 @@ func TestIntegration_SeparateConfigurationsConvergeThroughSharedStorageFile(t *t
 			config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
 			config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
 			value, getErr := config.GetWithError(configuration.MACHINE_ID)
-			require.NoError(t, getErr)
+			if !assert.NoError(t, getErr) {
+				return
+			}
 			id, ok := value.(string)
-			require.True(t, ok)
+			assert.True(t, ok)
 			results[i] = id
 		}(i)
 	}

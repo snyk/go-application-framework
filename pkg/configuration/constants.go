@@ -33,7 +33,7 @@ const (
 	// ---------
 
 	MACHINE_ID        string = "internal_snyk_machine_id"        // MACHINE_ID (string) sets/returns the resolved, persisted machine identifier shared across Snyk products on this machine
-	MACHINE_ID_SOURCE string = "internal_snyk_machine_id_source" // MACHINE_ID_SOURCE (string) returns how MACHINE_ID was resolved: provided, os, legacy or generated
+	MACHINE_ID_SOURCE string = "internal_snyk_machine_id_source" // MACHINE_ID_SOURCE (string) returns how MACHINE_ID was resolved: provided, persisted, generated or ephemeral
 	CLIENT_MACHINE_ID string = "internal_snyk_client_machine_id" // CLIENT_MACHINE_ID (string) read-only external input for MACHINE_ID, typically supplied by a device-management tool
 
 	// ---------
