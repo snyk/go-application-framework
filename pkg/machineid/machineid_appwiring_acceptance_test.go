@@ -1,26 +1,41 @@
 package machineid_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/machineid"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // TestAcceptance_ViaAppEngineProducesPersistedMachineID exercises the actual wiring in
 // pkg/app.initConfiguration, proving CLI and language server consumers of a real engine share
 // the same resolved and persisted machine identifier.
+//
+// A real, pre-existing XDG_CONFIG_HOME is simulated (rather than left absent) because
+// defaultSharedFilePaths prefers it over HOME on Linux: a developer running this suite locally
+// typically has XDG_CONFIG_HOME set, and without isolating it this test would read and write that
+// developer's real shared machine-id file instead of the temp one under home.
 func TestAcceptance_ViaAppEngineProducesPersistedMachineID(t *testing.T) {
+	leakedXDGConfigHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", leakedXDGConfigHome)
 	configtest.IsolateEnvironmentForTest(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("ProgramData", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
 
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
@@ -30,13 +45,84 @@ func TestAcceptance_ViaAppEngineProducesPersistedMachineID(t *testing.T) {
 
 	value, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
-	id, ok := value.(string)
-	require.True(t, ok)
-	require.NotEmpty(t, id)
+	require.Equal(t, "app-wiring-test-machine-id", value)
 
 	data, err := os.ReadFile(filepath.Join(home, ".config", "configstore", "snyk.json"))
 	require.NoError(t, err)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(data, &m))
-	require.Equal(t, id, m[configuration.MACHINE_ID])
+	require.Equal(t, value, m[configuration.MACHINE_ID])
+
+	entries, err := os.ReadDir(leakedXDGConfigHome)
+	require.NoError(t, err)
+	require.Empty(t, entries, "resolution must not write into a pre-existing XDG_CONFIG_HOME leaked from the developer's real environment")
+}
+
+// TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles proves the logger
+// pkg/app.initConfiguration wires into every other default value function also reaches
+// machineid.Resolve, so a support log bundle actually captures machine id resolution decisions.
+func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("ProgramData", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
+
+	_, err := configuration.CreateConfigurationFile("snyk.json")
+	require.NoError(t, err)
+
+	config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(config), app.WithZeroLogger(&logger))
+
+	_, err = engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	require.Contains(t, logs.String(), "machine id: adopting value from external channel", "the real app wiring must pass its logger into machineid.Resolve")
+}
+
+// TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve proves app.WithMachineIDOptions
+// actually reaches machineid.Resolve through the real engine wiring, not just through a unit test
+// of pkg/app in isolation: a machineid.ResolveOption passed this way must take effect exactly like
+// one baked into pkg/app.initConfiguration itself.
+func TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	programData := t.TempDir()
+	t.Setenv("ProgramData", programData)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+
+	// On Windows, the shared file's machine-wide directory is only ever used by this process
+	// when it already exists and is writable (see selectWritePath); pre-creating it, like a
+	// privileged installer would have, makes the write destination deterministic instead of
+	// depending on whether the CI account can ACL-lock a directory it creates itself.
+	sharedFilePath := filepath.Join(home, ".snyk", "machine-id.json")
+	if runtime.GOOS == "windows" {
+		sharedFilePath = filepath.Join(programData, "Snyk", "machine-id.json")
+		require.NoError(t, os.MkdirAll(filepath.Dir(sharedFilePath), 0o755))
+	}
+
+	_, err := configuration.CreateConfigurationFile("snyk.json")
+	require.NoError(t, err)
+
+	config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))
+	engine := app.CreateAppEngineWithOptions(
+		app.WithConfiguration(config),
+		app.WithMachineIDOptions(machineid.WithRuntimeInfo(ri)),
+	)
+
+	_, err = engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(sharedFilePath)
+	require.NoError(t, err)
+	var sf map[string]any
+	require.NoError(t, json.Unmarshal(data, &sf))
+	require.Equal(t, "snyk-ls/9.9.9", sf["writer"], "a machineid.ResolveOption passed via WithMachineIDOptions must reach the shared file write")
 }
