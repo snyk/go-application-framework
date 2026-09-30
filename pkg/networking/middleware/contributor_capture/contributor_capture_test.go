@@ -260,7 +260,7 @@ func TestContributorCaptureMiddleware_capturesMonitorProjectIDBehindALargeLicens
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(wantBody)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	rt, sink := newTestMiddleware(t, http.DefaultTransport, server.URL)
