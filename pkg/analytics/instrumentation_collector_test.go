@@ -12,6 +12,7 @@ import (
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -325,6 +326,28 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should redact heuristic terms only at identifier boundaries in string extension values", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		cfg := configuration.NewInMemory()
+		cfg.Set(logging.HEURISTIC_REDACTION_TERMS, []string{"requests", "12345"})
+
+		ic.AddExtension("no_relevant_requests", "no_relevant_requests")
+		ic.AddExtension("standalone", "requests!")
+		ic.AddExtension("embedded", "prerequests requests2")
+		ic.AddExtension("number", 12345)
+		ic.AddExtension("stringNumber", "12345")
+
+		actual, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(cfg))
+		require.NoError(t, err)
+		extension := *actual.Data.Attributes.Interaction.Extension
+
+		assert.Equal(t, "no_relevant_requests", extension["no_relevant_requests"])
+		assert.Equal(t, "***!", extension["standalone"])
+		assert.Equal(t, "prerequests requests2", extension["embedded"])
+		assert.Equal(t, float64(12345), extension["number"])
+		assert.Equal(t, "***", extension["stringNumber"])
 	})
 
 	t.Run("it should not corrupt sibling fields when a short-form-keyed extension value is a nested object", func(t *testing.T) {
