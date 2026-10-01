@@ -352,6 +352,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	config.AddDefaultValue(configuration.MACHINE_ID, configuration.StandardDefaultValueFunction("tmp-hardcoded-value"))
+	// the placeholder identifier is shared by every machine, so it must not be reported as stable
+	config.AddDefaultValue(configuration.MACHINE_ID_SOURCE, configuration.StandardDefaultValueFunction("ephemeral"))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see
