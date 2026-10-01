@@ -63,7 +63,7 @@ type scrubStruct struct {
 	regex *regexp.Regexp
 	// the exact term to replace
 	replace string
-	// whether `replace` must stand alone as a word/identifier to match, rather than matching anywhere
+	// whether `replace` must stand alone as a word/identifier to match
 	wholeWord bool
 }
 
@@ -119,10 +119,8 @@ func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
 	}
 }
 
-// addWholeWordTermToDict adds replaceTerm to dict such that it only matches when it stands alone
-// as a word/identifier, not as a substring of a larger token. Unlike addStaticTermToDict, it does
-// not overwrite an existing entry: if replaceTerm is already present (e.g. it's also a known
-// secret added via addStaticTermToDict), that existing match-anywhere entry is left untouched.
+// addWholeWordTermToDict is like addStaticTermToDict but marks the term wholeWord. It never
+// overwrites an existing entry, so a term that's also a known secret stays match-anywhere.
 func addWholeWordTermToDict(replaceTerm string, dict ScrubbingDict) {
 	if replaceTerm == "" {
 		return
@@ -147,18 +145,13 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 }
 
 // REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log output, in
-// addition to the token/OAuth-derived terms GetScrubDictFromConfig already adds. These terms are
-// guessed (e.g. unrecognized CLI args/env values), not known secrets, so they are only redacted
-// when they stand alone as a word/identifier, not as a substring of a larger token. Lives here
-// rather than pkg/configuration since this package is its only reader, matching the precedent of
-// local_workflows.ConfigurationNewAuthenticationToken.
+// addition to the token/OAuth-derived terms GetScrubDictFromConfig already adds. These are guessed
+// terms, not known secrets, so they're only redacted as whole words, not as a substring of a larger
+// token. Lives here rather than pkg/configuration since this package is its only reader, matching
+// the precedent of local_workflows.ConfigurationNewAuthenticationToken.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
-// HEURISTIC_REDACTION_TERMS ([]string) is a deprecated alias for REDACTION_TERMS, kept only so
-// code compiled against the earlier heuristic-redaction-terms feature still builds. REDACTION_TERMS
-// now provides the same whole-word-only matching behavior; use it instead.
-//
-// Deprecated: use REDACTION_TERMS instead.
+// Deprecated: use REDACTION_TERMS instead; kept as an alias so existing consumers still compile.
 const HEURISTIC_REDACTION_TERMS string = "internal_heuristic_redaction_terms"
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
@@ -405,13 +398,9 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
-	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
-	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
-	// Non-whole-word entries (known secrets) are applied before whole-word entries (guessed
-	// REDACTION_TERMS), so a guessed term can't fragment a real secret before it's redacted whole.
-	// Within the whole-word group, longer terms are applied first so a shorter configured term
-	// (e.g. "secret") can't consume part of a longer one that shares its prefix/suffix (e.g.
-	// "secret-token") before the longer term's own pass runs.
+	// Dictionaries are unordered, so sort keys for deterministic, overlap-safe application:
+	// non-whole-word (secret) entries first so a guessed term can't fragment a secret, then
+	// whole-word entries longest-first so e.g. "secret" can't eat part of "secret-token".
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
@@ -468,31 +457,22 @@ func RedactStaticTerm(s, term, replacement string) string {
 	return redactTerm(s, term, replacement, false)
 }
 
-// redactTerm is RedactStaticTerm's implementation, with an additional wholeWord mode: when true, a
-// match is only redacted if it stands alone as a word/identifier — i.e. neither the character
-// immediately before nor after it is a letter, digit or underscore (see hasIdentifierNeighbor).
-// Rejected matches are skipped and the search resumes one byte in, so overlapping candidate
-// matches (e.g. term "a-a" against "xa-a-a") are still found.
+// redactTerm is RedactStaticTerm's implementation, with an additional wholeWord mode (see redact).
 func redactTerm(s, term, replacement string, wholeWord bool) string {
 	return redact(s, term, replacement, wholeWord, true)
 }
 
-// redactWholeWord replaces every occurrence of term in s with replacement, but only where term
-// stands alone as a word/identifier (see hasIdentifierNeighbor). Unlike redactTerm, it has no JSON
-// awareness: no quote tracking, no bare-value quoting, no fused-token guard. Intended for values
-// already known not to be JSON-structured (see ScrubValue).
+// redactWholeWord is like redactTerm with wholeWord matching, but without JSON awareness: no quote
+// tracking, no bare-value quoting, no fused-token guard. For values known not to be JSON (ScrubValue).
 func redactWholeWord(s, term, replacement string) string {
 	return redact(s, term, replacement, true, false)
 }
 
-// redact is the shared scan loop behind redactTerm and redactWholeWord: find each occurrence of
-// term in s, reject it (and resume the search one byte in, so overlapping candidate matches like
-// term "a-a" against "xa-a-a" are still found) if wholeWord is set and the match has an identifier
-// neighbor, and otherwise write replacement in its place. jsonAware selects which of the two
-// accepted-match behaviors applies:
-//   - true: redactTerm's JSON-safety behavior — track quote state and apply the bare-value/
-//     fused-token guards documented on RedactStaticTerm.
-//   - false: redactWholeWord's behavior — write replacement verbatim, with no JSON awareness.
+// redact is the shared scan loop behind redactTerm and redactWholeWord. When wholeWord is set, a
+// match with an identifier neighbor (see hasIdentifierNeighbor) is rejected and the search resumes
+// one byte in, so overlapping candidate matches (e.g. term "a-a" against "xa-a-a") are still found.
+// jsonAware selects RedactStaticTerm's quote-tracking and bare-value/fused-token guards for accepted
+// matches; otherwise replacement is written verbatim.
 func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	if term == "" {
 		return s
