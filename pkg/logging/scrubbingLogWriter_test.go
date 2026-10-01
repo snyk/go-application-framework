@@ -1261,3 +1261,31 @@ func TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere(t *testin
 
 	assert.Equal(t, "x***y", string(actual))
 }
+
+// TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm guards the whole-word sort order: when
+// one configured REDACTION_TERMS value is a separator-bounded prefix/suffix of another (e.g.
+// "secret" vs. "secret-token"), the longer term must be applied first so the shorter term can't
+// consume part of it and leak the remainder.
+func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"secret", "secret-token"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("credential: secret-token"), dict)
+
+	assert.Equal(t, "credential: ***", string(actual))
+}
+
+// TestHeuristicRedactionTermsIsDeprecatedAliasForRedactionTerms guards backward compatibility: code
+// built against the earlier HEURISTIC_REDACTION_TERMS config key must still compile and behave
+// identically to REDACTION_TERMS (whole-word-only matching), since the constant is deprecated rather
+// than removed.
+func TestHeuristicRedactionTermsIsDeprecatedAliasForRedactionTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(HEURISTIC_REDACTION_TERMS, []string{"request"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("no_relevant_request standalone request"), dict)
+
+	assert.Equal(t, "no_relevant_request standalone ***", string(actual))
+}

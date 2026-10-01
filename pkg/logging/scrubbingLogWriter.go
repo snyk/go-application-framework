@@ -154,6 +154,13 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 // local_workflows.ConfigurationNewAuthenticationToken.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
+// HEURISTIC_REDACTION_TERMS ([]string) is a deprecated alias for REDACTION_TERMS, kept only so
+// code compiled against the earlier heuristic-redaction-terms feature still builds. REDACTION_TERMS
+// now provides the same whole-word-only matching behavior; use it instead.
+//
+// Deprecated: use REDACTION_TERMS instead.
+const HEURISTIC_REDACTION_TERMS string = "internal_heuristic_redaction_terms"
+
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
@@ -161,6 +168,9 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
+		addWholeWordTermToDict(term, dict)
+	}
+	for _, term := range config.GetStringSlice(HEURISTIC_REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
 	token, err := auth.GetOAuthToken(config)
@@ -399,6 +409,9 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
 	// Non-whole-word entries (known secrets) are applied before whole-word entries (guessed
 	// REDACTION_TERMS), so a guessed term can't fragment a real secret before it's redacted whole.
+	// Within the whole-word group, longer terms are applied first so a shorter configured term
+	// (e.g. "secret") can't consume part of a longer one that shares its prefix/suffix (e.g.
+	// "secret-token") before the longer term's own pass runs.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
@@ -407,6 +420,9 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		wi, wj := scrubDict[keys[i]].wholeWord, scrubDict[keys[j]].wholeWord
 		if wi != wj {
 			return wj
+		}
+		if wi && len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
 		}
 		return keys[i] < keys[j]
 	})
