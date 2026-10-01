@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 
@@ -61,6 +63,8 @@ type scrubStruct struct {
 	regex *regexp.Regexp
 	// the exact term to replace
 	replace string
+	// whether `replace` must stand alone as a word/identifier to match, rather than matching anywhere
+	wholeWord bool
 }
 
 type ScrubbingDict map[string]scrubStruct
@@ -111,13 +115,27 @@ func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
 
 func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
 	if replaceTerm != "" {
-		dict[replaceTerm] = scrubStruct{0, nil, replaceTerm}
+		dict[replaceTerm] = scrubStruct{groupToRedact: 0, replace: replaceTerm}
 	}
+}
+
+// addWholeWordTermToDict adds replaceTerm to dict such that it only matches when it stands alone
+// as a word/identifier, not as a substring of a larger token. Unlike addStaticTermToDict, it does
+// not overwrite an existing entry: if replaceTerm is already present (e.g. it's also a known
+// secret added via addStaticTermToDict), that existing match-anywhere entry is left untouched.
+func addWholeWordTermToDict(replaceTerm string, dict ScrubbingDict) {
+	if replaceTerm == "" {
+		return
+	}
+	if _, exists := dict[replaceTerm]; exists {
+		return
+	}
+	dict[replaceTerm] = scrubStruct{groupToRedact: 0, replace: replaceTerm, wholeWord: true}
 }
 
 func addRegexTermToDict(regexTerm string, matchGroup int, dict ScrubbingDict) {
 	if regexTerm != "" {
-		dict[regexTerm] = scrubStruct{matchGroup, regexp.MustCompile(regexTerm), ""}
+		dict[regexTerm] = scrubStruct{groupToRedact: matchGroup, regex: regexp.MustCompile(regexTerm)}
 	}
 }
 
@@ -128,10 +146,12 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log
-// output, in addition to the token/OAuth-derived terms GetScrubDictFromConfig
-// already adds. Lives here rather than pkg/configuration since this package is
-// its only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
+// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log output, in
+// addition to the token/OAuth-derived terms GetScrubDictFromConfig already adds. These terms are
+// guessed (e.g. unrecognized CLI args/env values), not known secrets, so they are only redacted
+// when they stand alone as a word/identifier, not as a substring of a larger token. Lives here
+// rather than pkg/configuration since this package is its only reader, matching the precedent of
+// local_workflows.ConfigurationNewAuthenticationToken.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
@@ -141,7 +161,7 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
-		addStaticTermToDict(term, dict)
+		addWholeWordTermToDict(term, dict)
 	}
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
@@ -377,18 +397,29 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
 	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
 	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
+	// Non-whole-word entries (known secrets) are applied before whole-word entries (guessed
+	// REDACTION_TERMS), so a guessed term can't fragment a real secret before it's redacted whole.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		wi, wj := scrubDict[keys[i]].wholeWord, scrubDict[keys[j]].wholeWord
+		if wi != wj {
+			return wj
+		}
+		return keys[i] < keys[j]
+	})
 	for _, key := range keys {
 		entry := scrubDict[key]
 		// scrub from the replacement list first
 		if entry.replace != "" {
-			if jsonAware {
-				s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			} else {
+			switch {
+			case jsonAware:
+				s = redactTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING, entry.wholeWord)
+			case entry.wholeWord:
+				s = redactWholeWord(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			default:
 				s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 			}
 			continue
@@ -418,6 +449,15 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 //
 // Exported for reuse by pkg/analytics's SanitizeStaticValues, which has the same corruption risk.
 func RedactStaticTerm(s, term, replacement string) string {
+	return redactTerm(s, term, replacement, false)
+}
+
+// redactTerm is RedactStaticTerm's implementation, with an additional wholeWord mode: when true, a
+// match is only redacted if it stands alone as a word/identifier — i.e. neither the character
+// immediately before nor after it is a letter, digit or underscore (see hasIdentifierNeighbor).
+// Rejected matches are skipped and the search resumes one byte in, so overlapping candidate
+// matches (e.g. term "a-a" against "xa-a-a") are still found.
+func redactTerm(s, term, replacement string, wholeWord bool) string {
 	if term == "" {
 		return s
 	}
@@ -432,6 +472,12 @@ func RedactStaticTerm(s, term, replacement string) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
+		if wholeWord && hasIdentifierNeighbor(s, start, matchEnd) {
+			qs = qs.advance(s[end : start+1])
+			builder.WriteString(s[end : start+1])
+			end = start + 1
+			continue
+		}
 		qs = qs.advance(s[end:start])
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
@@ -450,6 +496,62 @@ func RedactStaticTerm(s, term, replacement string) string {
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
+}
+
+// redactWholeWord replaces every occurrence of term in s with replacement, but only where term
+// stands alone as a word/identifier (see hasIdentifierNeighbor). Unlike redactTerm, it has no JSON
+// awareness: no quote tracking, no bare-value quoting, no fused-token guard. Intended for values
+// already known not to be JSON-structured (see ScrubValue).
+func redactWholeWord(s, term, replacement string) string {
+	if term == "" {
+		return s
+	}
+	var builder strings.Builder
+	builder.Grow(len(s))
+	end := 0
+	for {
+		idx := strings.Index(s[end:], term)
+		if idx < 0 {
+			break
+		}
+		start := end + idx
+		matchEnd := start + len(term)
+		if hasIdentifierNeighbor(s, start, matchEnd) {
+			builder.WriteString(s[end : start+1])
+			end = start + 1
+			continue
+		}
+		builder.WriteString(s[end:start])
+		builder.WriteString(replacement)
+		end = matchEnd
+	}
+	builder.WriteString(s[end:])
+	return builder.String()
+}
+
+// hasIdentifierNeighbor reports whether the character immediately before start or immediately
+// after end (if any) is an identifier rune (see isIdentifierRune), i.e. s[start:end] is not
+// standing alone as its own word.
+func hasIdentifierNeighbor(s string, start, end int) bool {
+	if start > 0 {
+		r, _ := utf8.DecodeLastRuneInString(s[:start])
+		if isIdentifierRune(r) {
+			return true
+		}
+	}
+	if end < len(s) {
+		r, _ := utf8.DecodeRuneInString(s[end:])
+		if isIdentifierRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// isIdentifierRune reports whether r can be part of a word/identifier: a Unicode letter, a
+// Unicode digit, or an underscore.
+func isIdentifierRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_'
 }
 
 // quoteState tracks whether a scan position sits inside an open, unescaped double-quoted JSON
