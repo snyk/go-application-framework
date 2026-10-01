@@ -8,8 +8,6 @@ type RuntimeInfo interface {
 
 	GetVersion() string
 	SetVersion(string)
-
-	GetMachineIdentifier() string
 }
 
 type opt func(RuntimeInfo)
@@ -35,10 +33,6 @@ func (ri *defaultRuntimeInfo) GetVersion() string {
 
 func (ri *defaultRuntimeInfo) SetVersion(v string) {
 	ri.version = v
-}
-
-func (ri *defaultRuntimeInfo) GetMachineIdentifier() string {
-	return "tmp-hardcoded-value"
 }
 
 func New(opts ...opt) RuntimeInfo {
