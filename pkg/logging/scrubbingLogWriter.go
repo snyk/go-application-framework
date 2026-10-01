@@ -474,6 +474,26 @@ func RedactStaticTerm(s, term, replacement string) string {
 // Rejected matches are skipped and the search resumes one byte in, so overlapping candidate
 // matches (e.g. term "a-a" against "xa-a-a") are still found.
 func redactTerm(s, term, replacement string, wholeWord bool) string {
+	return redact(s, term, replacement, wholeWord, true)
+}
+
+// redactWholeWord replaces every occurrence of term in s with replacement, but only where term
+// stands alone as a word/identifier (see hasIdentifierNeighbor). Unlike redactTerm, it has no JSON
+// awareness: no quote tracking, no bare-value quoting, no fused-token guard. Intended for values
+// already known not to be JSON-structured (see ScrubValue).
+func redactWholeWord(s, term, replacement string) string {
+	return redact(s, term, replacement, true, false)
+}
+
+// redact is the shared scan loop behind redactTerm and redactWholeWord: find each occurrence of
+// term in s, reject it (and resume the search one byte in, so overlapping candidate matches like
+// term "a-a" against "xa-a-a" are still found) if wholeWord is set and the match has an identifier
+// neighbor, and otherwise write replacement in its place. jsonAware selects which of the two
+// accepted-match behaviors applies:
+//   - true: redactTerm's JSON-safety behavior — track quote state and apply the bare-value/
+//     fused-token guards documented on RedactStaticTerm.
+//   - false: redactWholeWord's behavior — write replacement verbatim, with no JSON awareness.
+func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	if term == "" {
 		return s
 	}
@@ -489,9 +509,17 @@ func redactTerm(s, term, replacement string, wholeWord bool) string {
 		start := end + idx
 		matchEnd := start + len(term)
 		if wholeWord && hasIdentifierNeighbor(s, start, matchEnd) {
-			qs = qs.advance(s[end : start+1])
+			if jsonAware {
+				qs = qs.advance(s[end : start+1])
+			}
 			builder.WriteString(s[end : start+1])
 			end = start + 1
+			continue
+		}
+		if !jsonAware {
+			builder.WriteString(s[end:start])
+			builder.WriteString(replacement)
+			end = matchEnd
 			continue
 		}
 		qs = qs.advance(s[end:start])
@@ -508,37 +536,6 @@ func redactTerm(s, term, replacement string, wholeWord bool) string {
 			builder.WriteString(replacement)
 		}
 		qs = qs.advance(s[start:matchEnd])
-		end = matchEnd
-	}
-	builder.WriteString(s[end:])
-	return builder.String()
-}
-
-// redactWholeWord replaces every occurrence of term in s with replacement, but only where term
-// stands alone as a word/identifier (see hasIdentifierNeighbor). Unlike redactTerm, it has no JSON
-// awareness: no quote tracking, no bare-value quoting, no fused-token guard. Intended for values
-// already known not to be JSON-structured (see ScrubValue).
-func redactWholeWord(s, term, replacement string) string {
-	if term == "" {
-		return s
-	}
-	var builder strings.Builder
-	builder.Grow(len(s))
-	end := 0
-	for {
-		idx := strings.Index(s[end:], term)
-		if idx < 0 {
-			break
-		}
-		start := end + idx
-		matchEnd := start + len(term)
-		if hasIdentifierNeighbor(s, start, matchEnd) {
-			builder.WriteString(s[end : start+1])
-			end = start + 1
-			continue
-		}
-		builder.WriteString(s[end:start])
-		builder.WriteString(replacement)
 		end = matchEnd
 	}
 	builder.WriteString(s[end:])
