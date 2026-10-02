@@ -138,9 +138,9 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS ([]string) guessed or inferred values to redact as whole words
-// from analytics/log output. Known secrets use token/OAuth configuration and remain
-// match-anywhere. Lives here rather than pkg/configuration since this package is its
+// REDACTION_TERMS ([]string) values to redact as whole words from analytics/log output.
+// Known secrets use token/OAuth configuration and remain match-anywhere.
+// Lives here rather than pkg/configuration since this package is its
 // only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
