@@ -223,6 +223,47 @@ func Test_CreateAppEngine(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func Test_CreateAppEngine_providesMachineId(t *testing.T) {
+	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+
+	assert.NotEmpty(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+}
+
+func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewWithOpts()),
+		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
+	)
+	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
+	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		machineID, machineIDErr := invocation.GetRuntimeInfo().GetMachineID()
+		if machineIDErr != nil {
+			return nil, machineIDErr
+		}
+		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machineID)}, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	output, err := engine.Invoke(wfId)
+
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), output[0].GetPayload())
+}
+
+func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *testing.T) {
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewWithOpts()),
+		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
+	)
+
+	machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.NoError(t, err)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
+}
+
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	localConfig := configuration.NewWithOpts()
 	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
@@ -615,7 +656,8 @@ func Test_CreateAppEngineWithRuntimeInfo(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithRuntimeInfo(ri))
 
 	assert.NotNil(t, engine)
-	assert.Equal(t, ri, engine.GetRuntimeInfo())
+	assert.Equal(t, "some-app", engine.GetRuntimeInfo().GetName())
+	assert.Equal(t, "some.version", engine.GetRuntimeInfo().GetVersion())
 }
 
 func Test_initConfiguration_snykgov(t *testing.T) {

@@ -60,6 +60,12 @@ const (
 	CACHE_PATH    string = "snyk_cache_path" // CACHE_PATH (string) returns the cache directory that can be used by Extensions and is valid between multiple invocations of the application. It is guaranteed to be set and existing and match the documented paths
 
 	// ---------
+	// machine identification
+	// ---------
+
+	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) returns the identifier of the machine the application is running on. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
+
+	// ---------
 	// general workflow configuration
 	// ---------
 

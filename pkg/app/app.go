@@ -352,6 +352,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	config.AddDefaultValue(configuration.MACHINE_ID, configuration.StandardDefaultValueFunction("tmp-hardcoded-value"))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see
