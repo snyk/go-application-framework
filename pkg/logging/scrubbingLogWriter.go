@@ -119,8 +119,7 @@ func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
 	}
 }
 
-// addWholeWordTermToDict is like addStaticTermToDict but marks the term wholeWord. It never
-// overwrites an existing entry, so a term that's also a known secret stays match-anywhere.
+// Preserve match-anywhere rules for known secrets.
 func addWholeWordTermToDict(replaceTerm string, dict ScrubbingDict) {
 	if replaceTerm == "" {
 		return
@@ -144,15 +143,8 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log output, in
-// addition to the token/OAuth-derived terms GetScrubDictFromConfig already adds. These are guessed
-// terms, not known secrets, so they're only redacted as whole words, not as a substring of a larger
-// token. Lives here rather than pkg/configuration since this package is its only reader, matching
-// the precedent of local_workflows.ConfigurationNewAuthenticationToken.
+// REDACTION_TERMS configures literal terms redacted only as whole words.
 const REDACTION_TERMS string = "internal_redaction_terms"
-
-// Deprecated: use REDACTION_TERMS instead; kept as an alias so existing consumers still compile.
-const HEURISTIC_REDACTION_TERMS string = "internal_heuristic_redaction_terms"
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
@@ -161,9 +153,6 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
-		addWholeWordTermToDict(term, dict)
-	}
-	for _, term := range config.GetStringSlice(HEURISTIC_REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
 	token, err := auth.GetOAuthToken(config)
@@ -398,9 +387,7 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
-	// Dictionaries are unordered, so sort keys for deterministic, overlap-safe application:
-	// non-whole-word (secret) entries first so a guessed term can't fragment a secret, then
-	// whole-word entries longest-first so e.g. "secret" can't eat part of "secret-token".
+	// Apply secrets first, then longer whole-word terms, to avoid partial redaction.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
@@ -457,22 +444,15 @@ func RedactStaticTerm(s, term, replacement string) string {
 	return redactTerm(s, term, replacement, false)
 }
 
-// redactTerm is RedactStaticTerm's implementation, with an additional wholeWord mode (see redact).
 func redactTerm(s, term, replacement string, wholeWord bool) string {
 	return redact(s, term, replacement, wholeWord, true)
 }
 
-// redactWholeWord is like redactTerm with wholeWord matching, but without JSON awareness: no quote
-// tracking, no bare-value quoting, no fused-token guard. For values known not to be JSON (ScrubValue).
 func redactWholeWord(s, term, replacement string) string {
 	return redact(s, term, replacement, true, false)
 }
 
-// redact is the shared scan loop behind redactTerm and redactWholeWord. When wholeWord is set, a
-// match with an identifier neighbor (see hasIdentifierNeighbor) is rejected and the search resumes
-// one byte in, so overlapping candidate matches (e.g. term "a-a" against "xa-a-a") are still found.
-// jsonAware selects RedactStaticTerm's quote-tracking and bare-value/fused-token guards for accepted
-// matches; otherwise replacement is written verbatim.
+// redact optionally enforces whole-word matching and JSON-safe replacements.
 func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	if term == "" {
 		return s
@@ -522,9 +502,6 @@ func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	return builder.String()
 }
 
-// hasIdentifierNeighbor reports whether the character immediately before start or immediately
-// after end (if any) is an identifier rune (see isIdentifierRune), i.e. s[start:end] is not
-// standing alone as its own word.
 func hasIdentifierNeighbor(s string, start, end int) bool {
 	if start > 0 {
 		r, _ := utf8.DecodeLastRuneInString(s[:start])
@@ -541,8 +518,6 @@ func hasIdentifierNeighbor(s string, start, end int) bool {
 	return false
 }
 
-// isIdentifierRune reports whether r can be part of a word/identifier: a Unicode letter, a
-// Unicode digit, or an underscore.
 func isIdentifierRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_'
 }

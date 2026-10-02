@@ -256,9 +256,7 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 
 // TestScrub_NonJSONInputStillRedactsStaticTerms guards against a static term landing next to a
 // digit in plain, non-JSON text being silently skipped by the JSON-only digit-fusion guard, which
-// exists to protect real JSON numbers, not prose. Uses AUTHENTICATION_TOKEN rather than
-// REDACTION_TERMS because REDACTION_TERMS is now whole-word only and would no longer match this
-// mid-token occurrence.
+// exists to protect real JSON numbers, not prose.
 func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "12345")
@@ -269,9 +267,6 @@ func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	assert.Equal(t, "id: ***1234", string(actual))
 }
 
-// TestScrub_NonJSONInputRedactsRedactionTermsOnlyAsWholeWords guards the whole-word behavior of
-// REDACTION_TERMS: a term embedded in a larger token is left alone, while the same term standing
-// alone as a word is still redacted.
 func TestScrub_NonJSONInputRedactsRedactionTermsOnlyAsWholeWords(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(REDACTION_TERMS, []string{"12345"})
@@ -1094,9 +1089,6 @@ func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
 	}
 }
 
-// TestRedactWholeWord_OnlyMatchesStandaloneWords is the table test for word-boundary matching per
-// CLI-1899: a match is rejected if the character directly before or after it is a letter, a digit
-// or `_` (Unicode-aware); start/end of input, whitespace and punctuation are boundaries.
 func TestRedactWholeWord_OnlyMatchesStandaloneWords(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1194,9 +1186,6 @@ func TestRedactWholeWord_EmptyTermIsNoop(t *testing.T) {
 	assert.Equal(t, "request", redactWholeWord("request", "", SANITIZE_REPLACEMENT_STRING))
 }
 
-// TestScrub_RedactsRedactionTermsOnlyAsWholeWordsInJSON mirrors the word-boundary behavior for
-// JSON input: a word-internal value is left alone, a standalone value is redacted, a bare number
-// standing alone as a word is still quoted to keep the output valid JSON.
 func TestScrub_RedactsRedactionTermsOnlyAsWholeWordsInJSON(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(REDACTION_TERMS, []string{"request"})
@@ -1219,9 +1208,6 @@ func TestScrub_RedactsBareNumberRedactionTermAsWholeWordAndKeepsValidJSON(t *tes
 	assert.True(t, json.Valid(actual))
 }
 
-// TestScrub_SecretsStillMatchAnywhereDespiteWholeWordRedactionTerms guards that the wholeWord
-// behavior is exclusive to REDACTION_TERMS: known secrets (here, the auth token) continue to match
-// anywhere, including fused inside a larger token.
 func TestScrub_SecretsStillMatchAnywhereDespiteWholeWordRedactionTerms(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "TOKEN")
@@ -1233,9 +1219,6 @@ func TestScrub_SecretsStillMatchAnywhereDespiteWholeWordRedactionTerms(t *testin
 	assert.Equal(t, "x***y guess_word", string(actual))
 }
 
-// TestScrub_SecretAppliedBeforeRedactionTerm guards the ordering requirement: known secrets are
-// applied to scrub()'s dictionary before REDACTION_TERMS entries, so a guessed term that happens to
-// be a substring of a real secret can't fragment the secret before it's redacted whole.
 func TestScrub_SecretAppliedBeforeRedactionTerm(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "abc-secret-xyz")
@@ -1247,10 +1230,6 @@ func TestScrub_SecretAppliedBeforeRedactionTerm(t *testing.T) {
 	assert.Equal(t, "***", string(actual))
 }
 
-// TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere guards
-// addWholeWordTermToDict's precedence rule: when the same literal value is both a known secret and
-// present in REDACTION_TERMS, the existing match-anywhere entry wins and is not downgraded to
-// whole-word.
 func TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "shared")
@@ -1262,10 +1241,6 @@ func TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere(t *testin
 	assert.Equal(t, "x***y", string(actual))
 }
 
-// TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm guards the whole-word sort order: when
-// one configured REDACTION_TERMS value is a separator-bounded prefix/suffix of another (e.g.
-// "secret" vs. "secret-token"), the longer term must be applied first so the shorter term can't
-// consume part of it and leak the remainder.
 func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(REDACTION_TERMS, []string{"secret", "secret-token"})
@@ -1274,18 +1249,4 @@ func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
 	actual := Scrub([]byte("credential: secret-token"), dict)
 
 	assert.Equal(t, "credential: ***", string(actual))
-}
-
-// TestHeuristicRedactionTermsIsDeprecatedAliasForRedactionTerms guards backward compatibility: code
-// built against the earlier HEURISTIC_REDACTION_TERMS config key must still compile and behave
-// identically to REDACTION_TERMS (whole-word-only matching), since the constant is deprecated rather
-// than removed.
-func TestHeuristicRedactionTermsIsDeprecatedAliasForRedactionTerms(t *testing.T) {
-	config := configuration.NewInMemory()
-	config.Set(HEURISTIC_REDACTION_TERMS, []string{"request"})
-	dict := GetScrubDictFromConfig(config)
-
-	actual := Scrub([]byte("no_relevant_request standalone request"), dict)
-
-	assert.Equal(t, "no_relevant_request standalone ***", string(actual))
 }
