@@ -114,6 +114,10 @@ func (ici *invocationContextImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 	return ici.WorkflowEngine.GetRuntimeInfo()
 }
 
+func (ici *invocationContextImpl) GetMachineID() string {
+	return ici.Configuration.GetString(configuration.MACHINE_ID)
+}
+
 // GetFileFilter returns a utils.FileFilter rooted at path, wired to this invocation's configuration, analytics and logger.
 func (ici *invocationContextImpl) GetFileFilter(path string, options ...utils.FileFilterOption) *utils.FileFilter {
 	defaults := []utils.FileFilterOption{

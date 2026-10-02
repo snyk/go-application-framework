@@ -114,3 +114,23 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 		}, slices.Collect(maps.Keys(fileFilterMetrics(t, invocationAnalytics))))
 	})
 }
+
+func TestInvocationContextImpl_GetMachineID(t *testing.T) {
+	t.Run("returns the machine identifier from the configuration of the invocation", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.MACHINE_ID, "invocation-machine-id")
+		ictx := &invocationContextImpl{Configuration: config}
+
+		assert.Equal(t, "invocation-machine-id", ictx.GetMachineID())
+	})
+
+	t.Run("prefers the configuration of the invocation over the configuration of the engine", func(t *testing.T) {
+		engineConfig := configuration.NewWithOpts()
+		engineConfig.Set(configuration.MACHINE_ID, "engine-machine-id")
+		invocationConfig := configuration.NewWithOpts()
+		invocationConfig.Set(configuration.MACHINE_ID, "invocation-machine-id")
+		ictx := &invocationContextImpl{Configuration: invocationConfig, WorkflowEngine: NewWorkFlowEngine(engineConfig)}
+
+		assert.Equal(t, "invocation-machine-id", ictx.GetMachineID())
+	})
+}

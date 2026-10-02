@@ -229,6 +229,23 @@ func Test_CreateAppEngine_providesMachineId(t *testing.T) {
 	assert.NotEmpty(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
+func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngine(t *testing.T) {
+	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
+	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		machineID := invocation.GetMachineID()
+		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machineID)}, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	output, err := engine.Invoke(wfId)
+
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), output[0].GetPayload())
+}
+
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	localConfig := configuration.NewWithOpts()
 	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
