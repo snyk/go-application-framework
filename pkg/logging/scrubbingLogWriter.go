@@ -63,8 +63,8 @@ type scrubStruct struct {
 	regex *regexp.Regexp
 	// the exact term to replace
 	replace string
-	// heuristic limits replacement to identifier boundaries
-	heuristic bool
+	// whether `replace` must stand alone as a word/identifier to match
+	wholeWord bool
 }
 
 type ScrubbingDict map[string]scrubStruct
@@ -115,14 +115,19 @@ func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
 
 func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
 	if replaceTerm != "" {
-		dict[replaceTerm] = scrubStruct{replace: replaceTerm}
+		dict[replaceTerm] = scrubStruct{groupToRedact: 0, replace: replaceTerm}
 	}
 }
 
-func addHeuristicTermToDict(replaceTerm string, dict ScrubbingDict) {
-	if _, exists := dict[replaceTerm]; replaceTerm != "" && !exists {
-		dict[replaceTerm] = scrubStruct{replace: replaceTerm, heuristic: true}
+// Preserve match-anywhere rules for known secrets.
+func addWholeWordTermToDict(replaceTerm string, dict ScrubbingDict) {
+	if replaceTerm == "" {
+		return
 	}
+	if _, exists := dict[replaceTerm]; exists {
+		return
+	}
+	dict[replaceTerm] = scrubStruct{groupToRedact: 0, replace: replaceTerm, wholeWord: true}
 }
 
 func addRegexTermToDict(regexTerm string, matchGroup int, dict ScrubbingDict) {
@@ -138,14 +143,8 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log
-// output, in addition to the token/OAuth-derived terms GetScrubDictFromConfig
-// already adds. Lives here rather than pkg/configuration since this package is
-// its only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
+// REDACTION_TERMS configures literal terms redacted only as whole words.
 const REDACTION_TERMS string = "internal_redaction_terms"
-
-// HEURISTIC_REDACTION_TERMS ([]string) are inferred values redacted only at identifier boundaries.
-const HEURISTIC_REDACTION_TERMS string = "internal_heuristic_redaction_terms"
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
@@ -154,10 +153,7 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
-		addStaticTermToDict(term, dict)
-	}
-	for _, term := range config.GetStringSlice(HEURISTIC_REDACTION_TERMS) {
-		addHeuristicTermToDict(term, dict)
+		addWholeWordTermToDict(term, dict)
 	}
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
@@ -391,16 +387,18 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
-	// Apply explicit rules before heuristic rules so a shorter inferred term cannot partially
-	// redact an overlapping explicit secret. Sort within each class for deterministic output.
+	// Apply secrets first, then longer whole-word terms, to avoid partial redaction.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		left, right := scrubDict[keys[i]], scrubDict[keys[j]]
-		if left.heuristic != right.heuristic {
-			return !left.heuristic
+		wi, wj := scrubDict[keys[i]].wholeWord, scrubDict[keys[j]].wholeWord
+		if wi != wj {
+			return wj
+		}
+		if wi && len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
 		}
 		return keys[i] < keys[j]
 	})
@@ -408,13 +406,12 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		entry := scrubDict[key]
 		// scrub from the replacement list first
 		if entry.replace != "" {
-			if entry.heuristic && jsonAware {
-				s = redactHeuristicJSONValues(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			} else if entry.heuristic {
-				s = redactHeuristicTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			} else if jsonAware {
-				s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			} else {
+			switch {
+			case jsonAware:
+				s = redactTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING, entry.wholeWord)
+			case entry.wholeWord:
+				s = redactWholeWord(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			default:
 				s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 			}
 			continue
@@ -423,102 +420,6 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
 	}
 	return []byte(s)
-}
-
-// redactHeuristicJSONValues redacts term inside the decoded string values of valid JSON s;
-// object keys and non-string values stay unchanged.
-func redactHeuristicJSONValues(s, term, replacement string) string {
-	var builder strings.Builder
-	lastTokenEnd := 0
-	for i := 0; i < len(s); {
-		if s[i] != '"' {
-			i++
-			continue
-		}
-
-		tokenStart := i
-		i++
-		for i < len(s) {
-			if s[i] == '\\' {
-				i += 2
-				continue
-			}
-			i++
-			if s[i-1] == '"' {
-				break
-			}
-		}
-
-		tokenEnd := i
-		nextNonSpace := tokenEnd
-		for nextNonSpace < len(s) && isJSONWhitespace(s[nextNonSpace]) {
-			nextNonSpace++
-		}
-		if nextNonSpace < len(s) && s[nextNonSpace] == ':' {
-			continue
-		}
-
-		var value string
-		if err := json.Unmarshal([]byte(s[tokenStart:tokenEnd]), &value); err != nil {
-			continue
-		}
-		redacted := redactHeuristicTerm(value, term, replacement)
-		if redacted == value {
-			continue
-		}
-		var encoded strings.Builder
-		encoder := json.NewEncoder(&encoded)
-		encoder.SetEscapeHTML(false)
-		if err := encoder.Encode(redacted); err != nil {
-			continue
-		}
-		builder.WriteString(s[lastTokenEnd:tokenStart])
-		builder.WriteString(strings.TrimSuffix(encoded.String(), "\n"))
-		lastTokenEnd = tokenEnd
-	}
-	builder.WriteString(s[lastTokenEnd:])
-	return builder.String()
-}
-
-// redactHeuristicTerm redacts term in plain text s where it is not part of a larger identifier.
-func redactHeuristicTerm(s, term, replacement string) string {
-	if term == "" {
-		return s
-	}
-	var builder strings.Builder
-	builder.Grow(len(s))
-	end, search := 0, 0
-	for {
-		idx := strings.Index(s[search:], term)
-		if idx < 0 {
-			break
-		}
-		matchStart := search + idx
-		matchEnd := matchStart + len(term)
-		if hasIdentifierNeighbor(s, matchStart, matchEnd) {
-			// a rejected match may overlap the next valid ("a-a" in "xa-a-a")
-			search = matchStart + 1
-			continue
-		}
-		search = matchEnd
-		builder.WriteString(s[end:matchStart])
-		builder.WriteString(replacement)
-		end = matchEnd
-	}
-	builder.WriteString(s[end:])
-	return builder.String()
-}
-
-// hasIdentifierNeighbor reports whether s[start:end] touches an identifier rune on either side.
-// A zero size means no rune there (start or end of s), which is a boundary.
-func hasIdentifierNeighbor(s string, start, end int) bool {
-	before, beforeSize := utf8.DecodeLastRuneInString(s[:start])
-	after, afterSize := utf8.DecodeRuneInString(s[end:])
-	return (beforeSize > 0 && isIdentifierRune(before)) || (afterSize > 0 && isIdentifierRune(after))
-}
-
-func isIdentifierRune(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
 }
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
@@ -540,6 +441,19 @@ func isIdentifierRune(r rune) bool {
 //
 // Exported for reuse by pkg/analytics's SanitizeStaticValues, which has the same corruption risk.
 func RedactStaticTerm(s, term, replacement string) string {
+	return redactTerm(s, term, replacement, false)
+}
+
+func redactTerm(s, term, replacement string, wholeWord bool) string {
+	return redact(s, term, replacement, wholeWord, true)
+}
+
+func redactWholeWord(s, term, replacement string) string {
+	return redact(s, term, replacement, true, false)
+}
+
+// redact optionally enforces whole-word matching and JSON-safe replacements.
+func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	if term == "" {
 		return s
 	}
@@ -554,6 +468,20 @@ func RedactStaticTerm(s, term, replacement string) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
+		if wholeWord && hasIdentifierNeighbor(s, start, matchEnd) {
+			if jsonAware {
+				qs = qs.advance(s[end : start+1])
+			}
+			builder.WriteString(s[end : start+1])
+			end = start + 1
+			continue
+		}
+		if !jsonAware {
+			builder.WriteString(s[end:start])
+			builder.WriteString(replacement)
+			end = matchEnd
+			continue
+		}
 		qs = qs.advance(s[end:start])
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
@@ -572,6 +500,26 @@ func RedactStaticTerm(s, term, replacement string) string {
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
+}
+
+func hasIdentifierNeighbor(s string, start, end int) bool {
+	if start > 0 {
+		r, _ := utf8.DecodeLastRuneInString(s[:start])
+		if isIdentifierRune(r) {
+			return true
+		}
+	}
+	if end < len(s) {
+		r, _ := utf8.DecodeRuneInString(s[end:])
+		if isIdentifierRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func isIdentifierRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_'
 }
 
 // quoteState tracks whether a scan position sits inside an open, unescaped double-quoted JSON

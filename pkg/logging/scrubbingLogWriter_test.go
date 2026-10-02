@@ -106,88 +106,6 @@ func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
 	require.Equal(t, "***", string(mockWriter.written), "configured redaction term should be scrubbed")
 }
 
-func TestHeuristicRedactionTerms(t *testing.T) {
-	config := configuration.NewInMemory()
-	config.Set(HEURISTIC_REDACTION_TERMS, []string{"requests", "12345", "caf\u00e9", `quote"term`, "-token-"})
-	dict := GetScrubDictFromConfig(config)
-
-	t.Run("plain text uses identifier boundaries", func(t *testing.T) {
-		input := "requests requests! prerequests requests2 no_relevant_requests \u017crequests requests\u017c \u0661requests requests\u0662 -token- x-token- -token-y"
-		assert.Equal(t, "*** ***! prerequests requests2 no_relevant_requests \u017crequests requests\u017c \u0661requests requests\u0662 *** x-token- -token-y", string(ScrubValue([]byte(input), dict)))
-	})
-
-	t.Run("valid JSON only redacts decoded string values", func(t *testing.T) {
-		input := `{"requests":"requests!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"12345","caf\u00e9":"caf\u00e9!","quoted":"quote\"term","html":"<requests>&"}`
-		expected := `{"requests":"***!","no_relevant_requests":"no_relevant_requests","count":12345,"stringCount":"***","caf\u00e9":"***!","quoted":"***","html":"<***>&"}`
-		actual := Scrub([]byte(input), dict)
-
-		assert.True(t, json.Valid(actual))
-		assert.Equal(t, expected, string(actual))
-	})
-
-	t.Run("empty term is ignored", func(t *testing.T) {
-		config.Set(HEURISTIC_REDACTION_TERMS, []string{""})
-		assert.Equal(t, "keep", string(ScrubValue([]byte("keep"), GetScrubDictFromConfig(config))))
-	})
-}
-
-func TestExplicitTermsTakePrecedenceOverHeuristicTerms(t *testing.T) {
-	config := configuration.NewInMemory()
-	config.Set(REDACTION_TERMS, []string{"secret-token"})
-	config.Set(HEURISTIC_REDACTION_TERMS, []string{"secret"})
-
-	assert.Equal(t, "credential: ***", string(ScrubValue([]byte("credential: secret-token"), GetScrubDictFromConfig(config))))
-}
-
-func TestRedactHeuristicTerm(t *testing.T) {
-	tests := map[string]struct{ term, input, expected string }{
-		"whole input":                   {"requests", "requests", "***"},
-		"start and end":                 {"requests", "requests x requests", "*** x ***"},
-		"adjacent hits share separator": {"requests", "requests requests requests", "*** *** ***"},
-		"punctuation is a boundary":     {"requests", "-requests. (requests)/requests", "-***. (***)/***"},
-		"letter neighbor":               {"requests", "prerequests requestsX", "prerequests requestsX"},
-		"digit neighbor":                {"requests", "1requests requests2", "1requests requests2"},
-		"underscore neighbor":           {"requests", "_requests requests_", "_requests requests_"},
-		"unicode letter neighbor":       {"requests", "\u017crequests requests\u00e9", "\u017crequests requests\u00e9"},
-		"unicode digit neighbor":        {"requests", "\u0661requests", "\u0661requests"},
-		"overlapping candidates":        {"aa", "aaa aa", "aaa ***"},
-		"overlap after rejected match":  {"a-a", "xa-a-a", "xa-***"},
-		"no hit":                        {"requests", "nothing here", "nothing here"},
-		"empty input":                   {"requests", "", ""},
-		"empty term":                    {"", "keep", "keep"},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, redactHeuristicTerm(tc.input, tc.term, SANITIZE_REPLACEMENT_STRING))
-		})
-	}
-}
-
-func TestRedactHeuristicJSONValues(t *testing.T) {
-	tests := map[string]struct{ input, expected string }{
-		"key untouched, value redacted":      {`{"requests":"requests"}`, `{"requests":"***"}`},
-		"whitespace before colon":            {"{\n  \"requests\" \t: \"requests\" }", "{\n  \"requests\" \t: \"***\" }"},
-		"siblings and array elements":        {`{"a":"requests","b":["requests","x requests"],"c":{"d":"requests"}}`, `{"a":"***","b":["***","x ***"],"c":{"d":"***"}}`},
-		"top-level string":                   {`"requests"`, `"***"`},
-		"non-string scalars untouched":       {`{"a":12345,"b":true,"c":null}`, `{"a":12345,"b":true,"c":null}`},
-		"escaped quote inside value":         {`{"a":"x \"requests\" y"}`, `{"a":"x \"***\" y"}`},
-		"escaped backslash ends value":       {`{"a":"requests\\"}`, `{"a":"***\\"}`},
-		"unicode escape decodes to term":     {`{"a":"\u0072equests"}`, `{"a":"***"}`},
-		"html chars kept unescaped":          {`{"a":"<requests>&"}`, `{"a":"<***>&"}`},
-		"unchanged value keeps its bytes":    {`{"a":"caf\u00e9 \/ x"}`, `{"a":"caf\u00e9 \/ x"}`},
-		"unterminated string does not panic": {`{"a":"requests`, `{"a":"requests`},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			actual := redactHeuristicJSONValues(tc.input, "requests", SANITIZE_REPLACEMENT_STRING)
-			assert.Equal(t, tc.expected, actual)
-			if json.Valid([]byte(tc.input)) {
-				assert.True(t, json.Valid([]byte(actual)))
-			}
-		})
-	}
-}
-
 // TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity guards the fix for a real corruption
 // path: a consumer that wraps this writer's output in a non-JSON formatter (e.g. zerolog's
 // ConsoleWriter, which decodes the JSON zerolog encodes and re-emits human-readable prose before
@@ -221,8 +139,8 @@ func TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":  {regex: regexp.MustCompile("token")},
-		"secret": {regex: regexp.MustCompile("secret")},
+		"token":  {groupToRedact: 0, regex: regexp.MustCompile("token")},
+		"secret": {groupToRedact: 0, regex: regexp.MustCompile("secret")},
 	}
 
 	pattern := "%s for my account, including my %s"
@@ -295,9 +213,9 @@ func TestScrubbingIoWriter(t *testing.T) {
 func TestScrubFunction(t *testing.T) {
 	t.Run("scrub everything in dict", func(t *testing.T) {
 		dict := ScrubbingDict{
-			"secret":       {regex: regexp.MustCompile("secret")},
-			"special":      {regex: regexp.MustCompile("special")},
-			"be disclosed": {regex: regexp.MustCompile("be disclosed")},
+			"secret":       {groupToRedact: 0, regex: regexp.MustCompile("secret")},
+			"special":      {groupToRedact: 0, regex: regexp.MustCompile("special")},
+			"be disclosed": {groupToRedact: 0, regex: regexp.MustCompile("be disclosed")},
 		}
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
@@ -341,12 +259,22 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 // exists to protect real JSON numbers, not prose.
 func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	config := configuration.NewInMemory()
-	config.Set(REDACTION_TERMS, []string{"12345"})
+	config.Set(configuration.AUTHENTICATION_TOKEN, "12345")
 	dict := GetScrubDictFromConfig(config)
 
 	actual := Scrub([]byte("id: 123451234"), dict)
 
 	assert.Equal(t, "id: ***1234", string(actual))
+}
+
+func TestScrub_NonJSONInputRedactsRedactionTermsOnlyAsWholeWords(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("id: 123451234, id2: 12345"), dict)
+
+	assert.Equal(t, "id: 123451234, id2: ***", string(actual))
 }
 
 func TestAddDefaults(t *testing.T) {
@@ -702,8 +630,8 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":    {regex: regexp.MustCompile("token")},
-		"password": {regex: regexp.MustCompile("password")},
+		"token":    {groupToRedact: 0, regex: regexp.MustCompile("token")},
+		"password": {groupToRedact: 0, regex: regexp.MustCompile("password")},
 	}
 
 	innerWriter := &mockWriter{
@@ -1159,4 +1087,166 @@ func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
 			assert.Equal(t, test.expected, output.String())
 		})
 	}
+}
+
+func TestRedactWholeWord_OnlyMatchesStandaloneWords(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		term     string
+		expected string
+	}{
+		{
+			name:     "whole input is the term",
+			input:    "request",
+			term:     "request",
+			expected: "***",
+		},
+		{
+			name:     "term at start of input followed by boundary",
+			input:    "request pending",
+			term:     "request",
+			expected: "*** pending",
+		},
+		{
+			name:     "term at end of input preceded by boundary",
+			input:    "pending request",
+			term:     "request",
+			expected: "pending ***",
+		},
+		{
+			name:     "term preceded by underscore is not a whole word",
+			input:    "no_relevant_request",
+			term:     "request",
+			expected: "no_relevant_request",
+		},
+		{
+			name:     "term followed by letters is not a whole word",
+			input:    "prerequests",
+			term:     "request",
+			expected: "prerequests",
+		},
+		{
+			name:     "term followed by punctuation is a whole word",
+			input:    "request!",
+			term:     "request",
+			expected: "***!",
+		},
+		{
+			name:     "term preceded and followed by digits is not a whole word",
+			input:    "id: 123451234",
+			term:     "12345",
+			expected: "id: 123451234",
+		},
+		{
+			name:     "term adjacent to underscore neighbor is not a whole word",
+			input:    "a_request_b",
+			term:     "request",
+			expected: "a_request_b",
+		},
+		{
+			name:     "Unicode letter neighbor is not a whole word",
+			input:    "préquest",
+			term:     "quest",
+			expected: "préquest",
+		},
+		{
+			name:     "Unicode digit neighbor is not a whole word",
+			input:    "request١",
+			term:     "request",
+			expected: "request١",
+		},
+		{
+			name:     "a rejected candidate match resumes search to find a later valid one",
+			input:    "xa-a-a",
+			term:     "a-a",
+			expected: "xa-***",
+		},
+		{
+			name:     "no occurrence of the term",
+			input:    "nothing here",
+			term:     "request",
+			expected: "nothing here",
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			term:     "request",
+			expected: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, redactWholeWord(test.input, test.term, SANITIZE_REPLACEMENT_STRING))
+		})
+	}
+}
+
+func TestRedactWholeWord_EmptyTermIsNoop(t *testing.T) {
+	assert.Equal(t, "request", redactWholeWord("request", "", SANITIZE_REPLACEMENT_STRING))
+}
+
+func TestScrub_RedactsRedactionTermsOnlyAsWholeWordsInJSON(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"request"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte(`{"result":"no_relevant_request","note":"request"}`), dict)
+
+	assert.Equal(t, `{"result":"no_relevant_request","note":"***"}`, string(actual))
+	assert.True(t, json.Valid(actual))
+}
+
+func TestScrub_RedactsBareNumberRedactionTermAsWholeWordAndKeepsValidJSON(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte(`{"count":12345}`), dict)
+
+	assert.Equal(t, `{"count":"***"}`, string(actual))
+	assert.True(t, json.Valid(actual))
+}
+
+func TestScrub_SecretsStillMatchAnywhereDespiteWholeWordRedactionTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "TOKEN")
+	config.Set(REDACTION_TERMS, []string{"guess"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("xTOKENy guess_word"), dict)
+
+	assert.Equal(t, "x***y guess_word", string(actual))
+}
+
+func TestScrub_SecretAppliedBeforeRedactionTerm(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "abc-secret-xyz")
+	config.Set(REDACTION_TERMS, []string{"secret"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("abc-secret-xyz"), dict)
+
+	assert.Equal(t, "***", string(actual))
+}
+
+func TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "shared")
+	config.Set(REDACTION_TERMS, []string{"shared"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("xsharedy"), dict)
+
+	assert.Equal(t, "x***y", string(actual))
+}
+
+func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"secret", "secret-token"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("credential: secret-token"), dict)
+
+	assert.Equal(t, "credential: ***", string(actual))
 }
