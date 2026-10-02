@@ -41,6 +41,8 @@ type mockWriter struct {
 	MaxBytesToWrite int
 }
 
+var _ func(configuration.Configuration) ScrubbingDict = GetScrubDictFromConfig
+
 func (m *mockWriter) Write(p []byte) (n int, err error) {
 	if m.MaxBytesToWrite > 0 {
 		length := min(m.MaxBytesToWrite, len(p))
@@ -106,6 +108,88 @@ func TestScrubbingWriter_GetScrubDictFromConfig_RedactionTerms(t *testing.T) {
 	require.Equal(t, "***", string(mockWriter.written), "configured redaction term should be scrubbed")
 }
 
+func TestScrubValue_RedactionTermsMatchWholeWords(t *testing.T) {
+	tests := map[string]struct {
+		term     string
+		input    string
+		expected string
+	}{
+		"whole input":                  {"request", "request", "***"},
+		"start and end":                {"request", "request x request", "*** x ***"},
+		"punctuation":                  {"request", "-request. (request)/request", "-***. (***)/***"},
+		"letter neighbor":              {"request", "prerequest requestX", "prerequest requestX"},
+		"digit neighbor":               {"request", "1request request2", "1request request2"},
+		"fused numeric term":           {"12345", "id: 123451234", "id: 123451234"},
+		"underscore neighbor":          {"request", "_request request_", "_request request_"},
+		"Unicode letter neighbor":      {"request", "żrequest requesté", "żrequest requesté"},
+		"Unicode number neighbor":      {"request", "١request request٢", "١request request٢"},
+		"overlap after rejected match": {"a-a", "xa-a-a", "xa-***"},
+		"empty term":                   {"", "keep", "keep"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			config.Set(REDACTION_TERMS, []string{test.term})
+
+			actual := ScrubValue([]byte(test.input), GetScrubDictFromConfig(config))
+
+			assert.Equal(t, test.expected, string(actual))
+		})
+	}
+}
+
+func TestScrub_RedactionTermsMatchWholeWordsAndKeepJSONValid(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"request", "12345", "a-a"})
+	input := []byte(`{"request":"request","result":"no_relevant_request","overlap":"xa-a-a","count":12345,"fused":123451234}`)
+
+	actual := Scrub(input, GetScrubDictFromConfig(config))
+
+	assert.Equal(t, `{"***":"***","result":"no_relevant_request","overlap":"xa-***","count":"***","fused":123451234}`, string(actual))
+	assert.True(t, json.Valid(actual))
+}
+
+func TestScrub_RedactionTermPrecedence(t *testing.T) {
+	t.Run("known secret matches anywhere before a contained redaction term", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "abc-secret-xyz")
+		config.Set(REDACTION_TERMS, []string{"secret"})
+
+		actual := ScrubValue([]byte("xabc-secret-xyzy"), GetScrubDictFromConfig(config))
+
+		assert.Equal(t, "x***y", string(actual))
+	})
+
+	t.Run("a value that is both a secret and redaction term matches anywhere", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "shared")
+		config.Set(REDACTION_TERMS, []string{"shared"})
+
+		actual := ScrubValue([]byte("xsharedy"), GetScrubDictFromConfig(config))
+
+		assert.Equal(t, "x***y", string(actual))
+	})
+
+	t.Run("an OAuth token added after a redaction term matches anywhere", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(REDACTION_TERMS, []string{"shared"})
+		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"shared"}`)
+
+		actual := ScrubValue([]byte("xsharedy"), GetScrubDictFromConfig(config))
+
+		assert.Equal(t, "x***y", string(actual))
+	})
+
+	t.Run("longer redaction term wins", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(REDACTION_TERMS, []string{"secret", "secret-token"})
+
+		actual := ScrubValue([]byte("secret-token"), GetScrubDictFromConfig(config))
+
+		assert.Equal(t, "***", string(actual))
+	})
+}
+
 // TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity guards the fix for a real corruption
 // path: a consumer that wraps this writer's output in a non-JSON formatter (e.g. zerolog's
 // ConsoleWriter, which decodes the JSON zerolog encodes and re-emits human-readable prose before
@@ -139,8 +223,8 @@ func TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":  {0, regexp.MustCompile("token"), ""},
-		"secret": {0, regexp.MustCompile("secret"), ""},
+		"token":  {regex: regexp.MustCompile("token")},
+		"secret": {regex: regexp.MustCompile("secret")},
 	}
 
 	pattern := "%s for my account, including my %s"
@@ -213,9 +297,9 @@ func TestScrubbingIoWriter(t *testing.T) {
 func TestScrubFunction(t *testing.T) {
 	t.Run("scrub everything in dict", func(t *testing.T) {
 		dict := ScrubbingDict{
-			"secret":       {0, regexp.MustCompile("secret"), ""},
-			"special":      {0, regexp.MustCompile("special"), ""},
-			"be disclosed": {0, regexp.MustCompile("be disclosed"), ""},
+			"secret":       {regex: regexp.MustCompile("secret")},
+			"special":      {regex: regexp.MustCompile("special")},
+			"be disclosed": {regex: regexp.MustCompile("be disclosed")},
 		}
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
@@ -256,10 +340,10 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 
 // TestScrub_NonJSONInputStillRedactsStaticTerms guards against a static term landing next to a
 // digit in plain, non-JSON text being silently skipped by the JSON-only digit-fusion guard, which
-// exists to protect real JSON numbers, not prose.
+// exists to protect real JSON numbers, not prose. Known secrets remain match-anywhere.
 func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	config := configuration.NewInMemory()
-	config.Set(REDACTION_TERMS, []string{"12345"})
+	config.Set(configuration.AUTHENTICATION_TOKEN, "12345")
 	dict := GetScrubDictFromConfig(config)
 
 	actual := Scrub([]byte("id: 123451234"), dict)
@@ -620,8 +704,8 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":    {0, regexp.MustCompile("token"), ""},
-		"password": {0, regexp.MustCompile("password"), ""},
+		"token":    {regex: regexp.MustCompile("token")},
+		"password": {regex: regexp.MustCompile("password")},
 	}
 
 	innerWriter := &mockWriter{

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/logging"
 	"maps"
 	"os/user"
 	"reflect"
@@ -18,6 +17,7 @@ import (
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
 

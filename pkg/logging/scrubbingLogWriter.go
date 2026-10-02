@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 
@@ -61,6 +63,8 @@ type scrubStruct struct {
 	regex *regexp.Regexp
 	// the exact term to replace
 	replace string
+	// wholeWord only matches where the term is not part of a larger word
+	wholeWord bool
 }
 
 type ScrubbingDict map[string]scrubStruct
@@ -111,13 +115,19 @@ func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
 
 func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
 	if replaceTerm != "" {
-		dict[replaceTerm] = scrubStruct{0, nil, replaceTerm}
+		dict[replaceTerm] = scrubStruct{replace: replaceTerm}
+	}
+}
+
+func addWholeWordTermToDict(replaceTerm string, dict ScrubbingDict) {
+	if _, exists := dict[replaceTerm]; replaceTerm != "" && !exists {
+		dict[replaceTerm] = scrubStruct{replace: replaceTerm, wholeWord: true}
 	}
 }
 
 func addRegexTermToDict(regexTerm string, matchGroup int, dict ScrubbingDict) {
 	if regexTerm != "" {
-		dict[regexTerm] = scrubStruct{matchGroup, regexp.MustCompile(regexTerm), ""}
+		dict[regexTerm] = scrubStruct{groupToRedact: matchGroup, regex: regexp.MustCompile(regexTerm)}
 	}
 }
 
@@ -128,10 +138,10 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS ([]string) arbitrary literal terms to redact from analytics/log
-// output, in addition to the token/OAuth-derived terms GetScrubDictFromConfig
-// already adds. Lives here rather than pkg/configuration since this package is
-// its only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
+// REDACTION_TERMS ([]string) guessed or inferred values to redact as whole words
+// from analytics/log output. Known secrets use token/OAuth configuration and remain
+// match-anywhere. Lives here rather than pkg/configuration since this package is its
+// only reader, matching the precedent of local_workflows.ConfigurationNewAuthenticationToken.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
@@ -141,7 +151,7 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
-		addStaticTermToDict(term, dict)
+		addWholeWordTermToDict(term, dict)
 	}
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
@@ -327,8 +337,6 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Same as above, but for values with no surrounding quotes at all, e.g. u: john.doe,
-	// The value class excludes ':' too: without that, a greedy separator backtracking off an
-	// already-redacted 'key': '***' leaves the colon for this group to swallow instead.
 	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s]+)[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
@@ -358,10 +366,7 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
-// Scrub applies scrubDict's redaction rules to data. JSON-value quoting and digit-fusion
-// protection apply only when data is itself valid JSON; the caller's intent doesn't override
-// what data actually is (see internalWrite). Use ScrubValue for a value already known to be a
-// bare, non-JSON leaf.
+// Scrub applies scrubDict to data, with JSON-aware protections only when data is valid JSON; see ScrubValue for bare leaves.
 func Scrub(data []byte, scrubDict ScrubbingDict) []byte {
 	return scrub(data, scrubDict, json.Valid(data))
 }
@@ -375,21 +380,34 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
-	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
-	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
+	// Apply known secrets before whole-word terms. Within whole-word terms, prefer
+	// longer values so a shorter term cannot partially redact an overlapping value.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		left, right := scrubDict[keys[i]], scrubDict[keys[j]]
+		if left.wholeWord != right.wholeWord {
+			return !left.wholeWord
+		}
+		if left.wholeWord && len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
 	for _, key := range keys {
 		entry := scrubDict[key]
 		// scrub from the replacement list first
 		if entry.replace != "" {
-			if jsonAware {
-				s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			} else {
+			if jsonAware && entry.wholeWord {
+				s = redactTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING, true)
+			} else if !jsonAware && entry.wholeWord {
+				s = redactWholeWord(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			} else if !jsonAware {
 				s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			} else {
+				s = RedactStaticTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 			}
 			continue
 		}
@@ -397,6 +415,30 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
 	}
 	return []byte(s)
+}
+
+func redactWholeWord(s, term, replacement string) string {
+	return redact(s, term, replacement, true, false)
+}
+
+func hasIdentifierNeighbor(s string, start, end int) bool {
+	if start > 0 {
+		before, _ := utf8.DecodeLastRuneInString(s[:start])
+		if isIdentifierRune(before) {
+			return true
+		}
+	}
+	if end < len(s) {
+		after, _ := utf8.DecodeRuneInString(s[end:])
+		if isIdentifierRune(after) {
+			return true
+		}
+	}
+	return false
+}
+
+func isIdentifierRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
 }
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
@@ -418,6 +460,14 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 //
 // Exported for reuse by pkg/analytics's SanitizeStaticValues, which has the same corruption risk.
 func RedactStaticTerm(s, term, replacement string) string {
+	return redactTerm(s, term, replacement, false)
+}
+
+func redactTerm(s, term, replacement string, wholeWord bool) string {
+	return redact(s, term, replacement, wholeWord, true)
+}
+
+func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	if term == "" {
 		return s
 	}
@@ -432,6 +482,20 @@ func RedactStaticTerm(s, term, replacement string) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
+		if wholeWord && hasIdentifierNeighbor(s, start, matchEnd) {
+			if jsonAware {
+				qs = qs.advance(s[end : start+1])
+			}
+			builder.WriteString(s[end : start+1])
+			end = start + 1
+			continue
+		}
+		if !jsonAware {
+			builder.WriteString(s[end:start])
+			builder.WriteString(replacement)
+			end = matchEnd
+			continue
+		}
 		qs = qs.advance(s[end:start])
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])

@@ -18,9 +18,29 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/metrics"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
+
+func TestReport_DoesNotExemptItsResultFromRedaction(t *testing.T) {
+	config := testConfig("https://api.snyk.io", testOrgID.String(), t.TempDir())
+	config.Set(logging.REDACTION_TERMS, []string{string(resultNoRelevantRequest)})
+	recorder := analytics.New()
+	engine := newTestEngine(t, config, http.DefaultClient)
+	engine.EXPECT().GetAnalytics().Return(recorder)
+
+	Report(t.Context(), engine, &Sink{})
+
+	payload, err := analytics.GetV2InstrumentationObject(
+		recorder.GetInstrumentation(),
+		analytics.WithConfiguration(config),
+	)
+	require.NoError(t, err)
+	extension := *payload.Data.Attributes.Interaction.Extension
+	assert.Equal(t, "***", extension[analyticsKeyResult])
+}
 
 func TestReport_RecordsEmissionWithContributorCount(t *testing.T) {
 	var posted bool

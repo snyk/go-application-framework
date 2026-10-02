@@ -12,6 +12,7 @@ import (
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -298,13 +299,13 @@ func Test_InstrumentationCollector(t *testing.T) {
 	})
 
 	t.Run("it should redact a static term embedded in freeform extension text without corrupting or under-redacting it", func(t *testing.T) {
-		// Extension leaves are scrubbed via ScrubValue, not Scrub: a term adjacent to `:`/`,` or
-		// fused to a digit must still be redacted verbatim, with no JSON-value quoting or digit-fusion skip.
+		// Extension leaves are scrubbed via ScrubValue, not Scrub. Known secrets remain
+		// match-anywhere, including next to punctuation or fused to a digit.
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
 		cfg := configuration.NewInMemory()
-		cfg.Set(logging.REDACTION_TERMS, []string{"1000"})
+		cfg.Set(configuration.AUTHENTICATION_TOKEN, "1000")
 
 		ic.AddExtension("note", "port:1000,timeout:3000")
 		ic.AddExtension("adjacent", "trace id 10001234 seen")
@@ -325,6 +326,22 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should redact REDACTION_TERMS only at word boundaries in string extension values", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		cfg := configuration.NewInMemory()
+		cfg.Set(logging.REDACTION_TERMS, []string{"request"})
+
+		ic.AddExtension("embedded", "no_relevant_request")
+		ic.AddExtension("standalone", "request pending")
+
+		actual, err := GetV2InstrumentationObject(ic, WithLogger(&logger), WithConfiguration(cfg))
+		require.NoError(t, err)
+		extension := *actual.Data.Attributes.Interaction.Extension
+
+		assert.Equal(t, "no_relevant_request", extension["embedded"])
+		assert.Equal(t, "*** pending", extension["standalone"])
 	})
 
 	t.Run("it should not corrupt sibling fields when a short-form-keyed extension value is a nested object", func(t *testing.T) {
