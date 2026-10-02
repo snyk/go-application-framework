@@ -63,8 +63,7 @@ const (
 	// machine identification
 	// ---------
 
-	MACHINE_ID        string = "internal_snyk_machine_id"        // MACHINE_ID (string) returns the identifier of the machine the application is running on
-	MACHINE_ID_SOURCE string = "internal_snyk_machine_id_source" // MACHINE_ID_SOURCE (string) returns how MACHINE_ID was resolved: "provided", "persisted", "generated" or "ephemeral"; "ephemeral" means the identifier is not stable across runs, so consumers needing a stable identifier must not rely on it
+	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) returns the identifier of the machine the application is running on. It is empty when no stable identifier is available, so consumers must treat an empty value as no usable machine identifier
 
 	// ---------
 	// general workflow configuration

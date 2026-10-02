@@ -229,12 +229,6 @@ func Test_CreateAppEngine_providesMachineId(t *testing.T) {
 	assert.NotEmpty(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
-func Test_CreateAppEngine_reportsPlaceholderMachineIdAsEphemeral(t *testing.T) {
-	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
-
-	assert.Equal(t, "ephemeral", engine.GetConfiguration().GetString(configuration.MACHINE_ID_SOURCE))
-}
-
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	localConfig := configuration.NewWithOpts()
 	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
