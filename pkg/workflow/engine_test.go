@@ -255,13 +255,67 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 }
 
 func Test_Engine_SetterRuntimeInfo(t *testing.T) {
-	ri := runtimeinfo.New()
+	ri := runtimeinfo.New(runtimeinfo.WithName("some-app"), runtimeinfo.WithVersion("1.2.3"))
 	config := configuration.NewInMemory()
 	engine := NewWorkFlowEngine(config)
 
 	engine.SetRuntimeInfo(ri)
 
-	assert.Equal(t, ri, engine.GetRuntimeInfo())
+	assert.Equal(t, "some-app", engine.GetRuntimeInfo().GetName())
+	assert.Equal(t, "1.2.3", engine.GetRuntimeInfo().GetVersion())
+}
+
+func Test_Engine_RuntimeInfo(t *testing.T) {
+	t.Run("is nil when the host did not set one", func(t *testing.T) {
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+
+		assert.Nil(t, engine.GetRuntimeInfo())
+	})
+
+	t.Run("reads the machine id from the configuration on every call", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "initial")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		ri := engine.GetRuntimeInfo()
+
+		config.Set(configuration.MACHINE_ID, "changed")
+
+		assert.Equal(t, "changed", ri.GetMachineID())
+	})
+
+	t.Run("reads the machine id from a configuration set later", func(t *testing.T) {
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		replacement := configuration.NewInMemory()
+		replacement.Set(configuration.MACHINE_ID, "replacement")
+
+		engine.SetConfiguration(replacement)
+
+		assert.Equal(t, "replacement", engine.GetRuntimeInfo().GetMachineID())
+	})
+
+	t.Run("updates the application information of the host", func(t *testing.T) {
+		hostRuntimeInfo := runtimeinfo.New(runtimeinfo.WithName("some-app"), runtimeinfo.WithVersion("1.0.0"))
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+		engine.SetRuntimeInfo(hostRuntimeInfo)
+
+		engine.GetRuntimeInfo().SetVersion("2.0.0")
+		engine.GetRuntimeInfo().SetName("other-app")
+
+		assert.Equal(t, "2.0.0", hostRuntimeInfo.GetVersion())
+		assert.Equal(t, "other-app", hostRuntimeInfo.GetName())
+	})
+
+	t.Run("provides the machine id through an engine wrapper", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "wrapped")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		wrapper := &engineWrapper{WrappedEngine: engine}
+
+		assert.Equal(t, "wrapped", wrapper.GetRuntimeInfo().GetMachineID())
+	})
 }
 
 func Test_Engine_ClonedNetworkAccess(t *testing.T) {
@@ -464,7 +518,7 @@ func Test_InvocationContext_AllMethods(t *testing.T) {
 		assert.NotNil(t, invocation.GetUserInterface())
 
 		// GetRuntimeInfo
-		assert.Equal(t, ri, invocation.GetRuntimeInfo())
+		assert.Equal(t, "test-app", invocation.GetRuntimeInfo().GetName())
 
 		// GetWorkflowIdentifier
 		assert.Equal(t, wfId.String(), invocation.GetWorkflowIdentifier().String())

@@ -368,20 +368,6 @@ func (mr *MockInvocationContextMockRecorder) GetLogger() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogger", reflect.TypeOf((*MockInvocationContext)(nil).GetLogger))
 }
 
-// GetMachineID mocks base method.
-func (m *MockInvocationContext) GetMachineID() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMachineID")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// GetMachineID indicates an expected call of GetMachineID.
-func (mr *MockInvocationContextMockRecorder) GetMachineID() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachineID", reflect.TypeOf((*MockInvocationContext)(nil).GetMachineID))
-}
-
 // GetNetworkAccess mocks base method.
 func (m *MockInvocationContext) GetNetworkAccess() networking.NetworkAccess {
 	m.ctrl.T.Helper()

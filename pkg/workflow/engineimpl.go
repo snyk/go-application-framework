@@ -538,11 +538,24 @@ func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
-	return e.runtimeInfo
+	if e.runtimeInfo == nil {
+		return nil
+	}
+	return &engineRuntimeInfo{RuntimeInfo: e.runtimeInfo, engine: e}
 }
 
 func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
 	e.runtimeInfo = ri
+}
+
+// engineRuntimeInfo reads the machine id from the engine configuration on each call so the configuration key stays the single source.
+type engineRuntimeInfo struct {
+	runtimeinfo.RuntimeInfo
+	engine *EngineImpl
+}
+
+func (ri *engineRuntimeInfo) GetMachineID() string {
+	return ri.engine.GetConfiguration().GetString(configuration.MACHINE_ID)
 }
 
 // GetGlobalConfiguration returns the global configuration options.

@@ -82,8 +82,6 @@ type InvocationContext interface {
 	GetEnhancedLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
-	// GetMachineID returns the identifier of the machine the application is running on, or empty when no stable identifier is available.
-	GetMachineID() string
 	GetFileFilter(path string, options ...utils.FileFilterOption) *utils.FileFilter
 }
 

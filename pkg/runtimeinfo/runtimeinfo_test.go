@@ -18,6 +18,12 @@ func TestRuntimeInfo_NewWithName(t *testing.T) {
 	assert.Equal(t, "asdf", ri.GetName())
 }
 
+func TestRuntimeInfo_NewHasNoMachineId(t *testing.T) {
+	ri := New()
+
+	assert.Empty(t, ri.GetMachineID())
+}
+
 func TestRuntimeInfo_NewWithVersion(t *testing.T) {
 	ri := New(WithVersion("1.2.3"))
 
