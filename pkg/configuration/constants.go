@@ -63,7 +63,7 @@ const (
 	// machine identification
 	// ---------
 
-	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) returns the identifier of the machine the application is running on. Host applications read this key directly; workflows and other consumers can use RuntimeInfo.GetMachineID() via engine.GetRuntimeInfo() or invocation.GetRuntimeInfo(). It is empty when no stable identifier is available, so consumers must treat an empty value as no usable machine identifier
+	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) returns the identifier of the machine the application is running on. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
 
 	// ---------
 	// general workflow configuration

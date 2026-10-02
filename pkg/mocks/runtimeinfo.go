@@ -34,11 +34,12 @@ func (m *MockRuntimeInfo) EXPECT() *MockRuntimeInfoMockRecorder {
 }
 
 // GetMachineID mocks base method.
-func (m *MockRuntimeInfo) GetMachineID() string {
+func (m *MockRuntimeInfo) GetMachineID() (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMachineID")
 	ret0, _ := ret[0].(string)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetMachineID indicates an expected call of GetMachineID.

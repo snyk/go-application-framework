@@ -3,6 +3,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
@@ -281,7 +282,10 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 
 		config.Set(configuration.MACHINE_ID, "changed")
 
-		assert.Equal(t, "changed", ri.GetMachineID())
+		machineID, err := ri.GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "changed", machineID)
 	})
 
 	t.Run("reads the machine id from a configuration set later", func(t *testing.T) {
@@ -292,7 +296,37 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 
 		engine.SetConfiguration(replacement)
 
-		assert.Equal(t, "replacement", engine.GetRuntimeInfo().GetMachineID())
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "replacement", machineID)
+	})
+
+	t.Run("reports no machine id when the configured value is empty", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+		assert.Empty(t, machineID)
+	})
+
+	t.Run("returns the error of the configuration when the machine id cannot be resolved", func(t *testing.T) {
+		resolveErr := errors.New("machine id resolution failed")
+		config := configuration.NewInMemory()
+		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
+			return nil, resolveErr
+		})
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, resolveErr)
+		assert.Empty(t, machineID)
 	})
 
 	t.Run("updates the application information of the host", func(t *testing.T) {
@@ -314,7 +348,10 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 		engine.SetRuntimeInfo(runtimeinfo.New())
 		wrapper := &engineWrapper{WrappedEngine: engine}
 
-		assert.Equal(t, "wrapped", wrapper.GetRuntimeInfo().GetMachineID())
+		machineID, err := wrapper.GetRuntimeInfo().GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "wrapped", machineID)
 	})
 }
 

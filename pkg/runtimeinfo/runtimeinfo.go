@@ -1,6 +1,11 @@
 package runtimeinfo
 
+import "errors"
+
 //go:generate go tool github.com/golang/mock/mockgen -source=runtimeinfo.go -destination ../mocks/runtimeinfo.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/runtimeinfo/
+
+// ErrNoMachineID is returned by GetMachineID when no stable machine identifier is available.
+var ErrNoMachineID = errors.New("no stable machine identifier available")
 
 // RuntimeInfo describes the runtime the application runs in, grouped into application and machine information.
 type RuntimeInfo interface {
@@ -13,8 +18,8 @@ type RuntimeInfo interface {
 
 	// machine
 
-	// GetMachineID returns the identifier of the machine the application runs on, or empty when no stable identifier is available.
-	GetMachineID() string
+	// GetMachineID returns the identifier of the machine the application runs on, or ErrNoMachineID when no stable identifier is available.
+	GetMachineID() (string, error)
 }
 
 type opt func(RuntimeInfo)
@@ -42,8 +47,8 @@ func (ri *defaultRuntimeInfo) SetVersion(v string) {
 	ri.version = v
 }
 
-func (ri *defaultRuntimeInfo) GetMachineID() string {
-	return ""
+func (ri *defaultRuntimeInfo) GetMachineID() (string, error) {
+	return "", ErrNoMachineID
 }
 
 func New(opts ...opt) RuntimeInfo {

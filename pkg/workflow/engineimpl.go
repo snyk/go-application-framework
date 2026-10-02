@@ -554,8 +554,15 @@ type engineRuntimeInfo struct {
 	engine *EngineImpl
 }
 
-func (ri *engineRuntimeInfo) GetMachineID() string {
-	return ri.engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
+	id, err := ri.engine.GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to read machine id: %w", err)
+	}
+	if id == "" {
+		return "", runtimeinfo.ErrNoMachineID
+	}
+	return id, nil
 }
 
 // GetGlobalConfiguration returns the global configuration options.

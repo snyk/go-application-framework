@@ -236,7 +236,10 @@ func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(
 	)
 	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
 	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		machineID := invocation.GetRuntimeInfo().GetMachineID()
+		machineID, machineIDErr := invocation.GetRuntimeInfo().GetMachineID()
+		if machineIDErr != nil {
+			return nil, machineIDErr
+		}
 		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machineID)}, nil
 	})
 	require.NoError(t, err)
@@ -255,7 +258,10 @@ func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
 	)
 
-	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), engine.GetRuntimeInfo().GetMachineID())
+	machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.NoError(t, err)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
 }
 
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
