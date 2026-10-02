@@ -1861,9 +1861,13 @@ func truncatingJSONServer(t *testing.T, fullBody []byte, truncateAt int) (*httpt
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if atomic.AddInt32(&attempts, 1) == 1 {
 			hj, ok := w.(http.Hijacker)
-			require.True(t, ok)
+			if !assert.True(t, ok) {
+				return
+			}
 			conn, bufrw, err := hj.Hijack()
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			defer conn.Close()
 			_, _ = fmt.Fprintf(bufrw, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n", len(fullBody))
 			_, _ = bufrw.Write(fullBody[:truncateAt]) //nolint:errcheck // test fixture, best-effort write to a hijacked connection
