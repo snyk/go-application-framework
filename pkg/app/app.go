@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/machineid"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
@@ -329,6 +330,17 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 	return callback
 }
 
+func defaultMachineID(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	opts := []machineid.ResolveOption{machineid.WithLogger(logger)}
+	if ri := engine.GetRuntimeInfo(); ri != nil {
+		opts = append(opts, machineid.WithRuntimeInfo(ri))
+	}
+	if extra, ok := config.Get(machineIDResolveOptionsKey).([]machineid.ResolveOption); ok {
+		opts = append(opts, extra...)
+	}
+	return machineid.Resolve(opts...)
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -352,7 +364,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
-	config.AddDefaultValue(configuration.MACHINE_ID, configuration.StandardDefaultValueFunction("tmp-hardcoded-value"))
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, config, logger))
+	err = config.AddKeyDependency(configuration.MACHINE_ID, configuration.CLIENT_MACHINE_ID)
+	if err != nil {
+		logger.Print("Failed to add dependency for MACHINE_ID:", err)
+	}
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see

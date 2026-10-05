@@ -29,6 +29,12 @@ const (
 	INTEGRATION_ENVIRONMENT_VERSION string = "snyk_integration_environment_version" // INTEGRATION_ENVIRONMENT_VERSION (string) sets/returns the version of the environment of the integration for example the IDE version
 
 	// ---------
+	// machine identity
+	// ---------
+
+	CLIENT_MACHINE_ID string = "internal_snyk_client_machine_id" // CLIENT_MACHINE_ID (string) explicitly supplied machine identifier, typically from a device-management tool; when set and valid, MACHINE_ID returns it
+
+	// ---------
 	// Org related configuration
 	// ---------
 

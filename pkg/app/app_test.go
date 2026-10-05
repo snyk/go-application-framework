@@ -223,13 +223,49 @@ func Test_CreateAppEngine(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func isolateMachineIDStorage(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("ProgramData", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+}
+
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {
+	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
 
-	assert.NotEmpty(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+	machineID := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+
+	assert.NotEmpty(t, machineID)
+	assert.Equal(t, machineID, CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts())).GetConfiguration().GetString(configuration.MACHINE_ID),
+		"a second engine on the same machine must resolve the same machine id")
+}
+
+func Test_CreateAppEngine_providesTheExplicitlySuppliedMachineId(t *testing.T) {
+	isolateMachineIDStorage(t)
+	config := configuration.NewWithOpts()
+	config.Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+}
+
+func Test_CreateAppEngine_explicitlySuppliedMachineIdWinsAfterAFirstLookupWithCachingEnabled(t *testing.T) {
+	isolateMachineIDStorage(t)
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(configuration.NoCacheExpiration))
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+
+	engine.GetConfiguration().Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
+
+	assert.NotEqual(t, "explicit-machine-id", resolved)
+	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
 func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
+	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(
 		WithConfiguration(configuration.NewWithOpts()),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
@@ -253,6 +289,7 @@ func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(
 }
 
 func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *testing.T) {
+	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(
 		WithConfiguration(configuration.NewWithOpts()),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
