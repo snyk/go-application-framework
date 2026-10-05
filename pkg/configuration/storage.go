@@ -59,19 +59,13 @@ func IsKeyDeleted(val any) bool {
 }
 
 type JsonStorage struct {
-	path     string
-	config   Configuration
-	fileLock *flock.Flock
-	mutex    sync.Mutex
+	path   string
+	config Configuration
+	mutex  sync.Mutex
 
-	// inProcess and lockHeld close a gap in *flock.Flock: its OS-level lock only
-	// guards against other processes, so two goroutines sharing this same
-	// JsonStorage in one process would otherwise both be granted Lock() at once.
-	// inProcess is a binary semaphore acquired by Lock and released by Unlock;
-	// lockHeld records whether this instance currently holds it, so a failed
-	// Lock never skews the count and an unmatched Unlock is a safe no-op.
-	inProcess *semaphore.Weighted
-	lockHeld  int32
+	fileLock  *flock.Flock        // OS-level lock, only guards file against other processes
+	inProcess *semaphore.Weighted // binary semaphore guards against other goroutines
+	lockHeld  atomic.Bool
 }
 
 type JsonOption func(*JsonStorage)
@@ -182,12 +176,13 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 		return err
 	}
 
-	atomic.StoreInt32(&s.lockHeld, 1)
+	s.lockHeld.Store(true)
 	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	if !atomic.CompareAndSwapInt32(&s.lockHeld, 1, 0) {
+	// match prior behavior Unlock is a safe no-op
+	if !s.lockHeld.CompareAndSwap(true, false) {
 		return nil
 	}
 
