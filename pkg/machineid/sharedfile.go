@@ -40,9 +40,6 @@ const (
 	scopeUser    = "user"
 )
 
-// defaultWriterIdentity is recorded as the writer field when the consumer did not identify itself.
-const defaultWriterIdentity = "go-application-framework"
-
 // sharedFile is the schema of the machine-identity file shared by every Snyk product on the
 // machine. GAF only ever writes machine_id, identifier_source, schema_version, scope,
 // first_seen_at, updated_at and writer; serial_number, hostname and snyk_machine_id may be
@@ -229,6 +226,21 @@ func mergeKnownSharedFileFields(sf sharedFile, existingRaw map[string]json.RawMe
 	return existingRaw, nil
 }
 
+// readExistingSharedFile returns the file at path both as a sharedFile and as its raw top-level
+// keys. A missing file, or one holding anything but a JSON object (null included), is treated as
+// absent: both results are then empty, so the caller rewrites the file from scratch.
+func readExistingSharedFile(path string) (sharedFile, map[string]json.RawMessage) {
+	var sf sharedFile
+	var raw map[string]json.RawMessage
+	data, err := os.ReadFile(path)
+	if err != nil || json.Unmarshal(data, &raw) != nil || raw == nil {
+		return sharedFile{}, map[string]json.RawMessage{}
+	}
+	//nolint:errcheck // a field of the wrong type is left zero; the caller fills in what GAF writes
+	_ = json.Unmarshal(data, &sf)
+	return sf, raw
+}
+
 // writeSharedFileValue serializes writers to path with flock, then applies mutate to the file's
 // current contents (or a zero sharedFile if it does not yet exist) and writes back the result.
 // createDir controls whether the parent directory may be created, and also which scope is stamped
@@ -261,14 +273,7 @@ func writeSharedFileValue(path string, createDir bool, writer string, mutate fun
 	}
 	defer unlock()
 
-	sf := sharedFile{}
-	existingRaw := map[string]json.RawMessage{}
-	if data, readErr := os.ReadFile(path); readErr == nil {
-		//nolint:errcheck // an unparsable existing file is treated as absent; mutate below fills sf from scratch
-		_ = json.Unmarshal(data, &sf)
-		//nolint:errcheck // ditto; existingRaw just stays empty, so nothing is preserved from an unparsable file
-		_ = json.Unmarshal(data, &existingRaw)
-	}
+	sf, existingRaw := readExistingSharedFile(path)
 
 	originalFirstSeenAt := sf.FirstSeenAt
 	mutate(&sf)
@@ -323,15 +328,15 @@ func writeSharedFileValue(path string, createDir bool, writer string, mutate fun
 
 // writeSharedFileID stores candidateID in the machine-wide shared file when its directory is
 // writable, otherwise in the per-user one, retrying per-user if the machine-wide write itself fails
-// (the writability probe only checks the directory). Unless overwrite is set, a valid id already in
-// the chosen file is kept and returned instead, so products racing to write converge on one value.
-func writeSharedFileID(paths pathPair, candidateID, source, writer string, overwrite bool, logger *zerolog.Logger) (string, error) {
+// (the writability probe only checks the directory). A valid id already in the chosen file is kept
+// and returned instead, so products racing to write converge on one value.
+func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
 	logger = effectiveLogger(logger)
 	path := selectWritePath(paths, logger)
-	id, err := writeSharedFileIDAt(path, path == paths.perUser, candidateID, source, writer, overwrite, logger)
+	id, err := writeSharedFileIDAt(path, path == paths.perUser, candidateID, source, writer, logger)
 	if err != nil && path == paths.machineWide && paths.perUser != "" {
 		logger.Debug().Err(err).Str("path", path).Msg("machine id: machine-wide shared file write failed, falling back to per-user path")
-		id, err = writeSharedFileIDAt(paths.perUser, true, candidateID, source, writer, overwrite, logger)
+		id, err = writeSharedFileIDAt(paths.perUser, true, candidateID, source, writer, logger)
 	}
 	if err != nil {
 		logger.Debug().Err(err).Msg("machine id: shared file write failed on every candidate path")
@@ -340,10 +345,10 @@ func writeSharedFileID(paths pathPair, candidateID, source, writer string, overw
 	return id, nil
 }
 
-func writeSharedFileIDAt(path string, createDir bool, candidateID, source, writer string, overwrite bool, logger *zerolog.Logger) (string, error) {
+func writeSharedFileIDAt(path string, createDir bool, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
 	id := candidateID
 	err := writeSharedFileValue(path, createDir, writer, func(sf *sharedFile) {
-		if !overwrite && !blank(sf.MachineID) && valid(sf.MachineID) {
+		if !blank(sf.MachineID) && valid(sf.MachineID) {
 			id = sf.MachineID
 			logger.Debug().Str("path", path).Msg("machine id: shared file already holds a value, keeping it")
 			return

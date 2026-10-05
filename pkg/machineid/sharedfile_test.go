@@ -204,6 +204,19 @@ func newTempSharedFilePaths(t *testing.T) pathPair {
 	}
 }
 
+// newPerUserOnlySharedFilePaths returns paths whose machine-wide parent is a regular file, so the
+// machine-wide directory can never be created or written on any OS (on Windows selectWritePath
+// would otherwise create it), and every write deterministically lands in the per-user file.
+func newPerUserOnlySharedFilePaths(t *testing.T) pathPair {
+	t.Helper()
+	blocker := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
+	return pathPair{
+		machineWide: filepath.Join(blocker, "Snyk", "machine-id.json"),
+		perUser:     filepath.Join(t.TempDir(), "per-user", ".snyk", "machine-id.json"),
+	}
+}
+
 func writeRawSharedFile(t *testing.T, path string, content map[string]any) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -263,10 +276,14 @@ func TestReadSharedFileSkipsUnusableMachineWideCandidate(t *testing.T) {
 			prepareMachineWide(t, paths.machineWide)
 			writeRawSharedFile(t, paths.perUser, map[string]any{"machine_id": "per-user-id"})
 
-			sf := readSharedFile(paths, nil)
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+			sf := readSharedFile(paths, &logger)
 
 			require.NotNil(t, sf)
 			require.Equal(t, "per-user-id", sf.MachineID)
+			require.Contains(t, logs.String(), jsonEscapedPath(t, paths.machineWide), "the skipped machine-wide candidate must be logged with its path")
 		})
 	}
 }
@@ -282,7 +299,7 @@ func TestWriteSharedFileIDWritesMachineWideWhenItsDirectoryIsWritable(t *testing
 	paths := newTempSharedFilePaths(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))
 
-	id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, nil)
+	id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
 
 	require.NoError(t, err)
 	require.Equal(t, "new-id", id)
@@ -313,7 +330,7 @@ func TestWriteSharedFileIDWritesPerUserWhenMachineWideDirectoryIsMissing(t *test
 	defer withZeroUmask(t)()
 	paths := newTempSharedFilePaths(t)
 
-	id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, nil)
+	id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
 
 	require.NoError(t, err)
 	require.Equal(t, "new-id", id)
@@ -336,7 +353,7 @@ func TestWriteSharedFileIDWritesPerUserWhenMachineWideDirectoryIsNotWritable(t *
 	require.NoError(t, os.Chmod(dir, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir cleanup can remove dir
 
-	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, nil)
+	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
 
 	require.NoError(t, err)
 	require.NoFileExists(t, paths.machineWide)
@@ -350,7 +367,7 @@ func TestWriteSharedFileIDFallsBackToPerUserWhenTheMachineWideWriteFails(t *test
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
-	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, &logger)
+	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", &logger)
 
 	require.NoError(t, err)
 	require.Equal(t, "new-id", readRawSharedFile(t, paths.perUser)["machine_id"])
@@ -363,38 +380,24 @@ func TestWriteSharedFileIDFailsWhenNoLocationIsWritable(t *testing.T) {
 	blockingParent := filepath.Dir(filepath.Dir(paths.perUser))
 	require.NoError(t, os.WriteFile(blockingParent, []byte("not a directory"), 0o600))
 
-	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, nil)
+	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
 
 	require.Error(t, err)
 }
 
 func TestWriteSharedFileIDKeepsAnIDAlreadyInTheFile(t *testing.T) {
-	paths := newTempSharedFilePaths(t)
+	paths := newPerUserOnlySharedFilePaths(t)
 	writeRawSharedFile(t, paths.perUser, map[string]any{"machine_id": "existing-id", "identifier_source": "anything"})
 
-	id, err := writeSharedFileID(paths, "candidate-id", "generated", "test-writer", false, nil)
+	id, err := writeSharedFileID(paths, "candidate-id", "generated", "test-writer", nil)
 
 	require.NoError(t, err)
 	require.Equal(t, "existing-id", id)
 	require.Equal(t, "existing-id", readRawSharedFile(t, paths.perUser)["machine_id"])
 }
 
-func TestWriteSharedFileIDWithOverwriteReplacesAnIDAlreadyInTheFile(t *testing.T) {
-	paths := newTempSharedFilePaths(t)
-	writeRawSharedFile(t, paths.perUser, map[string]any{"machine_id": "existing-id"})
-
-	id, err := writeSharedFileID(paths, "provided-id", "provided", defaultWriterIdentity, true, nil)
-
-	require.NoError(t, err)
-	require.Equal(t, "provided-id", id)
-	raw := readRawSharedFile(t, paths.perUser)
-	require.Equal(t, "provided-id", raw["machine_id"])
-	require.Equal(t, "provided", raw["identifier_source"])
-	require.Equal(t, defaultWriterIdentity, raw["writer"])
-}
-
 func TestWriteSharedFileIDPreservesFieldsItDoesNotModel(t *testing.T) {
-	paths := newTempSharedFilePaths(t)
+	paths := newPerUserOnlySharedFilePaths(t)
 	writeRawSharedFile(t, paths.perUser, map[string]any{
 		"serial_number":     "5CG1234ABC",
 		"hostname":          "some-host",
@@ -403,14 +406,32 @@ func TestWriteSharedFileIDPreservesFieldsItDoesNotModel(t *testing.T) {
 		"identifier_source": "",
 	})
 
-	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", false, nil)
+	_, err := writeSharedFileID(paths, "new-id", "persisted", "some-product/1.2.3", nil)
 
 	require.NoError(t, err)
 	raw := readRawSharedFile(t, paths.perUser)
+	require.Equal(t, "persisted", raw["identifier_source"])
+	require.Equal(t, "some-product/1.2.3", raw["writer"])
 	require.Equal(t, "5CG1234ABC", raw["serial_number"])
 	require.Equal(t, "some-host", raw["hostname"])
 	require.Equal(t, "keep-me", raw["a_future_field"])
 	require.Equal(t, "2020-01-01T00:00:00Z", raw["first_seen_at"])
+}
+
+func TestWriteSharedFileIDTreatsAFileHoldingNonObjectJSONAsAbsent(t *testing.T) {
+	for _, content := range []string{"null", "[]", `"x"`, "42"} {
+		t.Run(content, func(t *testing.T) {
+			paths := newPerUserOnlySharedFilePaths(t)
+			require.NoError(t, os.MkdirAll(filepath.Dir(paths.perUser), 0o755))
+			require.NoError(t, os.WriteFile(paths.perUser, []byte(content), 0o600))
+
+			id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
+
+			require.NoError(t, err)
+			require.Equal(t, "new-id", id)
+			require.Equal(t, "new-id", readSharedFile(paths, nil).MachineID)
+		})
+	}
 }
 
 func TestDirWritableConcurrentCallsDoNotRace(t *testing.T) {
