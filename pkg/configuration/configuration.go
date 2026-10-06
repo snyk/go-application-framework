@@ -436,13 +436,13 @@ func (ev *extendedViper) Unset(key string) {
 	// If we're unsetting a key, we're intending to persist it.
 	ev.PersistInStorage(key)
 
-	// The Deleted sentinel marks the key for deletion in storage.
-	ev.Set(key, Deleted)
+	// An empty struct marks the key for deletion in JsonStorage.
+	ev.Set(key, keyDeleted)
 
 	// Do the same for all this key's alternatives
 	for _, otherKey := range ev.GetAlternativeKeys(key) {
 		ev.PersistInStorage(otherKey)
-		ev.Set(otherKey, Deleted)
+		ev.Set(otherKey, keyDeleted)
 	}
 }
 
