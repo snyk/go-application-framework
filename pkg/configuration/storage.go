@@ -63,9 +63,9 @@ type JsonStorage struct {
 	config Configuration
 	mutex  sync.Mutex
 
-	fileLock  *flock.Flock        // OS-level lock, only guards file against other processes
-	inProcess *semaphore.Weighted // binary semaphore guards against other goroutines
-	lockHeld  atomic.Bool
+	fileIntraProcessLock *flock.Flock
+	fileInProcessLock    *semaphore.Weighted
+	fileLockHeld         atomic.Bool
 }
 
 type JsonOption func(*JsonStorage)
@@ -78,9 +78,9 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path:      path,
-		fileLock:  flock.New(path + ".lock"),
-		inProcess: semaphore.NewWeighted(1),
+		path:                 path,
+		fileIntraProcessLock: flock.New(path + ".lock"),
+		fileInProcessLock:    semaphore.NewWeighted(1),
 	}
 
 	for _, opt := range options {
@@ -166,27 +166,27 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
-	if err := s.inProcess.Acquire(ctx, 1); err != nil {
+	if err := s.fileInProcessLock.Acquire(ctx, 1); err != nil {
 		return err
 	}
 
-	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
+	_, err := s.fileIntraProcessLock.TryLockContext(ctx, retryDelay)
 	if err != nil {
-		s.inProcess.Release(1)
+		s.fileInProcessLock.Release(1)
 		return err
 	}
 
-	s.lockHeld.Store(true)
+	s.fileLockHeld.Store(true)
 	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	// match prior behavior Unlock is a safe no-op
-	if !s.lockHeld.CompareAndSwap(true, false) {
+	// match prior behavior Unlock is a safe no-op if called twice
+	if !s.fileLockHeld.CompareAndSwap(true, false) {
 		return nil
 	}
 
-	err := s.fileLock.Unlock()
-	s.inProcess.Release(1)
+	err := s.fileIntraProcessLock.Unlock()
+	s.fileInProcessLock.Release(1)
 	return err
 }
