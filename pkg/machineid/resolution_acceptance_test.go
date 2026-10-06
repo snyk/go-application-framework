@@ -17,7 +17,7 @@ import (
 type isolatedMachine struct {
 	home   string
 	shared pathPair
-	legacy pathPair
+	studio pathPair
 }
 
 func newIsolatedMachine(t *testing.T) isolatedMachine {
@@ -27,9 +27,9 @@ func newIsolatedMachine(t *testing.T) isolatedMachine {
 	m := isolatedMachine{
 		home:   t.TempDir(),
 		shared: newPerUserOnlySharedFilePaths(t),
-		legacy: pathPair{
-			machineWide: filepath.Join(t.TempDir(), "legacy-machine-wide", "device-id"),
-			perUser:     filepath.Join(t.TempDir(), "legacy-per-user", "device-id"),
+		studio: pathPair{
+			machineWide: filepath.Join(t.TempDir(), "studio-machine-wide", "device-id"),
+			perUser:     filepath.Join(t.TempDir(), "studio-per-user", "device-id"),
 		},
 	}
 	t.Setenv("HOME", m.home)
@@ -37,8 +37,8 @@ func newIsolatedMachine(t *testing.T) isolatedMachine {
 
 	sharedFilePaths = func() pathPair { return m.shared }
 	t.Cleanup(func() { sharedFilePaths = defaultSharedFilePaths })
-	legacyDeviceIDPaths = func() pathPair { return m.legacy }
-	t.Cleanup(func() { legacyDeviceIDPaths = defaultLegacyDeviceIDPaths })
+	studioDeviceIDPaths = func() pathPair { return m.studio }
+	t.Cleanup(func() { studioDeviceIDPaths = defaultStudioDeviceIDPaths })
 
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
@@ -123,10 +123,10 @@ func TestAcceptance_ExplicitIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t
 		`"serial_number":"C02Q7KHTGFWF","scope":"user","first_seen_at":"2026-09-14T08:14:03Z",` +
 		`"updated_at":"2026-09-14T08:14:03Z","writer":"ads-installer/0.1.42"}`)
 	writeFile(t, m.shared.perUser, installerWritten)
-	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "legacy-studio-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-device-id")
 
-	require.Equal(t, "legacy-studio-id", machineID(t, newRun(t)))
-	require.Equal(t, "legacy-studio-id", machineID(t, newRun(t)))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
 
 	onDisk, err := os.ReadFile(m.shared.perUser)
 	require.NoError(t, err)
@@ -218,48 +218,48 @@ func TestAcceptance_InvalidExplicitIDIsIgnored(t *testing.T) {
 	}
 }
 
-func TestAcceptance_LegacyDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t *testing.T) {
+func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.legacy.perUser, []byte("legacy-device-id\n"))
+	writeFile(t, m.studio.perUser, []byte("studio-device-id\n"))
 
-	require.Equal(t, "legacy-device-id", machineID(t, newRun(t)))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
 
 	content := sharedFileContent(t, m.shared.perUser)
-	require.Equal(t, "legacy-device-id", content["machine_id"])
+	require.Equal(t, "studio-device-id", content["machine_id"])
 	require.Equal(t, "persisted", content["identifier_source"])
 	require.Equal(t, "go-application-framework", content["writer"])
-	legacy, err := os.ReadFile(m.legacy.perUser)
+	studio, err := os.ReadFile(m.studio.perUser)
 	require.NoError(t, err)
-	require.Equal(t, "legacy-device-id\n", string(legacy), "the legacy file must be left in place")
+	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
 }
 
-func TestAcceptance_MachineScopeLegacyDeviceIDWinsWhenScopesDisagree(t *testing.T) {
+func TestAcceptance_MachineScopeStudioDeviceIDWinsWhenScopesDisagree(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.legacy.machineWide, []byte("machine-scope-id"))
-	writeFile(t, m.legacy.perUser, []byte("user-scope-id"))
+	writeFile(t, m.studio.machineWide, []byte("machine-scope-id"))
+	writeFile(t, m.studio.perUser, []byte("user-scope-id"))
 
 	require.Equal(t, "machine-scope-id", machineID(t, newRun(t)))
 }
 
-func TestAcceptance_SharedFileWinsOverLegacyDeviceID(t *testing.T) {
+func TestAcceptance_SharedFileWinsOverStudioDeviceID(t *testing.T) {
 	m := newIsolatedMachine(t)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
-	writeFile(t, m.legacy.machineWide, []byte("legacy-device-id"))
+	writeFile(t, m.studio.machineWide, []byte("studio-device-id"))
 
 	require.Equal(t, "from-shared-file", machineID(t, newRun(t)))
 }
 
-func TestAcceptance_LegacyDeviceIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
+func TestAcceptance_StudioDeviceIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	writeFile(t, m.legacy.perUser, []byte("legacy-device-id"))
+	writeFile(t, m.studio.perUser, []byte("studio-device-id"))
 
-	require.Equal(t, "legacy-device-id", machineID(t, newRun(t)))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
 }
 
-func TestAcceptance_InvalidLegacyDeviceIDIsIgnoredAndLogged(t *testing.T) {
+func TestAcceptance_InvalidStudioDeviceIDIsIgnoredAndLogged(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.legacy.perUser, []byte(" \t{ABC-99}\x00WEIRD-interior\n\n"))
+	writeFile(t, m.studio.perUser, []byte(" \t{ABC-99}\x00WEIRD-interior\n\n"))
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
@@ -267,7 +267,7 @@ func TestAcceptance_InvalidLegacyDeviceIDIsIgnoredAndLogged(t *testing.T) {
 
 	require.True(t, valid(id))
 	require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
-	require.Contains(t, logs.String(), jsonEscapedPath(t, m.legacy.perUser))
+	require.Contains(t, logs.String(), jsonEscapedPath(t, m.studio.perUser))
 }
 
 func TestAcceptance_RepeatedLookupsInOneProcessDoNotReadTheSharedFileAgain(t *testing.T) {

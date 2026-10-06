@@ -4,8 +4,8 @@
 // bounded length, a safe character set) that rejects placeholder and malformed values.
 //
 // Resolution tries, in order: an explicitly supplied value (configuration.CLIENT_MACHINE_ID); the
-// shared machine-id file written by any Snyk product on the machine; a legacy device-id file left
-// behind by an older product installation; and finally a freshly generated UUIDv4. The shared file
+// shared machine-id file written by any Snyk product on the machine; the device-id file written by
+// Snyk Studio; and finally a freshly generated UUIDv4. The shared file
 // is the only place the identifier is stored. An explicitly supplied value is used but never
 // written there, so it cannot replace the identity other Snyk products on the machine share. A
 // generated value that cannot be written there is not a stable identity, so
@@ -109,11 +109,11 @@ func (r *resolver) resolveFromDisk() string {
 		return sf.MachineID
 	}
 
-	if id, path, ok := readLegacyDeviceID(legacyDeviceIDPaths(), logger); ok {
-		logger.Debug().Str("path", path).Msg("machine id: adopting value from legacy device-id file")
+	if id, path, ok := readStudioDeviceID(studioDeviceIDPaths(), logger); ok {
+		logger.Debug().Str("path", path).Msg("machine id: adopting value from Snyk Studio device-id file")
 		stored, err := writeSharedFileID(paths, id, string(sourcePersisted), writer, logger)
 		if err != nil {
-			// The legacy file stays in place, so the id is still stable across runs.
+			// The Studio file stays in place, so the id is still stable across runs.
 			return id
 		}
 		return stored
