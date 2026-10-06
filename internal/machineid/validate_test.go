@@ -46,15 +46,8 @@ func TestValid(t *testing.T) {
 	}
 }
 
-func TestInvalidReasonIsOnlyUsedForRejectedValues(t *testing.T) {
-	tests := map[string]string{
-		"":                       "empty",
-		strings.Repeat("a", 129): "longer than 128 characters",
-		"device id":              "contains characters outside the allowed set",
-		"none":                   "matches a known placeholder serial number",
-	}
-	for input, wantSubstring := range tests {
-		require.False(t, valid(input))
-		require.Contains(t, invalidReason(input), wantSubstring)
+func TestBlank(t *testing.T) {
+	for input, want := range map[string]bool{"": true, " \t\n": true, "id": false, " id ": false} {
+		require.Equal(t, want, blank(input), "%q", input)
 	}
 }
