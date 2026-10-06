@@ -77,17 +77,26 @@ func seed(t *testing.T, path, content string) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
-func skipUnlessPermissionsRestrictUs(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("permission bits do not restrict this user")
-	}
+func probeRead(path string) error {
+	_, err := os.ReadFile(path)
+	return err
 }
 
-func makeUnreadable(t *testing.T, path string) {
+func probeWrite(dir string) error {
+	f, err := os.CreateTemp(dir, "probe-*")
+	if err != nil {
+		return err
+	}
+	_ = f.Close()
+	return os.Remove(f.Name())
+}
+
+// skipIfStillAccessible skips when the restriction did not take, e.g. when running as root.
+func skipIfStillAccessible(t *testing.T, probe func() error) {
 	t.Helper()
-	require.NoError(t, os.Chmod(path, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(path, 0o600) }) //nolint:errcheck // best-effort restore so t.TempDir can clean up
+	if probe() == nil {
+		t.Skip("permissions do not restrict this user")
+	}
 }
 
 var brokenFiles = map[string]string{
@@ -113,7 +122,6 @@ func TestReadSharedFileSkipsAMachineWideFileWithoutAValidID(t *testing.T) {
 		"missing": func(*testing.T, string) {},
 		"unreadable": func(t *testing.T, path string) {
 			t.Helper()
-			skipUnlessPermissionsRestrictUs(t)
 			seed(t, path, `{"machine_id": "machine-wide-id"}`)
 			makeUnreadable(t, path)
 		},
@@ -231,11 +239,10 @@ func TestWriteSharedFileIDWritesPerUserWhenMachineWideIsEmpty(t *testing.T) {
 }
 
 func TestWriteSharedFileIDWritesPerUserWhenMachineWideDirectoryIsNotWritable(t *testing.T) {
-	skipUnlessPermissionsRestrictUs(t)
 	paths := tempPaths(t)
 	dir := filepath.Dir(paths.machineWide)
-	require.NoError(t, os.MkdirAll(dir, 0o555))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir can clean up
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	makeUnwritable(t, dir)
 
 	require.Equal(t, "new-id", write(t, paths, "new-id"))
 
@@ -244,12 +251,9 @@ func TestWriteSharedFileIDWritesPerUserWhenMachineWideDirectoryIsNotWritable(t *
 }
 
 func TestWriteSharedFileIDReturnsAValidMachineWideIDFromADirectoryItCannotWrite(t *testing.T) {
-	skipUnlessPermissionsRestrictUs(t)
 	paths := tempPaths(t)
 	seed(t, paths.machineWide, `{"machine_id": "existing-id"}`)
-	dir := filepath.Dir(paths.machineWide)
-	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:errcheck // best-effort restore so t.TempDir can clean up
+	makeUnwritable(t, filepath.Dir(paths.machineWide))
 
 	require.Equal(t, "existing-id", write(t, paths, "candidate-id"))
 
@@ -270,14 +274,13 @@ func TestWriteSharedFileIDLeavesAValidFileUntouched(t *testing.T) {
 }
 
 func TestWriteSharedFileIDNeverReplacesAFileItCannotRead(t *testing.T) {
-	skipUnlessPermissionsRestrictUs(t)
 	paths := tempPaths(t)
 	seed(t, paths.machineWide, `{"machine_id": "original-id"}`)
-	makeUnreadable(t, paths.machineWide)
+	restore := makeUnreadable(t, paths.machineWide)
 
 	require.Equal(t, "candidate-id", write(t, paths, "candidate-id"))
 
-	require.NoError(t, os.Chmod(paths.machineWide, 0o600))
+	restore()
 	require.Equal(t, "original-id", readFile(t, paths.machineWide).MachineID)
 	require.Equal(t, "candidate-id", readFile(t, paths.perUser).MachineID)
 }
