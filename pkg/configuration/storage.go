@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -65,7 +64,6 @@ type JsonStorage struct {
 
 	fileIntraProcessLock *flock.Flock
 	fileInProcessLock    *semaphore.Weighted
-	fileLockHeld         atomic.Bool
 }
 
 type JsonOption func(*JsonStorage)
@@ -176,16 +174,10 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 		return err
 	}
 
-	s.fileLockHeld.Store(true)
 	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	// match prior behavior Unlock is a safe no-op if called twice
-	if !s.fileLockHeld.CompareAndSwap(true, false) {
-		return nil
-	}
-
 	err := s.fileIntraProcessLock.Unlock()
 	s.fileInProcessLock.Release(1)
 	return err

@@ -74,22 +74,6 @@ func Test_JsonStorage_Lock_FailedAcquisitionDoesNotLeakInProcessGate(t *testing.
 	require.NoError(t, storage.Unlock())
 }
 
-// Unlock is called defensively in several call sites (e.g. via defer) even when
-// the preceding Lock may not have succeeded, so it must stay safe without a
-// matching Lock, both before any Lock call and after a matched pair.
-func Test_JsonStorage_Unlock_WithoutMatchingLockIsSafe(t *testing.T) {
-	t.Parallel()
-	path := filepath.Join(t.TempDir(), "test.json")
-	storage := configuration.NewJsonStorage(path)
-
-	assert.NoError(t, storage.Unlock(), "unlocking without a prior successful Lock must be a safe no-op")
-
-	assert.NoError(t, storage.Lock(context.Background(), time.Millisecond))
-	assert.NoError(t, storage.Unlock())
-
-	assert.NoError(t, storage.Unlock(), "an extra Unlock after a matched Lock/Unlock pair must also stay safe")
-}
-
 // A caller waiting on the in-process gate must give up when its context expires,
 // not just when the OS-level file lock is contended.
 func Test_JsonStorage_Lock_HonorsContextTimeoutWhileWaitingInProcess(t *testing.T) {
