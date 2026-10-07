@@ -99,6 +99,7 @@
 {{- "\n" }}
 {{- $metadata := .Get "metadata" }}
 {{- $targetFile := index $metadata "display-target-file" }}
+{{- $projectName := index $metadata "project-name" }}
 {{- $targetDirectory := index $metadata "target-directory" }}
 {{- if not $targetDirectory }}
 {{- $targetDirectory = getValueFromConfig "targetDirectory" }}
@@ -106,6 +107,9 @@
 {{- $findingTypes := getFindingTypesFromTestResult . }}
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
+  {{- if $projectName }}
+  Project name:      {{ $projectName }}
+  {{- end }}
   Project path:      {{ $targetDirectory }}
   {{- if $targetFile }}
   Target file:       {{ $targetFile }}

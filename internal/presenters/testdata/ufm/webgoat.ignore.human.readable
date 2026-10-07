@@ -493,6 +493,7 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
 │                                                                │
 │   Organization:      My Org                                    │
 │   Test type:         Software Composition Analysis             │
+│   Project name:      org.owasp.webgoat:webgoat                 │
 │   Project path:      /Users/catalin.iuga/code/goofs/WebGoat    │
 │   Target file:       pom.xml                                   │
 │                                                                │

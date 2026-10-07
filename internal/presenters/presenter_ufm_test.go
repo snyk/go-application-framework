@@ -2363,6 +2363,37 @@ func Test_UfmPresenter_HumanReadableFromSarifInput(t *testing.T) {
 	}
 }
 
+func Test_UfmPresenter_HumanReadableProjectName(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1307.0"))
+	lipgloss.SetHasDarkBackground(true)
+	lipgloss.SetColorProfile(termenv.Ascii)
+
+	render := func(t *testing.T, projectName string) string {
+		t.Helper()
+		result := sarifToUFM(t, "testdata/4-high-5-medium.json", nil)
+		if projectName != "" {
+			result.SetMetadata("project-name", projectName)
+		}
+		writer := &bytes.Buffer{}
+		presenter := presenters.NewUfmRenderer(
+			[]testapi.TestResult{result},
+			configuration.NewWithOpts(),
+			writer,
+			presenters.UfmWithRuntimeInfo(ri),
+		)
+		require.NoError(t, presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType))
+		return writer.String()
+	}
+
+	t.Run("prints project name when available", func(t *testing.T) {
+		assert.Contains(t, render(t, "my-project"), "Project name:      my-project")
+	})
+
+	t.Run("omits project name when not available", func(t *testing.T) {
+		assert.NotContains(t, render(t, ""), "Project name:")
+	})
+}
+
 func Test_UfmPresenter_HTMLFromSarifInput(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
