@@ -103,9 +103,13 @@
 {{- if not $targetDirectory }}
 {{- $targetDirectory = getValueFromConfig "targetDirectory" }}
 {{- end }}
+{{- $projectName := index $metadata "project-name" }}
 {{- $findingTypes := getFindingTypesFromTestResult . }}
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
+  {{- if $projectName }}
+  Project name:      {{ $projectName }}
+  {{- end }}
   Project path:      {{ $targetDirectory }}
   {{- if $targetFile }}
   Target file:       {{ $targetFile }}
