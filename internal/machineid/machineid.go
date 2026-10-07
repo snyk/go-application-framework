@@ -1,14 +1,5 @@
 // Package machineid resolves and stores a single machine identifier shared by every Snyk product
-// on the same machine. The identifier is an opaque string: it is stored and reported exactly as
-// supplied by whichever source produced it, subject only to a basic sanity check (non-empty,
-// bounded length, a safe character set) that rejects placeholder and malformed values.
-//
-// Resolution tries, in order: an explicitly supplied value (configuration.CLIENT_MACHINE_ID); the
-// shared machine-id file written by any Snyk product on the machine; the device-id file written by
-// Snyk Studio; and finally a freshly generated UUIDv4. The shared file is the only place the
-// identifier is stored. An explicitly supplied value is used but never written there, so it cannot
-// replace the identity other Snyk products on the machine share. A generated value that cannot be
-// written there is not a stable identity, so configuration.MACHINE_ID is empty in that case.
+// on the same machine.
 package machineid
 
 import (
@@ -58,11 +49,9 @@ func writerIdentity(o resolveOptions) string {
 	return name
 }
 
-// Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
-// the precedence order documented on the package. A value resolved from disk is kept in memory
-// for the life of the returned function, so repeated lookups do not touch the file system again.
-// An empty result is not kept, so a later lookup retries once the cause (a held lock, a missing
-// permission) has cleared. An explicitly supplied value is checked on every lookup and always wins.
+// Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. It takes the
+// first of: an id passed in by the host (configuration.CLIENT_MACHINE_ID), the shared file, the
+// Snyk Studio device-id file, or a newly generated id.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	var o resolveOptions
 	for _, opt := range opts {
@@ -85,6 +74,8 @@ type resolver struct {
 func (r *resolver) resolve(config configuration.Configuration) string {
 	logger := r.opts.logger
 
+	// Checked on every lookup, and never written to the shared file, so it cannot replace the id
+	// other Snyk products share.
 	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); !blank(raw) {
 		if valid(raw) {
 			logger.Debug().Msg("machine id: adopting value from external channel")
@@ -95,6 +86,8 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// A found id is kept for the life of the resolver. An empty result is not, so a later lookup
+	// retries once the cause (a held lock, a missing permission) has cleared.
 	if r.fromDisk == "" {
 		r.fromDisk = r.resolveFromDisk()
 	}
