@@ -8,7 +8,7 @@ import (
 
 // resolveOptions holds the configuration for a single Resolve call, built from ResolveOption values.
 type resolveOptions struct {
-	runtimeInfo runtimeinfo.RuntimeInfo
+	runtimeInfo func() runtimeinfo.RuntimeInfo
 	logger      *zerolog.Logger
 }
 
@@ -26,9 +26,11 @@ func WithLogger(logger *zerolog.Logger) ResolveOption {
 
 // WithRuntimeInfo identifies the consumer resolving the machine id, recorded as the writer field
 // in the shared machine-id file so a machine carrying values written by several different
-// products or versions is identifiable. If unset, a generic framework identifier is recorded.
-func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) ResolveOption {
+// products or versions is identifiable. get is called when the file is written rather than when
+// Resolve is called, so runtime info set on the engine after it was created is still used. If
+// unset, or if get returns nil, a generic framework identifier is recorded.
+func WithRuntimeInfo(get func() runtimeinfo.RuntimeInfo) ResolveOption {
 	return func(o *resolveOptions) {
-		o.runtimeInfo = ri
+		o.runtimeInfo = get
 	}
 }

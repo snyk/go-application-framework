@@ -5,11 +5,10 @@
 //
 // Resolution tries, in order: an explicitly supplied value (configuration.CLIENT_MACHINE_ID); the
 // shared machine-id file written by any Snyk product on the machine; the device-id file written by
-// Snyk Studio; and finally a freshly generated UUIDv4. The shared file
-// is the only place the identifier is stored. An explicitly supplied value is used but never
-// written there, so it cannot replace the identity other Snyk products on the machine share. A
-// generated value that cannot be written there is not a stable identity, so
-// configuration.MACHINE_ID is empty in that case.
+// Snyk Studio; and finally a freshly generated UUIDv4. The shared file is the only place the
+// identifier is stored. An explicitly supplied value is used but never written there, so it cannot
+// replace the identity other Snyk products on the machine share. A generated value that cannot be
+// written there is not a stable identity, so configuration.MACHINE_ID is empty in that case.
 package machineid
 
 import (
@@ -45,20 +44,25 @@ func writerIdentity(o resolveOptions) string {
 	if o.runtimeInfo == nil {
 		return defaultWriterIdentity
 	}
-	name := o.runtimeInfo.GetName()
+	ri := o.runtimeInfo()
+	if ri == nil {
+		return defaultWriterIdentity
+	}
+	name := ri.GetName()
 	if blank(name) {
 		return defaultWriterIdentity
 	}
-	if version := o.runtimeInfo.GetVersion(); !blank(version) {
+	if version := ri.GetVersion(); !blank(version) {
 		return name + "/" + version
 	}
 	return name
 }
 
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID implementing
-// the precedence order documented on the package. The value resolved from disk is kept in memory
-// for the life of the returned function, so repeated lookups do not touch the file system again;
-// an explicitly supplied value is still checked on every lookup and always wins.
+// the precedence order documented on the package. A value resolved from disk is kept in memory
+// for the life of the returned function, so repeated lookups do not touch the file system again.
+// An empty result is not kept, so a later lookup retries once the cause (a held lock, a missing
+// permission) has cleared. An explicitly supplied value is checked on every lookup and always wins.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	var o resolveOptions
 	for _, opt := range opts {
@@ -74,9 +78,8 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 type resolver struct {
 	opts resolveOptions
 
-	mu            sync.Mutex
-	fromDisk      string
-	fromDiskKnown bool
+	mu       sync.Mutex
+	fromDisk string
 }
 
 func (r *resolver) resolve(config configuration.Configuration) string {
@@ -92,9 +95,8 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.fromDiskKnown {
+	if r.fromDisk == "" {
 		r.fromDisk = r.resolveFromDisk()
-		r.fromDiskKnown = true
 	}
 	return r.fromDisk
 }

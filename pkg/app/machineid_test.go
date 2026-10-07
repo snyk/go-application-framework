@@ -1,50 +1,26 @@
-package app_test
+package app
 
 import (
 	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/app"
-	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// isolateUserScope points the user-scoped shared file at a temp directory and returns its path.
-// The machine-wide location is a fixed OS path outside the test's control except on Windows, where
-// ProgramData is pointed below a regular file so the machine-wide directory can never be created
-// and every OS writes to the returned per-user path.
-func isolateUserScope(t *testing.T) (sharedFilePath string) {
+func newAppEngine(t *testing.T, opts ...Opts) workflow.Engine {
 	t.Helper()
-	configtest.IsolateEnvironmentForTest(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	notADirectory := filepath.Join(t.TempDir(), "not-a-directory")
-	require.NoError(t, os.WriteFile(notADirectory, nil, 0o600))
-	t.Setenv("ProgramData", notADirectory)
-	localAppData := t.TempDir()
-	t.Setenv("LOCALAPPDATA", localAppData)
-
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
-	if runtime.GOOS == "windows" {
-		return filepath.Join(localAppData, "Snyk", "machine-id.json")
-	}
-	return filepath.Join(home, ".snyk", "machine-id.json")
-}
-
-func newAppEngine(opts ...app.Opts) workflow.Engine {
 	config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
-	return app.CreateAppEngineWithOptions(append([]app.Opts{app.WithConfiguration(config)}, opts...)...)
+	return CreateAppEngineWithOptions(append([]Opts{WithConfiguration(config)}, opts...)...)
 }
 
 func readJSON(t *testing.T, path string) map[string]any {
@@ -57,9 +33,9 @@ func readJSON(t *testing.T, path string) map[string]any {
 }
 
 func TestAcceptance_ViaAppEngineExplicitMachineIDIsReturnedButNotStored(t *testing.T) {
-	sharedFilePath := isolateUserScope(t)
+	sharedFilePath := isolateMachineIDStorage(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
-	engine := newAppEngine(app.WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
 
 	id, err := engine.GetRuntimeInfo().GetMachineID()
 
@@ -69,11 +45,11 @@ func TestAcceptance_ViaAppEngineExplicitMachineIDIsReturnedButNotStored(t *testi
 }
 
 func TestAcceptance_ViaAppEngineGeneratedMachineIDIsStableAcrossRuns(t *testing.T) {
-	sharedFilePath := isolateUserScope(t)
+	sharedFilePath := isolateMachineIDStorage(t)
 
-	first, err := newAppEngine().GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	first, err := newAppEngine(t).GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
-	second, err := newAppEngine().GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	second, err := newAppEngine(t).GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, first)
@@ -82,11 +58,11 @@ func TestAcceptance_ViaAppEngineGeneratedMachineIDIsStableAcrossRuns(t *testing.
 }
 
 func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testing.T) {
-	sharedFilePath := isolateUserScope(t)
+	sharedFilePath := isolateMachineIDStorage(t)
 	// The user-scoped directory cannot be created while a file occupies its path.
 	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(sharedFilePath)), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Dir(sharedFilePath), []byte("not a directory"), 0o600))
-	engine := newAppEngine(app.WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
 
 	_, err := engine.GetRuntimeInfo().GetMachineID()
 
@@ -94,11 +70,11 @@ func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testin
 }
 
 func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *testing.T) {
-	isolateUserScope(t)
+	isolateMachineIDStorage(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	engine := newAppEngine(app.WithZeroLogger(&logger))
+	engine := newAppEngine(t, WithZeroLogger(&logger))
 
 	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
@@ -107,11 +83,22 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 }
 
 func TestAcceptance_ViaAppEngineSharedFileRecordsTheRuntimeInfoAsWriter(t *testing.T) {
-	sharedFilePath := isolateUserScope(t)
-	engine := newAppEngine(app.WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))))
+	sharedFilePath := isolateMachineIDStorage(t)
+	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))))
 
 	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
 	require.Equal(t, "snyk-ls/9.9.9", readJSON(t, sharedFilePath)["writer"], "the engine's runtime info must reach the shared file write")
+}
+
+func TestAcceptance_ViaAppEngineRuntimeInfoSetAfterCreationIsRecordedAsWriter(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	engine := newAppEngine(t)
+	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9")))
+
+	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	require.Equal(t, "snyk-ls/9.9.9", readJSON(t, sharedFilePath)["writer"], "runtime info set after the engine was created must still reach the shared file write")
 }

@@ -37,10 +37,12 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -223,13 +225,17 @@ func Test_CreateAppEngine(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
-func isolateMachineIDStorage(t *testing.T) {
+// isolateMachineIDStorage keeps machine id resolution away from the real machine-wide and per-user
+// locations and from a CLIENT_MACHINE_ID set in the environment. It returns the shared file that
+// generated ids are written to.
+func isolateMachineIDStorage(t *testing.T) (sharedFilePath string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("ProgramData", t.TempDir())
-	t.Setenv("LOCALAPPDATA", t.TempDir())
+	configtest.IsolateEnvironmentForTest(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", os.Getenv("HOME"))
+	sharedFilePath, restore := machineid.RedirectForTest(t.TempDir())
+	t.Cleanup(restore)
+	return sharedFilePath
 }
 
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {

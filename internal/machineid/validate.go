@@ -32,7 +32,8 @@ func valid(id string) bool {
 	return !placeholder
 }
 
-// invalidReason describes why valid rejected id, for logging only.
+// invalidReason describes why valid rejected id, for logging only. It is only meaningful for a
+// non-blank id that valid rejected; callers check both first.
 func invalidReason(id string) string {
 	switch {
 	case len(id) > 128:

@@ -192,6 +192,21 @@ func TestAcceptance_NoWritableSharedFileLocationGivesAnEmptyMachineID(t *testing
 	require.Empty(t, machineID(t, config))
 }
 
+func TestAcceptance_AFailedWriteIsRetriedOnTheNextLookup(t *testing.T) {
+	m := newIsolatedMachine(t)
+	blocker := filepath.Dir(filepath.Dir(m.shared.perUser))
+	m.blockEverySharedFileLocation(t)
+	config := newRun(t)
+	require.Empty(t, machineID(t, config))
+
+	require.NoError(t, os.Remove(blocker))
+	id := machineID(t, config)
+
+	require.True(t, valid(id), "once the shared file can be written, the same process must get a stable id")
+	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, machineID(t, config))
+}
+
 func TestAcceptance_ExplicitIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)

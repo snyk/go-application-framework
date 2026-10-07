@@ -331,11 +331,7 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 }
 
 func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	opts := []machineid.ResolveOption{machineid.WithLogger(logger)}
-	if ri := engine.GetRuntimeInfo(); ri != nil {
-		opts = append(opts, machineid.WithRuntimeInfo(ri))
-	}
-	return machineid.Resolve(opts...)
+	return machineid.Resolve(machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo))
 }
 
 // initConfiguration initializes the configuration with initial values.
