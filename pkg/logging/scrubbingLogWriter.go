@@ -51,7 +51,7 @@ var SENSITIVE_FIELD_NAMES = []string{
 type ScrubbingLogWriter interface {
 	// AddTerm takes a regex pattern to scrub
 	AddTerm(term string, matchGroup int)
-	// AddTermsToReplace takes exact strings to scrub
+	// AddTermsToReplace takes exact strings to scrub, matched only as whole words
 	AddTermsToReplace(args []string)
 	RemoveTerm(term string)
 }
@@ -102,7 +102,7 @@ func (w *scrubbingIoWriter) AddTermsToReplace(terms []string) {
 	w.m.Lock()
 	defer w.m.Unlock()
 	for _, v := range terms {
-		addStaticTermToDict(v, w.scrubDict)
+		addWholeWordTermToDict(v, w.scrubDict)
 	}
 }
 
@@ -174,7 +174,7 @@ func (w *scrubbingLevelWriter) AddTermsToReplace(terms []string) {
 	w.m.Lock()
 	defer w.m.Unlock()
 	for _, v := range terms {
-		addStaticTermToDict(v, w.scrubDict)
+		addWholeWordTermToDict(v, w.scrubDict)
 	}
 }
 
