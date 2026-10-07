@@ -20,6 +20,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -27,7 +28,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
-	"github.com/snyk/go-application-framework/pkg/machineid"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
@@ -330,13 +330,10 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 	return callback
 }
 
-func defaultMachineID(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	opts := []machineid.ResolveOption{machineid.WithLogger(logger)}
 	if ri := engine.GetRuntimeInfo(); ri != nil {
 		opts = append(opts, machineid.WithRuntimeInfo(ri))
-	}
-	if extra, ok := config.Get(machineIDResolveOptionsKey).([]machineid.ResolveOption); ok {
-		opts = append(opts, extra...)
 	}
 	return machineid.Resolve(opts...)
 }
@@ -364,7 +361,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
-	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, config, logger))
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
 	err = config.AddKeyDependency(configuration.MACHINE_ID, configuration.CLIENT_MACHINE_ID)
 	if err != nil {
 		logger.Print("Failed to add dependency for MACHINE_ID:", err)

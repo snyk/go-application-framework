@@ -1,5 +1,3 @@
-// Package machineid stores a single machine identifier shared by every Snyk product on the same
-// machine.
 package machineid
 
 import (

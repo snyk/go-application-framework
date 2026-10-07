@@ -1,4 +1,4 @@
-package machineid_test
+package app_test
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/machineid"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -104,16 +103,15 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.Contains(t, logs.String(), "machine id: adopting value from external channel", "the real app wiring must pass its logger into machineid.Resolve")
+	require.Contains(t, logs.String(), "machine id: adopting value from external channel", "the app wiring must pass its logger into machine id resolution")
 }
 
-func TestAcceptance_ViaAppEngineWithMachineIDOptionsReachesResolve(t *testing.T) {
+func TestAcceptance_ViaAppEngineSharedFileRecordsTheRuntimeInfoAsWriter(t *testing.T) {
 	sharedFilePath := isolateUserScope(t)
-	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))
-	engine := newAppEngine(app.WithMachineIDOptions(machineid.WithRuntimeInfo(ri)))
+	engine := newAppEngine(app.WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9"))))
 
 	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.Equal(t, "snyk-ls/9.9.9", readJSON(t, sharedFilePath)["writer"], "a machineid.ResolveOption passed via WithMachineIDOptions must reach the shared file write")
+	require.Equal(t, "snyk-ls/9.9.9", readJSON(t, sharedFilePath)["writer"], "the engine's runtime info must reach the shared file write")
 }

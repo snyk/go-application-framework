@@ -31,3 +31,15 @@ func valid(id string) bool {
 	_, placeholder := placeholderSerials[strings.ToLower(id)]
 	return !placeholder
 }
+
+// invalidReason describes why valid rejected id, for logging only.
+func invalidReason(id string) string {
+	switch {
+	case len(id) > 128:
+		return "longer than 128 characters"
+	case !idPattern.MatchString(id):
+		return "contains characters outside the allowed set"
+	default:
+		return "matches a known placeholder serial number"
+	}
+}

@@ -51,3 +51,16 @@ func TestBlank(t *testing.T) {
 		require.Equal(t, want, blank(input), "%q", input)
 	}
 }
+
+func TestInvalidReason(t *testing.T) {
+	tests := map[string]string{
+		strings.Repeat("a", 129): "longer than 128 characters",
+		"":                       "contains characters outside the allowed set",
+		"device id":              "contains characters outside the allowed set",
+		"none":                   "matches a known placeholder serial number",
+	}
+	for input, want := range tests {
+		require.False(t, valid(input))
+		require.Equal(t, want, invalidReason(input))
+	}
+}

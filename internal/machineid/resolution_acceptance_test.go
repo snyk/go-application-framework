@@ -26,7 +26,7 @@ func newIsolatedMachine(t *testing.T) isolatedMachine {
 
 	m := isolatedMachine{
 		home:   t.TempDir(),
-		shared: newPerUserOnlySharedFilePaths(t),
+		shared: tempPaths(t),
 		studio: pathPair{
 			machineWide: filepath.Join(t.TempDir(), "studio-machine-wide", "device-id"),
 			perUser:     filepath.Join(t.TempDir(), "studio-per-user", "device-id"),
@@ -267,7 +267,7 @@ func TestAcceptance_InvalidStudioDeviceIDIsIgnoredAndLogged(t *testing.T) {
 
 	require.True(t, valid(id))
 	require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
-	require.Contains(t, logs.String(), jsonEscapedPath(t, m.studio.perUser))
+	require.Contains(t, logs.String(), jsonEscaped(t, m.studio.perUser))
 }
 
 func TestAcceptance_RepeatedLookupsInOneProcessDoNotReadTheSharedFileAgain(t *testing.T) {
