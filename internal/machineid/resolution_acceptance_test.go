@@ -109,6 +109,14 @@ func TestAcceptance_GeneratedIDIsStoredInTheSharedFile(t *testing.T) {
 	require.Equal(t, "generated", content["identifier_source"])
 }
 
+func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
+	newIsolatedMachine(t)
+	first := machineID(t, newRun(t))
+
+	require.True(t, valid(first))
+	require.Equal(t, first, machineID(t, newRun(t)))
+}
+
 func TestAcceptance_ExplicitIDWinsOverTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
@@ -246,6 +254,18 @@ func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t 
 	studio, err := os.ReadFile(m.studio.perUser)
 	require.NoError(t, err)
 	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
+}
+
+func TestAcceptance_AdoptedStudioDeviceIDIsReturnedAgainAfterTheStudioFileChanges(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeFile(t, m.studio.perUser, []byte("studio-device-id"))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
+
+	writeFile(t, m.studio.perUser, []byte("changed-studio-device-id"))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)), "once adopted, the id comes from the shared file")
+
+	require.NoError(t, os.Remove(m.studio.perUser))
+	require.Equal(t, "studio-device-id", machineID(t, newRun(t)))
 }
 
 func TestAcceptance_MachineScopeStudioDeviceIDWinsWhenScopesDisagree(t *testing.T) {
