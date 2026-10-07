@@ -709,6 +709,12 @@ func TestAddTermsToReplace(t *testing.T) {
 			input:      "ID 12345 and value 987.654 are sensitive",
 			expected:   "ID *** and value *** are sensitive",
 		},
+		{
+			name:       "term inside an identifier is left intact",
+			termsToAdd: []string{"requests"},
+			input:      "no_relevant_requests requests app-requests",
+			expected:   "no_relevant_requests *** app-***",
+		},
 	}
 
 	for _, test := range tests {
@@ -912,10 +918,9 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
-			w := NewScrubbingIoWriter(&output, ScrubbingDict{})
-			scrubbingWriter, ok := w.(ScrubbingLogWriter)
-			require.True(t, ok)
-			scrubbingWriter.AddTermsToReplace([]string{"12345"})
+			dict := ScrubbingDict{}
+			addStaticTermToDict("12345", dict)
+			w := NewScrubbingIoWriter(&output, dict)
 
 			_, err := w.Write([]byte(test.input))
 			require.NoError(t, err)
@@ -1069,11 +1074,9 @@ func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
-			writer := NewScrubbingIoWriter(&output, ScrubbingDict{})
-
-			scrubbingWriter, ok := writer.(ScrubbingLogWriter)
-			require.True(t, ok)
-			scrubbingWriter.AddTermsToReplace([]string{test.term})
+			dict := ScrubbingDict{}
+			addStaticTermToDict(test.term, dict)
+			writer := NewScrubbingIoWriter(&output, dict)
 
 			_, err := writer.Write([]byte(test.input))
 			require.NoError(t, err)
