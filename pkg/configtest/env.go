@@ -8,9 +8,15 @@ import (
 // Keep aligned with pkg/configuration/constants.go.
 const snykAPIKey = "SNYK_API"
 
+// xdgConfigHomeKey overrides where Linux config-path lookups (e.g. pkg/machineid's shared file)
+// resolve to; a developer's real value takes precedence over a test's HOME override, so it must be
+// cleared even though it isn't Snyk-specific.
+const xdgConfigHomeKey = "XDG_CONFIG_HOME"
+
 // KnownLeakEnvironmentKeys is cleared when [IsolateEnvironmentForTest] is called with no arguments.
 var KnownLeakEnvironmentKeys = []string{
 	snykAPIKey,
+	xdgConfigHomeKey,
 }
 
 // IsolateEnvironmentForTest clears environment variables for a test using t.Setenv(k, "").
