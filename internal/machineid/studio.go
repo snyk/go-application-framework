@@ -10,10 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// defaultStudioDeviceIDPaths returns the well-known locations of the bare-string device-id file
-// written by Snyk Studio, which predates the shared machine-id file. Both variants are
-// checked so a machine that only ever ran studio for one user, or only as a service, still has its
-// existing identity picked up rather than minting a second one.
+// defaultStudioDeviceIDPaths returns the machine-wide and per-user locations of the Snyk Studio
+// device-id file.
 func defaultStudioDeviceIDPaths() pathPair {
 	return studioDeviceIDPathsFor(runtime.GOOS)
 }
@@ -40,11 +38,9 @@ func studioDeviceIDPathsFor(goos string) pathPair {
 	}
 }
 
-// readStudioDeviceID looks for a Snyk Studio bare-string device-id file at the machine-wide location
-// first, then the per-user one, so that two variants left behind by different studio install modes
-// that disagree resolve to the machine-wide value rather than an arbitrary one. The file's content
-// is trimmed of trailing whitespace only, since a trailing newline is a file-format artifact rather
-// than part of the identifier, and validated like every other candidate.
+// readStudioDeviceID returns the first valid id from the machine-wide, then the per-user, Snyk Studio
+// device-id file, so the result does not depend on the user when the two disagree. Only trailing
+// whitespace is trimmed (a trailing newline is a file artifact) before validation.
 func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path string, ok bool) {
 	logger = effectiveLogger(logger)
 	for _, p := range []string{paths.machineWide, paths.perUser} {
