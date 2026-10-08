@@ -286,16 +286,15 @@ func Test_CreateAppEngine_providesTheExplicitlySuppliedMachineId(t *testing.T) {
 	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
-func Test_CreateAppEngine_explicitlySuppliedMachineIdWinsAfterAFirstLookupWithCachingEnabled(t *testing.T) {
+func Test_CreateAppEngine_explicitlySuppliedMachineIdAfterAFirstLookupIsIgnoredUntilRestart(t *testing.T) {
 	isolateMachineIDStorage(t)
-	config := configuration.NewWithOpts(configuration.WithCachingEnabled(configuration.NoCacheExpiration))
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
 	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
 
 	engine.GetConfiguration().Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
 
 	assert.NotEqual(t, "explicit-machine-id", resolved)
-	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+	assert.Equal(t, resolved, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
 func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {

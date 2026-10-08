@@ -32,7 +32,7 @@ const (
 	// machine identity
 	// ---------
 
-	CLIENT_MACHINE_ID string = "internal_snyk_client_machine_id" // CLIENT_MACHINE_ID (string) explicitly supplied machine identifier, typically from a device-management tool; when set and valid, MACHINE_ID returns it
+	CLIENT_MACHINE_ID string = "internal_snyk_client_machine_id" // CLIENT_MACHINE_ID (string) explicitly supplied machine identifier, typically from a device-management tool; when set and valid before MACHINE_ID is first read, MACHINE_ID returns it for the life of the process
 
 	// ---------
 	// Org related configuration

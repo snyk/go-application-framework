@@ -157,14 +157,39 @@ func TestAcceptance_ExplicitIDWinsOverAnIDResolvedOnAPreviousRun(t *testing.T) {
 	require.Equal(t, "device-managed-id", machineID(t, m.newRun()))
 }
 
-func TestAcceptance_ExplicitIDSetLaterInTheSameProcessWins(t *testing.T) {
+func TestAcceptance_ExplicitIDSetAfterTheFirstLookupIsUsedFromTheNextRun(t *testing.T) {
 	m := newIsolatedMachine(t)
 	config := m.newRun()
-	machineID(t, config)
+	first := machineID(t, config)
 
 	config.Set(configuration.CLIENT_MACHINE_ID, "device-managed-id")
 
+	require.Equal(t, first, machineID(t, config), "the machine id must not change within a process once read")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")
+	require.Equal(t, "device-managed-id", machineID(t, m.newRun()), "a restarted process must use the explicit id")
+}
+
+func TestAcceptance_ExplicitIDSetAfterAFailedLookupIsUsed(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.blockEverySharedFileLocation(t)
+	now := time.Now()
+	config := m.newRun(withClock(func() time.Time { return now }))
+	require.Empty(t, machineID(t, config))
+
+	config.Set(configuration.CLIENT_MACHINE_ID, "device-managed-id")
+	now = now.Add(retryDelay)
+
 	require.Equal(t, "device-managed-id", machineID(t, config))
+}
+
+func TestAcceptance_AValueSetOnMachineIDIsReturnedAsIs(t *testing.T) {
+	m := newIsolatedMachine(t)
+	config := m.newRun()
+
+	config.Set(configuration.MACHINE_ID, "set-by-host")
+
+	require.Equal(t, "set-by-host", machineID(t, config))
+	require.NoFileExists(t, m.shared.perUser, "a set value must not trigger resolution")
 }
 
 func TestAcceptance_IDWrittenToTheSharedFileByAnotherProductIsPickedUpOnTheNextRun(t *testing.T) {
