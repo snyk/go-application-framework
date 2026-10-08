@@ -59,16 +59,12 @@ func machineID(t *testing.T, config configuration.Configuration) string {
 	return value
 }
 
-func (m isolatedMachine) snykJSON(t *testing.T) map[string]any {
+// snykJSON returns the contents of the configuration file newIsolatedMachine creates.
+func (m isolatedMachine) snykJSON(t *testing.T) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(m.home, ".config", "configstore", "snyk.json"))
-	if os.IsNotExist(err) || len(data) == 0 {
-		return map[string]any{}
-	}
 	require.NoError(t, err)
-	var content map[string]any
-	require.NoError(t, json.Unmarshal(data, &content))
-	return content
+	return string(data)
 }
 
 func writeFile(t *testing.T, path string, content []byte) {
@@ -182,12 +178,15 @@ func TestAcceptance_IDWrittenToTheSharedFileByAnotherProductIsPickedUpOnTheNextR
 func TestAcceptance_NothingIsWrittenToSnykJSON(t *testing.T) {
 	m := newIsolatedMachine(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "device-managed-id")
-	machineID(t, m.newRun())
+	explicit := machineID(t, m.newRun())
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "")
-	machineID(t, m.newRun())
+	generated := machineID(t, m.newRun())
 
-	for key := range m.snykJSON(t) {
-		require.NotContains(t, key, "machine_id", "the machine id must only be stored in the shared machine-id file")
+	require.Equal(t, "device-managed-id", explicit)
+	require.Equal(t, generated, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	content := m.snykJSON(t)
+	for _, id := range []string{explicit, generated} {
+		require.NotContains(t, content, id, "the machine id must only be stored in the shared machine-id file")
 	}
 }
 
