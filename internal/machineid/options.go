@@ -1,6 +1,8 @@
 package machineid
 
 import (
+	"time"
+
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -12,6 +14,7 @@ type resolveOptions struct {
 	logger      *zerolog.Logger
 	shared      pathPair
 	studio      pathPair
+	now         func() time.Time
 }
 
 // ResolveOption configures optional behavior of Resolve.

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -231,14 +232,20 @@ func logLineContaining(t *testing.T, logs, substr string) string {
 	return ""
 }
 
-func TestAcceptance_AFailedWriteIsRetriedOnTheNextLookup(t *testing.T) {
+func TestAcceptance_AFailedWriteIsRetriedAfterTheRetryDelay(t *testing.T) {
 	m := newIsolatedMachine(t)
 	blocker := filepath.Dir(filepath.Dir(m.shared.perUser))
 	m.blockEverySharedFileLocation(t)
-	config := m.newRun()
+	now := time.Now()
+	config := m.newRun(withClock(func() time.Time { return now }))
 	require.Empty(t, machineID(t, config))
-
 	require.NoError(t, os.Remove(blocker))
+
+	now = now.Add(retryDelay - time.Second)
+	require.Empty(t, machineID(t, config), "a lookup within the retry delay must not touch the disk again")
+	require.NoFileExists(t, m.shared.perUser)
+
+	now = now.Add(time.Second)
 	id := machineID(t, config)
 
 	require.True(t, valid(id), "once the shared file can be written, the same process must get a stable id")

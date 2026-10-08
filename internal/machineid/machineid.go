@@ -5,6 +5,7 @@ package machineid
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -49,7 +50,7 @@ func writerIdentity(o resolveOptions) string {
 // first of: an id passed in by the host (configuration.CLIENT_MACHINE_ID), the shared file, the
 // Snyk Studio device-id file, or a newly generated id.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
-	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths()}
+	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths(), now: time.Now}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -60,11 +61,15 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	}
 }
 
+// retryDelay is how long a resolver waits after failing to get an id from disk before trying again.
+const retryDelay = 30 * time.Second
+
 type resolver struct {
 	opts resolveOptions
 
-	mu       sync.Mutex
-	fromDisk string
+	mu          sync.Mutex
+	fromDisk    string
+	nextAttempt time.Time
 }
 
 func (r *resolver) resolve(config configuration.Configuration) string {
@@ -83,10 +88,13 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// A found id is kept for the life of the resolver. An empty result is not, so a later lookup
-	// retries once the cause (a held lock, a missing permission) has cleared.
-	if r.fromDisk == "" {
+	// A found id is kept for the life of the resolver. An empty result is not, so a lookup after
+	// retryDelay tries again once the cause (a held lock, a missing permission) has cleared.
+	if r.fromDisk == "" && !r.opts.now().Before(r.nextAttempt) {
 		r.fromDisk = r.resolveFromDisk()
+		if r.fromDisk == "" {
+			r.nextAttempt = r.opts.now().Add(retryDelay)
+		}
 	}
 	return r.fromDisk
 }
