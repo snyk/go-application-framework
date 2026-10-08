@@ -117,9 +117,9 @@ func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
 func TestAcceptance_SuppliedIDWinsOverTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
 
-	require.Equal(t, "device-managed-id", machineID(t, m.newRun()))
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
 func TestAcceptance_SuppliedIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t *testing.T) {
@@ -135,14 +135,14 @@ func TestAcceptance_SuppliedIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t
 
 	onDisk, err := os.ReadFile(m.shared.perUser)
 	require.NoError(t, err)
-	require.Equal(t, string(installerWritten), string(onDisk), "an explicitly supplied id must be used but never written to the shared file")
+	require.Equal(t, string(installerWritten), string(onDisk), "a supplied id must be used but never written to the shared file")
 }
 
 func TestAcceptance_SuppliedIDDoesNotCreateASharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
 
-	require.Equal(t, "device-managed-id", machineID(t, m.newRun()))
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 
 	require.NoFileExists(t, m.shared.perUser)
 }
@@ -151,10 +151,10 @@ func TestAcceptance_SuppliedIDWinsOverAnIDResolvedOnAPreviousRun(t *testing.T) {
 	m := newIsolatedMachine(t)
 	previous := machineID(t, m.newRun())
 
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
 
-	require.NotEqual(t, "device-managed-id", previous)
-	require.Equal(t, "device-managed-id", machineID(t, m.newRun()))
+	require.NotEqual(t, "supplied-id", previous)
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
 func TestAcceptance_SuppliedIDSetAfterTheFirstLookupIsUsedFromTheNextRun(t *testing.T) {
@@ -162,11 +162,11 @@ func TestAcceptance_SuppliedIDSetAfterTheFirstLookupIsUsedFromTheNextRun(t *test
 	config := m.newRun()
 	first := machineID(t, config)
 
-	config.Set(configuration.MACHINE_ID, "device-managed-id")
+	config.Set(configuration.MACHINE_ID, "supplied-id")
 
 	require.Equal(t, first, machineID(t, config), "the machine id must not change within a process once read")
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
-	require.Equal(t, "device-managed-id", machineID(t, m.newRun()), "a restarted process must use the supplied id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()), "a restarted process must use the supplied id")
 }
 
 func TestAcceptance_SuppliedIDSetAfterAFailedLookupIsUsed(t *testing.T) {
@@ -176,11 +176,11 @@ func TestAcceptance_SuppliedIDSetAfterAFailedLookupIsUsed(t *testing.T) {
 	config := m.newRun(withClock(func() time.Time { return now }))
 	require.Empty(t, machineID(t, config))
 
-	config.Set(configuration.MACHINE_ID, "device-managed-id")
+	config.Set(configuration.MACHINE_ID, "supplied-id")
 
-	require.Equal(t, "device-managed-id", machineID(t, config), "a supplied value needs no disk access, so the retry delay does not apply")
+	require.Equal(t, "supplied-id", machineID(t, config), "a supplied value needs no disk access, so the retry delay does not apply")
 	now = now.Add(retryDelay)
-	require.Equal(t, "device-managed-id", machineID(t, config))
+	require.Equal(t, "supplied-id", machineID(t, config))
 }
 
 func TestAcceptance_AValidValueSetBeforeTheFirstReadIsUsed(t *testing.T) {
@@ -209,7 +209,7 @@ func TestAcceptance_EachWayOfSupplyingMachineIDIsUsed(t *testing.T) {
 		},
 		"snyk.json": func(t *testing.T, m isolatedMachine) configuration.Configuration {
 			t.Helper()
-			writeFile(t, filepath.Join(m.home, ".config", "configstore", "snyk.json"), []byte(`{"internal_snyk_machine_id":"supplied-id"}`))
+			writeFile(t, filepath.Join(m.home, ".config", "configstore", "snyk.json"), []byte(`{"`+configuration.MACHINE_ID+`":"supplied-id"}`))
 			return m.newRun()
 		},
 	} {
@@ -255,15 +255,15 @@ func TestAcceptance_IDWrittenToTheSharedFileByAnotherProductIsPickedUpOnTheNextR
 
 func TestAcceptance_NothingIsWrittenToSnykJSON(t *testing.T) {
 	m := newIsolatedMachine(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
-	explicit := machineID(t, m.newRun())
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	supplied := machineID(t, m.newRun())
 	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "")
 	generated := machineID(t, m.newRun())
 
-	require.Equal(t, "device-managed-id", explicit)
+	require.Equal(t, "supplied-id", supplied)
 	require.Equal(t, generated, sharedFileContent(t, m.shared.perUser)["machine_id"])
 	content := m.snykJSON(t)
-	for _, id := range []string{explicit, generated} {
+	for _, id := range []string{supplied, generated} {
 		require.NotContains(t, content, id, "the machine id must only be stored in the shared machine-id file")
 	}
 }
@@ -275,6 +275,13 @@ func TestAcceptance_NoWritableSharedFileLocationGivesAnEmptyMachineID(t *testing
 
 	require.Empty(t, machineID(t, config), "an id that cannot be stored is not a stable machine id")
 	require.Empty(t, machineID(t, config))
+}
+
+func TestMachineIDDocumentsTheRetryDelay(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "pkg", "configuration", "constants.go"))
+	require.NoError(t, err)
+
+	require.Contains(t, string(source), "tried again after "+retryDelay.String(), "the MACHINE_ID doc must state retryDelay")
 }
 
 func TestAcceptance_AFailedLookupIsRetriedOnlyWithoutConfigurationCaching(t *testing.T) {
@@ -304,6 +311,21 @@ func TestAcceptance_AFailedLookupIsRetriedOnlyWithoutConfigurationCaching(t *tes
 			}
 		})
 	}
+}
+
+func TestAcceptance_AnInvalidSuppliedValueIsLoggedOnce(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.blockEverySharedFileLocation(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not valid")
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config := m.newRun(WithLogger(&logger))
+
+	for range 3 {
+		require.Empty(t, machineID(t, config))
+	}
+
+	require.Equal(t, 1, strings.Count(logs.String(), "supplied value failed validation"))
 }
 
 func TestAcceptance_WriteFailuresAreLoggedWithTheirCause(t *testing.T) {
@@ -362,14 +384,14 @@ func TestAcceptance_AFailedWriteIsRetriedAfterTheRetryDelay(t *testing.T) {
 func TestAcceptance_SuppliedIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "device-managed-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
 
-	require.Equal(t, "device-managed-id", machineID(t, m.newRun()))
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
 func TestAcceptance_InvalidSuppliedIDIsIgnored(t *testing.T) {
 	for name, raw := range map[string]string{
-		"trailing newline":   "device-managed-id\n",
+		"trailing newline":   "supplied-id\n",
 		"brace-wrapped guid": "{550E8400-E29B-41D4-A716-446655440000}",
 		"whitespace only":    "   ",
 	} {

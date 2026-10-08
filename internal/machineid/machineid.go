@@ -73,6 +73,8 @@ type resolver struct {
 	mu          sync.Mutex
 	id          string
 	nextAttempt time.Time
+	// rejected is the last supplied value that failed validation, so it is logged only once.
+	rejected string
 }
 
 func (r *resolver) resolve(supplied any) string {
@@ -103,7 +105,10 @@ func (r *resolver) resolveSupplied(supplied any) string {
 	}
 	reason, ok := validate(raw)
 	if !ok {
-		r.opts.logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
+		if raw != r.rejected {
+			r.rejected = raw
+			r.opts.logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
+		}
 		return ""
 	}
 	r.opts.logger.Debug().Msg("machine id: adopting supplied value")

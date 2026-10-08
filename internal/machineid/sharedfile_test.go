@@ -323,6 +323,7 @@ func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	paths := tempPaths(t)
 	paths.machineWide = ""
 	// Invalid ids (over 128 characters), so writeAt keeps replacing the file instead of keeping it.
+	// A torn write shows up as an empty or partial file, so the values need not be large.
 	valueA := strings.Repeat("A", 1024)
 	valueB := strings.Repeat("B", 1024)
 	// Readers can finish before the writer's first write lands, so the file must exist up front.
