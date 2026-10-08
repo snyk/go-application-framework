@@ -129,7 +129,7 @@ func TestAcceptance_ExplicitIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t
 	m := newIsolatedMachine(t)
 	installerWritten := []byte(`{"schema_version":1,"machine_id":"C02Q7KHTGFWF","identifier_source":"serial",` +
 		`"serial_number":"C02Q7KHTGFWF","scope":"user","first_seen_at":"2026-09-14T08:14:03Z",` +
-		`"updated_at":"2026-09-14T08:14:03Z","writer":"ads-installer/0.1.42"}`)
+		`"updated_at":"2026-09-14T08:14:03Z","writer":"some-installer/1.0.0"}`)
 	writeFile(t, m.shared.perUser, installerWritten)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-device-id")
 
