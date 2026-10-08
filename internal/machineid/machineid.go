@@ -11,10 +11,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-// sharedFilePaths is a variable so tests can point it at temporary directories; the machine-wide
-// path on Linux and macOS is a fixed OS path that a test process cannot write to without root.
-var sharedFilePaths = defaultSharedFilePaths
-
 // idSource records in the shared file how its machine identifier was obtained.
 type idSource string
 
@@ -53,7 +49,7 @@ func writerIdentity(o resolveOptions) string {
 // first of: an id passed in by the host (configuration.CLIENT_MACHINE_ID), the shared file, the
 // Snyk Studio device-id file, or a newly generated id.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
-	var o resolveOptions
+	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths()}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -97,14 +93,14 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 func (r *resolver) resolveFromDisk() string {
 	logger := r.opts.logger
 	writer := writerIdentity(r.opts)
-	paths := sharedFilePaths()
+	paths := r.opts.shared
 
 	if sf := readSharedFile(paths, logger); sf != nil {
 		logger.Debug().Msg("machine id: adopting value from shared file")
 		return sf.MachineID
 	}
 
-	if id, path, ok := readStudioDeviceID(studioDeviceIDPaths(), logger); ok {
+	if id, path, ok := readStudioDeviceID(r.opts.studio, logger); ok {
 		logger.Debug().Str("path", path).Msg("machine id: adopting value from Snyk Studio device-id file")
 		stored, err := writeSharedFileID(paths, id, string(sourcePersisted), writer, logger)
 		if err != nil {

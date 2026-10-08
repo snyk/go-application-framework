@@ -10,6 +10,8 @@ import (
 type resolveOptions struct {
 	runtimeInfo func() runtimeinfo.RuntimeInfo
 	logger      *zerolog.Logger
+	shared      pathPair
+	studio      pathPair
 }
 
 // ResolveOption configures optional behavior of Resolve.

@@ -49,7 +49,7 @@ func TestAcceptance_FIFOsAtTheStudioAndSharedFilePathsDoNotHangResolution(t *tes
 	}
 
 	var id string
-	withinDeadline(t, func() { id = machineID(t, newRun(t)) })
+	withinDeadline(t, func() { id = machineID(t, m.newRun()) })
 
 	require.Empty(t, id, "a FIFO occupies the only writable shared file path, so nothing can be stored")
 }

@@ -10,9 +10,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// studioDeviceIDPaths is a variable so tests can point it at temporary files.
-var studioDeviceIDPaths = defaultStudioDeviceIDPaths
-
 // defaultStudioDeviceIDPaths returns the well-known locations of the bare-string device-id file
 // written by Snyk Studio, which predates the shared machine-id file. Both variants are
 // checked so a machine that only ever ran studio for one user, or only as a service, still has its

@@ -37,7 +37,6 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
@@ -225,17 +224,46 @@ func Test_CreateAppEngine(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
-// isolateMachineIDStorage keeps machine id resolution away from the real machine-wide and per-user
-// locations and from a CLIENT_MACHINE_ID set in the environment. It returns the shared file that
-// generated ids are written to.
+// isolateMachineIDStorage points machine id storage at temp directories through the environment
+// and clears CLIENT_MACHINE_ID. It returns the shared file that generated ids are written to. On
+// Linux and macOS the machine-wide shared file and Studio locations are fixed paths, so it skips
+// when either directory exists: an existing file there would be read, and a privileged run could
+// write one. In CI it fails instead, so coverage is never lost silently.
 func isolateMachineIDStorage(t *testing.T) (sharedFilePath string) {
 	t.Helper()
-	configtest.IsolateEnvironmentForTest(t)
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("USERPROFILE", os.Getenv("HOME"))
-	sharedFilePath, restore := machineid.RedirectForTest(t.TempDir())
-	t.Cleanup(restore)
-	return sharedFilePath
+	configtest.IsolateEnvironmentForTest(t, "SNYK_API", "INTERNAL_SNYK_CLIENT_MACHINE_ID")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// A file in place of ProgramData stops the machine-wide directory being created on Windows.
+	notADirectory := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(notADirectory, nil, 0o600))
+	t.Setenv("ProgramData", notADirectory)
+	localAppData := t.TempDir()
+	t.Setenv("LOCALAPPDATA", localAppData)
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(localAppData, "Snyk", "machine-id.json")
+	case "darwin":
+		skipIfExists(t, "/Library/Application Support/Snyk", "/Library/Application Support/snyk-studio")
+	default:
+		skipIfExists(t, "/etc/snyk", "/var/lib/snyk-studio")
+	}
+	return filepath.Join(home, ".snyk", "machine-id.json")
+}
+
+func skipIfExists(t *testing.T, machineWideDirs ...string) {
+	t.Helper()
+	for _, dir := range machineWideDirs {
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		if os.Getenv("CI") != "" {
+			t.Fatalf("machine-wide machine id directory %s exists on a CI runner; these tests would be skipped", dir)
+		}
+		t.Skipf("machine-wide machine id directory %s exists", dir)
+	}
 }
 
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 func TestIntegration_InMemoryConfigurationResolvesThroughTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	config := configuration.NewInMemory()
-	config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+	config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
 
 	id := machineID(t, config)
 
@@ -32,7 +32,7 @@ func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
-			config.AddDefaultValue(configuration.MACHINE_ID, Resolve())
+			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
 			value, err := config.GetStringWithError(configuration.MACHINE_ID)
 			assert.NoError(t, err)
 			results[i] = value
