@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"syscall"
 )
 
 // maxIDFileSize bounds how much of a machine id file is read. Real files are well under 1 KiB.
@@ -18,7 +19,8 @@ var (
 // cannot hang the caller, and checks the opened file rather than the path, so the path cannot be
 // swapped between the check and the read.
 func readIDFile(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|openNonBlocking, 0)
+	// O_NONBLOCK makes opening a FIFO return at once on macOS and Linux; Windows ignores it.
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
