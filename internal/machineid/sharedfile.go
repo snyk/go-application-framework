@@ -31,6 +31,12 @@ const (
 	lockRetryDelay = 100 * time.Millisecond
 )
 
+const (
+	schemaVersion = 1
+	scopeMachine  = "machine"
+	scopeUser     = "user"
+)
+
 var lockTimeout = 5 * time.Second
 
 // sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over,
@@ -109,7 +115,6 @@ func loadSharedFile(path string) (*sharedFile, error) {
 	}
 	var sf sharedFile
 	var typeErr *json.UnmarshalTypeError
-	// A field of the wrong type still fills machine_id. A non-object leaves it blank.
 	if err := json.Unmarshal(data, &sf); err != nil && !errors.As(err, &typeErr) {
 		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
 	}
@@ -121,11 +126,11 @@ func loadSharedFile(path string) (*sharedFile, error) {
 
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
 // It never creates the machine-wide directory; any failure there falls back to the per-user path.
-func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
+func writeSharedFileID(paths pathPair, candidateID string, source idSource, writer string, logger *zerolog.Logger) (string, error) {
 	logger = effectiveLogger(logger)
 	var machineWideErr error
 	if paths.machineWide != "" {
-		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer)
+		id, err := writeAt(paths.machineWide, scopeMachine, fileperms.FILEPERM_644, candidateID, source, writer)
 		if err == nil {
 			return id, nil
 		}
@@ -139,17 +144,17 @@ func writeSharedFileID(paths pathPair, candidateID, source, writer string, logge
 	return id, nil
 }
 
-func writePerUser(path, candidateID, source, writer string) (string, error) {
+func writePerUser(path, candidateID string, source idSource, writer string) (string, error) {
 	if path == "" {
 		return "", errors.New("machine id: no per-user shared file path")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), fileperms.FILEPERM_755); err != nil {
 		return "", err
 	}
-	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer)
+	return writeAt(path, scopeUser, fileperms.FILEPERM_600, candidateID, source, writer)
 }
 
-func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string) (string, error) {
+func writeAt(path, scope string, mode fs.FileMode, candidateID string, source idSource, writer string) (string, error) {
 	// Read before locking: the lock file cannot be created in a directory this process cannot write.
 	if existing, err := loadSharedFile(path); err == nil {
 		return existing.MachineID, nil
@@ -173,8 +178,8 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	stamp := time.Now().UTC().Format(time.RFC3339)
 	data, err := json.Marshal(sharedFile{
 		MachineID:        candidateID,
-		IdentifierSource: source,
-		SchemaVersion:    1,
+		IdentifierSource: string(source),
+		SchemaVersion:    schemaVersion,
 		Scope:            scope,
 		FirstSeenAt:      stamp,
 		UpdatedAt:        stamp,

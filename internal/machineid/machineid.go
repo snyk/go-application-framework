@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // idSource records in the shared file how its machine identifier was obtained.
@@ -28,11 +29,11 @@ func generate() string {
 const defaultWriterIdentity = "go-application-framework"
 
 // writerIdentity names the current consumer for the shared file's writer field.
-func writerIdentity(o resolveOptions) string {
-	if o.runtimeInfo == nil {
+func writerIdentity(runtimeInfo func() runtimeinfo.RuntimeInfo) string {
+	if runtimeInfo == nil {
 		return defaultWriterIdentity
 	}
-	ri := o.runtimeInfo()
+	ri := runtimeInfo()
 	if ri == nil {
 		return defaultWriterIdentity
 	}
@@ -48,7 +49,7 @@ func writerIdentity(o resolveOptions) string {
 
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. It takes the
 // first of: an id passed in by the host (configuration.CLIENT_MACHINE_ID), the shared file, the
-// Snyk Studio device-id file, or a newly generated id.
+// Snyk Studio device-id file, or a newly generated id. The result is an empty string when no id can be stored.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths(), now: time.Now}
 	for _, opt := range opts {
@@ -91,7 +92,7 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 	// A found id is kept for the life of the resolver. An empty result is not, so a lookup after
 	// retryDelay tries again once the cause (a held lock, a missing permission) has cleared.
 	if r.fromDisk == "" && !r.opts.now().Before(r.nextAttempt) {
-		r.fromDisk = r.resolveFromDisk()
+		r.fromDisk = r.loadOrCreateID()
 		if r.fromDisk == "" {
 			r.nextAttempt = r.opts.now().Add(retryDelay)
 		}
@@ -99,9 +100,9 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 	return r.fromDisk
 }
 
-func (r *resolver) resolveFromDisk() string {
+func (r *resolver) loadOrCreateID() string {
 	logger := r.opts.logger
-	writer := writerIdentity(r.opts)
+	writer := writerIdentity(r.opts.runtimeInfo)
 	paths := r.opts.shared
 
 	if sf := readSharedFile(paths, logger); sf != nil {
@@ -111,7 +112,7 @@ func (r *resolver) resolveFromDisk() string {
 
 	if id, path, ok := readStudioDeviceID(r.opts.studio, logger); ok {
 		logger.Debug().Str("path", path).Msg("machine id: adopting value from Snyk Studio device-id file")
-		stored, err := writeSharedFileID(paths, id, string(sourcePersisted), writer, logger)
+		stored, err := writeSharedFileID(paths, id, sourcePersisted, writer, logger)
 		if err != nil {
 			// The Studio file stays in place, so the id is still stable across runs.
 			logger.Debug().Err(err).Msg("machine id: Snyk Studio value could not be stored in the shared file, using it directly")
@@ -121,7 +122,7 @@ func (r *resolver) resolveFromDisk() string {
 	}
 
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
-	stored, err := writeSharedFileID(paths, generate(), string(sourceGenerated), writer, logger)
+	stored, err := writeSharedFileID(paths, generate(), sourceGenerated, writer, logger)
 	if err != nil {
 		logger.Debug().Err(err).Msg("machine id: generated value could not be stored, no stable machine id is available")
 		return ""

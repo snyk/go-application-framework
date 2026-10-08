@@ -357,11 +357,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
-	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
 	err = config.AddKeyDependency(configuration.MACHINE_ID, configuration.CLIENT_MACHINE_ID)
 	if err != nil {
 		logger.Print("Failed to add dependency for MACHINE_ID:", err)
 	}
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see

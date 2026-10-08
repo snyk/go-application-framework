@@ -42,7 +42,6 @@ func studioDeviceIDPathsFor(goos string) pathPair {
 // device-id file, so the result does not depend on the user when the two disagree. Only trailing
 // whitespace is trimmed (a trailing newline is a file artifact) before validation.
 func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path string, ok bool) {
-	logger = effectiveLogger(logger)
 	for _, p := range []string{paths.machineWide, paths.perUser} {
 		if p == "" {
 			continue

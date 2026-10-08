@@ -1,9 +1,12 @@
 package machineid
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
+
+const maxIDLength = 128
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@-]*$`)
 
@@ -32,8 +35,8 @@ func valid(id string) bool {
 // validate reports whether id is a usable machine id and, if not, why, for logging.
 func validate(id string) (reason string, ok bool) {
 	switch {
-	case len(id) > 128:
-		return "longer than 128 characters", false
+	case len(id) > maxIDLength:
+		return fmt.Sprintf("longer than %d characters", maxIDLength), false
 	case !idPattern.MatchString(id):
 		return "contains characters outside the allowed set", false
 	}
