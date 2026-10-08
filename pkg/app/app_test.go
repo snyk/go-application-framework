@@ -225,13 +225,13 @@ func Test_CreateAppEngine(t *testing.T) {
 }
 
 // isolateMachineIDStorage points machine id storage at temp directories through the environment
-// and clears CLIENT_MACHINE_ID. It returns the shared file that generated ids are written to. On
+// and clears any supplied machine id. It returns the shared file that generated ids are written to. On
 // Linux and macOS the machine-wide shared file and Studio locations are fixed paths, so it skips
 // when either directory exists: an existing file there would be read, and a privileged run could
 // write one. In CI it fails instead, so coverage is never lost silently.
 func isolateMachineIDStorage(t *testing.T) (sharedFilePath string) {
 	t.Helper()
-	configtest.IsolateEnvironmentForTest(t, "SNYK_API", "INTERNAL_SNYK_CLIENT_MACHINE_ID")
+	configtest.IsolateEnvironmentForTest(t, "SNYK_API", "INTERNAL_SNYK_MACHINE_ID", "INTERNAL_SNYK_CLIENT_MACHINE_ID")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -277,21 +277,21 @@ func Test_CreateAppEngine_providesMachineId(t *testing.T) {
 		"a second engine on the same machine must resolve the same machine id")
 }
 
-func Test_CreateAppEngine_providesTheExplicitlySuppliedMachineId(t *testing.T) {
+func Test_CreateAppEngine_providesTheSuppliedMachineId(t *testing.T) {
 	isolateMachineIDStorage(t)
 	config := configuration.NewWithOpts()
-	config.Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
+	config.Set(configuration.MACHINE_ID, "explicit-machine-id")
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 
 	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
-func Test_CreateAppEngine_explicitlySuppliedMachineIdAfterAFirstLookupIsIgnoredUntilRestart(t *testing.T) {
+func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsIgnoredUntilRestart(t *testing.T) {
 	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
 	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
 
-	engine.GetConfiguration().Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
+	engine.GetConfiguration().Set(configuration.MACHINE_ID, "explicit-machine-id")
 
 	assert.NotEqual(t, "explicit-machine-id", resolved)
 	assert.Equal(t, resolved, engine.GetConfiguration().GetString(configuration.MACHINE_ID))

@@ -29,12 +29,6 @@ const (
 	INTEGRATION_ENVIRONMENT_VERSION string = "snyk_integration_environment_version" // INTEGRATION_ENVIRONMENT_VERSION (string) sets/returns the version of the environment of the integration for example the IDE version
 
 	// ---------
-	// machine identity
-	// ---------
-
-	CLIENT_MACHINE_ID string = "internal_snyk_client_machine_id" // CLIENT_MACHINE_ID (string) explicitly supplied machine identifier, typically from a device-management tool; when set and valid before MACHINE_ID is first read, MACHINE_ID returns it for the life of the process
-
-	// ---------
 	// Org related configuration
 	// ---------
 
@@ -69,7 +63,7 @@ const (
 	// machine identification
 	// ---------
 
-	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) returns the identifier of the machine the application is running on. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
+	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) the identifier of the machine the application is running on, resolved on first read and kept for the life of the engine (the configuration passed to app.CreateAppEngineWithOptions and its clones). A valid value supplied on this key before then is used; otherwise the shared machine id file, the Snyk Studio device-id file or a newly generated id is. If no id was found, a value supplied later is used and the files are tried again after 30s, unless configuration caching holds the empty result for its time to live. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
 
 	// ---------
 	// general workflow configuration

@@ -46,11 +46,12 @@ func writerIdentity(o resolveOptions) string {
 	return name
 }
 
-// Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. A value set
-// on MACHINE_ID is returned as is. Otherwise the first lookup takes the first of: an id passed in
-// by the host (configuration.CLIENT_MACHINE_ID), the shared file, the Snyk Studio device-id file,
-// or a newly generated id, and later lookups return that id, so CLIENT_MACHINE_ID must be set
-// before the machine id is first read.
+// Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. The first
+// lookup takes the first of: a valid value supplied on MACHINE_ID itself, the shared file, the Snyk
+// Studio device-id file, or a newly generated id. Later lookups through the same resolver return
+// that id, so a value must be supplied before the machine id is first read. If no id was found, a
+// value supplied later is used on the next lookup, and the disk is tried again after retryDelay,
+// unless configuration caching holds the empty result.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths(), now: time.Now}
 	for _, opt := range opts {
@@ -58,11 +59,8 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	}
 	o.logger = effectiveLogger(o.logger)
 	r := &resolver{opts: o}
-	return func(config configuration.Configuration, existingValue any) (any, error) {
-		if id, ok := existingValue.(string); ok && id != "" {
-			return id, nil
-		}
-		return r.resolve(config), nil
+	return func(_ configuration.Configuration, supplied any) (any, error) {
+		return r.resolve(supplied), nil
 	}
 }
 
@@ -77,16 +75,17 @@ type resolver struct {
 	nextAttempt time.Time
 }
 
-func (r *resolver) resolve(config configuration.Configuration) string {
+func (r *resolver) resolve(supplied any) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// A found id is kept for the life of the resolver. An empty result is not, so a lookup after
-	// retryDelay tries again once the cause (a held lock, a missing permission) has cleared.
+	// A found id is kept for the life of the resolver. A supplied value needs no disk access, so it
+	// is used as soon as it appears. An empty result is not kept, so a lookup after retryDelay goes
+	// back to disk once the cause (a held lock, a missing permission) has cleared.
+	if r.id == "" {
+		r.id = r.resolveSupplied(supplied)
+	}
 	if r.id == "" && !r.opts.now().Before(r.nextAttempt) {
-		r.id = r.resolveExplicit(config)
-		if r.id == "" {
-			r.id = r.resolveFromDisk()
-		}
+		r.id = r.resolveFromDisk()
 		if r.id == "" {
 			r.nextAttempt = r.opts.now().Add(retryDelay)
 		}
@@ -94,19 +93,20 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 	return r.id
 }
 
-// resolveExplicit returns a valid id passed in by the host. It is never written to the shared
-// file, so it cannot replace the id other Snyk products share.
-func (r *resolver) resolveExplicit(config configuration.Configuration) string {
-	raw := config.GetString(configuration.CLIENT_MACHINE_ID)
+// resolveSupplied returns a valid id supplied on MACHINE_ID (set directly, through its environment
+// variable, a bound flag or a config file). It is never written to the shared file, so it cannot
+// replace the id other Snyk products share.
+func (r *resolver) resolveSupplied(supplied any) string {
+	raw, _ := supplied.(string) //nolint:errcheck // a non-string value counts as not supplied
 	if blank(raw) {
 		return ""
 	}
 	reason, ok := validate(raw)
 	if !ok {
-		r.opts.logger.Debug().Str("reason", reason).Msg("machine id: external channel value failed validation, ignoring")
+		r.opts.logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
 		return ""
 	}
-	r.opts.logger.Debug().Msg("machine id: adopting value from external channel")
+	r.opts.logger.Debug().Msg("machine id: adopting supplied value")
 	return raw
 }
 
