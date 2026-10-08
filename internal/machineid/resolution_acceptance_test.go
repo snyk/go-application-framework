@@ -14,6 +14,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 type isolatedMachine struct {
@@ -53,10 +54,15 @@ func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultVal
 	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio)}, opts...)...)
 }
 
+// machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
 func machineID(t *testing.T, config configuration.Configuration) string {
 	t.Helper()
 	value, err := config.GetStringWithError(configuration.MACHINE_ID)
-	require.NoError(t, err)
+	if value == "" {
+		require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+	} else {
+		require.NoError(t, err)
+	}
 	return value
 }
 
@@ -284,31 +290,24 @@ func TestMachineIDDocumentsTheRetryDelay(t *testing.T) {
 	require.Contains(t, string(source), "tried again after "+retryDelay.String(), "the MACHINE_ID doc must state retryDelay")
 }
 
-func TestAcceptance_AFailedLookupIsRetriedOnlyWithoutConfigurationCaching(t *testing.T) {
-	for name, tc := range map[string]struct {
-		opts      []configuration.Opts
-		wantRetry bool
-	}{
-		"caching off": {wantRetry: true},
-		"caching on":  {opts: []configuration.Opts{configuration.WithCachingEnabled(configuration.NoCacheExpiration)}, wantRetry: false},
+func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *testing.T) {
+	for name, opts := range map[string][]configuration.Opts{
+		"caching off": nil,
+		"caching on":  {configuration.WithCachingEnabled(configuration.NoCacheExpiration)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := newIsolatedMachine(t)
 			blocker := filepath.Dir(filepath.Dir(m.shared.perUser))
 			m.blockEverySharedFileLocation(t)
 			now := time.Now()
-			config := configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk"), configuration.WithAutomaticEnv()}, tc.opts...)...)
+			config := configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk"), configuration.WithAutomaticEnv()}, opts...)...)
 			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve(withClock(func() time.Time { return now })))
 			require.Empty(t, machineID(t, config))
 
 			require.NoError(t, os.Remove(blocker))
 			now = now.Add(retryDelay)
 
-			if tc.wantRetry {
-				require.NotEmpty(t, machineID(t, config))
-			} else {
-				require.Empty(t, machineID(t, config), "configuration caching holds the empty result")
-			}
+			require.NotEmpty(t, machineID(t, config), "a failed lookup must not be cached, so it is retried")
 		})
 	}
 }
@@ -326,6 +325,24 @@ func TestAcceptance_AnInvalidSuppliedValueIsLoggedOnce(t *testing.T) {
 	}
 
 	require.Equal(t, 1, strings.Count(logs.String(), "supplied value failed validation"))
+	require.Contains(t, logLineContaining(t, logs.String(), "supplied value failed validation"), `"level":"warn"`)
+}
+
+func TestAcceptance_AnUnstorableIDIsWarnedAboutOnce(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.blockEverySharedFileLocation(t)
+	now := time.Now()
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config := m.newRun(WithLogger(&logger), withClock(func() time.Time { return now }))
+
+	for range 3 {
+		require.Empty(t, machineID(t, config))
+		now = now.Add(retryDelay)
+	}
+
+	require.Equal(t, 3, strings.Count(logs.String(), "could not be stored, no stable machine id"), "each retry is logged")
+	require.Equal(t, 1, strings.Count(logs.String(), `"level":"warn"`), "only the first is a warning")
 }
 
 func TestAcceptance_WriteFailuresAreLoggedWithTheirCause(t *testing.T) {
@@ -389,11 +406,18 @@ func TestAcceptance_SuppliedIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *
 	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
+func TestAcceptance_TrailingWhitespaceIsTrimmedFromASuppliedID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id\r\n")
+
+	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
+}
+
 func TestAcceptance_InvalidSuppliedIDIsIgnored(t *testing.T) {
 	for name, raw := range map[string]string{
-		"trailing newline":   "supplied-id\n",
 		"brace-wrapped guid": "{550E8400-E29B-41D4-A716-446655440000}",
 		"whitespace only":    "   ",
+		"leading whitespace": " supplied-id",
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := newIsolatedMachine(t)

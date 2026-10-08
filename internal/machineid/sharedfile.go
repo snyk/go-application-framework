@@ -31,7 +31,11 @@ const (
 	lockRetryDelay = 100 * time.Millisecond
 )
 
-var lockTimeout = 5 * time.Second
+// lockTimeout bounds the wait for each shared file location, and so how long a first machine id
+// lookup can stall while another process holds the lock. After a timeout the file is read once more,
+// so an id a slow writer stored meanwhile is used; a writer still holding the lock can't be waited
+// for, so this process may then store a different per-user id.
+var lockTimeout = 1 * time.Second
 
 // sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over,
 // because GAF never rewrites a file that holds a valid id.
@@ -158,6 +162,10 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
 	if _, err := lock.TryLockContext(ctx, lockRetryDelay); err != nil {
+		// A slow writer may have stored an id while this process waited; use it rather than fail.
+		if existing, loadErr := loadSharedFile(path); loadErr == nil {
+			return existing.MachineID, nil
+		}
 		return "", fmt.Errorf("locking %s: %w", lock.Path(), err)
 	}
 	defer func() { _ = lock.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock

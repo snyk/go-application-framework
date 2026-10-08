@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -560,11 +561,11 @@ type engineRuntimeInfo struct {
 
 func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
 	id, err := ri.engine.GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
+		return "", runtimeinfo.ErrNoMachineID
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to read machine id: %w", err)
-	}
-	if id == "" {
-		return "", runtimeinfo.ErrNoMachineID
 	}
 	return id, nil
 }

@@ -38,9 +38,11 @@ func studioDeviceIDPathsFor(goos string) pathPair {
 	}
 }
 
-// readStudioDeviceID returns the first valid id from the machine-wide, then the per-user, Snyk Studio
-// device-id file, so the result does not depend on the user when the two disagree. Only trailing
-// whitespace is trimmed (a trailing newline is a file artifact) before validation.
+// readStudioDeviceID reads the legacy Snyk Studio device-id file, so a machine that already has an
+// id there keeps it: it is adopted into the shared file when that can be written, otherwise used as is.
+// It returns the first valid id from the machine-wide, then the per-user, file, so the result does not
+// depend on the user when the two disagree. Only trailing whitespace is trimmed (a trailing newline is
+// a file artifact) before validation.
 func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path string, ok bool) {
 	logger = effectiveLogger(logger)
 	for _, p := range []string{paths.machineWide, paths.perUser} {

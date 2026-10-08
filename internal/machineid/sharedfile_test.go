@@ -198,6 +198,26 @@ func holdLock(t *testing.T, path string) {
 	t.Cleanup(func() { _ = lock.Unlock() }) //nolint:errcheck // best-effort release of the test's own lock
 }
 
+func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
+	shortenLockTimeout(t)
+	paths := tempPaths(t)
+	paths.machineWide = ""
+	seed(t, paths.perUser, `{"machine_id": "not a valid id"}`)
+	holdLock(t, paths.perUser)
+	// Another writer stores an id while this one waits for the lock it holds.
+	stored := make(chan error, 1)
+	go func() {
+		time.Sleep(lockTimeout / 5)
+		stored <- os.WriteFile(paths.perUser, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600)
+	}()
+
+	id, err := writeSharedFileID(paths, "candidate", "generated", "test-writer", nil)
+
+	require.NoError(t, <-stored)
+	require.NoError(t, err)
+	require.Equal(t, "stored-by-other-writer", id)
+}
+
 func TestWriteSharedFileIDWritesMachineWideWhenItsDirectoryIsWritable(t *testing.T) {
 	paths := tempPaths(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.machineWide), 0o755))

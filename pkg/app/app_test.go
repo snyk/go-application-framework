@@ -267,12 +267,14 @@ func skipIfExists(t *testing.T, machineWideDirs ...string) {
 }
 
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {
-	isolateMachineIDStorage(t)
+	sharedFilePath := isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
 
 	machineID := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
 
-	assert.NotEmpty(t, machineID)
+	content, err := os.ReadFile(sharedFilePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
 	assert.Equal(t, machineID, CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts())).GetConfiguration().GetString(configuration.MACHINE_ID),
 		"a second engine on the same machine must resolve the same machine id")
 }

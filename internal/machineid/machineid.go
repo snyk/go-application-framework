@@ -6,10 +6,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // idSource records in the shared file how its machine identifier was obtained.
@@ -49,9 +51,9 @@ func writerIdentity(o resolveOptions) string {
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. The first
 // lookup takes the first of: a valid value supplied on MACHINE_ID itself, the shared file, the Snyk
 // Studio device-id file, or a newly generated id. Later lookups through the same resolver return
-// that id, so a value must be supplied before the machine id is first read. If no id was found, a
-// value supplied later is used on the next lookup, and the disk is tried again after retryDelay,
-// unless configuration caching holds the empty result.
+// that id, so a value must be supplied before the machine id is first read. If no id was found, it
+// returns an empty id with runtimeinfo.ErrNoMachineID, which configuration caching does not hold, so
+// a value supplied later is used on the next lookup and the disk is tried again after retryDelay.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths(), now: time.Now}
 	for _, opt := range opts {
@@ -60,7 +62,10 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o.logger = effectiveLogger(o.logger)
 	r := &resolver{opts: o}
 	return func(_ configuration.Configuration, supplied any) (any, error) {
-		return r.resolve(supplied), nil
+		if id := r.resolve(supplied); id != "" {
+			return id, nil
+		}
+		return "", runtimeinfo.ErrNoMachineID
 	}
 }
 
@@ -75,6 +80,8 @@ type resolver struct {
 	nextAttempt time.Time
 	// rejected is the last supplied value that failed validation, so it is logged only once.
 	rejected string
+	// warnedUnstored records that the warning about an unstorable id was logged, so retries log at Debug.
+	warnedUnstored bool
 }
 
 func (r *resolver) resolve(supplied any) string {
@@ -100,6 +107,8 @@ func (r *resolver) resolve(supplied any) string {
 // replace the id other Snyk products share.
 func (r *resolver) resolveSupplied(supplied any) string {
 	raw, _ := supplied.(string) //nolint:errcheck // a non-string value counts as not supplied
+	// Trimmed like the Snyk Studio file, so a trailing newline from an environment variable is not fatal.
+	raw = strings.TrimRightFunc(raw, unicode.IsSpace)
 	if blank(raw) {
 		return ""
 	}
@@ -107,7 +116,7 @@ func (r *resolver) resolveSupplied(supplied any) string {
 	if !ok {
 		if raw != r.rejected {
 			r.rejected = raw
-			r.opts.logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
+			r.opts.logger.Warn().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
 		}
 		return ""
 	}
@@ -139,7 +148,12 @@ func (r *resolver) resolveFromDisk() string {
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
 	stored, err := writeSharedFileID(paths, generate(), string(sourceGenerated), writer, logger)
 	if err != nil {
-		logger.Debug().Err(err).Msg("machine id: generated value could not be stored, no stable machine id is available")
+		event := logger.Debug()
+		if !r.warnedUnstored {
+			r.warnedUnstored = true
+			event = logger.Warn()
+		}
+		event.Err(err).Msg("machine id: generated value could not be stored, no stable machine id is available")
 		return ""
 	}
 	return stored
