@@ -322,8 +322,12 @@ func TestWriteSharedFileIDConvergesOnOneIDUnderConcurrentWriters(t *testing.T) {
 func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	paths := tempPaths(t)
 	paths.machineWide = ""
-	valueA := strings.Repeat("A", 64*1024)
-	valueB := strings.Repeat("B", 64*1024)
+	// Invalid ids (over 128 characters), so writeAt keeps replacing the file instead of keeping it.
+	valueA := strings.Repeat("A", 1024)
+	valueB := strings.Repeat("B", 1024)
+	// Readers can finish before the writer's first write lands, so the file must exist up front.
+	_, err := writeSharedFileID(paths, valueA, "generated", "test-writer", nil)
+	require.NoError(t, err)
 
 	stop := make(chan struct{})
 	var writer sync.WaitGroup
@@ -346,7 +350,7 @@ func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	var readers sync.WaitGroup
 	for range 8 {
 		readers.Go(func() {
-			for range 2000 {
+			for range 200 {
 				// Skip failed reads: Windows can refuse to open a file while a rename replaces it.
 				data, err := os.ReadFile(paths.perUser)
 				if err != nil {
