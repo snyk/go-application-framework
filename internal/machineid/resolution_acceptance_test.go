@@ -81,15 +81,6 @@ func writeSharedFileAs(t *testing.T, path string, content map[string]any) {
 	writeFile(t, path, data)
 }
 
-func sharedFileContent(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var content map[string]any
-	require.NoError(t, json.Unmarshal(data, &content))
-	return content
-}
-
 func (m isolatedMachine) blockEverySharedFileLocation(t *testing.T) {
 	t.Helper()
 	writeFile(t, filepath.Dir(filepath.Dir(m.shared.perUser)), []byte("not a directory"))
@@ -101,9 +92,9 @@ func TestAcceptance_GeneratedIDIsStoredInTheSharedFile(t *testing.T) {
 	id := machineID(t, m.newRun())
 
 	require.True(t, valid(id))
-	content := sharedFileContent(t, m.shared.perUser)
-	require.Equal(t, id, content["machine_id"])
-	require.Equal(t, "generated", content["identifier_source"])
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, id, content.MachineID)
+	require.Equal(t, "generated", content.IdentifierSource)
 }
 
 func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
@@ -184,7 +175,7 @@ func TestAcceptance_NothingIsWrittenToSnykJSON(t *testing.T) {
 	generated := machineID(t, m.newRun())
 
 	require.Equal(t, "device-managed-id", explicit)
-	require.Equal(t, generated, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, generated, readFile(t, m.shared.perUser).MachineID)
 	content := m.snykJSON(t)
 	for _, id := range []string{explicit, generated} {
 		require.NotContains(t, content, id, "the machine id must only be stored in the shared machine-id file")
@@ -249,7 +240,7 @@ func TestAcceptance_AFailedWriteIsRetriedAfterTheRetryDelay(t *testing.T) {
 	id := machineID(t, config)
 
 	require.True(t, valid(id), "once the shared file can be written, the same process must get a stable id")
-	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 	require.Equal(t, id, machineID(t, config))
 }
 
@@ -274,7 +265,7 @@ func TestAcceptance_InvalidExplicitIDIsIgnored(t *testing.T) {
 			id := machineID(t, m.newRun())
 
 			require.True(t, valid(id))
-			require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
+			require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
 		})
 	}
 }
@@ -285,10 +276,10 @@ func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t 
 
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()))
 
-	content := sharedFileContent(t, m.shared.perUser)
-	require.Equal(t, "studio-device-id", content["machine_id"])
-	require.Equal(t, "persisted", content["identifier_source"])
-	require.Equal(t, "go-application-framework", content["writer"])
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "studio-device-id", content.MachineID)
+	require.Equal(t, "persisted", content.IdentifierSource)
+	require.Equal(t, "go-application-framework", content.Writer)
 	studio, err := os.ReadFile(m.studio.perUser)
 	require.NoError(t, err)
 	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
@@ -339,7 +330,7 @@ func TestAcceptance_InvalidStudioDeviceIDIsIgnoredAndLogged(t *testing.T) {
 	id := machineID(t, m.newRun(WithLogger(&logger)))
 
 	require.True(t, valid(id))
-	require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
+	require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
 	require.Contains(t, logs.String(), jsonEscaped(t, m.studio.perUser))
 }
 
@@ -359,5 +350,5 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 
 	machineID(t, m.newRun())
 
-	require.Equal(t, "go-application-framework", sharedFileContent(t, m.shared.perUser)["writer"])
+	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
 }

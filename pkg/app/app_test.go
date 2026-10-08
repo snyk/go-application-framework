@@ -224,11 +224,6 @@ func Test_CreateAppEngine(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
-// isolateMachineIDStorage points machine id storage at temp directories through the environment
-// and clears CLIENT_MACHINE_ID. It returns the shared file that generated ids are written to. On
-// Linux and macOS the machine-wide shared file and Studio locations are fixed paths, so it skips
-// when either directory exists: an existing file there would be read, and a privileged run could
-// write one. In CI it fails instead, so coverage is never lost silently.
 func isolateMachineIDStorage(t *testing.T) (sharedFilePath string) {
 	t.Helper()
 	configtest.IsolateEnvironmentForTest(t, "SNYK_API", "INTERNAL_SNYK_CLIENT_MACHINE_ID")
@@ -262,7 +257,7 @@ func skipIfExists(t *testing.T, machineWideDirs ...string) {
 		if os.Getenv("CI") != "" {
 			t.Fatalf("machine-wide machine id directory %s exists on a CI runner; these tests would be skipped", dir)
 		}
-		t.Skipf("machine-wide machine id directory %s exists", dir)
+		t.Skipf("skipping machine id app coverage: machine-wide directory %s exists and would be read or written", dir)
 	}
 }
 
@@ -287,14 +282,15 @@ func Test_CreateAppEngine_providesTheExplicitlySuppliedMachineId(t *testing.T) {
 }
 
 func Test_CreateAppEngine_explicitlySuppliedMachineIdWinsAfterAFirstLookupWithCachingEnabled(t *testing.T) {
-	isolateMachineIDStorage(t)
+	sharedFilePath := isolateMachineIDStorage(t)
 	config := configuration.NewWithOpts(configuration.WithCachingEnabled(configuration.NoCacheExpiration))
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
 
 	engine.GetConfiguration().Set(configuration.CLIENT_MACHINE_ID, "explicit-machine-id")
 
-	assert.NotEqual(t, "explicit-machine-id", resolved)
+	assert.NotEmpty(t, resolved)
+	assert.Equal(t, readJSON(t, sharedFilePath)["machine_id"], resolved)
 	assert.Equal(t, "explicit-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 

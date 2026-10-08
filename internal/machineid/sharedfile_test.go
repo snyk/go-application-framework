@@ -26,29 +26,29 @@ func TestSharedFilePathsArePinnedPerOS(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	perUser := filepath.Join(home, ".snyk", "machine-id.json")
 
-	t.Run("linux", func(t *testing.T) {
-		require.Equal(t, pathPair{
-			machineWide: "/etc/snyk/machine-id.json",
-			perUser:     perUser,
-		}, sharedFilePathsFor("linux"))
-	})
-	t.Run("darwin", func(t *testing.T) {
-		require.Equal(t, pathPair{
-			machineWide: "/Library/Application Support/Snyk/machine-id.json",
-			perUser:     perUser,
-		}, sharedFilePathsFor("darwin"))
-	})
-	t.Run("windows", func(t *testing.T) {
-		if runtime.GOOS != "windows" {
-			t.Skip("filepath only builds windows paths on windows")
-		}
-		t.Setenv("ProgramData", `C:\ProgramData`)
-		t.Setenv("LOCALAPPDATA", `C:\Users\someone\AppData\Local`)
-		require.Equal(t, pathPair{
+	tests := []struct {
+		goos string
+		want pathPair
+	}{
+		{"linux", pathPair{machineWide: "/etc/snyk/machine-id.json", perUser: perUser}},
+		{"darwin", pathPair{machineWide: "/Library/Application Support/Snyk/machine-id.json", perUser: perUser}},
+		{"windows", pathPair{
 			machineWide: `C:\ProgramData\Snyk\machine-id.json`,
 			perUser:     `C:\Users\someone\AppData\Local\Snyk\machine-id.json`,
-		}, sharedFilePathsFor("windows"))
-	})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			if tt.goos == "windows" {
+				if runtime.GOOS != "windows" {
+					t.Skip("filepath only builds windows paths on windows")
+				}
+				t.Setenv("ProgramData", `C:\ProgramData`)
+				t.Setenv("LOCALAPPDATA", `C:\Users\someone\AppData\Local`)
+			}
+			require.Equal(t, tt.want, sharedFilePathsFor(tt.goos))
+		})
+	}
 }
 
 func TestSharedFilePathsSkipUnsetBaseLocations(t *testing.T) {
@@ -69,12 +69,6 @@ func tempPaths(t *testing.T) pathPair {
 		machineWide: filepath.Join(t.TempDir(), "machine", "machine-id.json"),
 		perUser:     filepath.Join(t.TempDir(), "user", ".snyk", "machine-id.json"),
 	}
-}
-
-func seed(t *testing.T, path, content string) {
-	t.Helper()
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
 func probeRead(path string) error {
@@ -112,8 +106,8 @@ var brokenFiles = map[string]string{
 
 func TestReadSharedFilePrefersMachineWide(t *testing.T) {
 	paths := tempPaths(t)
-	seed(t, paths.machineWide, `{"machine_id": "machine-wide-id"}`)
-	seed(t, paths.perUser, `{"machine_id": "per-user-id"}`)
+	writeFile(t, paths.machineWide, []byte(`{"machine_id": "machine-wide-id"}`))
+	writeFile(t, paths.perUser, []byte(`{"machine_id": "per-user-id"}`))
 
 	require.Equal(t, "machine-wide-id", readSharedFile(paths, nil).MachineID)
 }
@@ -123,21 +117,21 @@ func TestReadSharedFileSkipsAMachineWideFileWithoutAValidID(t *testing.T) {
 		"missing": func(*testing.T, string) {},
 		"unreadable": func(t *testing.T, path string) {
 			t.Helper()
-			seed(t, path, `{"machine_id": "machine-wide-id"}`)
+			writeFile(t, path, []byte(`{"machine_id": "machine-wide-id"}`))
 			makeUnreadable(t, path)
 		},
 	}
 	for name, content := range brokenFiles {
 		cases[name] = func(t *testing.T, path string) {
 			t.Helper()
-			seed(t, path, content)
+			writeFile(t, path, []byte(content))
 		}
 	}
 	for name, prepare := range cases {
 		t.Run(name, func(t *testing.T) {
 			paths := tempPaths(t)
 			prepare(t, paths.machineWide)
-			seed(t, paths.perUser, `{"machine_id": "per-user-id"}`)
+			writeFile(t, paths.perUser, []byte(`{"machine_id": "per-user-id"}`))
 			var logs bytes.Buffer
 			logger := zerolog.New(&logs)
 
@@ -149,7 +143,7 @@ func TestReadSharedFileSkipsAMachineWideFileWithoutAValidID(t *testing.T) {
 
 func TestReadSharedFileAcceptsAValidIDBesideAFieldOfTheWrongType(t *testing.T) {
 	paths := tempPaths(t)
-	seed(t, paths.machineWide, `{"machine_id": "machine-wide-id", "schema_version": "1"}`)
+	writeFile(t, paths.machineWide, []byte(`{"machine_id": "machine-wide-id", "schema_version": "1"}`))
 
 	require.Equal(t, "machine-wide-id", readSharedFile(paths, nil).MachineID)
 }
@@ -253,7 +247,7 @@ func TestWriteSharedFileIDWritesPerUserWhenMachineWideDirectoryIsNotWritable(t *
 
 func TestWriteSharedFileIDReturnsAValidMachineWideIDFromADirectoryItCannotWrite(t *testing.T) {
 	paths := tempPaths(t)
-	seed(t, paths.machineWide, `{"machine_id": "existing-id"}`)
+	writeFile(t, paths.machineWide, []byte(`{"machine_id": "existing-id"}`))
 	makeUnwritable(t, filepath.Dir(paths.machineWide))
 
 	require.Equal(t, "existing-id", write(t, paths, "candidate-id"))
@@ -264,7 +258,7 @@ func TestWriteSharedFileIDReturnsAValidMachineWideIDFromADirectoryItCannotWrite(
 func TestWriteSharedFileIDLeavesAValidFileUntouched(t *testing.T) {
 	paths := tempPaths(t)
 	original := `{"machine_id":"existing-id","writer":"installer","serial_number":"5CG1234ABC","schema_version":"1"}`
-	seed(t, paths.machineWide, original)
+	writeFile(t, paths.machineWide, []byte(original))
 
 	require.Equal(t, "existing-id", write(t, paths, "candidate-id"))
 
@@ -276,7 +270,7 @@ func TestWriteSharedFileIDLeavesAValidFileUntouched(t *testing.T) {
 
 func TestWriteSharedFileIDNeverReplacesAFileItCannotRead(t *testing.T) {
 	paths := tempPaths(t)
-	seed(t, paths.machineWide, `{"machine_id": "original-id"}`)
+	writeFile(t, paths.machineWide, []byte(`{"machine_id": "original-id"}`))
 	restore := makeUnreadable(t, paths.machineWide)
 
 	require.Equal(t, "candidate-id", write(t, paths, "candidate-id"))
@@ -290,7 +284,7 @@ func TestWriteSharedFileIDReplacesABrokenFile(t *testing.T) {
 	for name, content := range brokenFiles {
 		t.Run(name, func(t *testing.T) {
 			paths := tempPaths(t)
-			seed(t, paths.machineWide, content)
+			writeFile(t, paths.machineWide, []byte(content))
 
 			require.Equal(t, "new-id", write(t, paths, "new-id"))
 
@@ -364,7 +358,7 @@ func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	close(stop)
 	writer.Wait()
 
-	require.NotZero(t, reads.Load())
+	require.Greater(t, reads.Load(), int64(1000), "too few successful reads to trust the torn-read check")
 	require.Zero(t, torn.Load())
 }
 
@@ -400,7 +394,7 @@ func TestWriteSharedFileIDFailsWhenBothLocksAreHeld(t *testing.T) {
 
 func TestWriteSharedFileIDFailsWithBothCausesWhenNoLocationIsWritable(t *testing.T) {
 	paths := tempPaths(t)
-	seed(t, filepath.Dir(paths.perUser), "")
+	writeFile(t, filepath.Dir(paths.perUser), []byte(""))
 
 	_, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
 

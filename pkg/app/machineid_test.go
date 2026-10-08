@@ -17,6 +17,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+const clientMachineIDEnv = "INTERNAL_SNYK_CLIENT_MACHINE_ID"
+
+func testRuntimeInfo() runtimeinfo.RuntimeInfo {
+	return runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))
+}
+
 func newAppEngine(t *testing.T, opts ...Opts) workflow.Engine {
 	t.Helper()
 	_, err := configuration.CreateConfigurationFile("snyk.json")
@@ -36,8 +42,8 @@ func readJSON(t *testing.T, path string) map[string]any {
 
 func TestAcceptance_ViaAppEngineExplicitMachineIDIsReturnedButNotStored(t *testing.T) {
 	sharedFilePath := isolateMachineIDStorage(t)
-	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
-	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+	t.Setenv(clientMachineIDEnv, "app-wiring-test-machine-id")
+	engine := newAppEngine(t, WithRuntimeInfo(testRuntimeInfo()))
 
 	id, err := engine.GetRuntimeInfo().GetMachineID()
 
@@ -64,7 +70,7 @@ func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testin
 	// The user-scoped directory cannot be created while a file occupies its path.
 	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(sharedFilePath)), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Dir(sharedFilePath), []byte("not a directory"), 0o600))
-	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+	engine := newAppEngine(t, WithRuntimeInfo(testRuntimeInfo()))
 
 	_, err := engine.GetRuntimeInfo().GetMachineID()
 
@@ -73,7 +79,7 @@ func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testin
 
 func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *testing.T) {
 	isolateMachineIDStorage(t)
-	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "app-wiring-test-machine-id")
+	t.Setenv(clientMachineIDEnv, "app-wiring-test-machine-id")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	engine := newAppEngine(t, WithZeroLogger(&logger))
@@ -111,15 +117,19 @@ func TestAcceptance_ViaAppEngineLookupConcurrentWithSetRuntimeInfoDoesNotRace(t 
 	engine := newAppEngine(t)
 
 	var wg sync.WaitGroup
+	start := make(chan struct{})
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
+		<-start
 		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9")))
 	}()
 	go func() {
 		defer wg.Done()
+		<-start
 		_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 		assert.NoError(t, err)
 	}()
+	close(start)
 	wg.Wait()
 }

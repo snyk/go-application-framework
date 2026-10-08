@@ -18,7 +18,7 @@ func TestIntegration_InMemoryConfigurationResolvesThroughTheSharedFile(t *testin
 	id := machineID(t, config)
 
 	require.True(t, valid(id))
-	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
@@ -44,5 +44,5 @@ func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
 	for i := 1; i < runs; i++ {
 		require.Equal(t, results[0], results[i], "independent runs must converge on the same machine id")
 	}
-	require.Equal(t, results[0], sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, results[0], readFile(t, m.shared.perUser).MachineID)
 }
