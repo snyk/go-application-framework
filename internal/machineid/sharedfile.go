@@ -99,7 +99,11 @@ func readSharedFile(paths pathPair, logger *zerolog.Logger) *sharedFile {
 var errNoValidID = errors.New("shared file holds no valid machine id")
 
 func loadSharedFile(path string) (*sharedFile, error) {
-	data, err := os.ReadFile(path)
+	data, err := readIDFile(path)
+	if errors.Is(err, errFileTooLarge) {
+		// No real shared file is this large, so treat it like any other broken file and replace it.
+		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
+	}
 	if err != nil {
 		return nil, err
 	}
