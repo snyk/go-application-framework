@@ -105,6 +105,7 @@ func (r *resolver) resolveFromDisk() string {
 		stored, err := writeSharedFileID(paths, id, string(sourcePersisted), writer, logger)
 		if err != nil {
 			// The Studio file stays in place, so the id is still stable across runs.
+			logger.Debug().Err(err).Msg("machine id: Snyk Studio value could not be stored in the shared file, using it directly")
 			return id
 		}
 		return stored
@@ -113,7 +114,7 @@ func (r *resolver) resolveFromDisk() string {
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
 	stored, err := writeSharedFileID(paths, generate(), string(sourceGenerated), writer, logger)
 	if err != nil {
-		logger.Debug().Msg("machine id: generated value could not be stored, no stable machine id is available")
+		logger.Debug().Err(err).Msg("machine id: generated value could not be stored, no stable machine id is available")
 		return ""
 	}
 	return stored

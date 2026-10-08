@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -197,6 +198,38 @@ func TestAcceptance_NoWritableSharedFileLocationGivesAnEmptyMachineID(t *testing
 
 	require.Empty(t, machineID(t, config), "an id that cannot be stored is not a stable machine id")
 	require.Empty(t, machineID(t, config))
+}
+
+func TestAcceptance_WriteFailuresAreLoggedWithTheirCause(t *testing.T) {
+	for name, seedStudio := range map[string]bool{"generated id": false, "Snyk Studio id": true} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.blockEverySharedFileLocation(t)
+			if seedStudio {
+				writeFile(t, m.studio.perUser, []byte("studio-device-id"))
+			}
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+			machineID(t, m.newRun(WithLogger(&logger)))
+
+			line := logLineContaining(t, logs.String(), "could not be stored")
+			require.Contains(t, line, `"error":`)
+			blocked := filepath.Dir(filepath.Dir(m.shared.perUser))
+			require.Contains(t, line, jsonEscaped(t, blocked), "the per-user failure must be logged, not just the machine-wide one")
+		})
+	}
+}
+
+func logLineContaining(t *testing.T, logs, substr string) string {
+	t.Helper()
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, substr) {
+			return line
+		}
+	}
+	t.Fatalf("no log line contains %q:\n%s", substr, logs)
+	return ""
 }
 
 func TestAcceptance_AFailedWriteIsRetriedOnTheNextLookup(t *testing.T) {
