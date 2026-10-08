@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -101,4 +103,23 @@ func TestAcceptance_ViaAppEngineRuntimeInfoSetAfterCreationIsRecordedAsWriter(t 
 	require.NoError(t, err)
 
 	require.Equal(t, "snyk-ls/9.9.9", readJSON(t, sharedFilePath)["writer"], "runtime info set after the engine was created must still reach the shared file write")
+}
+
+// Run with -race: a first MACHINE_ID lookup reads the engine's runtime info while it is still being set.
+func TestAcceptance_ViaAppEngineLookupConcurrentWithSetRuntimeInfoDoesNotRace(t *testing.T) {
+	isolateMachineIDStorage(t)
+	engine := newAppEngine(t)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion("9.9.9")))
+	}()
+	go func() {
+		defer wg.Done()
+		_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+		assert.NoError(t, err)
+	}()
+	wg.Wait()
 }

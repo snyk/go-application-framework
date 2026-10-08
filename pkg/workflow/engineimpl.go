@@ -538,6 +538,8 @@ func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	if e.runtimeInfo == nil {
 		return nil
 	}
@@ -545,6 +547,8 @@ func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 }
 
 func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.runtimeInfo = ri
 }
 
