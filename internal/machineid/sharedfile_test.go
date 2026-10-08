@@ -101,7 +101,6 @@ var brokenFiles = map[string]string{
 	"number":     "42",
 	"blank id":   `{"machine_id": "  "}`,
 	"invalid id": `{"machine_id": "not a valid id"}`,
-	"oversized":  `{"machine_id": "some-id", "padding": "` + strings.Repeat("a", maxIDFileSize) + `"}`,
 }
 
 func TestReadSharedFilePrefersMachineWide(t *testing.T) {

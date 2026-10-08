@@ -46,7 +46,7 @@ func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path
 		if p == "" {
 			continue
 		}
-		data, err := readIDFile(p)
+		data, err := os.ReadFile(p)
 		if err != nil {
 			logger.Debug().Err(err).Str("path", p).Msg("machine id: Snyk Studio device-id file candidate could not be read")
 			continue
