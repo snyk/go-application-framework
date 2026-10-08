@@ -525,8 +525,11 @@ func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
 	return nil
 }
 
-// GetConfiguration returns the configuration object.
+// GetConfiguration returns the configuration object. It is safe to call concurrently with
+// SetConfiguration; other reads of the configuration inside the engine are not yet synchronized.
 func (e *EngineImpl) GetConfiguration() configuration.Configuration {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.config
 }
 

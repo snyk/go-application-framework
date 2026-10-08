@@ -1,6 +1,7 @@
 package runtimeinfo
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,4 +32,23 @@ func TestRuntimeInfo_NewWithVersion(t *testing.T) {
 	ri := New(WithVersion("1.2.3"))
 
 	assert.Equal(t, "1.2.3", ri.GetVersion())
+}
+
+// Run with -race: a writer can set the name and version while the machine id resolver reads them.
+func TestRuntimeInfo_ConcurrentSetAndGetDoNotRace(t *testing.T) {
+	ri := New()
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			ri.SetName("snyk-ls")
+			ri.SetVersion("9.9.9")
+		}
+	})
+	wg.Go(func() {
+		for range 100 {
+			_ = ri.GetName()
+			_ = ri.GetVersion()
+		}
+	})
+	wg.Wait()
 }

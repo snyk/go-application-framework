@@ -1,6 +1,9 @@
 package runtimeinfo
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
 //go:generate go tool github.com/golang/mock/mockgen -source=runtimeinfo.go -destination ../mocks/runtimeinfo.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/runtimeinfo/
 
@@ -25,6 +28,7 @@ type RuntimeInfo interface {
 type opt func(RuntimeInfo)
 
 type defaultRuntimeInfo struct {
+	mu      sync.RWMutex
 	name    string
 	version string
 }
@@ -32,18 +36,26 @@ type defaultRuntimeInfo struct {
 var _ RuntimeInfo = (*defaultRuntimeInfo)(nil)
 
 func (ri *defaultRuntimeInfo) GetName() string {
+	ri.mu.RLock()
+	defer ri.mu.RUnlock()
 	return ri.name
 }
 
 func (ri *defaultRuntimeInfo) SetName(n string) {
+	ri.mu.Lock()
+	defer ri.mu.Unlock()
 	ri.name = n
 }
 
 func (ri *defaultRuntimeInfo) GetVersion() string {
+	ri.mu.RLock()
+	defer ri.mu.RUnlock()
 	return ri.version
 }
 
 func (ri *defaultRuntimeInfo) SetVersion(v string) {
+	ri.mu.Lock()
+	defer ri.mu.Unlock()
 	ri.version = v
 }
 
