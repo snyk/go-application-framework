@@ -57,8 +57,8 @@ func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path
 			logger.Debug().Str("path", p).Msg("machine id: Snyk Studio device-id file candidate was empty")
 			continue
 		}
-		if !valid(candidate) {
-			logger.Debug().Str("path", p).Str("reason", invalidReason(candidate)).Msg("machine id: Snyk Studio device-id file candidate failed validation")
+		if reason, ok := validate(candidate); !ok {
+			logger.Debug().Str("path", p).Str("reason", reason).Msg("machine id: Snyk Studio device-id file candidate failed validation")
 			continue
 		}
 		return candidate, p, true

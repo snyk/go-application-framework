@@ -73,11 +73,12 @@ func (r *resolver) resolve(config configuration.Configuration) string {
 	// Checked on every lookup, and never written to the shared file, so it cannot replace the id
 	// other Snyk products share.
 	if raw := config.GetString(configuration.CLIENT_MACHINE_ID); !blank(raw) {
-		if valid(raw) {
+		reason, ok := validate(raw)
+		if ok {
 			logger.Debug().Msg("machine id: adopting value from external channel")
 			return raw
 		}
-		logger.Debug().Str("reason", invalidReason(raw)).Msg("machine id: external channel value failed validation, ignoring")
+		logger.Debug().Str("reason", reason).Msg("machine id: external channel value failed validation, ignoring")
 	}
 
 	r.mu.Lock()
