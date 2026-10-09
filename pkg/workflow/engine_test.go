@@ -1336,3 +1336,20 @@ func Test_PostInvokeHook_NestedInvokeContextBoundByHookTimeout(t *testing.T) {
 		assert.FailNow(t, "timeout waiting for inner workflow callback")
 	}
 }
+
+// Run with -race: a configuration read can happen while the configuration is being replaced.
+func Test_Engine_GetConfigurationConcurrentWithSetConfigurationDoesNotRace(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			engine.SetConfiguration(configuration.NewWithOpts())
+		}
+	})
+	wg.Go(func() {
+		for range 100 {
+			_ = engine.GetConfiguration()
+		}
+	})
+	wg.Wait()
+}

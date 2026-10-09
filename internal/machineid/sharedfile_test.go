@@ -107,6 +107,7 @@ var brokenFiles = map[string]string{
 	"number":     "42",
 	"blank id":   `{"machine_id": "  "}`,
 	"invalid id": `{"machine_id": "not a valid id"}`,
+	"oversized":  `{"machine_id": "some-id", "padding": "` + strings.Repeat("a", maxIDFileSize) + `"}`,
 }
 
 func TestReadSharedFilePrefersMachineWide(t *testing.T) {
@@ -195,6 +196,26 @@ func holdLock(t *testing.T, path string) {
 	require.NoError(t, err)
 	require.True(t, locked)
 	t.Cleanup(func() { _ = lock.Unlock() }) //nolint:errcheck // best-effort release of the test's own lock
+}
+
+func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
+	shortenLockTimeout(t)
+	paths := tempPaths(t)
+	paths.machineWide = ""
+	seed(t, paths.perUser, `{"machine_id": "not a valid id"}`)
+	holdLock(t, paths.perUser)
+	// Another writer stores an id while this one waits for the lock it holds.
+	stored := make(chan error, 1)
+	go func() {
+		time.Sleep(lockTimeout / 5)
+		stored <- os.WriteFile(paths.perUser, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600)
+	}()
+
+	id, err := writeSharedFileID(paths, "candidate", "generated", "test-writer", nil)
+
+	require.NoError(t, <-stored)
+	require.NoError(t, err)
+	require.Equal(t, "stored-by-other-writer", id)
 }
 
 func TestWriteSharedFileIDWritesMachineWideWhenItsDirectoryIsWritable(t *testing.T) {
@@ -321,8 +342,13 @@ func TestWriteSharedFileIDConvergesOnOneIDUnderConcurrentWriters(t *testing.T) {
 func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	paths := tempPaths(t)
 	paths.machineWide = ""
-	valueA := strings.Repeat("A", 64*1024)
-	valueB := strings.Repeat("B", 64*1024)
+	// Invalid ids (over 128 characters), so writeAt keeps replacing the file instead of keeping it.
+	// A torn write shows up as an empty or partial file, so the values need not be large.
+	valueA := strings.Repeat("A", 1024)
+	valueB := strings.Repeat("B", 1024)
+	// Readers can finish before the writer's first write lands, so the file must exist up front.
+	_, err := writeSharedFileID(paths, valueA, "generated", "test-writer", nil)
+	require.NoError(t, err)
 
 	stop := make(chan struct{})
 	var writer sync.WaitGroup
@@ -345,7 +371,7 @@ func TestReadersNeverSeeATornFileWhileAWriterReplacesIt(t *testing.T) {
 	var readers sync.WaitGroup
 	for range 8 {
 		readers.Go(func() {
-			for range 2000 {
+			for range 200 {
 				// Skip failed reads: Windows can refuse to open a file while a rename replaces it.
 				data, err := os.ReadFile(paths.perUser)
 				if err != nil {

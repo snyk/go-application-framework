@@ -1,5 +1,3 @@
-// Package machineid stores a single machine identifier shared by every Snyk product on the same
-// machine.
 package machineid
 
 import (
@@ -33,7 +31,8 @@ const (
 	lockRetryDelay = 100 * time.Millisecond
 )
 
-var lockTimeout = 5 * time.Second
+// lockTimeout bounds the wait for each shared file location's lock.
+var lockTimeout = 1 * time.Second
 
 // sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over,
 // because GAF never rewrites a file that holds a valid id.
@@ -101,7 +100,11 @@ func readSharedFile(paths pathPair, logger *zerolog.Logger) *sharedFile {
 var errNoValidID = errors.New("shared file holds no valid machine id")
 
 func loadSharedFile(path string) (*sharedFile, error) {
-	data, err := os.ReadFile(path)
+	data, err := readIDFile(path)
+	if errors.Is(err, errFileTooLarge) {
+		// No real shared file is this large, so treat it like any other broken file and replace it.
+		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +159,10 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
 	if _, err := lock.TryLockContext(ctx, lockRetryDelay); err != nil {
+		// A slow writer may have stored an id while this process waited; use it rather than fail.
+		if existing, loadErr := loadSharedFile(path); loadErr == nil {
+			return existing.MachineID, nil
+		}
 		return "", fmt.Errorf("locking %s: %w", lock.Path(), err)
 	}
 	defer func() { _ = lock.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock

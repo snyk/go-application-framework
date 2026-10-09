@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -524,8 +525,11 @@ func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
 	return nil
 }
 
-// GetConfiguration returns the configuration object.
+// GetConfiguration returns the configuration object. It is safe to call concurrently with
+// SetConfiguration; other reads of the configuration inside the engine are not yet synchronized.
 func (e *EngineImpl) GetConfiguration() configuration.Configuration {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.config
 }
 
@@ -538,6 +542,8 @@ func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	if e.runtimeInfo == nil {
 		return nil
 	}
@@ -545,6 +551,8 @@ func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 }
 
 func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.runtimeInfo = ri
 }
 
@@ -556,11 +564,11 @@ type engineRuntimeInfo struct {
 
 func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
 	id, err := ri.engine.GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
+		return "", runtimeinfo.ErrNoMachineID
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to read machine id: %w", err)
-	}
-	if id == "" {
-		return "", runtimeinfo.ErrNoMachineID
 	}
 	return id, nil
 }

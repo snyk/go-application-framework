@@ -25,9 +25,20 @@ func blank(raw string) bool {
 }
 
 func valid(id string) bool {
-	if len(id) > 128 || !idPattern.MatchString(id) {
-		return false
+	_, ok := validate(id)
+	return ok
+}
+
+// validate reports whether id is a usable machine id and, if not, why, for logging.
+func validate(id string) (reason string, ok bool) {
+	switch {
+	case len(id) > 128:
+		return "longer than 128 characters", false
+	case !idPattern.MatchString(id):
+		return "contains characters outside the allowed set", false
 	}
-	_, placeholder := placeholderSerials[strings.ToLower(id)]
-	return !placeholder
+	if _, placeholder := placeholderSerials[strings.ToLower(id)]; placeholder {
+		return "matches a known placeholder serial number", false
+	}
+	return "", true
 }
