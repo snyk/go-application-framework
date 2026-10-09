@@ -31,10 +31,7 @@ const (
 	lockRetryDelay = 100 * time.Millisecond
 )
 
-// lockTimeout bounds the wait for each shared file location, and so how long a first machine id
-// lookup can stall while another process holds the lock. After a timeout the file is read once more,
-// so an id a slow writer stored meanwhile is used; a writer still holding the lock can't be waited
-// for, so this process may then store a different per-user id.
+// lockTimeout bounds the wait for each shared file location's lock.
 var lockTimeout = 1 * time.Second
 
 // sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over,

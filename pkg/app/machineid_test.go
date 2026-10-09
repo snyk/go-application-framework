@@ -73,7 +73,6 @@ func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testin
 
 func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *testing.T) {
 	isolateMachineIDStorage(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "app-wiring-test-machine-id")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	engine := newAppEngine(t, WithZeroLogger(&logger))
@@ -81,7 +80,7 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
 	require.NoError(t, err)
 
-	require.Contains(t, logs.String(), "machine id: adopting supplied value", "the app wiring must pass its logger into machine id resolution")
+	require.Contains(t, logs.String(), "machine id: no source produced a value, generating one", "the app wiring must pass its logger into machine id resolution")
 }
 
 func TestAcceptance_ViaAppEngineSharedFileRecordsTheRuntimeInfoAsWriter(t *testing.T) {

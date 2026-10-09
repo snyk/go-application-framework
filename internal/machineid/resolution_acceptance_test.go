@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -163,29 +162,26 @@ func TestAcceptance_SuppliedIDWinsOverAnIDResolvedOnAPreviousRun(t *testing.T) {
 	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
-func TestAcceptance_SuppliedIDSetAfterTheFirstLookupIsUsedFromTheNextRun(t *testing.T) {
+func TestAcceptance_SuppliedIDSetAfterTheFirstLookupIsUsed(t *testing.T) {
 	m := newIsolatedMachine(t)
 	config := m.newRun()
-	first := machineID(t, config)
+	resolved := machineID(t, config)
 
 	config.Set(configuration.MACHINE_ID, "supplied-id")
 
-	require.Equal(t, first, machineID(t, config), "the machine id must not change within a process once read")
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
-	require.Equal(t, "supplied-id", machineID(t, m.newRun()), "a restarted process must use the supplied id")
+	require.Equal(t, "supplied-id", machineID(t, config), "a supplied value is returned as is")
+	config.Unset(configuration.MACHINE_ID)
+	require.Equal(t, resolved, machineID(t, config), "without a supplied value, the resolved id is kept")
 }
 
 func TestAcceptance_SuppliedIDSetAfterAFailedLookupIsUsed(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	now := time.Now()
-	config := m.newRun(withClock(func() time.Time { return now }))
+	config := m.newRun()
 	require.Empty(t, machineID(t, config))
 
 	config.Set(configuration.MACHINE_ID, "supplied-id")
 
-	require.Equal(t, "supplied-id", machineID(t, config), "a supplied value needs no disk access, so the retry delay does not apply")
-	now = now.Add(retryDelay)
 	require.Equal(t, "supplied-id", machineID(t, config))
 }
 
@@ -239,17 +235,6 @@ func TestAcceptance_TheStudioCLIVariableAloneDoesNotSupplyTheMachineID(t *testin
 	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
 }
 
-func TestAcceptance_ChangingTheSuppliedIDAfterTheFirstLookupHasNoEffect(t *testing.T) {
-	m := newIsolatedMachine(t)
-	config := m.newRun()
-	config.Set(configuration.MACHINE_ID, "first-id")
-	require.Equal(t, "first-id", machineID(t, config))
-
-	config.Set(configuration.MACHINE_ID, "second-id")
-
-	require.Equal(t, "first-id", machineID(t, config))
-}
-
 func TestAcceptance_IDWrittenToTheSharedFileByAnotherProductIsPickedUpOnTheNextRun(t *testing.T) {
 	m := newIsolatedMachine(t)
 	machineID(t, m.newRun())
@@ -283,13 +268,6 @@ func TestAcceptance_NoWritableSharedFileLocationGivesAnEmptyMachineID(t *testing
 	require.Empty(t, machineID(t, config))
 }
 
-func TestMachineIDDocumentsTheRetryDelay(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join("..", "..", "pkg", "configuration", "constants.go"))
-	require.NoError(t, err)
-
-	require.Contains(t, string(source), "tried again after "+retryDelay.String(), "the MACHINE_ID doc must state retryDelay")
-}
-
 func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *testing.T) {
 	for name, opts := range map[string][]configuration.Opts{
 		"caching off": nil,
@@ -299,20 +277,18 @@ func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *t
 			m := newIsolatedMachine(t)
 			blocker := filepath.Dir(filepath.Dir(m.shared.perUser))
 			m.blockEverySharedFileLocation(t)
-			now := time.Now()
 			config := configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk"), configuration.WithAutomaticEnv()}, opts...)...)
-			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve(withClock(func() time.Time { return now })))
+			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
 			require.Empty(t, machineID(t, config))
 
 			require.NoError(t, os.Remove(blocker))
-			now = now.Add(retryDelay)
 
 			require.NotEmpty(t, machineID(t, config), "a failed lookup must not be cached, so it is retried")
 		})
 	}
 }
 
-func TestAcceptance_AnInvalidSuppliedValueIsLoggedOnce(t *testing.T) {
+func TestAcceptance_AnInvalidSuppliedValueIsLoggedAtDebugOnEachRead(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
 	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not valid")
@@ -324,21 +300,34 @@ func TestAcceptance_AnInvalidSuppliedValueIsLoggedOnce(t *testing.T) {
 		require.Empty(t, machineID(t, config))
 	}
 
-	require.Equal(t, 1, strings.Count(logs.String(), "supplied value failed validation"))
-	require.Contains(t, logLineContaining(t, logs.String(), "supplied value failed validation"), `"level":"warn"`)
+	require.Equal(t, 3, strings.Count(logs.String(), "supplied value failed validation"))
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "supplied value failed validation") {
+			require.Contains(t, line, `"level":"debug"`, "a value checked on every read must not warn on every read")
+		}
+	}
+}
+
+func TestAcceptance_ANonStringSuppliedValueIsIgnored(t *testing.T) {
+	m := newIsolatedMachine(t)
+	config := m.newRun()
+	config.Set(configuration.MACHINE_ID, 42)
+
+	id := machineID(t, config)
+
+	require.True(t, valid(id))
+	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
 }
 
 func TestAcceptance_AnUnstorableIDIsWarnedAboutOnce(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	now := time.Now()
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	config := m.newRun(WithLogger(&logger), withClock(func() time.Time { return now }))
+	config := m.newRun(WithLogger(&logger))
 
 	for range 3 {
 		require.Empty(t, machineID(t, config))
-		now = now.Add(retryDelay)
 	}
 
 	require.Equal(t, 3, strings.Count(logs.String(), "could not be stored, no stable machine id"), "each retry is logged")
@@ -377,20 +366,14 @@ func logLineContaining(t *testing.T, logs, substr string) string {
 	return ""
 }
 
-func TestAcceptance_AFailedWriteIsRetriedAfterTheRetryDelay(t *testing.T) {
+func TestAcceptance_AFailedWriteIsRetriedOnTheNextLookup(t *testing.T) {
 	m := newIsolatedMachine(t)
 	blocker := filepath.Dir(filepath.Dir(m.shared.perUser))
 	m.blockEverySharedFileLocation(t)
-	now := time.Now()
-	config := m.newRun(withClock(func() time.Time { return now }))
+	config := m.newRun()
 	require.Empty(t, machineID(t, config))
+
 	require.NoError(t, os.Remove(blocker))
-
-	now = now.Add(retryDelay - time.Second)
-	require.Empty(t, machineID(t, config), "a lookup within the retry delay must not touch the disk again")
-	require.NoFileExists(t, m.shared.perUser)
-
-	now = now.Add(time.Second)
 	id := machineID(t, config)
 
 	require.True(t, valid(id), "once the shared file can be written, the same process must get a stable id")

@@ -288,7 +288,7 @@ func Test_CreateAppEngine_providesTheSuppliedMachineId(t *testing.T) {
 	assert.Equal(t, "supplied-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
-func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsIgnoredUntilRestart(t *testing.T) {
+func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsUsed(t *testing.T) {
 	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
 	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
@@ -296,7 +296,7 @@ func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsIgnoredUntilRestar
 	engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
 
 	assert.NotEqual(t, "supplied-machine-id", resolved)
-	assert.Equal(t, resolved, engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+	assert.Equal(t, "supplied-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
 }
 
 func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
