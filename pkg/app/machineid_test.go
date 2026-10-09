@@ -35,28 +35,31 @@ func readJSON(t *testing.T, path string) map[string]any {
 }
 
 func TestAcceptance_ViaAppEngineSuppliedMachineIDIsReturnedButNotStored(t *testing.T) {
-	sharedFilePath := isolateMachineIDStorage(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "app-wiring-test-machine-id")
-	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+	opt := WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0")))
+	for name, newEngine := range map[string]func(t *testing.T) workflow.Engine{
+		"environment variable": func(t *testing.T) workflow.Engine {
+			t.Helper()
+			t.Setenv("INTERNAL_SNYK_MACHINE_ID", "app-wiring-test-machine-id")
+			return newAppEngine(t, opt)
+		},
+		"set before the first read": func(t *testing.T) workflow.Engine {
+			t.Helper()
+			engine := newAppEngine(t, opt)
+			engine.GetConfiguration().Set(configuration.MACHINE_ID, "app-wiring-test-machine-id")
+			return engine
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sharedFilePath := isolateMachineIDStorage(t)
+			engine := newEngine(t)
 
-	id, err := engine.GetRuntimeInfo().GetMachineID()
+			id, err := engine.GetRuntimeInfo().GetMachineID()
 
-	require.NoError(t, err)
-	require.Equal(t, "app-wiring-test-machine-id", id)
-	require.NoFileExists(t, sharedFilePath)
-}
-
-func TestAcceptance_ViaAppEngineGeneratedMachineIDIsStableAcrossRuns(t *testing.T) {
-	sharedFilePath := isolateMachineIDStorage(t)
-
-	first, err := newAppEngine(t).GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
-	require.NoError(t, err)
-	second, err := newAppEngine(t).GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
-	require.NoError(t, err)
-
-	require.NotEmpty(t, first)
-	require.Equal(t, first, second)
-	require.Equal(t, first, readJSON(t, sharedFilePath)["machine_id"])
+			require.NoError(t, err)
+			require.Equal(t, "app-wiring-test-machine-id", id)
+			require.NoFileExists(t, sharedFilePath)
+		})
+	}
 }
 
 func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testing.T) {

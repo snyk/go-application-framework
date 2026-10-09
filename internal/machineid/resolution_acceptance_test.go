@@ -73,31 +73,16 @@ func (m isolatedMachine) snykJSON(t *testing.T) string {
 	return string(data)
 }
 
-func writeFile(t *testing.T, path string, content []byte) {
-	t.Helper()
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, content, 0o600))
-}
-
 func writeSharedFileAs(t *testing.T, path string, content map[string]any) {
 	t.Helper()
 	data, err := json.Marshal(content)
 	require.NoError(t, err)
-	writeFile(t, path, data)
-}
-
-func sharedFileContent(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var content map[string]any
-	require.NoError(t, json.Unmarshal(data, &content))
-	return content
+	seed(t, path, string(data))
 }
 
 func (m isolatedMachine) blockEverySharedFileLocation(t *testing.T) {
 	t.Helper()
-	writeFile(t, filepath.Dir(filepath.Dir(m.shared.perUser)), []byte("not a directory"))
+	seed(t, filepath.Dir(filepath.Dir(m.shared.perUser)), "not a directory")
 }
 
 func TestAcceptance_GeneratedIDIsStoredInTheSharedFile(t *testing.T) {
@@ -106,9 +91,9 @@ func TestAcceptance_GeneratedIDIsStoredInTheSharedFile(t *testing.T) {
 	id := machineID(t, m.newRun())
 
 	require.True(t, valid(id))
-	content := sharedFileContent(t, m.shared.perUser)
-	require.Equal(t, id, content["machine_id"])
-	require.Equal(t, "generated", content["identifier_source"])
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, id, content.MachineID)
+	require.Equal(t, "generated", content.IdentifierSource)
 }
 
 func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
@@ -129,10 +114,10 @@ func TestAcceptance_SuppliedIDWinsOverTheSharedFile(t *testing.T) {
 
 func TestAcceptance_SuppliedIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t *testing.T) {
 	m := newIsolatedMachine(t)
-	installerWritten := []byte(`{"schema_version":1,"machine_id":"C02Q7KHTGFWF","identifier_source":"serial",` +
+	installerWritten := `{"schema_version":1,"machine_id":"C02Q7KHTGFWF","identifier_source":"serial",` +
 		`"serial_number":"C02Q7KHTGFWF","scope":"user","first_seen_at":"2026-09-14T08:14:03Z",` +
-		`"updated_at":"2026-09-14T08:14:03Z","writer":"some-installer/1.0.0"}`)
-	writeFile(t, m.shared.perUser, installerWritten)
+		`"updated_at":"2026-09-14T08:14:03Z","writer":"some-installer/1.0.0"}`
+	seed(t, m.shared.perUser, installerWritten)
 	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "studio-device-id")
 
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()))
@@ -140,16 +125,7 @@ func TestAcceptance_SuppliedIDLeavesAnInstallerWrittenSharedFileExactlyAsItWas(t
 
 	onDisk, err := os.ReadFile(m.shared.perUser)
 	require.NoError(t, err)
-	require.Equal(t, string(installerWritten), string(onDisk), "a supplied id must be used but never written to the shared file")
-}
-
-func TestAcceptance_SuppliedIDDoesNotCreateASharedFile(t *testing.T) {
-	m := newIsolatedMachine(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
-
-	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
-
-	require.NoFileExists(t, m.shared.perUser)
+	require.Equal(t, installerWritten, string(onDisk), "a supplied id must be used but never written to the shared file")
 }
 
 func TestAcceptance_SuppliedIDWinsOverAnIDResolvedOnAPreviousRun(t *testing.T) {
@@ -185,16 +161,6 @@ func TestAcceptance_SuppliedIDSetAfterAFailedLookupIsUsed(t *testing.T) {
 	require.Equal(t, "supplied-id", machineID(t, config))
 }
 
-func TestAcceptance_AValidValueSetBeforeTheFirstReadIsUsed(t *testing.T) {
-	m := newIsolatedMachine(t)
-	config := m.newRun()
-
-	config.Set(configuration.MACHINE_ID, "set-by-host")
-
-	require.Equal(t, "set-by-host", machineID(t, config))
-	require.NoFileExists(t, m.shared.perUser, "a set value must not trigger resolution")
-}
-
 func TestAcceptance_EachWayOfSupplyingMachineIDIsUsed(t *testing.T) {
 	// Each supplier runs before or after the configuration is created, as it would in a host: the
 	// environment and snyk.json are in place at start-up, a direct Set happens afterwards.
@@ -207,11 +173,13 @@ func TestAcceptance_EachWayOfSupplyingMachineIDIsUsed(t *testing.T) {
 		"environment variable": func(t *testing.T, m isolatedMachine) configuration.Configuration {
 			t.Helper()
 			t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+			// Storage is blocked too: a supplied id must not depend on the shared file being writable.
+			m.blockEverySharedFileLocation(t)
 			return m.newRun()
 		},
 		"snyk.json": func(t *testing.T, m isolatedMachine) configuration.Configuration {
 			t.Helper()
-			writeFile(t, filepath.Join(m.home, ".config", "configstore", "snyk.json"), []byte(`{"`+configuration.MACHINE_ID+`":"supplied-id"}`))
+			seed(t, filepath.Join(m.home, ".config", "configstore", "snyk.json"), `{"`+configuration.MACHINE_ID+`":"supplied-id"}`)
 			return m.newRun()
 		},
 	} {
@@ -232,7 +200,7 @@ func TestAcceptance_TheStudioCLIVariableAloneDoesNotSupplyTheMachineID(t *testin
 	id := machineID(t, m.newRun())
 
 	require.NotEqual(t, "studio-cli-value", id)
-	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestAcceptance_IDWrittenToTheSharedFileByAnotherProductIsPickedUpOnTheNextRun(t *testing.T) {
@@ -252,20 +220,11 @@ func TestAcceptance_NothingIsWrittenToSnykJSON(t *testing.T) {
 	generated := machineID(t, m.newRun())
 
 	require.Equal(t, "supplied-id", supplied)
-	require.Equal(t, generated, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, generated, readFile(t, m.shared.perUser).MachineID)
 	content := m.snykJSON(t)
 	for _, id := range []string{supplied, generated} {
 		require.NotContains(t, content, id, "the machine id must only be stored in the shared machine-id file")
 	}
-}
-
-func TestAcceptance_NoWritableSharedFileLocationGivesAnEmptyMachineID(t *testing.T) {
-	m := newIsolatedMachine(t)
-	m.blockEverySharedFileLocation(t)
-	config := m.newRun()
-
-	require.Empty(t, machineID(t, config), "an id that cannot be stored is not a stable machine id")
-	require.Empty(t, machineID(t, config))
 }
 
 func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *testing.T) {
@@ -316,7 +275,7 @@ func TestAcceptance_ANonStringSuppliedValueIsIgnored(t *testing.T) {
 	id := machineID(t, config)
 
 	require.True(t, valid(id))
-	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestAcceptance_AnUnstorableIDIsWarnedAboutOnce(t *testing.T) {
@@ -340,7 +299,7 @@ func TestAcceptance_WriteFailuresAreLoggedWithTheirCause(t *testing.T) {
 			m := newIsolatedMachine(t)
 			m.blockEverySharedFileLocation(t)
 			if seedStudio {
-				writeFile(t, m.studio.perUser, []byte("studio-device-id"))
+				seed(t, m.studio.perUser, "studio-device-id")
 			}
 			var logs bytes.Buffer
 			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
@@ -377,16 +336,8 @@ func TestAcceptance_AFailedWriteIsRetriedOnTheNextLookup(t *testing.T) {
 	id := machineID(t, config)
 
 	require.True(t, valid(id), "once the shared file can be written, the same process must get a stable id")
-	require.Equal(t, id, sharedFileContent(t, m.shared.perUser)["machine_id"])
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 	require.Equal(t, id, machineID(t, config))
-}
-
-func TestAcceptance_SuppliedIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
-	m := newIsolatedMachine(t)
-	m.blockEverySharedFileLocation(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
-
-	require.Equal(t, "supplied-id", machineID(t, m.newRun()))
 }
 
 func TestAcceptance_TrailingWhitespaceIsTrimmedFromASuppliedID(t *testing.T) {
@@ -409,21 +360,21 @@ func TestAcceptance_InvalidSuppliedIDIsIgnored(t *testing.T) {
 			id := machineID(t, m.newRun())
 
 			require.True(t, valid(id))
-			require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
+			require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
 		})
 	}
 }
 
 func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.studio.perUser, []byte("studio-device-id\n"))
+	seed(t, m.studio.perUser, "studio-device-id\n")
 
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()))
 
-	content := sharedFileContent(t, m.shared.perUser)
-	require.Equal(t, "studio-device-id", content["machine_id"])
-	require.Equal(t, "persisted", content["identifier_source"])
-	require.Equal(t, "go-application-framework", content["writer"])
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "studio-device-id", content.MachineID)
+	require.Equal(t, "persisted", content.IdentifierSource)
+	require.Equal(t, "go-application-framework", content.Writer)
 	studio, err := os.ReadFile(m.studio.perUser)
 	require.NoError(t, err)
 	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
@@ -431,10 +382,10 @@ func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t 
 
 func TestAcceptance_AdoptedStudioDeviceIDIsReturnedAgainAfterTheStudioFileChanges(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.studio.perUser, []byte("studio-device-id"))
+	seed(t, m.studio.perUser, "studio-device-id")
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()))
 
-	writeFile(t, m.studio.perUser, []byte("changed-studio-device-id"))
+	seed(t, m.studio.perUser, "changed-studio-device-id")
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()), "once adopted, the id comes from the shared file")
 
 	require.NoError(t, os.Remove(m.studio.perUser))
@@ -443,8 +394,8 @@ func TestAcceptance_AdoptedStudioDeviceIDIsReturnedAgainAfterTheStudioFileChange
 
 func TestAcceptance_MachineScopeStudioDeviceIDWinsWhenScopesDisagree(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.studio.machineWide, []byte("machine-scope-id"))
-	writeFile(t, m.studio.perUser, []byte("user-scope-id"))
+	seed(t, m.studio.machineWide, "machine-scope-id")
+	seed(t, m.studio.perUser, "user-scope-id")
 
 	require.Equal(t, "machine-scope-id", machineID(t, m.newRun()))
 }
@@ -452,7 +403,7 @@ func TestAcceptance_MachineScopeStudioDeviceIDWinsWhenScopesDisagree(t *testing.
 func TestAcceptance_SharedFileWinsOverStudioDeviceID(t *testing.T) {
 	m := newIsolatedMachine(t)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
-	writeFile(t, m.studio.machineWide, []byte("studio-device-id"))
+	seed(t, m.studio.machineWide, "studio-device-id")
 
 	require.Equal(t, "from-shared-file", machineID(t, m.newRun()))
 }
@@ -460,21 +411,21 @@ func TestAcceptance_SharedFileWinsOverStudioDeviceID(t *testing.T) {
 func TestAcceptance_StudioDeviceIDIsReturnedEvenWhenTheSharedFileCannotBeWritten(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	writeFile(t, m.studio.perUser, []byte("studio-device-id"))
+	seed(t, m.studio.perUser, "studio-device-id")
 
 	require.Equal(t, "studio-device-id", machineID(t, m.newRun()))
 }
 
 func TestAcceptance_InvalidStudioDeviceIDIsIgnoredAndLogged(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.studio.perUser, []byte(" \t{ABC-99}\x00WEIRD-interior\n\n"))
+	seed(t, m.studio.perUser, " \t{ABC-99}\x00WEIRD-interior\n\n")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
 	id := machineID(t, m.newRun(WithLogger(&logger)))
 
 	require.True(t, valid(id))
-	require.Equal(t, "generated", sharedFileContent(t, m.shared.perUser)["identifier_source"])
+	require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
 	require.Contains(t, logs.String(), jsonEscaped(t, m.studio.perUser))
 }
 
@@ -494,5 +445,5 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 
 	machineID(t, m.newRun())
 
-	require.Equal(t, "go-application-framework", sharedFileContent(t, m.shared.perUser)["writer"])
+	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
 }

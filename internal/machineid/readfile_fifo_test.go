@@ -41,8 +41,8 @@ func TestReadIDFileRejectsAFIFOWithoutBlocking(t *testing.T) {
 
 func TestAcceptance_FIFOsAtTheStudioAndSharedFilePathsDoNotHangResolution(t *testing.T) {
 	m := newIsolatedMachine(t)
-	writeFile(t, m.studio.machineWide, nil)
-	writeFile(t, m.shared.perUser, nil)
+	seed(t, m.studio.machineWide, "")
+	seed(t, m.shared.perUser, "")
 	for _, p := range []string{m.studio.machineWide, m.shared.perUser} {
 		require.NoError(t, syscall.Unlink(p))
 		mkfifo(t, p)

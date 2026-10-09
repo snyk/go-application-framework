@@ -279,15 +279,6 @@ func Test_CreateAppEngine_providesMachineId(t *testing.T) {
 		"a second engine on the same machine must resolve the same machine id")
 }
 
-func Test_CreateAppEngine_providesTheSuppliedMachineId(t *testing.T) {
-	isolateMachineIDStorage(t)
-	config := configuration.NewWithOpts()
-	config.Set(configuration.MACHINE_ID, "supplied-machine-id")
-	engine := CreateAppEngineWithOptions(WithConfiguration(config))
-
-	assert.Equal(t, "supplied-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
-}
-
 func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsUsed(t *testing.T) {
 	isolateMachineIDStorage(t)
 	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
