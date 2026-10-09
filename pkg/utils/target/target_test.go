@@ -15,6 +15,65 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+func Test_ParseGitTargetId(t *testing.T) {
+	t.Run("parses a git target id", func(t *testing.T) {
+		gitTarget, ok := ParseGitTargetId("pkg:git/github.com/snyk/go-application-framework@c9cc908c69bc6d8cc4715275f9c19fa3be69aebc?branch=main")
+		assert.True(t, ok)
+		assert.Equal(t, "github.com/snyk/go-application-framework", gitTarget.Namespace)
+		assert.Equal(t, "go-application-framework", gitTarget.Repository)
+		assert.Equal(t, "c9cc908c69bc6d8cc4715275f9c19fa3be69aebc", gitTarget.Commit)
+		assert.Equal(t, "main", gitTarget.Branch)
+	})
+
+	t.Run("ignores an optional subpath", func(t *testing.T) {
+		gitTarget, ok := ParseGitTargetId("pkg:git/github.com/snyk/go-application-framework@c9cc908c?branch=main#cliv2/go.mod")
+		assert.True(t, ok)
+		assert.Equal(t, "go-application-framework", gitTarget.Repository)
+		assert.Equal(t, "c9cc908c", gitTarget.Commit)
+		assert.Equal(t, "main", gitTarget.Branch)
+	})
+
+	t.Run("handles a namespace with subgroups and a branch containing a slash", func(t *testing.T) {
+		gitTarget, ok := ParseGitTargetId("pkg:git/gitlab.com/group/subgroup/repo@abc123?branch=feature/foo")
+		assert.True(t, ok)
+		assert.Equal(t, "gitlab.com/group/subgroup/repo", gitTarget.Namespace)
+		assert.Equal(t, "repo", gitTarget.Repository)
+		assert.Equal(t, "abc123", gitTarget.Commit)
+		assert.Equal(t, "feature/foo", gitTarget.Branch)
+	})
+
+	t.Run("handles a missing branch qualifier", func(t *testing.T) {
+		gitTarget, ok := ParseGitTargetId("pkg:git/github.com/snyk/repo@deadbeef")
+		assert.True(t, ok)
+		assert.Equal(t, "repo", gitTarget.Repository)
+		assert.Equal(t, "deadbeef", gitTarget.Commit)
+		assert.Empty(t, gitTarget.Branch)
+	})
+
+	t.Run("rejects a filesystem target id", func(t *testing.T) {
+		_, ok := ParseGitTargetId("pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/name#cliv2/go.mod")
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects a non-target string", func(t *testing.T) {
+		_, ok := ParseGitTargetId("not-a-target-id")
+		assert.False(t, ok)
+	})
+
+	t.Run("round-trips an id built by this package's encoder", func(t *testing.T) {
+		id := emptyTargetId()
+		err := gitUpdateId("https://github.com/snyk/myrepo.git", "abcdef123456", "main", id)
+		assert.NoError(t, err)
+
+		gitTarget, ok := ParseGitTargetId(id.String())
+		assert.True(t, ok)
+		assert.Equal(t, "github.com/snyk/myrepo", gitTarget.Namespace)
+		assert.Equal(t, "myrepo", gitTarget.Repository)
+		assert.Equal(t, "abcdef123456", gitTarget.Commit)
+		assert.Equal(t, "main", gitTarget.Branch)
+	})
+}
+
 func Test_GetTargetId(t *testing.T) {
 	t.Run("handles a filesystem directory path", func(t *testing.T) {
 		tempDir := t.TempDir()
