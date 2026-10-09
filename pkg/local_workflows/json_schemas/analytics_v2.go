@@ -127,6 +127,9 @@ const AnalyticsV2EventSchema = `{
         },
         "performance": {
           "$ref": "#/schemas/Performance"
+        },
+        "machine": {
+          "$ref": "#/schemas/Machine"
         }
       }
     },
@@ -219,6 +222,15 @@ const AnalyticsV2EventSchema = `{
           "type": "string"
         },
         "arch": {
+          "type": "string"
+        }
+      }
+    },
+    "Machine": {
+      "type": "object",
+      "description": "The machine identifier used to correlate analytics events from the same machine.",
+      "properties": {
+        "id": {
           "type": "string"
         }
       }

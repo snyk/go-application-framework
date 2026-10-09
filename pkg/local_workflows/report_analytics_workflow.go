@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -11,14 +12,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
 
+	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -32,7 +36,7 @@ var (
 const (
 	reportAnalyticsWorkflowName      = "analytics.report"
 	reportAnalyticsInputDataFlagName = "inputData"
-	reportAnalyticsAPIVersion        = "2024-03-07~experimental"
+	reportAnalyticsAPIVersion        = "2024-10-15"
 )
 
 // InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
@@ -132,6 +136,8 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			}
 		}
 
+		input = enrichV2Event(invocationCtx, input)
+
 		logger.Printf("[%d] Data: %s", i, input.GetPayload())
 
 		// send to V2 analytics endpoint
@@ -142,6 +148,53 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 	}
 	return nil, nil
+}
+
+// enrichV2Event adds the runtime fields GAF knows to a v2 event without overwriting values the producer set.
+func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data) workflow.Data {
+	logger := invocationCtx.GetEnhancedLogger()
+	payload, ok := input.GetPayload().([]byte)
+	if !ok {
+		return input
+	}
+
+	var body api.AnalyticsRequestBody
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	// keeps the numbers in the extension and results maps exact
+	decoder.UseNumber()
+	if err := decoder.Decode(&body); err != nil {
+		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
+		return input
+	}
+
+	addMachineID(&body.Data.Attributes, invocationCtx.GetRuntimeInfo(), logger)
+
+	enriched, err := json.Marshal(body)
+	if err != nil {
+		logger.Printf("Sending the event unchanged, failed to encode it: %v", err)
+		return input
+	}
+	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
+}
+
+func addMachineID(attributes *api.AnalyticsAttributes, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {
+	if ri == nil || (attributes.Runtime != nil && attributes.Runtime.Machine != nil && attributes.Runtime.Machine.Id != nil) {
+		return
+	}
+	id, err := ri.GetMachineID()
+	if err != nil {
+		if !errors.Is(err, runtimeinfo.ErrNoMachineID) {
+			logger.Printf("Leaving out the machine id: %v", err)
+		}
+		return
+	}
+	if attributes.Runtime == nil {
+		attributes.Runtime = &api.Runtime{}
+	}
+	if attributes.Runtime.Machine == nil {
+		attributes.Runtime.Machine = &api.Machine{}
+	}
+	attributes.Runtime.Machine.Id = &id
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {

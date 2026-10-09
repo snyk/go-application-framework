@@ -2,11 +2,13 @@ package localworkflows
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -22,13 +24,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+const testOrgID = "orgId"
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPayloadToApi(t *testing.T) {
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	orgId := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 	config.Set(configuration.INPUT_DIRECTORY, "/my/file")
 
@@ -40,18 +43,133 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	requestPayload := testGetAnalyticsV2PayloadString()
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+	mockClient := testGetMockHTTPClient(t, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(nil).AnyTimes()
 	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
 	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsMachineIdToV2Input(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ri := mocks.NewMockRuntimeInfo(ctrl)
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+	payload := testGetAnalyticsV2PayloadString()
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testWithMachineID(payload, "test-machine-id")), ri)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsMachineIdToConvertedScanDoneInput(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ri := mocks.NewMockRuntimeInfo(ctrl)
+	ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
+	ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+	expected := testWithMachineID(testGetAnalyticsV2PayloadString(), "test-machine-id")
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetScanDonePayloadString())})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_leavesOutMachineIdWhenUnavailable(t *testing.T) {
+	tests := map[string]func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo{
+		"no runtime info": func(*gomock.Controller) runtimeinfo.RuntimeInfo { return nil },
+		"no stable machine id": func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo {
+			ri := mocks.NewMockRuntimeInfo(ctrl)
+			ri.EXPECT().GetMachineID().Return("", runtimeinfo.ErrNoMachineID).AnyTimes()
+			return ri
+		},
+		"error reading the machine id": func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo {
+			ri := mocks.NewMockRuntimeInfo(ctrl)
+			ri.EXPECT().GetMachineID().Return("", errors.New("read failed")).AnyTimes()
+			return ri
+		},
+	}
+	for name, newRuntimeInfo := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			payload := testGetAnalyticsV2PayloadString()
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), newRuntimeInfo(ctrl))
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsMachineIdOfTheProducer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ri := mocks.NewMockRuntimeInfo(ctrl)
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+	payload := testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id")
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), ri)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsNumbersInExtensionAndResultsExact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	payload := strings.Replace(testGetAnalyticsV2PayloadString(),
+		`"device_id": "unique-uuid"`,
+		`"device_id": "unique-uuid", "large": 9007199254740993, "larger": 12345678901234567890, "ratio": 1.50`, 1)
+	payload = strings.Replace(payload, `"count": 15,`, `"count": 9007199254740993,`, 1)
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), nil)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsUndecodableInputUnchanged(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ri := mocks.NewMockRuntimeInfo(ctrl)
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+	// valid against the schema, but overflows the int64 duration of the request body type
+	payload := strings.Replace(testGetAnalyticsV2PayloadString(), `"duration_ms": 1000`, `"duration_ms": 99999999999999999999`, 1)
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), ri)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testing.T) {
+	tests := map[string]string{
+		"empty object":          `{}`,
+		"not json":              ``,
+		"machine is not object": strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": "test-machine-id", "performance"`, 1),
+		"machine id not string": strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": {"id": 5}, "performance"`, 1),
+	}
+	for name, payload := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				t.Errorf("unexpected request to %s", req.URL)
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+			require.Error(t, err)
+		})
+	}
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *testing.T) {
@@ -155,10 +273,9 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	config := configuration.New()
 	expectedPayload := testGetAnalyticsV2PayloadString()
 	config.Set("inputData", expectedPayload)
-	orgId := "orgId"
 	a := analytics.New()
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 
 	// setup mocks
@@ -167,7 +284,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
-	mockClient := testGetMockHTTPClient(t, orgId, expectedPayload)
+	mockClient := testGetMockHTTPClient(t, expectedPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -319,18 +436,18 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 	return InitReportAnalyticsWorkflow(engine)
 }
 
-func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
+func testGetMockHTTPClient(t *testing.T, requestPayload string) *http.Client {
 	t.Helper()
 	configtest.IsolateEnvironmentForTest(t)
 	mockClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07~experimental", req.URL.String())
+		require.Equal(t, "/hidden/orgs/"+testOrgID+"/analytics?version=2024-10-15", req.URL.String())
 		require.Equal(t, "POST", req.Method)
 		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		body, err := io.ReadAll(req.Body)
 
-		// used to replace whitespaces and uuids before comparing payloads
-		expression := regexp.MustCompile(`\s|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+		// used to replace whitespaces, uuids and path hashes before comparing payloads; the hash of a target path differs by OS
+		expression := regexp.MustCompile(`\s|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{64}`)
 
 		require.NoError(t, err)
 		require.Equal(t, expression.ReplaceAllString(requestPayload, ""), expression.ReplaceAllString(string(body), ""))
@@ -344,4 +461,28 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 		}
 	})
 	return mockClient
+}
+
+func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller, client *http.Client, ri runtimeinfo.RuntimeInfo) *mocks.MockInvocationContext {
+	t.Helper()
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+	logger := zerolog.New(io.Discard)
+	config := configuration.New()
+	config.Set(configuration.ORGANIZATION, testOrgID)
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
+
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	networkAccessMock.EXPECT().GetHttpClient().Return(client).AnyTimes()
+	invocationCtx := mocks.NewMockInvocationContext(ctrl)
+	invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationCtx.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationCtx.EXPECT().GetRuntimeInfo().Return(ri).AnyTimes()
+	invocationCtx.EXPECT().Context().Return(t.Context()).AnyTimes()
+	return invocationCtx
+}
+
+// testWithMachineID returns the v2 payload with runtime.machine.id set, in the key order the workflow encodes it.
+func testWithMachineID(payload string, machineID string) string {
+	return strings.Replace(payload, `"performance"`, `"machine": {"id": "`+machineID+`"}, "performance"`, 1)
 }

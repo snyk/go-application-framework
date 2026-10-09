@@ -327,6 +327,41 @@ func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *
 	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
 }
 
+func Test_CreateAppEngine_reportAnalyticsSendsTheMachineIdOfTheEngine(t *testing.T) {
+	isolateMachineIDStorage(t)
+	var requestBody atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/analytics") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		requestBody.Store(string(body))
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, "0d2bc57c-1df9-4115-996f-4f19aa12912b")
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
+	config.Set(configuration.MACHINE_ID, "supplied-machine-id")
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(config),
+		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
+	)
+	require.NoError(t, engine.Init())
+	event := `{"data":{"type":"analytics","attributes":{"interaction":{"id":"urn:snyk:interaction:0d2bc57c-1df9-4115-996f-4f19aa12912b",` +
+		`"timestamp_ms":1693569600000,"type":"Scan done","status":"success","target":{"id":"pkg:filesystem/abc/file"}}}}}`
+	input := workflow.NewData(workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_REPORT_ANALYTICS, "test"), "application/json", []byte(event))
+
+	_, err := engine.Invoke(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.WithInput([]workflow.Data{input}))
+
+	require.NoError(t, err)
+	assert.Contains(t, requestBody.Load(), `"machine":{"id":"supplied-machine-id"}`)
+}
+
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	localConfig := configuration.NewWithOpts()
 	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
