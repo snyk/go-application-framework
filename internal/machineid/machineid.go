@@ -134,12 +134,13 @@ func (r *resolver) resolveFromDisk() string {
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
 	stored, err := writeSharedFileID(paths, generate(), string(sourceGenerated), writer, logger)
 	if err != nil {
-		event := logger.Debug()
-		if !r.warnedUnstored {
+		const msg = "machine id: generated value could not be stored, no stable machine id is available"
+		if r.warnedUnstored {
+			logger.Debug().Err(err).Msg(msg)
+		} else {
 			r.warnedUnstored = true
-			event = logger.Warn()
+			logger.Warn().Err(err).Msg(msg)
 		}
-		event.Err(err).Msg("machine id: generated value could not be stored, no stable machine id is available")
 		return ""
 	}
 	return stored
