@@ -60,6 +60,12 @@ const (
 	CACHE_PATH    string = "snyk_cache_path" // CACHE_PATH (string) returns the cache directory that can be used by Extensions and is valid between multiple invocations of the application. It is guaranteed to be set and existing and match the documented paths
 
 	// ---------
+	// machine identification
+	// ---------
+
+	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) the identifier of the machine the application is running on. A valid value supplied on this key (trailing whitespace trimmed) is returned on every read. Otherwise the id is resolved on first read from the shared machine id file, the Snyk Studio device-id file or a newly generated id, and kept for the life of the engine (the configuration passed to app.CreateAppEngineWithOptions and its clones). If no id was found, reading this key returns runtimeinfo.ErrNoMachineID (GetString returns an empty value), and the next read tries the files again. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
+
+	// ---------
 	// general workflow configuration
 	// ---------
 

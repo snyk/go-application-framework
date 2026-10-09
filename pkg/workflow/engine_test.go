@@ -3,6 +3,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
@@ -255,13 +256,103 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 }
 
 func Test_Engine_SetterRuntimeInfo(t *testing.T) {
-	ri := runtimeinfo.New()
+	ri := runtimeinfo.New(runtimeinfo.WithName("some-app"), runtimeinfo.WithVersion("1.2.3"))
 	config := configuration.NewInMemory()
 	engine := NewWorkFlowEngine(config)
 
 	engine.SetRuntimeInfo(ri)
 
-	assert.Equal(t, ri, engine.GetRuntimeInfo())
+	assert.Equal(t, "some-app", engine.GetRuntimeInfo().GetName())
+	assert.Equal(t, "1.2.3", engine.GetRuntimeInfo().GetVersion())
+}
+
+func Test_Engine_RuntimeInfo(t *testing.T) {
+	t.Run("is nil when the host did not set one", func(t *testing.T) {
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+
+		assert.Nil(t, engine.GetRuntimeInfo())
+	})
+
+	t.Run("reads the machine id from the configuration on every call", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "initial")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		ri := engine.GetRuntimeInfo()
+
+		config.Set(configuration.MACHINE_ID, "changed")
+
+		machineID, err := ri.GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "changed", machineID)
+	})
+
+	t.Run("reads the machine id from a configuration set later", func(t *testing.T) {
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		replacement := configuration.NewInMemory()
+		replacement.Set(configuration.MACHINE_ID, "replacement")
+
+		engine.SetConfiguration(replacement)
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "replacement", machineID)
+	})
+
+	t.Run("reports no machine id when the configured value is empty", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+		assert.Empty(t, machineID)
+	})
+
+	t.Run("returns the error of the configuration when the machine id cannot be resolved", func(t *testing.T) {
+		resolveErr := errors.New("machine id resolution failed")
+		config := configuration.NewInMemory()
+		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
+			return nil, resolveErr
+		})
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, resolveErr)
+		assert.Empty(t, machineID)
+	})
+
+	t.Run("updates the application information of the host", func(t *testing.T) {
+		hostRuntimeInfo := runtimeinfo.New(runtimeinfo.WithName("some-app"), runtimeinfo.WithVersion("1.0.0"))
+		engine := NewWorkFlowEngine(configuration.NewInMemory())
+		engine.SetRuntimeInfo(hostRuntimeInfo)
+
+		engine.GetRuntimeInfo().SetVersion("2.0.0")
+		engine.GetRuntimeInfo().SetName("other-app")
+
+		assert.Equal(t, "2.0.0", hostRuntimeInfo.GetVersion())
+		assert.Equal(t, "other-app", hostRuntimeInfo.GetName())
+	})
+
+	t.Run("provides the machine id through an engine wrapper", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "wrapped")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+		wrapper := &engineWrapper{WrappedEngine: engine}
+
+		machineID, err := wrapper.GetRuntimeInfo().GetMachineID()
+
+		assert.NoError(t, err)
+		assert.Equal(t, "wrapped", machineID)
+	})
 }
 
 func Test_Engine_ClonedNetworkAccess(t *testing.T) {
@@ -464,7 +555,7 @@ func Test_InvocationContext_AllMethods(t *testing.T) {
 		assert.NotNil(t, invocation.GetUserInterface())
 
 		// GetRuntimeInfo
-		assert.Equal(t, ri, invocation.GetRuntimeInfo())
+		assert.Equal(t, "test-app", invocation.GetRuntimeInfo().GetName())
 
 		// GetWorkflowIdentifier
 		assert.Equal(t, wfId.String(), invocation.GetWorkflowIdentifier().String())
@@ -1244,4 +1335,21 @@ func Test_PostInvokeHook_NestedInvokeContextBoundByHookTimeout(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		assert.FailNow(t, "timeout waiting for inner workflow callback")
 	}
+}
+
+// Run with -race: a configuration read can happen while the configuration is being replaced.
+func Test_Engine_GetConfigurationConcurrentWithSetConfigurationDoesNotRace(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			engine.SetConfiguration(configuration.NewWithOpts())
+		}
+	})
+	wg.Go(func() {
+		for range 100 {
+			_ = engine.GetConfiguration()
+		}
+	})
+	wg.Wait()
 }
