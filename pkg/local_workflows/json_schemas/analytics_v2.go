@@ -223,6 +223,30 @@ const AnalyticsV2EventSchema = `{
         },
         "arch": {
           "type": "string"
+        },
+        "configuration": {
+          "$ref": "#/schemas/PlatformConfiguration"
+        }
+      }
+    },
+    "PlatformConfiguration": {
+      "type": "object",
+      "description": "Client network and security configuration values.",
+      "properties": {
+        "extra_ca_certs": {
+          "type": "boolean"
+        },
+        "fips": {
+          "type": "boolean"
+        },
+        "insecure_https": {
+          "type": "boolean"
+        },
+        "network_request_attempts": {
+          "type": "integer"
+        },
+        "proxy": {
+          "type": "boolean"
         }
       }
     },

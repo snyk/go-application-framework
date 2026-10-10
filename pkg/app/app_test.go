@@ -327,7 +327,7 @@ func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *
 	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
 }
 
-func Test_CreateAppEngine_reportAnalyticsSendsTheMachineIdOfTheEngine(t *testing.T) {
+func Test_CreateAppEngine_reportAnalyticsSendsTheRuntimeFieldsOfTheEngine(t *testing.T) {
 	isolateMachineIDStorage(t)
 	var requestBody atomic.Value
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +360,7 @@ func Test_CreateAppEngine_reportAnalyticsSendsTheMachineIdOfTheEngine(t *testing
 
 	require.NoError(t, err)
 	assert.Contains(t, requestBody.Load(), `"machine":{"id":"supplied-machine-id"}`)
+	assert.Contains(t, requestBody.Load(), `"network_request_attempts":1,`)
 }
 
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
