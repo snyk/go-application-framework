@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/internal/fileperms"
 )
@@ -51,10 +52,12 @@ func IsKeyDeleted(val any) bool {
 }
 
 type JsonStorage struct {
-	path     string
-	config   Configuration
-	fileLock *flock.Flock
-	mutex    sync.Mutex
+	path   string
+	config Configuration
+	mutex  sync.Mutex
+
+	fileIntraProcessLock *flock.Flock
+	fileInProcessLock    *semaphore.Weighted
 }
 
 type JsonOption func(*JsonStorage)
@@ -67,8 +70,9 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path:     path,
-		fileLock: flock.New(path + ".lock"),
+		path:                 path,
+		fileIntraProcessLock: flock.New(path + ".lock"),
+		fileInProcessLock:    semaphore.NewWeighted(1),
 	}
 
 	for _, opt := range options {
@@ -156,10 +160,21 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
-	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
-	return err
+	if err := s.fileInProcessLock.Acquire(ctx, 1); err != nil {
+		return err
+	}
+
+	_, err := s.fileIntraProcessLock.TryLockContext(ctx, retryDelay)
+	if err != nil {
+		s.fileInProcessLock.Release(1)
+		return err
+	}
+
+	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	return s.fileLock.Unlock()
+	err := s.fileIntraProcessLock.Unlock()
+	s.fileInProcessLock.Release(1)
+	return err
 }
