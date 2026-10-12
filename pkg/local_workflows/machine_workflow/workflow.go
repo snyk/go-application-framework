@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -26,11 +28,16 @@ func enrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Dat
 	globalConfig.ClearCache()
 	defer globalConfig.ClearCache()
 
+	joinToken, err := readJoinToken(config.GetString(joinTokenFlag), os.Stdin)
+	if err != nil {
+		return nil, err
+	}
 	message, err := enroll(
 		invocationCtx.Context(),
 		config,
 		globalConfig,
 		invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(),
+		joinToken,
 		machineenrollment.SystemKeychain(),
 		invocationCtx.GetEnhancedLogger(),
 	)
@@ -40,25 +47,48 @@ func enrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Dat
 	return []workflow.Data{textData(WORKFLOWID_MACHINE_ENROLL, message, invocationCtx)}, nil
 }
 
-// enroll enrolls this device, stores the machine client's key and configuration, and gets the
-// machine's first access token. From then on, the machine is who this application authenticates
-// as.
+// maxJoinTokenBytes bounds what is read from stdin for a join token, which is well under 100 bytes.
+const maxJoinTokenBytes = 1024
+
+// readJoinToken returns the join token flag's value, reading it from stdin when it is "-" so the
+// token stays out of shell history and process listings.
+func readJoinToken(flag string, stdin io.Reader) (string, error) {
+	if flag != "-" {
+		return strings.TrimSpace(flag), nil
+	}
+	b, err := io.ReadAll(io.LimitReader(stdin, maxJoinTokenBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed reading the join token from stdin: %w", err)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// enroll enrolls this device, with joinToken when there is one and with the keychain's device
+// identity otherwise. It stores the machine client's key and configuration and gets the machine's
+// first access token. From then on, the machine is who this application authenticates as.
 func enroll(
 	ctx context.Context,
 	config, globalConfig configuration.Configuration,
 	httpClient *http.Client,
+	joinToken string,
 	keychain machineenrollment.Keychain,
 	logger *zerolog.Logger,
 ) (string, error) {
+	var err error
 	keyFile := config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE)
 	if keyFile == "" {
-		var err error
 		if keyFile, err = machineenrollment.DefaultKeyFile(); err != nil {
 			return "", err
 		}
 	}
 
-	e, err := machineenrollment.Enroll(ctx, httpClient, config.GetString(configuration.API_URL), keychain, time.Now())
+	apiURL := config.GetString(configuration.API_URL)
+	var e machineenrollment.Enrollment
+	if joinToken != "" {
+		e, err = machineenrollment.EnrollWithJoinToken(ctx, httpClient, apiURL, joinToken, time.Now())
+	} else {
+		e, err = machineenrollment.Enroll(ctx, httpClient, apiURL, keychain, time.Now())
+	}
 	if err != nil {
 		return "", err
 	}

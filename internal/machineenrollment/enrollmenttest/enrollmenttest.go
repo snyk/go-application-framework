@@ -147,6 +147,7 @@ type Server struct {
 	// TokenRequests counts accepted token requests.
 	TokenRequests int
 	nonces        map[string]bool // nonce -> used
+	joinTokens    map[string]bool // join token -> used
 	clients       map[string]*ecdsa.PublicKey
 	jtis          map[string]bool
 	tokens        map[string]string // access token -> client id
@@ -157,15 +158,17 @@ type Server struct {
 func NewServer(t *testing.T, ca *CA) *Server {
 	t.Helper()
 	s := &Server{
-		ca:      ca,
-		nonces:  map[string]bool{},
-		clients: map[string]*ecdsa.PublicKey{},
-		jtis:    map[string]bool{},
-		tokens:  map[string]string{},
+		ca:         ca,
+		nonces:     map[string]bool{},
+		joinTokens: map[string]bool{},
+		clients:    map[string]*ecdsa.PublicKey{},
+		jtis:       map[string]bool{},
+		tokens:     map[string]string{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollment_challenges", s.challenge)
 	mux.HandleFunc("POST /hidden/machines/attested_enrollments", s.enroll)
+	mux.HandleFunc("POST /hidden/machines/enrollments", s.enrollWithJoinToken)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/tenants", s.listTenants)
 	s.Server = httptest.NewServer(mux)
@@ -178,6 +181,17 @@ func (s *Server) RegisterClient(clientID string, key *ecdsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = key
+}
+
+// IssueJoinToken returns a new single-use join token, as an admin registering a machine gets.
+func (s *Server) IssueJoinToken() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b) //nolint:errcheck // crypto/rand never fails
+	token := "sjt_" + base64.RawURLEncoding.EncodeToString(b)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.joinTokens[token] = false
+	return token
 }
 
 // ClientKey returns the key clientID enrolled with.
@@ -229,7 +243,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, jkt, nonce, err := s.verifyAssertion(req.Data.Attributes.Assertion, s.URL+r.URL.Path)
+	key, jkt, nonce, err := s.verifyAssertion(req.Data.Attributes.Assertion, s.URL+r.URL.Path, "nonce")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "assertion: "+err.Error())
 		return
@@ -245,17 +259,53 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	s.nonces[nonce] = true
 
+	s.Attestations = append(s.Attestations, claims)
+	s.respondEnrolled(w, "machine_attested_enrollment", key, jkt)
+}
+
+func (s *Server) enrollWithJoinToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Data struct {
+			Type       string `json:"type"`
+			Attributes struct {
+				Assertion string `json:"assertion"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Data.Type != "machine_enrollment" {
+		writeError(w, http.StatusBadRequest, "malformed request")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key, jkt, joinToken, err := s.verifyAssertion(req.Data.Attributes.Assertion, s.URL+r.URL.Path, "join_token")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "assertion: "+err.Error())
+		return
+	}
+	if used, ok := s.joinTokens[joinToken]; !ok || used {
+		writeError(w, http.StatusUnauthorized, "The join token is not valid.")
+		return
+	}
+	s.joinTokens[joinToken] = true
+	s.respondEnrolled(w, "machine_enrollment", key, jkt)
+}
+
+// respondEnrolled creates a client for key and answers with it. s.mu must be held.
+func (s *Server) respondEnrolled(w http.ResponseWriter, resourceType string, key *ecdsa.PublicKey, jkt string) {
 	s.next++
 	clientID := fmt.Sprintf("client-%d", s.next)
 	s.clients[clientID] = key
-	s.Attestations = append(s.Attestations, claims)
 	writeJSON(w, http.StatusCreated, map[string]any{"data": map[string]any{
-		"id": clientID, "type": "machine_attested_enrollment",
+		"id": clientID, "type": resourceType,
 		"attributes": map[string]any{"machine_id": fmt.Sprintf("machine-%d", s.next), "client_id": clientID, "key_id": jkt},
 	}})
 }
 
-func (s *Server) verifyAssertion(token, audience string) (*ecdsa.PublicKey, string, string, error) {
+// verifyAssertion verifies a self-signed ES256 assertion addressed to audience and returns its key,
+// the key's thumbprint and the value of the claim named by credential.
+func (s *Server) verifyAssertion(token, audience, credential string) (*ecdsa.PublicKey, string, string, error) {
 	header, claims, err := decodeJWT(token)
 	if err != nil {
 		return nil, "", "", err
@@ -280,11 +330,11 @@ func (s *Server) verifyAssertion(token, audience string) (*ecdsa.PublicKey, stri
 	if _, ok := claims["iat"].(float64); !ok {
 		return nil, "", "", errors.New("iat is missing")
 	}
-	nonce, _ := claims["nonce"].(string) //nolint:errcheck // checked below
-	if nonce == "" {
-		return nil, "", "", errors.New("nonce is missing")
+	value, _ := claims[credential].(string) //nolint:errcheck // checked below
+	if value == "" {
+		return nil, "", "", errors.New(credential + " is missing")
 	}
-	return key, jkt, nonce, nil
+	return key, jkt, value, nil
 }
 
 func (s *Server) verifyAttestation(token, audience, nonce, jkt string) (map[string]any, error) {

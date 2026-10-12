@@ -239,6 +239,12 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
+	s = fmt.Sprintf("(sjt_)(%s)", charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
 	s = fmt.Sprintf("(github_pat_)(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,

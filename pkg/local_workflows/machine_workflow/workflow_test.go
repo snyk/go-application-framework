@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -29,6 +30,8 @@ func Test_MachineWorkflows_registration(t *testing.T) {
 		flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 		assert.True(t, config_utils.IsExperimental(flags), id)
 	}
+	entry, _ := engine.GetWorkflow(WORKFLOWID_MACHINE_ENROLL)
+	assert.NotNil(t, workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions()).Lookup(joinTokenFlag))
 }
 
 type fixture struct {
@@ -58,7 +61,7 @@ func newFixture(t *testing.T) *fixture {
 func (f *fixture) enroll(t *testing.T) string {
 	t.Helper()
 	logger := zerolog.Nop()
-	message, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, f.keychain, &logger)
+	message, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, "", f.keychain, &logger)
 	require.NoError(t, err)
 	return message
 }
@@ -104,7 +107,7 @@ func Test_enroll_refusedLeavesConfigurationAlone(t *testing.T) {
 	f.srv.RejectEnrollment = "This device is not in the fleet."
 	logger := zerolog.Nop()
 
-	_, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, f.keychain, &logger)
+	_, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, "", f.keychain, &logger)
 
 	assert.ErrorContains(t, err, "This device is not in the fleet.")
 	assert.Empty(t, f.globalConfig.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
@@ -140,4 +143,52 @@ func (a authenticating) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	return http.DefaultTransport.RoundTrip(r)
+}
+
+func Test_enroll_withJoinToken(t *testing.T) {
+	f := newFixture(t)
+	logger := zerolog.Nop()
+	noIdentities := &enrollmenttest.Keychain{}
+
+	message, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, f.srv.IssueJoinToken(), noIdentities, &logger)
+
+	require.NoError(t, err, "a join token needs no device identity")
+	assert.Contains(t, message, "machine-1")
+	key, err := machineenrollment.ReadKeyFile(f.keyFile)
+	require.NoError(t, err)
+	assert.True(t, f.srv.ClientKey("client-1").Equal(&key.PublicKey))
+	assert.Equal(t, "client-1", f.globalConfig.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+	token, err := auth.GetOAuthToken(f.globalConfig)
+	require.NoError(t, err)
+	require.NotNil(t, token)
+	assert.Equal(t, "token-client-1-1", token.AccessToken)
+}
+
+func Test_enroll_withAnInvalidJoinToken(t *testing.T) {
+	f := newFixture(t)
+	logger := zerolog.Nop()
+
+	_, err := enroll(context.Background(), f.config, f.globalConfig, http.DefaultClient, "sjt_never-issued", f.keychain, &logger)
+
+	assert.ErrorContains(t, err, "The join token is not valid.")
+	assert.Empty(t, f.globalConfig.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+	assert.NoFileExists(t, f.keyFile)
+}
+
+func Test_readJoinToken(t *testing.T) {
+	tests := map[string]struct {
+		flag, stdin, want string
+	}{
+		"not set":     {"", "sjt_from-stdin", ""},
+		"flag value":  {"  sjt_from-flag \n", "sjt_from-stdin", "sjt_from-flag"},
+		"stdin":       {"-", "sjt_from-stdin\n", "sjt_from-stdin"},
+		"empty stdin": {"-", "", ""},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := readJoinToken(tc.flag, strings.NewReader(tc.stdin))
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }

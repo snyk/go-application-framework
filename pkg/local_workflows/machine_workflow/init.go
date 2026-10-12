@@ -12,6 +12,8 @@ import (
 const (
 	enrollWorkflowName = "machine enroll"
 	statusWorkflowName = "machine status"
+
+	joinTokenFlag = "join-token"
 )
 
 var (
@@ -22,6 +24,8 @@ var (
 // InitMachineWorkflows registers the machine workflows. Both are experimental.
 func InitMachineWorkflows(engine workflow.Engine) error {
 	enrollFlags := pflag.NewFlagSet(enrollWorkflowName, pflag.ExitOnError)
+	enrollFlags.String(joinTokenFlag, "", "Enroll with the join token an admin issued for this machine, or - to read it from stdin, "+
+		"instead of the device's management identity certificate.")
 	_, err := engine.Register(
 		WORKFLOWID_MACHINE_ENROLL,
 		workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(enrollFlags)),

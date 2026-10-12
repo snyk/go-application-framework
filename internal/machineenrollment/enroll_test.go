@@ -127,3 +127,32 @@ func TestListTenants(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []machineenrollment.Tenant{{ID: "t-1", Name: "Tenant One"}}, tenants)
 }
+
+func TestEnrollWithJoinToken(t *testing.T) {
+	srv := enrollmenttest.NewServer(t, enrollmenttest.NewCA(t, "Device Management CA"))
+	token := srv.IssueJoinToken()
+
+	e, err := machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, srv.URL, token, time.Now())
+	require.NoError(t, err)
+
+	assert.Equal(t, "machine-1", e.MachineID)
+	assert.Equal(t, "client-1", e.ClientID)
+	assert.NotEmpty(t, e.KeyID)
+	require.NotNil(t, e.Key)
+	assert.True(t, srv.ClientKey(e.ClientID).Equal(&e.Key.PublicKey), "the client is bound to the returned key")
+
+	// A join token is single-use.
+	_, err = machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, srv.URL, token, time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "401")
+	assert.Contains(t, err.Error(), "The join token is not valid.")
+}
+
+func TestEnrollWithJoinTokenRejectsMalformedTokens(t *testing.T) {
+	// Nothing listens here, so a request would fail with a different error.
+	const apiURL = "http://127.0.0.1:1"
+	for _, token := range []string{"", "sjt_", "not-a-join-token"} {
+		_, err := machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, apiURL, token, time.Now())
+		assert.ErrorIs(t, err, machineenrollment.ErrMalformedJoinToken, token)
+	}
+}

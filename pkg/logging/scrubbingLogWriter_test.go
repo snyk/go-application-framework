@@ -333,6 +333,11 @@ func TestAddDefaults(t *testing.T) {
 			expected: "GITHUB_PRIVATE_TOKEN=github_pat_***",
 		},
 		{
+			name:     "machine join token",
+			input:    "enrolling with sjt_k3Jx9-QpL2mN8vR4tY6wZ1aB5cD7eF0gH failed",
+			expected: "enrolling with sjt_*** failed",
+		},
+		{
 			name:     "oauth access token",
 			input:    "access_token=alittlesecret&expire",
 			expected: "access_token=***&expire",

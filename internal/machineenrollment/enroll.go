@@ -14,14 +14,22 @@ import (
 )
 
 const (
-	apiVersion          = "2024-10-15"
-	challengesPath      = "/hidden/machines/enrollment_challenges"
-	enrollmentsPath     = "/hidden/machines/attested_enrollments"
-	challengeType       = "machine_enrollment_challenge"
-	enrollmentType      = "machine_attested_enrollment"
-	jsonAPIContentType  = "application/vnd.api+json"
-	maxResponseBodySize = 64 << 10
+	apiVersion               = "2024-10-15"
+	challengesPath           = "/hidden/machines/enrollment_challenges"
+	attestedEnrollmentsPath  = "/hidden/machines/attested_enrollments"
+	joinTokenEnrollmentsPath = "/hidden/machines/enrollments"
+	challengeType            = "machine_enrollment_challenge"
+	attestedEnrollmentType   = "machine_attested_enrollment"
+	joinTokenEnrollmentType  = "machine_enrollment"
+	jsonAPIContentType       = "application/vnd.api+json"
+	maxResponseBodySize      = 64 << 10
+
+	// JoinTokenPrefix starts every join token.
+	JoinTokenPrefix = "sjt_"
 )
+
+// ErrMalformedJoinToken is returned for a join token that can't be one, before it is sent anywhere.
+var ErrMalformedJoinToken = errors.New("the join token is malformed: join tokens start with " + JoinTokenPrefix)
 
 // Enrollment is the result of enrolling this device.
 type Enrollment struct {
@@ -54,17 +62,43 @@ func Enroll(ctx context.Context, httpClient *http.Client, apiURL string, keychai
 		return Enrollment{}, err
 	}
 
-	audience := apiURL + enrollmentsPath
-	assertion, err := enrollmentAssertion(key, audience, c.nonce, now)
+	url := apiURL + attestedEnrollmentsPath
+	assertion, err := keyAssertion(key, url, "nonce", c.nonce, now)
 	if err != nil {
 		return Enrollment{}, err
 	}
-	attestation, err := deviceAttestation(identity, keychain.DeviceInfo(), &key.PublicKey, audience, c.nonce, now)
+	attestation, err := deviceAttestation(identity, keychain.DeviceInfo(), &key.PublicKey, url, c.nonce, now)
 	if err != nil {
 		return Enrollment{}, err
 	}
 
-	res, err := postEnrollment(ctx, httpClient, apiURL, assertion, attestation)
+	res, err := postEnrollment(ctx, httpClient, url, attestedEnrollmentType, map[string]string{"assertion": assertion, "attestation": attestation})
+	if err != nil {
+		return Enrollment{}, err
+	}
+	return Enrollment{MachineID: res.MachineID, ClientID: res.ClientID, KeyID: res.KeyID, Key: key}, nil
+}
+
+// EnrollWithJoinToken enrolls this machine with the single-use join token an admin issued for it,
+// exchanging it for an OAuth client bound to a newly generated machine client key. It needs no
+// device identity, so it works on any platform. httpClient must not add authentication.
+func EnrollWithJoinToken(ctx context.Context, httpClient *http.Client, apiURL, joinToken string, now time.Time) (Enrollment, error) {
+	if !strings.HasPrefix(joinToken, JoinTokenPrefix) || len(joinToken) == len(JoinTokenPrefix) {
+		return Enrollment{}, ErrMalformedJoinToken
+	}
+
+	key, err := GenerateKey()
+	if err != nil {
+		return Enrollment{}, err
+	}
+
+	url := apiURL + joinTokenEnrollmentsPath
+	assertion, err := keyAssertion(key, url, "join_token", joinToken, now)
+	if err != nil {
+		return Enrollment{}, err
+	}
+
+	res, err := postEnrollment(ctx, httpClient, url, joinTokenEnrollmentType, map[string]string{"assertion": assertion})
 	if err != nil {
 		return Enrollment{}, err
 	}
@@ -105,16 +139,18 @@ func requestChallenge(ctx context.Context, httpClient *http.Client, apiURL strin
 	return c, nil
 }
 
-// enrollmentAssertion proves the machine holds key: it is signed by key and carries its public key.
-func enrollmentAssertion(key *ecdsa.PrivateKey, audience, nonce string, now time.Time) (string, error) {
+// keyAssertion proves the machine holds key: it is signed by key, carries its public key, and is
+// addressed to the enrollment endpoint at audience. The claim named by name is what the machine
+// enrolls with: the challenge nonce or the join token.
+func keyAssertion(key *ecdsa.PrivateKey, audience, name, value string, now time.Time) (string, error) {
 	jwk, err := publicJWK(&key.PublicKey)
 	if err != nil {
 		return "", err
 	}
 	return signJWT(key, map[string]any{"jwk": jwk}, map[string]any{
-		"aud":   audience,
-		"iat":   now.Unix(),
-		"nonce": nonce,
+		"aud": audience,
+		"iat": now.Unix(),
+		name:  value,
 	})
 }
 
@@ -147,10 +183,10 @@ type enrollmentResult struct {
 	KeyID     string `json:"key_id"`
 }
 
-func postEnrollment(ctx context.Context, httpClient *http.Client, apiURL, assertion, attestation string) (enrollmentResult, error) {
+func postEnrollment(ctx context.Context, httpClient *http.Client, url, resourceType string, attributes map[string]string) (enrollmentResult, error) {
 	req := map[string]any{"data": map[string]any{
-		"type":       enrollmentType,
-		"attributes": map[string]string{"assertion": assertion, "attestation": attestation},
+		"type":       resourceType,
+		"attributes": attributes,
 	}}
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -162,7 +198,7 @@ func postEnrollment(ctx context.Context, httpClient *http.Client, apiURL, assert
 			Attributes enrollmentResult `json:"attributes"`
 		} `json:"data"`
 	}
-	if err = doJSONAPI(ctx, httpClient, http.MethodPost, apiURL+enrollmentsPath, string(body), http.StatusCreated, &res); err != nil {
+	if err = doJSONAPI(ctx, httpClient, http.MethodPost, url, string(body), http.StatusCreated, &res); err != nil {
 		return enrollmentResult{}, fmt.Errorf("failed enrolling machine: %w", err)
 	}
 	if res.Data.Attributes.ClientID == "" {
