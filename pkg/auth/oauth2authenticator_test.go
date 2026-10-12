@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -651,4 +654,100 @@ func Test_modifyTokenUrl(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, original, o.oauthConfig.Endpoint.TokenURL)
 	})
+}
+
+func machineClientConfig(t *testing.T, srv *enrollmenttest.Server) configuration.Configuration {
+	t.Helper()
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyFile := filepath.Join(t.TempDir(), "key.pem")
+	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, key))
+	srv.RegisterClient("machine-client", &key.PublicKey)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_ID, "machine-client")
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
+	return config
+}
+
+func Test_determineGrantType_machineClient(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_ID, "machine-client")
+	assert.Equal(t, AuthorizationCodeGrant, determineGrantType(config), "a client id alone is not enough")
+
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, "/key.pem")
+	assert.Equal(t, ClientCredentialsGrant, determineGrantType(config))
+	assert.Equal(t, "machine-client", getOAuthConfiguration(config).ClientID)
+
+	config.Unset(machineenrollment.CONFIG_KEY_CLIENT_ID)
+	assert.Equal(t, AuthorizationCodeGrant, determineGrantType(config), "an unset machine client is not used")
+}
+
+func Test_determineGrantType_clientSecretTakesPrecedenceOverMachineClient(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_ID, "machine-client")
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, "/key.pem")
+	config.Set(PARAMETER_CLIENT_ID, "id")
+	config.Set(PARAMETER_CLIENT_SECRET, "secret")
+
+	conf := getOAuthConfiguration(config)
+	assert.Equal(t, "id", conf.ClientID)
+	assert.Equal(t, "secret", conf.ClientSecret)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config).(*oAuth2Authenticator) //nolint:errcheck // the type is clear
+	assert.False(t, authenticator.isMachineClient())
+}
+
+func Test_Authenticate_MachineClient(t *testing.T) {
+	srv := enrollmenttest.NewServer(t, enrollmenttest.NewCA(t, "CA"))
+	config := machineClientConfig(t, srv)
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+	assert.True(t, authenticator.IsSupported(), "an enrolled machine needs no stored token")
+	require.NoError(t, authenticator.Authenticate())
+
+	token, err := GetOAuthToken(config)
+	require.NoError(t, err)
+	require.NotNil(t, token)
+	assert.Equal(t, "token-machine-client-1", token.AccessToken)
+}
+
+func Test_AddAuthenticationHeader_MachineClientGetsTokensOnDemand(t *testing.T) {
+	srv := enrollmenttest.NewServer(t, enrollmenttest.NewCA(t, "CA"))
+	config := machineClientConfig(t, srv)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+
+	// No token is stored, so the first request gets one.
+	req := httptest.NewRequest(http.MethodGet, srv.URL+"/rest/tenants", nil)
+	require.NoError(t, authenticator.AddAuthenticationHeader(req))
+	assert.Equal(t, "Bearer token-machine-client-1", req.Header.Get("Authorization"))
+
+	// Once it expires, the next request gets a new one with a new client assertion; the server
+	// rejects a reused jti.
+	expired, err := GetOAuthToken(config)
+	require.NoError(t, err)
+	expired.Expiry = time.Now().Add(-time.Minute)
+	data, err := json.Marshal(expired)
+	require.NoError(t, err)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(data))
+	authenticator = NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+
+	req = httptest.NewRequest(http.MethodGet, srv.URL+"/rest/tenants", nil)
+	require.NoError(t, authenticator.AddAuthenticationHeader(req))
+	assert.Equal(t, "Bearer token-machine-client-2", req.Header.Get("Authorization"))
+	assert.Equal(t, 2, srv.TokenRequests)
+}
+
+func Test_AddAuthenticationHeader_MachineClientWithMissingKey(t *testing.T) {
+	srv := enrollmenttest.NewServer(t, enrollmenttest.NewCA(t, "CA"))
+	config := machineClientConfig(t, srv)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "missing.pem"))
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+
+	req := httptest.NewRequest(http.MethodGet, srv.URL+"/rest/tenants", nil)
+	err := authenticator.AddAuthenticationHeader(req)
+
+	assert.ErrorContains(t, err, "machine client key file")
+	assert.Empty(t, req.Header.Get("Authorization"))
 }

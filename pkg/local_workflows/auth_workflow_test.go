@@ -7,11 +7,13 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_auth_oauth(t *testing.T) {
@@ -262,4 +264,25 @@ func Test_autodetectAuth(t *testing.T) {
 		actual := autoDetectAuthType(config)
 		assert.Equal(t, expected, actual)
 	})
+}
+
+func Test_unsetMachineClient(t *testing.T) {
+	config := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	for _, c := range []configuration.Configuration{config, globalConfig} {
+		c.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+		c.Set(machineenrollment.CONFIG_KEY_CLIENT_ID, "machine-client")
+		c.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, "/key.pem")
+		c.Set(machineenrollment.CONFIG_KEY_MACHINE_ID, "machine")
+		require.True(t, auth.NewOAuth2AuthenticatorWithOpts(c).IsSupported(), "an enrolled machine authenticates")
+	}
+
+	unsetMachineClient(config, globalConfig)
+
+	for _, c := range []configuration.Configuration{config, globalConfig} {
+		assert.Empty(t, c.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+		assert.Empty(t, c.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE))
+		assert.Empty(t, c.GetString(machineenrollment.CONFIG_KEY_MACHINE_ID))
+		assert.False(t, auth.NewOAuth2AuthenticatorWithOpts(c).IsSupported(), "the machine no longer authenticates")
+	}
 }

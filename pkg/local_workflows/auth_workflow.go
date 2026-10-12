@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -67,6 +68,10 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	// make sure the updated environment is forwarded to global config
 	defer globalConfig.ClearCache()
 
+	// Authenticating replaces an enrolled machine's credential. It has to go before the
+	// authenticator is created, or the authenticator would authenticate as the machine again.
+	unsetMachineClient(config, globalConfig)
+
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 		config,
@@ -78,6 +83,14 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
+}
+
+func unsetMachineClient(configs ...configuration.Configuration) {
+	for _, c := range configs {
+		c.Unset(machineenrollment.CONFIG_KEY_CLIENT_ID)
+		c.Unset(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE)
+		c.Unset(machineenrollment.CONFIG_KEY_MACHINE_ID)
+	}
 }
 
 func autoDetectAuthType(config configuration.Configuration) string {

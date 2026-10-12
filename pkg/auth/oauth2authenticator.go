@@ -23,6 +23,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -86,6 +87,9 @@ type oAuth2Authenticator struct {
 	// and will result in server.Server exiting immediately when called.
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
+	// machineClientKeyFile is set when authenticating as an enrolled machine: the client
+	// credentials grant then uses private_key_jwt client assertions signed by this key.
+	machineClientKeyFile string
 }
 
 func OpenBrowser(authUrl string) {
@@ -121,7 +125,10 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 		},
 	}
 
-	if determineGrantType(config) == ClientCredentialsGrant {
+	switch {
+	case isMachineClient(config):
+		conf.ClientID = config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID)
+	case determineGrantType(config) == ClientCredentialsGrant:
 		conf.ClientID = config.GetString(PARAMETER_CLIENT_ID)
 		conf.ClientSecret = config.GetString(PARAMETER_CLIENT_SECRET)
 	}
@@ -136,6 +143,29 @@ func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredential
 		TokenURL:     in.Endpoint.TokenURL,
 	}
 	return conf
+}
+
+// getOAuthConfigurationMachineClient returns the client credentials configuration of an enrolled
+// machine. It authenticates with a private_key_jwt client assertion (RFC 7523) instead of a
+// secret; the assertion is new for every call, because the authorization server accepts each one
+// only once.
+func getOAuthConfigurationMachineClient(in *oauth2.Config, keyFile string) (*clientcredentials.Config, error) {
+	key, err := machineenrollment.ReadKeyFile(keyFile)
+	if err != nil {
+		return nil, err
+	}
+	assertion, err := machineenrollment.ClientAssertion(key, in.ClientID, in.Endpoint.TokenURL, time.Now())
+	if err != nil {
+		return nil, err
+	}
+
+	conf := getOAuthConfigurationClientCredentials(in)
+	conf.AuthStyle = oauth2.AuthStyleInParams
+	conf.EndpointParams = url.Values{
+		"client_assertion_type": {machineenrollment.ClientAssertionType},
+		"client_assertion":      {assertion},
+	}
+	return conf, nil
 }
 
 // This method creates a code challenge as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.2
@@ -205,12 +235,32 @@ func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Conf
 	return tokenSource.Token()
 }
 
+func (o *oAuth2Authenticator) refreshTokenMachineClient(ctx context.Context, oauthConfig *oauth2.Config, _ *oauth2.Token) (*oauth2.Token, error) {
+	conf, err := getOAuthConfigurationMachineClient(oauthConfig, o.machineClientKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	return conf.TokenSource(ctx).Token()
+}
+
 func determineGrantType(config configuration.Configuration) GrantType {
 	grantType := AuthorizationCodeGrant
-	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
+	if hasClientSecret(config) || isMachineClient(config) {
 		grantType = ClientCredentialsGrant
 	}
 	return grantType
+}
+
+func hasClientSecret(config configuration.Configuration) bool {
+	return config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID)
+}
+
+// isMachineClient reports whether this is an enrolled machine, which authenticates with the
+// client credentials grant and a private key. An explicit client id and secret take precedence.
+func isMachineClient(config configuration.Configuration) bool {
+	return !hasClientSecret(config) &&
+		config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID) != "" &&
+		config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE) != ""
 }
 
 //goland:noinspection GoUnusedExportedFunction
@@ -236,7 +286,10 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.grantType = determineGrantType(config)
 
 	// set refresh function depending on grant type
-	if o.grantType == ClientCredentialsGrant {
+	if isMachineClient(config) {
+		o.machineClientKeyFile = config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE)
+		o.tokenRefresherFunc = o.refreshTokenMachineClient
+	} else if o.grantType == ClientCredentialsGrant {
 		o.tokenRefresherFunc = refreshTokenClientCredentials
 	} else {
 		o.tokenRefresherFunc = RefreshToken
@@ -267,9 +320,14 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 }
 
 func (o *oAuth2Authenticator) IsSupported() bool {
-	tokenExistent := o.token != nil
+	// An enrolled machine can always get a token, so it doesn't need one stored.
+	credentialExistent := o.token != nil || o.isMachineClient()
 	featureEnabled := o.config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	return tokenExistent && featureEnabled
+	return credentialExistent && featureEnabled
+}
+
+func (o *oAuth2Authenticator) isMachineClient() bool {
+	return o.machineClientKeyFile != ""
 }
 
 func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
@@ -304,6 +362,12 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 
 func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant(ctx context.Context) error {
 	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
+	if o.isMachineClient() {
+		var err error
+		if config, err = getOAuthConfigurationMachineClient(o.oauthConfig, o.machineClientKeyFile); err != nil {
+			return err
+		}
+	}
 
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
@@ -524,7 +588,7 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	if request == nil {
 		return fmt.Errorf("request must not be nil")
 	}
-	if o.token == nil {
+	if o.token == nil && !o.isMachineClient() {
 		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
@@ -616,7 +680,7 @@ func (o *oAuth2Authenticator) syncTokenRefresh(ctx context.Context) (func(), err
 		if err != nil {
 			return cleanup, err
 		}
-		if o.token == nil {
+		if o.token == nil && !o.isMachineClient() {
 			return cleanup, fmt.Errorf("oauth token must not be nil to authorize")
 		}
 	}
