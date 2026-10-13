@@ -53,8 +53,9 @@ func writerIdentity(o resolveOptions) string {
 // supplied on MACHINE_ID itself (trailing whitespace trimmed) is returned. Otherwise the first
 // lookup takes the first of: the shared file, the Snyk Studio device-id file, or a newly generated
 // id, and later lookups through the same resolver return that id, together with an error for each
-// file that exists but could not be read. If no id was found, it returns runtimeinfo.ErrNoMachineID,
-// which configuration caching does not hold, so the next lookup tries the disk again.
+// file that exists but could not be read. If no id was found, it returns runtimeinfo.ErrNoMachineID
+// joined with those errors and an error describing why a generated id could not be stored; the
+// configuration caching does not hold it, so the next lookup tries the disk again.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths()}
 	for _, opt := range opts {
@@ -150,10 +151,7 @@ func (r *resolver) resolveFromDisk() (string, error) {
 			r.warnedUnstored = true
 			logger.Warn().Err(err).Msg(msg)
 		}
-		if readErr != nil {
-			return "", errors.Join(readErr, notPersistedError(err))
-		}
-		return "", nil
+		return "", errors.Join(readErr, notPersistedError(err))
 	}
 	return stored, readErr
 }

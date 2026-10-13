@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"strings"
 	"syscall"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
@@ -42,7 +43,8 @@ func unreadableFileError(err error, source string, c scopedPath) error {
 
 func notPersistedError(writeErr error) error {
 	return cli.NewMachineIDNotPersistedError(
-		fmt.Sprintf("No machine id could be stored: %v", writeErr),
+		// writeErr joins the machine-wide and per-user failures with newlines; log consumers expect one line per error.
+		"No machine id could be stored: "+strings.ReplaceAll(writeErr.Error(), "\n", "; "),
 		snyk_errors.WithCause(writeErr),
 	)
 }

@@ -162,11 +162,36 @@ func TestAcceptance_FilesThatAreMissingOrHoldNoValidIDAreNotReported(t *testing.
 	require.True(t, valid(id))
 }
 
-func TestAcceptance_NothingStorableWithoutUnreadableFilesGivesOnlyErrNoMachineID(t *testing.T) {
+func TestAcceptance_UnwritablePerUserDirectoryWithoutUnreadableFilesIsReportedAsNotPersisted(t *testing.T) {
 	m := newIsolatedMachine(t)
+	perUserDir := filepath.Dir(m.shared.perUser)
+	require.NoError(t, os.MkdirAll(perUserDir, 0o755))
+	makeUnwritable(t, perUserDir)
+
+	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Empty(t, id)
+	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+	requireNotPersistedReported(t, err, perUserDir)
+}
+
+func TestAcceptance_NotPersistedDetailIsOneLineWhenMachineWideAndPerUserWritesFail(t *testing.T) {
+	m := newIsolatedMachine(t)
+	machineWideDir := filepath.Dir(m.shared.machineWide)
+	require.NoError(t, os.MkdirAll(machineWideDir, 0o755))
+	makeUnwritable(t, machineWideDir)
 	m.blockEverySharedFileLocation(t)
 
 	_, err := runtimeInfoOf(m.newRun()).GetMachineID()
 
-	require.Equal(t, runtimeinfo.ErrNoMachineID, err)
+	var notPersisted snyk_errors.Error
+	for _, e := range catalogErrorsIn(err) {
+		if e.ErrorCode == "SNYK-CLI-0031" {
+			notPersisted = e
+		}
+	}
+	require.Equal(t, "SNYK-CLI-0031", notPersisted.ErrorCode, "no SNYK-CLI-0031 error in %v", err)
+	require.Contains(t, notPersisted.Detail, machineWideDir)
+	require.Contains(t, notPersisted.Detail, filepath.Dir(filepath.Dir(m.shared.perUser)))
+	require.NotContains(t, notPersisted.Detail, "\n")
 }
