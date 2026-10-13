@@ -233,8 +233,8 @@ github.com/skeema/knownhosts v1.3.1 h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnB
 github.com/skeema/knownhosts v1.3.1/go.mod h1:r7KTdC8l4uxWRyK2TpQZ/1o5HaSzh06ePQNxPwTcfiY=
 github.com/snyk/code-client-go v1.31.1 h1:fJHx9kZwcYikKGvIIXDxMxpSNbj5gxChEsV8xrYDRnw=
 github.com/snyk/code-client-go v1.31.1/go.mod h1:sAl5uS+Bc+3Owy1HS0UjrFihuWdq5CkIF4jzEZT2meY=
-github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6 h1:XUPFP85nBh+zDCTvxxBuouZP9yG7H1qXZiMGFVMWVKM=
-github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6/go.mod h1:0dz+HUR/r7VLlQpLfF0a/F1tdHH84NLTZzCxjZ+Q1nk=
+github.com/snyk/error-catalog-golang-public v0.0.0-20261013093652-1222cfbd5a27 h1:cpJsvdv314Y93RwCO2rxRcv4z2/OxpUx++oN1DY1+II=
+github.com/snyk/error-catalog-golang-public v0.0.0-20261013093652-1222cfbd5a27/go.mod h1:0dz+HUR/r7VLlQpLfF0a/F1tdHH84NLTZzCxjZ+Q1nk=
 github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc h1:tuZVhmJFxS4qJlwYIIIw8xgw3VaVqIR3IAV0WaaFVnI=
 github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc/go.mod h1:f42qLL7WXOS0od7dXJV/hK3myjms/r6HsXgLrg1HRRY=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=

@@ -3,12 +3,14 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -124,4 +126,35 @@ func TestAcceptance_ViaAppEngineLookupConcurrentWithSetRuntimeInfoDoesNotRace(t 
 		assert.NoError(t, err)
 	}()
 	wg.Wait()
+}
+
+// makeUnreadable skips when permissions do not restrict this user, e.g. when running as root or on Windows.
+func makeUnreadable(t *testing.T, path string) {
+	t.Helper()
+	require.NoError(t, os.Chmod(path, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(path, 0o600) }) //nolint:errcheck // best-effort restore so t.TempDir can clean up
+	if _, err := os.ReadFile(path); err == nil {
+		t.Skip("permissions do not restrict this user")
+	}
+}
+
+func TestAcceptance_ViaAppEngineUnreadableSharedFileIsReportedWithTheMachineIDFoundAfterIt(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(sharedFilePath), 0o755))
+	require.NoError(t, os.WriteFile(sharedFilePath, []byte(`{"machine_id":"shared-file-id"}`), 0o600))
+	makeUnreadable(t, sharedFilePath)
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	studioFile := filepath.Join(home, ".snyk-studio", "device-id")
+	require.NoError(t, os.MkdirAll(filepath.Dir(studioFile), 0o755))
+	require.NoError(t, os.WriteFile(studioFile, []byte("studio-device-id"), 0o600))
+	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+
+	id, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.Equal(t, "studio-device-id", id)
+	var catalogErr snyk_errors.Error
+	require.True(t, errors.As(err, &catalogErr), "want an error catalog error, got %v", err)
+	require.Equal(t, "SNYK-CLI-0030", catalogErr.ErrorCode)
+	require.Equal(t, sharedFilePath, catalogErr.Meta["path"])
 }
