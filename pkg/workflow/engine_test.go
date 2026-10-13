@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -327,6 +329,54 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 
 		assert.ErrorIs(t, err, resolveErr)
 		assert.Empty(t, machineID)
+	})
+
+	t.Run("returns the machine id together with the error it was resolved with", func(t *testing.T) {
+		resolveErr := cli.NewMachineIDFileUnreadableError("unreadable")
+		config := configuration.NewInMemory()
+		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
+			return "resolved", resolveErr
+		})
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		var catalogErr snyk_errors.Error
+		assert.ErrorAs(t, err, &catalogErr)
+		assert.Equal(t, resolveErr.ErrorCode, catalogErr.ErrorCode)
+		assert.Equal(t, "resolved", machineID)
+	})
+
+	t.Run("keeps the details given with no machine id", func(t *testing.T) {
+		details := cli.NewMachineIDNotPersistedError("not persisted")
+		config := configuration.NewInMemory()
+		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
+			return "", errors.Join(runtimeinfo.ErrNoMachineID, details)
+		})
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+		var catalogErr snyk_errors.Error
+		assert.ErrorAs(t, err, &catalogErr)
+		assert.Equal(t, details.ErrorCode, catalogErr.ErrorCode)
+		assert.Empty(t, machineID)
+	})
+
+	t.Run("reports exactly ErrNoMachineID when no details are given", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
+			return "", runtimeinfo.ErrNoMachineID
+		})
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		_, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.Equal(t, runtimeinfo.ErrNoMachineID, err)
 	})
 
 	t.Run("updates the application information of the host", func(t *testing.T) {

@@ -110,12 +110,17 @@ var brokenFiles = map[string]string{
 	"oversized":  `{"machine_id": "some-id", "padding": "` + strings.Repeat("a", maxIDFileSize) + `"}`,
 }
 
+func sharedFileIn(paths pathPair, logger *zerolog.Logger) *sharedFile {
+	sf, _ := readSharedFile(paths, logger) //nolint:errcheck // read errors are covered by their own tests
+	return sf
+}
+
 func TestReadSharedFilePrefersMachineWide(t *testing.T) {
 	paths := tempPaths(t)
 	seed(t, paths.machineWide, `{"machine_id": "machine-wide-id"}`)
 	seed(t, paths.perUser, `{"machine_id": "per-user-id"}`)
 
-	require.Equal(t, "machine-wide-id", readSharedFile(paths, nil).MachineID)
+	require.Equal(t, "machine-wide-id", sharedFileIn(paths, nil).MachineID)
 }
 
 func TestReadSharedFileSkipsAMachineWideFileWithoutAValidID(t *testing.T) {
@@ -141,7 +146,7 @@ func TestReadSharedFileSkipsAMachineWideFileWithoutAValidID(t *testing.T) {
 			var logs bytes.Buffer
 			logger := zerolog.New(&logs)
 
-			require.Equal(t, "per-user-id", readSharedFile(paths, &logger).MachineID)
+			require.Equal(t, "per-user-id", sharedFileIn(paths, &logger).MachineID)
 			require.Contains(t, logs.String(), jsonEscaped(t, paths.machineWide))
 		})
 	}
@@ -151,11 +156,11 @@ func TestReadSharedFileAcceptsAValidIDBesideAFieldOfTheWrongType(t *testing.T) {
 	paths := tempPaths(t)
 	seed(t, paths.machineWide, `{"machine_id": "machine-wide-id", "schema_version": "1"}`)
 
-	require.Equal(t, "machine-wide-id", readSharedFile(paths, nil).MachineID)
+	require.Equal(t, "machine-wide-id", sharedFileIn(paths, nil).MachineID)
 }
 
 func TestReadSharedFileReturnsNilWhenNoFileHoldsAValidID(t *testing.T) {
-	require.Nil(t, readSharedFile(tempPaths(t), nil))
+	require.Nil(t, sharedFileIn(tempPaths(t), nil))
 }
 
 func write(t *testing.T, paths pathPair, candidate string) string {
