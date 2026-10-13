@@ -34,7 +34,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
+	github.com/snyk/error-catalog-golang-public v0.0.0-20261013093652-1222cfbd5a27
 	github.com/subosito/gotenv v1.6.0
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
@@ -130,4 +130,3 @@ tool (
 )
 
 //replace github.com/snyk/code-client-go => ../code-client-go
-replace github.com/snyk/error-catalog-golang-public => ../error-catalog-golang-public_local-machineid
