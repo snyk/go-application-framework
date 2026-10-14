@@ -10,7 +10,7 @@ import (
 
 type BearerTokenScoper interface {
 	// GetScopedBearerToken returns a bearer token without any prefix for usage
-	GetScopedBearerToken(ctx context.Context, claims []string, ttl time.Duration) (string, error)
+	GetScopedBearerToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error)
 	// RevokeScopedBearerToken revokes the given token
 	RevokeScopedBearerToken(ctx context.Context, token string) error
 }
