@@ -36,6 +36,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/snyk/error-catalog-golang-public v0.0.0-20261013093652-1222cfbd5a27
 	github.com/subosito/gotenv v1.6.0
+	github.com/yusufpapurcu/wmi v1.2.4
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
 	golang.org/x/sync v0.22.0
@@ -66,6 +67,7 @@ require (
 	github.com/gkampitakis/ciinfo v0.3.0 // indirect
 	github.com/gkampitakis/go-diff v1.3.2 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v0.21.1 // indirect
 	github.com/go-openapi/swag v0.23.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
