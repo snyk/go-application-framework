@@ -86,6 +86,11 @@ type oAuth2Authenticator struct {
 	// and will result in server.Server exiting immediately when called.
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
+	// assertionProvider, when set via WithClientAssertionProvider, makes the client credentials
+	// grant authenticate with a private_key_jwt client assertion instead of a static client secret.
+	assertionProvider ClientAssertionProvider
+	// assertionClientID is the OAuth client id to use with assertionProvider.
+	assertionClientID string
 }
 
 func OpenBrowser(authUrl string) {
@@ -129,6 +134,17 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	return conf
 }
 
+// getOAuthConfiguration builds this authenticator's oauth2.Config, overriding the client id with
+// assertionClientID when a ClientAssertionProvider is in use.
+func (o *oAuth2Authenticator) getOAuthConfiguration() *oauth2.Config {
+	conf := getOAuthConfiguration(o.config)
+	if o.assertionProvider != nil {
+		conf.ClientID = o.assertionClientID
+		conf.ClientSecret = ""
+	}
+	return conf
+}
+
 func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredentials.Config {
 	conf := &clientcredentials.Config{
 		ClientID:     in.ClientID,
@@ -136,6 +152,24 @@ func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredential
 		TokenURL:     in.Endpoint.TokenURL,
 	}
 	return conf
+}
+
+// getOAuthConfigurationClientAssertion builds a clientcredentials.Config that authenticates with a
+// private_key_jwt client assertion minted by o.assertionProvider, instead of a static client secret.
+func (o *oAuth2Authenticator) getOAuthConfigurationClientAssertion(ctx context.Context) (*clientcredentials.Config, error) {
+	assertionType, assertion, err := o.assertionProvider.ClientAssertion(ctx, o.assertionClientID, o.oauthConfig.Endpoint.TokenURL)
+	if err != nil {
+		return nil, err
+	}
+	return &clientcredentials.Config{
+		ClientID:  o.assertionClientID,
+		TokenURL:  o.oauthConfig.Endpoint.TokenURL,
+		AuthStyle: oauth2.AuthStyleInParams,
+		EndpointParams: url.Values{
+			"client_assertion_type": {assertionType},
+			"client_assertion":      {assertion},
+		},
+	}, nil
 }
 
 // This method creates a code challenge as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.2
@@ -205,6 +239,17 @@ func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Conf
 	return tokenSource.Token()
 }
 
+// refreshTokenClientAssertion fetches a token using the client_credentials grant, authenticating
+// with a freshly minted client assertion instead of a static client secret.
+func (o *oAuth2Authenticator) refreshTokenClientAssertion(ctx context.Context, _ *oauth2.Config, _ *oauth2.Token) (*oauth2.Token, error) {
+	conf, err := o.getOAuthConfigurationClientAssertion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tokenSource := conf.TokenSource(ctx)
+	return tokenSource.Token()
+}
+
 func determineGrantType(config configuration.Configuration) GrantType {
 	grantType := AuthorizationCodeGrant
 	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
@@ -226,7 +271,6 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
-	o.oauthConfig = getOAuthConfiguration(config)
 	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
 
 	// set defaults
@@ -242,10 +286,13 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 		o.tokenRefresherFunc = RefreshToken
 	}
 
-	// apply options
+	// apply options; WithClientAssertionProvider, if used, overrides grantType and
+	// tokenRefresherFunc set above to use a client assertion instead of a static secret.
 	for _, opt := range opts {
 		opt(o)
 	}
+
+	o.oauthConfig = o.getOAuthConfiguration()
 	return o
 }
 
@@ -267,9 +314,9 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 }
 
 func (o *oAuth2Authenticator) IsSupported() bool {
-	tokenExistent := o.token != nil
+	credentialExistent := o.token != nil || o.assertionProvider != nil
 	featureEnabled := o.config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	return tokenExistent && featureEnabled
+	return credentialExistent && featureEnabled
 }
 
 func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
@@ -290,7 +337,7 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 	var err error
 
 	globalRefreshMutex.Lock()
-	o.oauthConfig = getOAuthConfiguration(o.config)
+	o.oauthConfig = o.getOAuthConfiguration()
 	globalRefreshMutex.Unlock()
 
 	if o.grantType == ClientCredentialsGrant {
@@ -303,11 +350,20 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 }
 
 func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant(ctx context.Context) error {
-	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
-
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
+	}
+
+	var config *clientcredentials.Config
+	if o.assertionProvider != nil {
+		var err error
+		config, err = o.getOAuthConfigurationClientAssertion(ctx)
+		if err != nil {
+			return err
+		}
+	} else {
+		config = getOAuthConfigurationClientCredentials(o.oauthConfig)
 	}
 
 	// get token
@@ -524,7 +580,7 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	if request == nil {
 		return fmt.Errorf("request must not be nil")
 	}
-	if o.token == nil {
+	if o.token == nil && o.assertionProvider == nil {
 		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
@@ -616,7 +672,7 @@ func (o *oAuth2Authenticator) syncTokenRefresh(ctx context.Context) (func(), err
 		if err != nil {
 			return cleanup, err
 		}
-		if o.token == nil {
+		if o.token == nil && o.assertionProvider == nil {
 			return cleanup, fmt.Errorf("oauth token must not be nil to authorize")
 		}
 	}
