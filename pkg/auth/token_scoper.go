@@ -14,6 +14,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=token_scoper.go -destination ../mocks/token_scoper.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
+
 const (
 	grantTypeTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange"
 	tokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"
