@@ -100,7 +100,7 @@ func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) er
 	return nil
 }
 
-func NewBearerTokenScoper(config configuration.Configuration, httpClient *http.Client) bearerTokenScoperImpl {
+func NewBearerTokenScoper(config configuration.Configuration, httpClient *http.Client) BearerTokenScoper {
 	return bearerTokenScoperImpl{
 		config:     config,
 		httpClient: httpClient,
