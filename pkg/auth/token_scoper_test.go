@@ -115,3 +115,45 @@ func Test_bearerTokenScoperImpl_GetToken_MissingAccessToken(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, token)
 }
+
+func Test_bearerTokenScoperImpl_GetToken_FallsBackToStoredOAuthToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		assert.Equal(t, "stored-access-token", r.PostForm.Get("subject_token"))
+
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{"access_token":"scoped-token","token_type":"bearer","expires_in":2874}`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer"}`)
+
+	scoper := NewBearerTokenScoper(config, server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.example.invalid")
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, `not-json`)
+
+	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.ErrorContains(t, err, "failed to read stored oauth token")
+	assert.Empty(t, token)
+}
+
+func Test_bearerTokenScoperImpl_RevokeToken_NotImplemented(t *testing.T) {
+	scoper := NewBearerTokenScoper(configuration.NewWithOpts(), http.DefaultClient)
+
+	err := scoper.RevokeToken(context.Background(), "scoped-token")
+
+	require.Error(t, err)
+}
