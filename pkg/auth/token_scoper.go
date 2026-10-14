@@ -10,9 +10,9 @@ import (
 
 type BearerTokenScoper interface {
 	// GetScopedBearerToken returns a bearer token without any prefix for usage
-	GetScopedBearerToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error)
+	GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error)
 	// RevokeScopedBearerToken revokes the given token
-	RevokeScopedBearerToken(ctx context.Context, token string) error
+	RevokeToken(ctx context.Context, token string) error
 }
 
 var _ = BearerTokenScoper(bearerTokenScoperImpl{})
@@ -23,12 +23,12 @@ type bearerTokenScoperImpl struct {
 }
 
 // GetScopedBearerToken implements [BearerTokenScoper].
-func (b bearerTokenScoperImpl) GetScopedBearerToken(ctx context.Context, claims []string, ttl time.Duration) (string, error) {
+func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error) {
 	panic("unimplemented")
 }
 
 // RevokeScopedBearerToken implements [BearerTokenScoper].
-func (b bearerTokenScoperImpl) RevokeScopedBearerToken(ctx context.Context, token string) error {
+func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) error {
 	panic("unimplemented")
 }
 
