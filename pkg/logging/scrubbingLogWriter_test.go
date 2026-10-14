@@ -139,8 +139,8 @@ func TestScrubbingWriter_Write_JSONAwarenessFollowsInputValidity(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":  {0, regexp.MustCompile("token"), ""},
-		"secret": {0, regexp.MustCompile("secret"), ""},
+		"token":  {groupToRedact: 0, regex: regexp.MustCompile("token")},
+		"secret": {groupToRedact: 0, regex: regexp.MustCompile("secret")},
 	}
 
 	pattern := "%s for my account, including my %s"
@@ -213,9 +213,9 @@ func TestScrubbingIoWriter(t *testing.T) {
 func TestScrubFunction(t *testing.T) {
 	t.Run("scrub everything in dict", func(t *testing.T) {
 		dict := ScrubbingDict{
-			"secret":       {0, regexp.MustCompile("secret"), ""},
-			"special":      {0, regexp.MustCompile("special"), ""},
-			"be disclosed": {0, regexp.MustCompile("be disclosed"), ""},
+			"secret":       {groupToRedact: 0, regex: regexp.MustCompile("secret")},
+			"special":      {groupToRedact: 0, regex: regexp.MustCompile("special")},
+			"be disclosed": {groupToRedact: 0, regex: regexp.MustCompile("be disclosed")},
 		}
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
@@ -259,12 +259,22 @@ func TestScrub_MatchesPrivateScrubPath(t *testing.T) {
 // exists to protect real JSON numbers, not prose.
 func TestScrub_NonJSONInputStillRedactsStaticTerms(t *testing.T) {
 	config := configuration.NewInMemory()
-	config.Set(REDACTION_TERMS, []string{"12345"})
+	config.Set(configuration.AUTHENTICATION_TOKEN, "12345")
 	dict := GetScrubDictFromConfig(config)
 
 	actual := Scrub([]byte("id: 123451234"), dict)
 
 	assert.Equal(t, "id: ***1234", string(actual))
+}
+
+func TestScrub_NonJSONInputRedactsRedactionTermsOnlyAsWholeWords(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("id: 123451234, id2: 12345"), dict)
+
+	assert.Equal(t, "id: 123451234, id2: ***", string(actual))
 }
 
 func TestAddDefaults(t *testing.T) {
@@ -620,8 +630,8 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":    {0, regexp.MustCompile("token"), ""},
-		"password": {0, regexp.MustCompile("password"), ""},
+		"token":    {groupToRedact: 0, regex: regexp.MustCompile("token")},
+		"password": {groupToRedact: 0, regex: regexp.MustCompile("password")},
 	}
 
 	innerWriter := &mockWriter{
@@ -698,6 +708,12 @@ func TestAddTermsToReplace(t *testing.T) {
 			termsToAdd: []string{"12345", "987.654"},
 			input:      "ID 12345 and value 987.654 are sensitive",
 			expected:   "ID *** and value *** are sensitive",
+		},
+		{
+			name:       "term inside an identifier is left intact",
+			termsToAdd: []string{"requests"},
+			input:      "no_relevant_requests requests app-requests",
+			expected:   "no_relevant_requests *** app-***",
 		},
 	}
 
@@ -902,10 +918,9 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
-			w := NewScrubbingIoWriter(&output, ScrubbingDict{})
-			scrubbingWriter, ok := w.(ScrubbingLogWriter)
-			require.True(t, ok)
-			scrubbingWriter.AddTermsToReplace([]string{"12345"})
+			dict := ScrubbingDict{}
+			addStaticTermToDict("12345", dict)
+			w := NewScrubbingIoWriter(&output, dict)
 
 			_, err := w.Write([]byte(test.input))
 			require.NoError(t, err)
@@ -1059,11 +1074,9 @@ func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
-			writer := NewScrubbingIoWriter(&output, ScrubbingDict{})
-
-			scrubbingWriter, ok := writer.(ScrubbingLogWriter)
-			require.True(t, ok)
-			scrubbingWriter.AddTermsToReplace([]string{test.term})
+			dict := ScrubbingDict{}
+			addStaticTermToDict(test.term, dict)
+			writer := NewScrubbingIoWriter(&output, dict)
 
 			_, err := writer.Write([]byte(test.input))
 			require.NoError(t, err)
@@ -1077,4 +1090,166 @@ func TestStaticTermReplacementPreservesJSONScalarValidity(t *testing.T) {
 			assert.Equal(t, test.expected, output.String())
 		})
 	}
+}
+
+func TestRedactWholeWord_OnlyMatchesStandaloneWords(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		term     string
+		expected string
+	}{
+		{
+			name:     "whole input is the term",
+			input:    "request",
+			term:     "request",
+			expected: "***",
+		},
+		{
+			name:     "term at start of input followed by boundary",
+			input:    "request pending",
+			term:     "request",
+			expected: "*** pending",
+		},
+		{
+			name:     "term at end of input preceded by boundary",
+			input:    "pending request",
+			term:     "request",
+			expected: "pending ***",
+		},
+		{
+			name:     "term preceded by underscore is not a whole word",
+			input:    "no_relevant_request",
+			term:     "request",
+			expected: "no_relevant_request",
+		},
+		{
+			name:     "term followed by letters is not a whole word",
+			input:    "prerequests",
+			term:     "request",
+			expected: "prerequests",
+		},
+		{
+			name:     "term followed by punctuation is a whole word",
+			input:    "request!",
+			term:     "request",
+			expected: "***!",
+		},
+		{
+			name:     "term preceded and followed by digits is not a whole word",
+			input:    "id: 123451234",
+			term:     "12345",
+			expected: "id: 123451234",
+		},
+		{
+			name:     "term adjacent to underscore neighbor is not a whole word",
+			input:    "a_request_b",
+			term:     "request",
+			expected: "a_request_b",
+		},
+		{
+			name:     "Unicode letter neighbor is not a whole word",
+			input:    "préquest",
+			term:     "quest",
+			expected: "préquest",
+		},
+		{
+			name:     "Unicode digit neighbor is not a whole word",
+			input:    "request١",
+			term:     "request",
+			expected: "request١",
+		},
+		{
+			name:     "a rejected candidate match resumes search to find a later valid one",
+			input:    "xa-a-a",
+			term:     "a-a",
+			expected: "xa-***",
+		},
+		{
+			name:     "no occurrence of the term",
+			input:    "nothing here",
+			term:     "request",
+			expected: "nothing here",
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			term:     "request",
+			expected: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, redactWholeWord(test.input, test.term, SANITIZE_REPLACEMENT_STRING))
+		})
+	}
+}
+
+func TestRedactWholeWord_EmptyTermIsNoop(t *testing.T) {
+	assert.Equal(t, "request", redactWholeWord("request", "", SANITIZE_REPLACEMENT_STRING))
+}
+
+func TestScrub_RedactsRedactionTermsOnlyAsWholeWordsInJSON(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"request"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte(`{"result":"no_relevant_request","note":"request"}`), dict)
+
+	assert.Equal(t, `{"result":"no_relevant_request","note":"***"}`, string(actual))
+	assert.True(t, json.Valid(actual))
+}
+
+func TestScrub_RedactsBareNumberRedactionTermAsWholeWordAndKeepsValidJSON(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"12345"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte(`{"count":12345}`), dict)
+
+	assert.Equal(t, `{"count":"***"}`, string(actual))
+	assert.True(t, json.Valid(actual))
+}
+
+func TestScrub_SecretsStillMatchAnywhereDespiteWholeWordRedactionTerms(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "TOKEN")
+	config.Set(REDACTION_TERMS, []string{"guess"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("xTOKENy guess_word"), dict)
+
+	assert.Equal(t, "x***y guess_word", string(actual))
+}
+
+func TestScrub_SecretAppliedBeforeRedactionTerm(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "abc-secret-xyz")
+	config.Set(REDACTION_TERMS, []string{"secret"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("abc-secret-xyz"), dict)
+
+	assert.Equal(t, "***", string(actual))
+}
+
+func TestScrub_ValueThatIsBothSecretAndRedactionTermStaysMatchAnywhere(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "shared")
+	config.Set(REDACTION_TERMS, []string{"shared"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("xsharedy"), dict)
+
+	assert.Equal(t, "x***y", string(actual))
+}
+
+func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"secret", "secret-token"})
+	dict := GetScrubDictFromConfig(config)
+
+	actual := Scrub([]byte("credential: secret-token"), dict)
+
+	assert.Equal(t, "credential: ***", string(actual))
 }

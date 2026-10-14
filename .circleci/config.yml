@@ -58,6 +58,7 @@ jobs:
       - prodsec/security_scans:
           mode: auto
           open-source-agentic-fix-enabled: true
+          open-source-agentic-fix-base-branch: main
 
 commands:
   save-build-cache:
@@ -90,6 +91,7 @@ workflows:
       - security-scans:
           context:
             - devex_cli
+            - endpoint-experience
             - prodsec-orb-runtime
       - unit_test:
           name: Unit tests

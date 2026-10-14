@@ -658,6 +658,8 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCweProblem(&problem)
 		case "secret":
 			b.processSecretsRuleProblem(&problem)
+		case "snyk_code_rule":
+			b.processSnykCodeRuleProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -782,6 +784,22 @@ func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
 	}
 
 	b.ruleShortDescription = secretsProblem.ShortDescription
+}
+
+// processSnykCodeRuleProblem extracts data from a Snyk Code rule problem
+func (b *issueBuilder) processSnykCodeRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" {
+		b.problemID = id
+	}
+
+	codeRuleProblem, err := problem.AsSnykCodeRuleProblem()
+	if err != nil {
+		return
+	}
+
+	if b.ruleShortDescription == "" && codeRuleProblem.ShortDescription.Text != nil {
+		b.ruleShortDescription = *codeRuleProblem.ShortDescription.Text
+	}
 }
 
 // determineFallbackID sets ID from finding key or ID if not already set
@@ -957,6 +975,14 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 		return []Issue{}, err
 	}
 
+	// Sort by problem ID, then ID, so issues of the same rule stay together and output is deterministic
+	slices.SortFunc(issuesList, func(a, b Issue) int {
+		if c := strings.Compare(a.GetProblemID(), b.GetProblemID()); c != 0 {
+			return c
+		}
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
 	if len(findingType) == 0 {
 		return issuesList, nil
 	}
@@ -968,11 +994,6 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 			filteredIssues = append(filteredIssues, issue)
 		}
 	}
-
-	// Sort by ID for deterministic output
-	slices.SortFunc(filteredIssues, func(a, b Issue) int {
-		return strings.Compare(a.GetID(), b.GetID())
-	})
 
 	return filteredIssues, nil
 }

@@ -16,38 +16,38 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-func TestNew_BuildsEmitterFromConfiguration(t *testing.T) {
+func TestNewEmitter_BuildsEmitterFromConfiguration(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	logger := zerolog.Nop()
 
-	emitter, err := New(http.DefaultClient, config, &logger)
+	emitter, err := NewEmitter(http.DefaultClient, config, &logger)
 	require.NoError(t, err)
 
 	assert.NotNil(t, emitter.ingest)
 	assert.NotNil(t, emitter.now)
 }
 
-func TestNew_RejectsUnusableAPIURL(t *testing.T) {
+func TestNewEmitter_RejectsUnusableAPIURL(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "not-a-url")
 	logger := zerolog.Nop()
 
-	_, err := New(http.DefaultClient, config, &logger)
+	_, err := NewEmitter(http.DefaultClient, config, &logger)
 	assert.Error(t, err)
 }
 
-func TestNew_RequiresHTTPClientConfigurationAndLogger(t *testing.T) {
+func TestNewEmitter_RequiresHTTPClientConfigurationAndLogger(t *testing.T) {
 	config := configuration.NewWithOpts()
 	logger := zerolog.Nop()
 
-	_, err := New(nil, config, &logger)
+	_, err := NewEmitter(nil, config, &logger)
 	assert.Error(t, err)
 
-	_, err = New(http.DefaultClient, nil, &logger)
+	_, err = NewEmitter(http.DefaultClient, nil, &logger)
 	assert.Error(t, err)
 
-	_, err = New(http.DefaultClient, config, nil)
+	_, err = NewEmitter(http.DefaultClient, config, nil)
 	assert.Error(t, err)
 }
 
@@ -61,35 +61,51 @@ func TestEmit_SendsCollectedContributors(t *testing.T) {
 	ingest := &fakeIngest{}
 	emitter := newTestEmitter(t, ingest, now)
 
-	err := emitter.Emit(t.Context(), repo.path(), testOrgID, Item{
-		EntityType: contributors_ingest.EntityTypeProject,
+	count, err := emitter.Emit(t.Context(), repo.path(), testOrgID, Item{
+		EntityType: EntityTypeProject,
 		EntityID:   "22222222-2222-2222-2222-222222222222",
 	})
 	require.NoError(t, err)
+	assert.Equal(t, 2, count)
 
 	assert.Equal(t, 1, ingest.calls)
 	assert.Equal(t, testOrgID, ingest.orgID)
-	assert.Equal(t, contributors_ingest.EntityTypeProject, ingest.entityType)
+	assert.Equal(t, EntityTypeProject, ingest.entityType)
 	assert.Equal(t, "22222222-2222-2222-2222-222222222222", ingest.entityID)
 	assert.Equal(t, []string{"alice@example.com", "bob@example.com"}, emails(ingest.contributors))
 }
 
 func TestEmit_SkipsIngestWhenThereAreNoContributors(t *testing.T) {
-	tests := map[string]string{
-		"not a git repository": t.TempDir(),
-		"repository with no commits in window": newTestRepo(t, commit{
-			email: "old@example.com",
-			when:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
-		}).path(),
+	tests := map[string]struct {
+		repo      string
+		wantErr   error
+		wantCount int
+	}{
+		"not a git repository": {
+			repo:      t.TempDir(),
+			wantErr:   ErrNotAGitRepository,
+			wantCount: 0,
+		},
+		"repository with no commits in window": {
+			repo: newTestRepo(t, commit{
+				email: "old@example.com",
+				when:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			}).path(),
+			wantErr:   ErrNoContributors,
+			wantCount: 0,
+		},
 	}
 
-	for name, repo := range tests {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			ingest := &fakeIngest{}
 			emitter := newTestEmitter(t, ingest, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
 
-			assert.NoError(t, emitter.Emit(t.Context(), repo, testOrgID, validItem()))
-			assert.Zero(t, ingest.calls, "nothing to report is not a failure, but must not POST")
+			count, err := emitter.Emit(t.Context(), tc.repo, testOrgID, validItem())
+			assert.ErrorIs(t, err, tc.wantErr, "nothing to report must be distinguishable from an emission")
+			assert.NotErrorIs(t, err, ErrCollect, "nothing to report is not a collection failure")
+			assert.Equal(t, tc.wantCount, count)
+			assert.Zero(t, ingest.calls, "nothing to report must not POST")
 		})
 	}
 }
@@ -99,13 +115,9 @@ func TestEmit_RejectsInvalidInput(t *testing.T) {
 		orgID uuid.UUID
 		item  Item
 	}{
-		"missing org ID": {
-			orgID: uuid.Nil,
-			item:  validItem(),
-		},
 		"missing entity ID": {
 			orgID: testOrgID,
-			item:  Item{EntityType: contributors_ingest.EntityTypeProject},
+			item:  Item{EntityType: EntityTypeProject},
 		},
 		"missing entity type": {
 			orgID: testOrgID,
@@ -125,7 +137,9 @@ func TestEmit_RejectsInvalidInput(t *testing.T) {
 			ingest := &fakeIngest{}
 			emitter := newTestEmitter(t, ingest, now)
 
-			assert.Error(t, emitter.Emit(t.Context(), repo.path(), tc.orgID, tc.item))
+			count, err := emitter.Emit(t.Context(), repo.path(), tc.orgID, tc.item)
+			require.Error(t, err)
+			assert.Zero(t, count)
 			assert.Zero(t, ingest.calls, "invalid input must be caught before any git or network work")
 		})
 	}
@@ -139,9 +153,11 @@ func TestEmit_ReturnsIngestFailure(t *testing.T) {
 	ingest := &fakeIngest{err: wantErr}
 	emitter := newTestEmitter(t, ingest, now)
 
-	err := emitter.Emit(t.Context(), repo.path(), testOrgID, validItem())
+	count, err := emitter.Emit(t.Context(), repo.path(), testOrgID, validItem())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, wantErr)
+	assert.ErrorIs(t, err, ErrSubmit)
+	assert.Equal(t, 1, count, "a failed submission still knows how many contributors it collected")
 }
 
 func TestEmit_SkipsIngestWhenContextIsCancelled(t *testing.T) {
@@ -154,8 +170,9 @@ func TestEmit_SkipsIngestWhenContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err := emitter.Emit(ctx, repo.path(), testOrgID, validItem())
+	count, err := emitter.Emit(ctx, repo.path(), testOrgID, validItem())
 	require.ErrorIs(t, err, context.Canceled)
+	assert.Zero(t, count)
 	assert.Zero(t, ingest.calls, "a canceled emit must not POST")
 }
 
@@ -165,7 +182,7 @@ var testOrgID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 type fakeIngest struct {
 	calls        int
 	orgID        uuid.UUID
-	entityType   contributors_ingest.EntityType
+	entityType   EntityType
 	entityID     string
 	contributors []contributors_ingest.Contributor
 	err          error
@@ -174,7 +191,7 @@ type fakeIngest struct {
 func (f *fakeIngest) SubmitContributors(
 	_ context.Context,
 	orgID uuid.UUID,
-	entityType contributors_ingest.EntityType,
+	entityType EntityType,
 	entityID string,
 	contributors []contributors_ingest.Contributor,
 ) error {
@@ -190,17 +207,15 @@ func (f *fakeIngest) SubmitContributors(
 func newTestEmitter(t *testing.T, ingest *fakeIngest, now time.Time) *Emitter {
 	t.Helper()
 
-	logger := zerolog.Nop()
 	return &Emitter{
 		ingest: ingest,
-		logger: &logger,
 		now:    func() time.Time { return now },
 	}
 }
 
 func validItem() Item {
 	return Item{
-		EntityType: contributors_ingest.EntityTypeProject,
+		EntityType: EntityTypeProject,
 		EntityID:   "22222222-2222-2222-2222-222222222222",
 	}
 }

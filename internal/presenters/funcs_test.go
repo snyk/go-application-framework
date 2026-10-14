@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 )
 
 func intPtr(v int) *int {
@@ -369,4 +371,32 @@ func TestMarkdownToHTMLNormalizesLineEndings(t *testing.T) {
 	assert.NotContains(t, rendered, "\r")
 	assert.NotContains(t, rendered, "line two  \n")
 	assert.NotContains(t, rendered, "\n   \n")
+}
+
+func TestDerefStr(t *testing.T) {
+	value := "help"
+	assert.Equal(t, "help", derefStr(&value))
+	assert.Equal(t, "", derefStr(nil))
+}
+
+func TestGetFingerprints(t *testing.T) {
+	fallback := map[string]string{
+		"identity":              "fallback-id",
+		"snyk/asset/finding/v1": "fallback-id",
+	}
+
+	t.Run("nil extra uses fallback", func(t *testing.T) {
+		assert.Equal(t, fallback, getFingerprints(nil, "fallback-id"))
+	})
+
+	t.Run("empty fingerprints use fallback", func(t *testing.T) {
+		extra := &ufm_helpers.FindingExtra{Fingerprints: map[string]string{}}
+		assert.Equal(t, fallback, getFingerprints(extra, "fallback-id"))
+	})
+
+	t.Run("existing fingerprints are returned as is", func(t *testing.T) {
+		fps := map[string]string{"identity": "abc", "0": "def"}
+		extra := &ufm_helpers.FindingExtra{Fingerprints: fps}
+		assert.Equal(t, fps, getFingerprints(extra, "fallback-id"))
+	})
 }

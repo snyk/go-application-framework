@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,6 +141,7 @@ type TestResult interface {
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
+	GetError() error
 	GetWarnings() *[]IoSnykApiCommonError
 
 	GetPassFail() *PassFail
@@ -277,6 +279,76 @@ func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
 
 // GetWarnings returns any API warnings encountered during the test execution.
 func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
+
+// jsonAPIErrorPayload avoids marshaling IoSnykApiCommonError directly, since its Links.About union isn't always a string.
+type jsonAPIErrorPayload struct {
+	ID     string         `json:"id,omitempty"`
+	Code   string         `json:"code,omitempty"`
+	Title  string         `json:"title,omitempty"`
+	Detail string         `json:"detail,omitempty"`
+	Status string         `json:"status,omitempty"`
+	Meta   map[string]any `json:"meta,omitempty"`
+}
+
+// errorsAsSnykErrors reconstructs errs as error-catalog snyk_errors.Error values; use GetError instead of calling this directly.
+func errorsAsSnykErrors(errs *[]IoSnykApiCommonError) ([]snyk_errors.Error, error) {
+	if errs == nil || len(*errs) == 0 {
+		return nil, nil
+	}
+
+	payload := make([]jsonAPIErrorPayload, 0, len(*errs))
+	for _, e := range *errs {
+		p := jsonAPIErrorPayload{
+			Detail: e.Detail,
+			Status: e.Status,
+			Meta:   map[string]any{"level": "error"},
+		}
+		if e.Code != nil {
+			p.Code = *e.Code
+		}
+		if e.Title != nil {
+			p.Title = *e.Title
+		}
+		if e.Id != nil {
+			p.ID = e.Id.String()
+		}
+		payload = append(payload, p)
+	}
+
+	body, err := json.Marshal(map[string]any{"errors": payload})
+	if err != nil {
+		return nil, fmt.Errorf("marshaling test errors for snyk_errors conversion: %w", err)
+	}
+
+	return snyk_errors.FromJSONAPIErrorBytes(body)
+}
+
+// JoinErrors turns errs into a single error, preferring an error-catalog code and falling back to the raw detail strings.
+func JoinErrors(errs *[]IoSnykApiCommonError) error {
+	if errs == nil || len(*errs) == 0 {
+		return nil
+	}
+
+	if snykErrs, err := errorsAsSnykErrors(errs); err == nil && len(snykErrs) > 0 {
+		causes := make([]error, len(snykErrs))
+		for i := range snykErrs {
+			if snykErrs[i].Title == "" {
+				snykErrs[i].Title = snykErrs[i].Detail
+			}
+			causes[i] = snykErrs[i]
+		}
+		return errors.Join(causes...)
+	}
+
+	messages := make([]string, 0, len(*errs))
+	for _, e := range *errs {
+		messages = append(messages, e.Detail)
+	}
+	return errors.New(strings.Join(messages, "; "))
+}
+
+// GetError returns a single combined error summarizing GetErrors.
+func (r *testResult) GetError() error { return JoinErrors(r.Errors) }
 
 // GetTestID returns the final Test ID.
 func (r *testResult) GetTestID() *uuid.UUID { return r.TestID }

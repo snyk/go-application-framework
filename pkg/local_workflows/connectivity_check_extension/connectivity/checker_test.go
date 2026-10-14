@@ -149,17 +149,12 @@ func TestDetectProxyConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear all environment variables that DetectProxyConfig reads, matching envVarSpecs in constants.go
-			// These must be kept in sync with the variables enumerated there.
-			envVarsToClean := []string{
-				"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", // Proxy variables
-				"NO_PROXY", "no_proxy", // Proxy bypass variables
-				"NODE_EXTRA_CA_CERTS", // Node.js CA bundle
-				"KRB5_CONFIG",         // Kerberos config
-				"KRB5CCNAME",          // Kerberos credentials cache
-			}
-			for _, key := range envVarsToClean {
-				t.Setenv(key, "")
+			// Clear every variable the checker reads, so the host environment
+			// cannot leak into the result.
+			for _, spec := range envVarSpecs {
+				for _, key := range spec.names {
+					t.Setenv(key, "")
+				}
 			}
 
 			// Set test environment

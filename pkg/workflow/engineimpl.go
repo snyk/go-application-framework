@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -524,8 +526,11 @@ func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {
 	return nil
 }
 
-// GetConfiguration returns the configuration object.
+// GetConfiguration returns the configuration object. It is safe to call concurrently with
+// SetConfiguration; other reads of the configuration inside the engine are not yet synchronized.
 func (e *EngineImpl) GetConfiguration() configuration.Configuration {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.config
 }
 
@@ -538,11 +543,42 @@ func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
-	return e.runtimeInfo
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.runtimeInfo == nil {
+		return nil
+	}
+	return &engineRuntimeInfo{RuntimeInfo: e.runtimeInfo, engine: e}
 }
 
 func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.runtimeInfo = ri
+}
+
+// engineRuntimeInfo reads the machine id from the engine configuration on each call so the configuration key stays the single source.
+type engineRuntimeInfo struct {
+	runtimeinfo.RuntimeInfo
+	engine *EngineImpl
+}
+
+// GetMachineID reads through GetWithError rather than GetStringWithError, which drops the value
+// whenever there is an error, because resolution can return a usable id together with an error.
+func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
+	value, err := ri.engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	id, _ := value.(string) //nolint:errcheck // a non-string value counts as no machine id
+	var details snyk_errors.Error
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) && errors.As(err, &details) {
+		return "", err
+	}
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
+		return "", runtimeinfo.ErrNoMachineID
+	}
+	if err != nil && id == "" {
+		return "", fmt.Errorf("failed to read machine id: %w", err)
+	}
+	return id, err
 }
 
 // GetGlobalConfiguration returns the global configuration options.

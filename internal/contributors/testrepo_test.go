@@ -118,6 +118,35 @@ func (r *testRepo) deleteBranch(name string) *testRepo {
 	return r
 }
 
+// withConfig sets a local config value, e.g. an extension that a checkout tool
+// enables.
+func (r *testRepo) withConfig(key, value string) *testRepo {
+	r.t.Helper()
+
+	r.git("config", key, value)
+	return r
+}
+
+// azurePipelinesCheckout returns the checkout an Azure Pipelines agent
+// produces: a depth-1 fetch into a remote-tracking ref named after the commit
+// SHA, checked out detached, with the worktreeConfig extension enabled while
+// the repository format version stays 0.
+func (r *testRepo) azurePipelinesCheckout() *testRepo {
+	r.t.Helper()
+
+	sha := r.git("rev-parse", "HEAD")
+	checkout := &testRepo{t: r.t, dir: filepath.Join(r.t.TempDir(), "s"), home: r.home}
+	require.NoError(r.t, os.MkdirAll(checkout.dir, 0o750))
+
+	checkout.git("init", ".")
+	checkout.git("remote", "add", "origin", "file://"+r.dir)
+	checkout.git("config", "extensions.worktreeConfig", "true")
+	checkout.git("fetch", "--force", "--no-tags", "--prune", "--depth=1", "origin", "+"+sha+":refs/remotes/origin/"+sha)
+	checkout.git("checkout", "--force", sha)
+
+	return checkout
+}
+
 // shallowClone returns a clone truncated to the last depth commits, as a CI job
 // cloning with --depth gets. The clone goes over file:// because git ignores
 // --depth when cloning a plain local path.

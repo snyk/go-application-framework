@@ -9,22 +9,22 @@ import (
 
 type FindingsFilterFunc func(local_models.FindingResource) bool
 
-func filterSeverityASC(original []string, severityMinLevel string) []string {
+func FilterSeverityASC(original []string, severityMinLevel string) []string {
 	if severityMinLevel == "" {
-		return original
+		return slices.Clone(original)
 	}
 
 	minLevelPointer := slices.Index(original, severityMinLevel)
 
 	if minLevelPointer >= 0 {
-		return original[minLevelPointer:]
+		return slices.Clone(original[minLevelPointer:])
 	}
 
-	return original
+	return slices.Clone(original)
 }
 
 func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string) FindingsFilterFunc {
-	allowed_severities := filterSeverityASC(severityOrder, severityThreshold)
+	allowed_severities := FilterSeverityASC(severityOrder, severityThreshold)
 	return func(finding local_models.FindingResource) bool {
 		return utils.Contains(allowed_severities, string(finding.Attributes.Rating.Severity.Value))
 	}

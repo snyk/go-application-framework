@@ -117,6 +117,7 @@ Tested 552 dependencies for known issues, found 9 issues, 111 vulnerable paths.
 │                                                         │
 │   Organization:      My Org                             │
 │   Test type:         Software Composition Analysis      │
+│   Project name:      snyk                               │
 │   Project path:      test-project                       │
 │   Target file:       package.json                       │
 │                                                         │
