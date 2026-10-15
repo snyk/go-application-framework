@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/internal/fileperms"
 )
@@ -19,7 +20,11 @@ import (
 type Storage interface {
 	Set(key string, value any) error
 	Refresh(config Configuration, key string) error
+	// Lock acquires exclusive access to the storage across both goroutines and processes,
+	// giving up when ctx is done. It is not re-entrant: calling Lock again while holding
+	// the lock blocks until ctx is done.
 	Lock(ctx context.Context, retryDelay time.Duration) error
+	// Unlock releases the lock. It must only be called after a successful Lock.
 	Unlock() error
 }
 
@@ -51,10 +56,13 @@ func IsKeyDeleted(val any) bool {
 }
 
 type JsonStorage struct {
-	path     string
-	config   Configuration
-	fileLock *flock.Flock
-	mutex    sync.Mutex
+	path   string
+	config Configuration
+	mutex  sync.Mutex
+
+	fileInterProcessLock *flock.Flock
+	// fileInProcessLock is a semaphore rather than a sync.Mutex so Lock can give up when ctx is done.
+	fileInProcessLock *semaphore.Weighted
 }
 
 type JsonOption func(*JsonStorage)
@@ -67,8 +75,9 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path:     path,
-		fileLock: flock.New(path + ".lock"),
+		path:                 path,
+		fileInterProcessLock: flock.New(path + ".lock"),
+		fileInProcessLock:    semaphore.NewWeighted(1),
 	}
 
 	for _, opt := range options {
@@ -156,10 +165,21 @@ func (s *JsonStorage) Refresh(config Configuration, key string) error {
 }
 
 func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
-	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
-	return err
+	if err := s.fileInProcessLock.Acquire(ctx, 1); err != nil {
+		return err
+	}
+
+	_, err := s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
+	if err != nil {
+		s.fileInProcessLock.Release(1)
+		return err
+	}
+
+	return nil
 }
 
 func (s *JsonStorage) Unlock() error {
-	return s.fileLock.Unlock()
+	err := s.fileInterProcessLock.Unlock()
+	s.fileInProcessLock.Release(1)
+	return err
 }

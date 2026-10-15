@@ -20,6 +20,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -329,6 +330,10 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 	return callback
 }
 
+func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	return machineid.Resolve(machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo))
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -352,6 +357,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see

@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -221,6 +222,109 @@ func Test_CreateAppEngine(t *testing.T) {
 	expectApiUrl := constants.SNYK_DEFAULT_API_URL
 	actualApiUrl := engine.GetConfiguration().GetString(configuration.API_URL)
 	assert.Equal(t, expectApiUrl, actualApiUrl)
+}
+
+// isolateMachineIDStorage points machine id storage at temp directories through the environment
+// and clears any supplied machine id. It returns the shared file that generated ids are written to. On
+// Linux and macOS the machine-wide shared file and Studio locations are fixed paths, so it skips
+// when either directory exists: an existing file there would be read, and a privileged run could
+// write one. In CI it fails instead, so coverage is never lost silently.
+func isolateMachineIDStorage(t *testing.T) (sharedFilePath string) {
+	t.Helper()
+	configtest.IsolateEnvironmentForTest(t, "SNYK_API", "INTERNAL_SNYK_MACHINE_ID", "INTERNAL_SNYK_CLIENT_MACHINE_ID")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// A file in place of ProgramData stops the machine-wide directory being created on Windows.
+	notADirectory := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(notADirectory, nil, 0o600))
+	t.Setenv("ProgramData", notADirectory)
+	localAppData := t.TempDir()
+	t.Setenv("LOCALAPPDATA", localAppData)
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(localAppData, "Snyk", "machine-id.json")
+	case "darwin":
+		skipIfExists(t, "/Library/Application Support/Snyk", "/Library/Application Support/snyk-studio")
+	default:
+		skipIfExists(t, "/etc/snyk", "/var/lib/snyk-studio")
+	}
+	return filepath.Join(home, ".snyk", "machine-id.json")
+}
+
+func skipIfExists(t *testing.T, machineWideDirs ...string) {
+	t.Helper()
+	for _, dir := range machineWideDirs {
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		if os.Getenv("CI") != "" {
+			t.Fatalf("machine-wide machine id directory %s exists on a CI runner; these tests would be skipped", dir)
+		}
+		t.Skipf("machine-wide machine id directory %s exists", dir)
+	}
+}
+
+func Test_CreateAppEngine_providesMachineId(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+
+	machineID := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+
+	content, err := os.ReadFile(sharedFilePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
+	assert.Equal(t, machineID, CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts())).GetConfiguration().GetString(configuration.MACHINE_ID),
+		"a second engine on the same machine must resolve the same machine id")
+}
+
+func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsUsed(t *testing.T) {
+	isolateMachineIDStorage(t)
+	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+
+	engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
+
+	assert.NotEqual(t, "supplied-machine-id", resolved)
+	assert.Equal(t, "supplied-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+}
+
+func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
+	isolateMachineIDStorage(t)
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewWithOpts()),
+		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
+	)
+	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
+	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		machineID, machineIDErr := invocation.GetRuntimeInfo().GetMachineID()
+		if machineIDErr != nil {
+			return nil, machineIDErr
+		}
+		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machineID)}, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	output, err := engine.Invoke(wfId)
+
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), output[0].GetPayload())
+}
+
+func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *testing.T) {
+	isolateMachineIDStorage(t)
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.NewWithOpts()),
+		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
+	)
+
+	machineID, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.NoError(t, err)
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
 }
 
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
@@ -615,7 +719,8 @@ func Test_CreateAppEngineWithRuntimeInfo(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithRuntimeInfo(ri))
 
 	assert.NotNil(t, engine)
-	assert.Equal(t, ri, engine.GetRuntimeInfo())
+	assert.Equal(t, "some-app", engine.GetRuntimeInfo().GetName())
+	assert.Equal(t, "some.version", engine.GetRuntimeInfo().GetVersion())
 }
 
 func Test_initConfiguration_snykgov(t *testing.T) {
