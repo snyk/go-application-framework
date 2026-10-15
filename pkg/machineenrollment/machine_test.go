@@ -39,7 +39,7 @@ func TestEnrollMachine(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, e.Key.Equal(stored))
 
-	if runtime.GOOS != "windows" { // Windows does not honour POSIX permission bits
+	if runtime.GOOS != "windows" { // Windows ignores POSIX permission bits
 		info, err := os.Stat(keyFile)
 		require.NoError(t, err)
 		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())

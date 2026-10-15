@@ -337,6 +337,7 @@ func Test_auth_clientPrivateKeyFile(t *testing.T) {
 
 func Test_auth_clientPrivateKeyFile_errors(t *testing.T) {
 	newCtx := func(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
+		t.Helper()
 		mockCtl := gomock.NewController(t)
 		logger := zerolog.New(&bytes.Buffer{})
 		networkAccess := mocks.NewMockNetworkAccess(mockCtl)

@@ -77,9 +77,10 @@ func TestEnrollWithJoinTokenRequestBody(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotQuery, gotType = r.URL.Path, r.URL.RawQuery, r.Header.Get("Content-Type")
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotBody))
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":{"id":"c","type":"machine_enrollment","attributes":{"machine_id":"m","client_id":"c","key_id":"k"}}}`))
+		_, werr := w.Write([]byte(`{"data":{"id":"c","type":"machine_enrollment","attributes":{"machine_id":"m","client_id":"c","key_id":"k"}}}`))
+		assert.NoError(t, werr)
 	}))
 	defer srv.Close()
 
@@ -93,10 +94,12 @@ func TestEnrollWithJoinTokenRequestBody(t *testing.T) {
 
 	// Exactly {"data":{"type":"machine_enrollment","attributes":{"assertion":"<jwt>"}}}.
 	require.Len(t, gotBody, 1)
-	data := gotBody["data"].(map[string]any)
+	data, ok := gotBody["data"].(map[string]any)
+	require.True(t, ok)
 	require.Len(t, data, 2)
 	assert.Equal(t, "machine_enrollment", data["type"])
-	attrs := data["attributes"].(map[string]any)
+	attrs, ok := data["attributes"].(map[string]any)
+	require.True(t, ok)
 	require.Len(t, attrs, 1)
 	assertion, ok := attrs["assertion"].(string)
 	require.True(t, ok)
