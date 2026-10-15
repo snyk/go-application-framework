@@ -55,10 +55,10 @@ func TestAcceptance_ViaAppEngineSuppliedMachineIDIsReturnedButNotStored(t *testi
 			sharedFilePath := isolateMachineIDStorage(t)
 			engine := newEngine(t)
 
-			id, err := engine.GetRuntimeInfo().GetMachineID()
+			machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 			require.NoError(t, err)
-			require.Equal(t, "app-wiring-test-machine-id", id)
+			require.Equal(t, "app-wiring-test-machine-id", machine.ID)
 			require.NoFileExists(t, sharedFilePath)
 		})
 	}
@@ -150,9 +150,9 @@ func TestAcceptance_ViaAppEngineUnreadableSharedFileIsReportedWithTheMachineIDFo
 	require.NoError(t, os.WriteFile(studioFile, []byte("studio-device-id"), 0o600))
 	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
 
-	id, err := engine.GetRuntimeInfo().GetMachineID()
+	machine, err := engine.GetRuntimeInfo().GetMachineID()
 
-	require.Equal(t, "studio-device-id", id)
+	require.Equal(t, "studio-device-id", machine.ID)
 	var catalogErr snyk_errors.Error
 	require.True(t, errors.As(err, &catalogErr), "want an error catalog error, got %v", err)
 	require.Equal(t, "SNYK-CLI-0030", catalogErr.ErrorCode)

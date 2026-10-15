@@ -56,13 +56,15 @@ func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultVal
 // machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
 func machineID(t *testing.T, config configuration.Configuration) string {
 	t.Helper()
-	value, err := config.GetStringWithError(configuration.MACHINE_ID)
-	if value == "" {
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+	if machine.ID == "" {
 		require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 	} else {
 		require.NoError(t, err)
 	}
-	return value
+	return machine.ID
 }
 
 // snykJSON returns the contents of the configuration file newIsolatedMachine creates.

@@ -65,7 +65,7 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	r := &resolver{opts: o}
 	return func(_ configuration.Configuration, existingValue any) (any, error) {
 		if id, ok := supplied(existingValue, o.logger); ok {
-			return id, nil
+			return runtimeinfo.Machine{ID: id}, nil
 		}
 		return r.resolve()
 	}
@@ -102,19 +102,19 @@ type resolver struct {
 // resolve returns the id from disk, keeping a found id for the life of the resolver. An empty result
 // is not kept, so the next lookup goes back to disk once the cause (a held lock, a missing
 // permission) has cleared.
-func (r *resolver) resolve() (string, error) {
+func (r *resolver) resolve() (runtimeinfo.Machine, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.id == "" {
 		r.id, r.readErr = r.resolveFromDisk()
 	}
 	if r.id == "" && r.readErr != nil {
-		return "", errors.Join(runtimeinfo.ErrNoMachineID, r.readErr)
+		return runtimeinfo.Machine{}, errors.Join(runtimeinfo.ErrNoMachineID, r.readErr)
 	}
 	if r.id == "" {
-		return "", runtimeinfo.ErrNoMachineID
+		return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 	}
-	return r.id, r.readErr
+	return runtimeinfo.Machine{ID: r.id}, r.readErr
 }
 
 func (r *resolver) resolveFromDisk() (string, error) {

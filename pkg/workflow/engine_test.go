@@ -277,43 +277,54 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 
 	t.Run("reads the machine id from the configuration on every call", func(t *testing.T) {
 		config := configuration.NewInMemory()
-		config.Set(configuration.MACHINE_ID, "initial")
+		config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{ID: "initial"})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 		ri := engine.GetRuntimeInfo()
 
-		config.Set(configuration.MACHINE_ID, "changed")
+		config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{ID: "changed"})
 
-		machineID, err := ri.GetMachineID()
+		machine, err := ri.GetMachineID()
 
 		assert.NoError(t, err)
-		assert.Equal(t, "changed", machineID)
+		assert.Equal(t, "changed", machine.ID)
+	})
+
+	t.Run("returns ErrNoMachineID for a MACHINE_ID value that is a plain string", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(configuration.MACHINE_ID, "plain-string-id")
+		engine := NewWorkFlowEngine(config)
+		engine.SetRuntimeInfo(runtimeinfo.New())
+
+		_, err := engine.GetRuntimeInfo().GetMachineID()
+
+		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 	})
 
 	t.Run("reads the machine id from a configuration set later", func(t *testing.T) {
 		engine := NewWorkFlowEngine(configuration.NewInMemory())
 		engine.SetRuntimeInfo(runtimeinfo.New())
 		replacement := configuration.NewInMemory()
-		replacement.Set(configuration.MACHINE_ID, "replacement")
+		replacement.Set(configuration.MACHINE_ID, runtimeinfo.Machine{ID: "replacement"})
 
 		engine.SetConfiguration(replacement)
 
-		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+		machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 		assert.NoError(t, err)
-		assert.Equal(t, "replacement", machineID)
+		assert.Equal(t, "replacement", machine.ID)
 	})
 
 	t.Run("reports no machine id when the configured value is empty", func(t *testing.T) {
 		config := configuration.NewInMemory()
-		config.Set(configuration.MACHINE_ID, "")
+		config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 
-		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+		machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
-		assert.Empty(t, machineID)
+		assert.Empty(t, machine.ID)
 	})
 
 	t.Run("returns the error of the configuration when the machine id cannot be resolved", func(t *testing.T) {
@@ -325,51 +336,51 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 
-		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+		machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 		assert.ErrorIs(t, err, resolveErr)
-		assert.Empty(t, machineID)
+		assert.Empty(t, machine.ID)
 	})
 
 	t.Run("returns the machine id together with the error it was resolved with", func(t *testing.T) {
 		resolveErr := cli.NewMachineIDFileUnreadableError("unreadable")
 		config := configuration.NewInMemory()
 		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
-			return "resolved", resolveErr
+			return runtimeinfo.Machine{ID: "resolved"}, resolveErr
 		})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 
-		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+		machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 		var catalogErr snyk_errors.Error
 		assert.ErrorAs(t, err, &catalogErr)
 		assert.Equal(t, resolveErr.ErrorCode, catalogErr.ErrorCode)
-		assert.Equal(t, "resolved", machineID)
+		assert.Equal(t, "resolved", machine.ID)
 	})
 
 	t.Run("keeps the details given with no machine id", func(t *testing.T) {
 		details := cli.NewMachineIDNotPersistedError("not persisted")
 		config := configuration.NewInMemory()
 		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
-			return "", errors.Join(runtimeinfo.ErrNoMachineID, details)
+			return runtimeinfo.Machine{}, errors.Join(runtimeinfo.ErrNoMachineID, details)
 		})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 
-		machineID, err := engine.GetRuntimeInfo().GetMachineID()
+		machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 		assert.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 		var catalogErr snyk_errors.Error
 		assert.ErrorAs(t, err, &catalogErr)
 		assert.Equal(t, details.ErrorCode, catalogErr.ErrorCode)
-		assert.Empty(t, machineID)
+		assert.Empty(t, machine.ID)
 	})
 
 	t.Run("reports exactly ErrNoMachineID when no details are given", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, interface{}) (interface{}, error) {
-			return "", runtimeinfo.ErrNoMachineID
+			return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 		})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
@@ -393,15 +404,15 @@ func Test_Engine_RuntimeInfo(t *testing.T) {
 
 	t.Run("provides the machine id through an engine wrapper", func(t *testing.T) {
 		config := configuration.NewInMemory()
-		config.Set(configuration.MACHINE_ID, "wrapped")
+		config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{ID: "wrapped"})
 		engine := NewWorkFlowEngine(config)
 		engine.SetRuntimeInfo(runtimeinfo.New())
 		wrapper := &engineWrapper{WrappedEngine: engine}
 
-		machineID, err := wrapper.GetRuntimeInfo().GetMachineID()
+		machine, err := wrapper.GetRuntimeInfo().GetMachineID()
 
 		assert.NoError(t, err)
-		assert.Equal(t, "wrapped", machineID)
+		assert.Equal(t, "wrapped", machine.ID)
 	})
 }
 
