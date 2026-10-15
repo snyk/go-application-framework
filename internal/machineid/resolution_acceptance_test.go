@@ -71,7 +71,6 @@ func machineOf(t *testing.T, config configuration.Configuration) runtimeinfo.Mac
 }
 
 // machineID reads the identifier of MACHINE_ID, see machineOf.
-// machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
 func machineID(t *testing.T, config configuration.Configuration) string {
 	t.Helper()
 	return machineOf(t, config).ID
