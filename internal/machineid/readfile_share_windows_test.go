@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
 const deleteAccess = 0x00010000
@@ -43,7 +45,9 @@ func TestWriteSharedFileIDReplacesTheFileWhileAReaderHoldsItOpen(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = f.Close() })
 
-	require.Equal(t, "new-id", write(t, paths, "new-id"))
+	id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, "new-id", "generated", "test-writer")
+	require.NoError(t, err)
+	require.Equal(t, "new-id", id)
 
 	require.Equal(t, "new-id", readFile(t, paths.machineWide).MachineID)
 }
