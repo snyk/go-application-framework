@@ -6,7 +6,6 @@ package enrollmenttest
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -33,7 +32,7 @@ type Server struct {
 	// TokenRequests counts accepted token requests.
 	TokenRequests int
 	joinTokens    map[string]bool // join key -> used
-	clients       map[string]*ecdsa.PublicKey
+	clients       map[string]*rsa.PublicKey
 	jtis          map[string]bool
 	tokens        map[string]string // access token -> client id
 	next          int
@@ -44,7 +43,7 @@ func NewServer(t *testing.T) *Server {
 	t.Helper()
 	s := &Server{
 		joinTokens: map[string]bool{},
-		clients:    map[string]*ecdsa.PublicKey{},
+		clients:    map[string]*rsa.PublicKey{},
 		jtis:       map[string]bool{},
 		tokens:     map[string]string{},
 	}
@@ -57,7 +56,7 @@ func NewServer(t *testing.T) *Server {
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
-func (s *Server) RegisterClient(clientID string, key *ecdsa.PublicKey) {
+func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = key
@@ -75,7 +74,7 @@ func (s *Server) IssueJoinToken() string {
 }
 
 // ClientKey returns the key clientID enrolled with.
-func (s *Server) ClientKey(clientID string) *ecdsa.PublicKey {
+func (s *Server) ClientKey(clientID string) *rsa.PublicKey {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.clients[clientID]
@@ -117,15 +116,15 @@ func (s *Server) enrollWithJoinToken(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-// verifyAssertion verifies a self-signed ES256 assertion addressed to audience and returns its key,
+// verifyAssertion verifies a self-signed RS256 assertion (the only algorithm the machine identity service accepts) addressed to audience and returns its key,
 // the key's thumbprint and the value of the claim named by credential.
-func (s *Server) verifyAssertion(token, audience, credential string) (*ecdsa.PublicKey, string, string, error) {
+func (s *Server) verifyAssertion(token, audience, credential string) (*rsa.PublicKey, string, string, error) {
 	header, claims, err := decodeJWT(token)
 	if err != nil {
 		return nil, "", "", err
 	}
-	if header["alg"] != "ES256" {
-		return nil, "", "", errors.New("alg must be ES256")
+	if header["alg"] != "RS256" {
+		return nil, "", "", errors.New("signing method " + fmt.Sprint(header["alg"]) + " is invalid")
 	}
 	jwk, ok := header["jwk"].(map[string]any)
 	if !ok {
@@ -243,22 +242,22 @@ func decodeJWT(token string) (header, claims map[string]any, err error) {
 	return header, claims, nil
 }
 
-func parseJWK(jwk map[string]any) (*ecdsa.PublicKey, string, error) {
-	x, _ := jwk["x"].(string) //nolint:errcheck // checked by decoding
-	y, _ := jwk["y"].(string) //nolint:errcheck // checked by decoding
-	if jwk["kty"] != "EC" || jwk["crv"] != "P-256" || jwk["d"] != nil {
-		return nil, "", errors.New("jwk must be a P-256 public key")
+func parseJWK(jwk map[string]any) (*rsa.PublicKey, string, error) {
+	n, _ := jwk["n"].(string) //nolint:errcheck // checked by decoding
+	e, _ := jwk["e"].(string) //nolint:errcheck // checked by decoding
+	if jwk["kty"] != "RSA" || jwk["d"] != nil {
+		return nil, "", errors.New("jwk header must be an RSA key")
 	}
-	xb, errX := base64.RawURLEncoding.DecodeString(x)
-	yb, errY := base64.RawURLEncoding.DecodeString(y)
-	if errX != nil || errY != nil || len(xb) != 32 || len(yb) != 32 {
-		return nil, "", errors.New("jwk has malformed coordinates")
+	nb, errN := base64.RawURLEncoding.DecodeString(n)
+	eb, errE := base64.RawURLEncoding.DecodeString(e)
+	if errN != nil || errE != nil || len(nb) == 0 || len(eb) == 0 || len(eb) > 4 {
+		return nil, "", errors.New("jwk header has a malformed modulus or exponent")
 	}
-	key, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), append(append([]byte{4}, xb...), yb...))
-	if err != nil {
-		return nil, "", err
+	key := &rsa.PublicKey{N: new(big.Int).SetBytes(nb), E: int(new(big.Int).SetBytes(eb).Int64())}
+	if key.N.BitLen() < 2048 {
+		return nil, "", errors.New("jwk header must be an RSA key of at least 2048 bits")
 	}
-	sum := sha256.Sum256(fmt.Appendf(nil, `{"crv":"P-256","kty":"EC","x":%q,"y":%q}`, x, y))
+	sum := sha256.Sum256(fmt.Appendf(nil, `{"e":%q,"kty":"RSA","n":%q}`, e, n))
 	return key, base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 

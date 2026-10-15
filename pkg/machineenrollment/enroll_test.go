@@ -1,8 +1,10 @@
 package machineenrollment_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,7 +28,7 @@ func TestClientAssertion(t *testing.T) {
 
 	require.NoError(t, enrollmenttest.VerifyJWT(assertion, &key.PublicKey))
 	header, claims := enrollmenttest.DecodeJWT(t, assertion)
-	assert.Equal(t, "ES256", header["alg"])
+	assert.Equal(t, "RS256", header["alg"])
 	assert.NotEmpty(t, header["kid"])
 	assert.Equal(t, "client-1", claims["iss"])
 	assert.Equal(t, "client-1", claims["sub"])
@@ -52,7 +54,7 @@ func TestEnrollWithJoinToken(t *testing.T) {
 	assert.Equal(t, "client-1", e.ClientID)
 	assert.NotEmpty(t, e.KeyID)
 	require.NotNil(t, e.Key)
-	assert.True(t, srv.ClientKey(e.ClientID).Equal(&e.Key.PublicKey), "the client is bound to the returned key")
+	assert.True(t, e.Key.PublicKey.Equal(srv.ClientKey(e.ClientID)), "the client is bound to the returned key")
 
 	// A join key is single-use.
 	_, err = machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, srv.URL, token, "", time.Now())
@@ -99,4 +101,46 @@ func TestEnrollWithJoinTokenRequestBody(t *testing.T) {
 	assertion, ok := attrs["assertion"].(string)
 	require.True(t, ok)
 	assert.Len(t, strings.Split(assertion, "."), 3)
+}
+
+// roundTripFunc captures requests sent through an http.Client.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestEnrollWithJoinTokenSendsRS256AssertionWithRSAJWK(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	var body []byte
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var err error
+		if body, err = io.ReadAll(r.Body); err != nil {
+			return nil, err
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+
+	e, err := machineenrollment.EnrollWithJoinToken(context.Background(), client, srv.URL, srv.IssueJoinToken(), "", time.Now())
+	require.NoError(t, err)
+
+	var req struct {
+		Data struct {
+			Attributes struct {
+				Assertion string `json:"assertion"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &req))
+	header, claims := enrollmenttest.DecodeJWT(t, req.Data.Attributes.Assertion)
+	assert.Equal(t, "RS256", header["alg"])
+	jwk, ok := header["jwk"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "RSA", jwk["kty"])
+	assert.NotEmpty(t, jwk["n"])
+	assert.NotEmpty(t, jwk["e"])
+	assert.NotContains(t, jwk, "d")
+	assert.Contains(t, claims, "join_token")
+	assert.Contains(t, claims, "aud")
+	assert.Contains(t, claims, "iat")
+	assert.GreaterOrEqual(t, e.Key.N.BitLen(), 2048)
 }

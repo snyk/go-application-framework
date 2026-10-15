@@ -1,6 +1,6 @@
 // Package machineenrollment enrolls a device as a machine principal using a single-use join key an
 // admin issued for it, and authenticates it afterward. The server answers with an OAuth client_id
-// bound to a newly generated ES256 key, which then authenticates with private_key_jwt client
+// bound to a newly generated RSA key (RS256), which then authenticates with private_key_jwt client
 // assertions, so the join key itself is only used once.
 package machineenrollment
 

@@ -28,7 +28,7 @@ func TestEnrollMachine(t *testing.T) {
 
 	assert.Equal(t, "client-1", e.ClientID)
 	require.NotNil(t, e.Key)
-	assert.True(t, srv.ClientKey(e.ClientID).Equal(&e.Key.PublicKey))
+	assert.True(t, e.Key.PublicKey.Equal(srv.ClientKey(e.ClientID)))
 
 	assert.Equal(t, e.ClientID, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
 	assert.Equal(t, keyFile, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE))
@@ -36,7 +36,7 @@ func TestEnrollMachine(t *testing.T) {
 
 	stored, err := machineenrollment.ReadKeyFile(keyFile)
 	require.NoError(t, err)
-	assert.True(t, stored.Equal(e.Key))
+	assert.True(t, e.Key.Equal(stored))
 
 	info, err := os.Stat(keyFile)
 	require.NoError(t, err)

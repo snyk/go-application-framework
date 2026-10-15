@@ -2,7 +2,8 @@ package machineenrollment
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +34,7 @@ type Enrollment struct {
 	KeyID     string
 	// Key is the machine client's private key, which the caller stores. It is the only credential
 	// the machine needs from now on.
-	Key *ecdsa.PrivateKey
+	Key *rsa.PrivateKey
 }
 
 // EnrollWithJoinToken enrolls this machine with the single-use join key an admin issued for it,
@@ -76,8 +77,8 @@ func EnrollWithJoinToken(ctx context.Context, httpClient *http.Client, apiURL, j
 // keyAssertion proves the machine holds key: it is signed by key, carries its public key, and is
 // addressed to the enrollment endpoint at audience. The claim named by name is what the machine
 // enrolls with: the join key.
-func keyAssertion(key *ecdsa.PrivateKey, audience, name, value string, now time.Time) (string, error) {
-	jwk, err := publicJWK(&key.PublicKey)
+func keyAssertion(key crypto.Signer, audience, name, value string, now time.Time) (string, error) {
+	jwk, err := publicJWK(key.Public())
 	if err != nil {
 		return "", err
 	}
