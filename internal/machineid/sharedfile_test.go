@@ -469,3 +469,25 @@ func TestWriteSharedFileIDSetsFileModes(t *testing.T) {
 		require.Equal(t, want, info.Mode().Perm(), path)
 	}
 }
+
+func TestSchemaReplaceableOnlyForCurrentOrOlderIntegerVersions(t *testing.T) {
+	cases := map[string]struct {
+		raw  string
+		want bool
+	}{
+		"absent":     {raw: "", want: true},
+		"current":    {raw: "1", want: true},
+		"older":      {raw: "0", want: true},
+		"newer":      {raw: "2", want: false},
+		"string":     {raw: `"1"`, want: false},
+		"fractional": {raw: "1.5", want: false},
+		"null":       {raw: "null", want: true},
+		"object":     {raw: `{"v":1}`, want: false},
+		"negative":   {raw: "-1", want: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, schemaReplaceable(json.RawMessage(tc.raw)))
+		})
+	}
+}
