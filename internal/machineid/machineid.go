@@ -59,7 +59,8 @@ func writerIdentity(o resolveOptions) string {
 // together with an error for each file that exists but could not be read. If no id was found, it
 // returns runtimeinfo.ErrNoMachineID joined with those errors and an error describing why a
 // generated id could not be stored; the configuration caching does not hold it, so the next lookup
-// tries the disk again.
+// tries the disk again. Machine.StudioID is the INTERNAL_SNYK_CLIENT_MACHINE_ID value when it is
+// valid, otherwise the Snyk Studio device-id file; neither supplies the id.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{
 		shared:       defaultSharedFilePaths(),
@@ -72,11 +73,11 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	}
 	o.logger = effectiveLogger(o.logger)
 	r := &resolver{opts: o}
-	return func(_ configuration.Configuration, existingValue any) (any, error) {
+	return func(config configuration.Configuration, existingValue any) (any, error) {
 		if id, ok := supplied(existingValue, o.logger); ok {
-			return r.describe(id), nil
+			return r.describe(config, id), nil
 		}
-		return r.resolve()
+		return r.resolve(config)
 	}
 }
 
@@ -102,12 +103,22 @@ type hardwareIdentity struct {
 	serial   string
 }
 
+type studioDisk struct {
+	id      string
+	path    string
+	found   bool
+	readErr error
+}
+
 type resolver struct {
 	opts resolveOptions
 
 	hwOnce     sync.Once
 	serialOnce sync.Once
 	hw         hardwareIdentity
+
+	studioOnce sync.Once
+	studio     studioDisk
 
 	mu      sync.Mutex
 	machine runtimeinfo.Machine
@@ -134,37 +145,54 @@ func (r *resolver) hardware() hardwareIdentity {
 	return r.hw
 }
 
-// describe returns the machine with the given id and the hardware fields that can be read. A supplied
-// id needs none of them, so read failures are not reported, but hosts still describe the machine.
-func (r *resolver) describe(id string) runtimeinfo.Machine {
+func (r *resolver) studioOnDisk() studioDisk {
+	r.studioOnce.Do(func() {
+		id, path, found, err := readStudioDeviceID(r.opts.studio, r.opts.logger)
+		if err != nil {
+			r.opts.logger.Debug().Err(err).Msg("machine id: Snyk Studio device-id file could not be read for the machine description")
+		}
+		r.studio = studioDisk{id: id, path: path, found: found, readErr: err}
+	})
+	return r.studio
+}
+
+// describe returns the machine with the given id and the descriptive fields that can be read. Read
+// failures are not reported: a supplied id needs none of them. Hostname, SerialNumber and StudioID are
+// still filled in, because hosts describe the machine even when its id comes from elsewhere.
+func (r *resolver) describe(config configuration.Configuration, id string) runtimeinfo.Machine {
 	hw := r.hardware()
-	return runtimeinfo.Machine{ID: id, Hostname: hw.hostname, SerialNumber: hw.serial}
+	disk := r.studioOnDisk()
+	return runtimeinfo.Machine{ID: id, Hostname: hw.hostname, SerialNumber: hw.serial, StudioID: studioID(config, r.opts.logger, disk.id)}
 }
 
 // resolve returns the id from disk, keeping a found id for the life of the resolver. An empty result
 // is not kept, so the next lookup goes back to disk once the cause (a held lock, a missing
 // permission) has cleared.
-func (r *resolver) resolve() (runtimeinfo.Machine, error) {
+func (r *resolver) resolve(config configuration.Configuration) (runtimeinfo.Machine, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.machine.ID == "" {
-		m, err := r.resolveFromDisk()
+		m, err := r.resolveFromDisk(config)
 		if m.ID == "" {
 			return runtimeinfo.Machine{}, errors.Join(runtimeinfo.ErrNoMachineID, err)
 		}
 		r.machine, r.readErr = m, err
 	}
-	return r.machine, r.readErr
+	machine := r.machine
+	machine.StudioID = studioID(config, r.opts.logger, r.studioOnDisk().id)
+	return machine, r.readErr
 }
 
-func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
+func (r *resolver) resolveFromDisk(config configuration.Configuration) (runtimeinfo.Machine, error) {
 	logger := r.opts.logger
 	writer := writerIdentity(r.opts)
 	paths := r.opts.shared
 	hw := r.hardware()
 
-	machine := runtimeinfo.Machine{Hostname: hw.hostname, SerialNumber: hw.serial}
+	disk := r.studioOnDisk()
+	diskStudioID, studioPath, studioOK, studioReadErr := disk.id, disk.path, disk.found, disk.readErr
+	machine := runtimeinfo.Machine{Hostname: hw.hostname, SerialNumber: hw.serial, StudioID: studioID(config, logger, diskStudioID)}
 
 	if hw.serial != "" {
 		if reason, ok := validate(hw.serial); !ok {
@@ -186,7 +214,6 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 		return machine, sharedReadErr
 	}
 
-	diskStudioID, studioPath, studioOK, studioReadErr := readStudioDeviceID(r.opts.studio, logger)
 	if studioOK {
 		logger.Debug().Str("path", studioPath).Msg("machine id: adopting value from Snyk Studio device-id file")
 		readErr := errors.Join(sharedReadErr, studioReadErr)
