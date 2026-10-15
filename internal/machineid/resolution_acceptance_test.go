@@ -3,10 +3,12 @@ package machineid
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -20,6 +22,7 @@ type isolatedMachine struct {
 	home   string
 	shared pathPair
 	studio pathPair
+	serial string
 }
 
 func newIsolatedMachine(t *testing.T) isolatedMachine {
@@ -50,7 +53,7 @@ func (m isolatedMachine) newRun(opts ...ResolveOption) configuration.Configurati
 }
 
 func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
-	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio)}, opts...)...)
+	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio), withHardware(m.serial, "test-host")}, opts...)...)
 }
 
 // machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
@@ -448,4 +451,194 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 	machineID(t, m.newRun())
 
 	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
+}
+
+func TestAcceptance_HardwareSerialWinsOverAnIDInTheSharedFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	require.NoError(t, err)
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "C02Q7KHTGFWF", machine.SerialNumber)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialDoesNotReplaceASharedFileItCannotRead(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file"}`)
+	restore := makeUnreadable(t, m.shared.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	restore()
+	require.ErrorContains(t, err, "unreadable")
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialLeavesAFileAlreadyHoldingTheSerialUntouched(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "C02Q7KHTGFWF", "identifier_source": "serial"})
+	before, err := os.Stat(m.shared.perUser)
+	require.NoError(t, err)
+	contentBefore, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	past := before.ModTime().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(m.shared.perUser, past, past))
+
+	machineID(t, m.newRun())
+
+	after, err := os.Stat(m.shared.perUser)
+	require.NoError(t, err)
+	contentAfter, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, string(contentBefore), string(contentAfter))
+	require.True(t, past.Equal(after.ModTime()), "mtime changed from %v to %v", past, after.ModTime())
+}
+
+func TestAcceptance_HardwareSerialIsStoredInAnEmptyOrMissingSharedFile(t *testing.T) {
+	for name, content := range map[string]*string{"missing": nil, "empty": new(string)} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			if content != nil {
+				seed(t, m.shared.perUser, *content)
+			}
+
+			id := machineID(t, m.newRun())
+
+			require.Equal(t, "C02Q7KHTGFWF", id)
+			stored := readFile(t, m.shared.perUser)
+			require.Equal(t, "C02Q7KHTGFWF", stored.MachineID)
+			require.Equal(t, "serial", stored.IdentifierSource)
+		})
+	}
+}
+
+func TestAcceptance_StudioDeviceIDIsNotReadWhenTheHardwareSerialWins(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.studio.perUser, "studio-device-id")
+	restore := makeUnreadable(t, m.studio.perUser)
+	defer restore()
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
+
+	require.NotContains(t, logs.String(), "device-id file candidate")
+}
+
+func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenAnExistingIDCannotBeReplaced(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file"}`)
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+	makeUnwritable(t, filepath.Dir(m.shared.perUser))
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialOutsideTheAllowedCharactersIsNotUsedAsTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02 Q7KHTGFWF"
+
+	id := machineID(t, m.newRun())
+
+	require.NotEqual(t, "C02 Q7KHTGFWF", id)
+	require.True(t, valid(id))
+	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialReadErrorIsLoggedAtDebugAndNotReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	failSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) { return "", errors.New("serial query failed") }
+	}
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger), failSerial)).GetMachineID()
+
+	require.NoError(t, err)
+	require.True(t, valid(machine.ID))
+	line := logLineContaining(t, logs.String(), "serial")
+	require.Contains(t, line, `"level":"debug"`)
+	require.Contains(t, line, "serial query failed")
+}
+
+func TestAcceptance_APermanentlyFailingHardwareSerialProbeRunsOnceForAllLookups(t *testing.T) {
+	for name, supplied := range map[string]bool{"resolved id": false, "supplied id": true} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			if supplied {
+				t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+			}
+			probes := 0
+			failingSerial := func(o *resolveOptions) {
+				o.serialNumber = func() (string, error) {
+					probes++
+					return "", errors.New("serial query failed")
+				}
+			}
+			config := m.newRun(failingSerial)
+
+			for range 3 {
+				machineID(t, config)
+			}
+
+			require.Equal(t, 1, probes)
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialIsReadOnceForASuppliedMachine(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	reads := 0
+	countSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) {
+			reads++
+			return "C02Q7KHTGFWF", nil
+		}
+	}
+	config := m.newRun(countSerial)
+
+	machineID(t, config)
+	machineID(t, config)
+
+	require.Equal(t, 1, reads)
+}
+
+func TestAcceptance_InvalidHardwareSerialReasonIsLoggedAtDebug(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02 Q7KHTGFWF"
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineID(t, m.newRun(WithLogger(&logger)))
+
+	line := logLineContaining(t, logs.String(), "contains characters outside the allowed set")
+	require.Contains(t, line, `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenTheSharedFileCannotBeWritten(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.blockEverySharedFileLocation(t)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
 }
