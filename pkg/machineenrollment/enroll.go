@@ -40,10 +40,8 @@ type Enrollment struct {
 // exchanging it for an OAuth client bound to a newly generated machine client key. It needs no
 // device identity, so it works on any platform. httpClient must not add authentication.
 //
-// knownMachineID, when non-empty, is sent along with the enrollment request as the caller's own
-// identifier for this machine, for the server to bind the enrollment to. The exact wire shape of
-// this is unconfirmed against the real Machine Service at the time of writing; if the server
-// ignores it, the machine id it returns is used instead.
+// knownMachineID is not sent to the server, whose enrollment request takes only the assertion; it is
+// the machine id reported in the result if the server's response omits one.
 func EnrollWithJoinToken(ctx context.Context, httpClient *http.Client, apiURL, joinToken, knownMachineID string, now time.Time) (Enrollment, error) {
 	if !strings.HasPrefix(joinToken, JoinTokenPrefix) || len(joinToken) == len(JoinTokenPrefix) {
 		return Enrollment{}, ErrMalformedJoinToken
@@ -60,10 +58,9 @@ func EnrollWithJoinToken(ctx context.Context, httpClient *http.Client, apiURL, j
 		return Enrollment{}, err
 	}
 
+	// The server rejects any attribute but the assertion (additionalProperties: false), so the
+	// machine id is never sent; the server assigns one.
 	attributes := map[string]string{"assertion": assertion}
-	if knownMachineID != "" {
-		attributes["machine_id"] = knownMachineID
-	}
 
 	res, err := postEnrollment(ctx, httpClient, url, joinTokenEnrollmentType, attributes)
 	if err != nil {

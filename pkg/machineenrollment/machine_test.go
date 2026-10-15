@@ -37,9 +37,15 @@ func TestEnrollMachine(t *testing.T) {
 	stored, err := machineenrollment.ReadKeyFile(keyFile)
 	require.NoError(t, err)
 	assert.True(t, stored.Equal(e.Key))
+
+	info, err := os.Stat(keyFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
 func TestEnrollMachineUsesDefaultKeyFileWhenNoneConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", os.Getenv("HOME"))
 	srv := enrollmenttest.NewServer(t)
 	token := srv.IssueJoinToken()
 

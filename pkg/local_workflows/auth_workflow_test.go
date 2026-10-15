@@ -334,3 +334,38 @@ func Test_auth_clientPrivateKeyFile(t *testing.T) {
 	assert.Empty(t, gotForm.Get("client_secret"))
 	assert.NotEmpty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 }
+
+func Test_auth_clientPrivateKeyFile_errors(t *testing.T) {
+	newCtx := func(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
+		mockCtl := gomock.NewController(t)
+		logger := zerolog.New(&bytes.Buffer{})
+		networkAccess := mocks.NewMockNetworkAccess(mockCtl)
+		networkAccess.EXPECT().GetUnauthorizedHttpClient().Return(http.DefaultClient).AnyTimes()
+		engine := mocks.NewMockEngine(mockCtl)
+		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		ictx := mocks.NewMockInvocationContext(mockCtl)
+		ictx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		ictx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		ictx.EXPECT().GetEngine().Return(engine).AnyTimes()
+		ictx.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
+		ictx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+		return ictx
+	}
+
+	t.Run("missing client id", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(ClientPrivateKeyFileParameter, "/some/key.pem")
+		_, err := authEntryPoint(newCtx(t, config), nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--client-id")
+	})
+
+	t.Run("missing key file", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(auth.PARAMETER_CLIENT_ID, "c")
+		config.Set(ClientPrivateKeyFileParameter, filepath.Join(t.TempDir(), "nope.pem"))
+		_, err := authEntryPoint(newCtx(t, config), nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nope.pem")
+	})
+}

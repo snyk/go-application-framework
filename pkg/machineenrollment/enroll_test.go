@@ -2,7 +2,10 @@ package machineenrollment_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,4 +68,35 @@ func TestEnrollWithJoinTokenRejectsMalformedTokens(t *testing.T) {
 		_, err := machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, apiURL, token, "", time.Now())
 		assert.ErrorIs(t, err, machineenrollment.ErrMalformedJoinToken, token)
 	}
+}
+
+func TestEnrollWithJoinTokenRequestBody(t *testing.T) {
+	var gotPath, gotQuery, gotType string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery, gotType = r.URL.Path, r.URL.RawQuery, r.Header.Get("Content-Type")
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"c","type":"machine_enrollment","attributes":{"machine_id":"m","client_id":"c","key_id":"k"}}}`))
+	}))
+	defer srv.Close()
+
+	e, err := machineenrollment.EnrollWithJoinToken(context.Background(), srv.Client(), srv.URL, "sjt_abc", "local-id", time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "m", e.MachineID)
+
+	assert.Equal(t, "/hidden/machines/enrollments", gotPath)
+	assert.Equal(t, "version=2024-10-15", gotQuery)
+	assert.Equal(t, "application/vnd.api+json", gotType)
+
+	// Exactly {"data":{"type":"machine_enrollment","attributes":{"assertion":"<jwt>"}}}.
+	require.Len(t, gotBody, 1)
+	data := gotBody["data"].(map[string]any)
+	require.Len(t, data, 2)
+	assert.Equal(t, "machine_enrollment", data["type"])
+	attrs := data["attributes"].(map[string]any)
+	require.Len(t, attrs, 1)
+	assertion, ok := attrs["assertion"].(string)
+	require.True(t, ok)
+	assert.Len(t, strings.Split(assertion, "."), 3)
 }
