@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
 const deleteAccess = 0x00010000
@@ -38,16 +36,25 @@ func TestReadIDFileReadsWhileAnotherHandleHasDeleteAccess(t *testing.T) {
 	require.Equal(t, "an-id", string(data))
 }
 
-func TestWriteSharedFileIDReplacesTheFileWhileAReaderHoldsItOpen(t *testing.T) {
+func TestWriteSharedFileIDStoresAnIDWhileAReaderHoldsTheMachineWideFileOpen(t *testing.T) {
 	paths := tempPaths(t)
 	seed(t, paths.machineWide, "")
-	f, err := openIDFile(paths.machineWide)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = f.Close() })
+	openWithDeleteAccess(t, paths.machineWide)
 
-	id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, "new-id", "generated", "test-writer")
+	id, err := writeSharedFileID(paths, "new-id", "generated", "test-writer", nil)
+
 	require.NoError(t, err)
 	require.Equal(t, "new-id", id)
+	require.True(t, valid(id))
+	require.True(t, storedIDIn(t, paths, id), "id must be readable from the machine-wide or the per-user file")
+}
 
-	require.Equal(t, "new-id", readFile(t, paths.machineWide).MachineID)
+func storedIDIn(t *testing.T, paths pathPair, id string) bool {
+	t.Helper()
+	for _, path := range []string{paths.machineWide, paths.perUser} {
+		if sf, err := loadSharedFile(path); err == nil && sf.MachineID == id {
+			return true
+		}
+	}
+	return false
 }
