@@ -8,3 +8,12 @@ func withPaths(shared, studio pathPair) ResolveOption {
 		o.studio = studio
 	}
 }
+
+// withHardware replaces the hardware serial and hostname sources, so tests do not depend on the
+// machine they run on.
+func withHardware(serial, hostname string) ResolveOption {
+	return func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) { return serial, nil }
+		o.hostname = func() (string, error) { return hostname, nil }
+	}
+}

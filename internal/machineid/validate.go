@@ -3,22 +3,11 @@ package machineid
 import (
 	"regexp"
 	"strings"
+
+	"github.com/snyk/go-application-framework/internal/machineid/identity"
 )
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@-]*$`)
-
-// placeholderSerials are values firmware tooling reports when no real serial was set.
-var placeholderSerials = map[string]struct{}{
-	"0":                      {},
-	"none":                   {},
-	"to be filled by o.e.m.": {},
-	"system serial number":   {},
-	"not applicable":         {},
-	"not specified":          {},
-	"default string":         {},
-	"invalid":                {},
-	"n/a":                    {},
-}
 
 func blank(raw string) bool {
 	return strings.TrimSpace(raw) == ""
@@ -37,7 +26,7 @@ func validate(id string) (reason string, ok bool) {
 	case !idPattern.MatchString(id):
 		return "contains characters outside the allowed set", false
 	}
-	if _, placeholder := placeholderSerials[strings.ToLower(id)]; placeholder {
+	if identity.NormalizeSerial(id) == "" {
 		return "matches a known placeholder serial number", false
 	}
 	return "", true
