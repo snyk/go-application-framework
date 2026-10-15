@@ -105,13 +105,11 @@ func TestAcceptance_RepeatedLookupsReportTheSameIDAndUnreadableFile(t *testing.T
 			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
 			ri := runtimeInfoOf(config)
 			firstMachine, firstErr := ri.GetMachineID()
-			firstID := firstMachine.ID
 
 			restore()
 			machine, err := ri.GetMachineID()
-			id := machine.ID
 
-			require.Equal(t, firstID, id)
+			require.Equal(t, firstMachine, machine)
 			require.Equal(t, firstErr, err, "the id is kept for the life of the engine, and so is the error it was found with")
 		})
 	}
