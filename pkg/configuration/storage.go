@@ -20,7 +20,11 @@ import (
 type Storage interface {
 	Set(key string, value any) error
 	Refresh(config Configuration, key string) error
+	// Lock acquires exclusive access to the storage across both goroutines and processes,
+	// giving up when ctx is done. It is not re-entrant: calling Lock again while holding
+	// the lock blocks until ctx is done.
 	Lock(ctx context.Context, retryDelay time.Duration) error
+	// Unlock releases the lock. It must only be called after a successful Lock.
 	Unlock() error
 }
 
@@ -56,8 +60,9 @@ type JsonStorage struct {
 	config Configuration
 	mutex  sync.Mutex
 
-	fileIntraProcessLock *flock.Flock
-	fileInProcessLock    *semaphore.Weighted
+	fileInterProcessLock *flock.Flock
+	// fileInProcessLock is a semaphore rather than a sync.Mutex so Lock can give up when ctx is done.
+	fileInProcessLock *semaphore.Weighted
 }
 
 type JsonOption func(*JsonStorage)
@@ -71,7 +76,7 @@ func WithConfiguration(c Configuration) JsonOption {
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
 		path:                 path,
-		fileIntraProcessLock: flock.New(path + ".lock"),
+		fileInterProcessLock: flock.New(path + ".lock"),
 		fileInProcessLock:    semaphore.NewWeighted(1),
 	}
 
@@ -164,7 +169,7 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 		return err
 	}
 
-	_, err := s.fileIntraProcessLock.TryLockContext(ctx, retryDelay)
+	_, err := s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
 	if err != nil {
 		s.fileInProcessLock.Release(1)
 		return err
@@ -174,7 +179,7 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 }
 
 func (s *JsonStorage) Unlock() error {
-	err := s.fileIntraProcessLock.Unlock()
+	err := s.fileInterProcessLock.Unlock()
 	s.fileInProcessLock.Release(1)
 	return err
 }
