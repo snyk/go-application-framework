@@ -27,15 +27,17 @@ func effectiveLogger(logger *zerolog.Logger) *zerolog.Logger {
 }
 
 const (
-	sharedFileName = "machine-id.json"
-	lockRetryDelay = 100 * time.Millisecond
+	sharedFileName      = "machine-id.json"
+	sharedSchemaVersion = 1
+	lockRetryDelay      = 100 * time.Millisecond
 )
 
 // lockTimeout bounds the wait for each shared file location's lock.
 var lockTimeout = 1 * time.Second
 
-// sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over,
-// because GAF never rewrites a file that holds a valid id.
+// sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over:
+// GAF rewrites a file holding a different valid id only when its schema is replaceable, and then
+// keeps just first_seen_at.
 type sharedFile struct {
 	MachineID        string `json:"machine_id"`
 	IdentifierSource string `json:"identifier_source"`
@@ -44,6 +46,8 @@ type sharedFile struct {
 	FirstSeenAt      string `json:"first_seen_at"`
 	UpdatedAt        string `json:"updated_at"`
 	Writer           string `json:"writer"`
+
+	replaceable bool
 }
 
 type pathPair struct {
@@ -101,7 +105,10 @@ func readSharedFile(paths pathPair, logger *zerolog.Logger) (*sharedFile, error)
 	return nil, errors.Join(readErrs...)
 }
 
-var errNoValidID = errors.New("shared file holds no valid machine id")
+var (
+	errNoValidID   = errors.New("shared file holds no valid machine id")
+	errNewerSchema = errors.New("shared file was written by a newer or unknown schema")
+)
 
 func loadSharedFile(path string) (*sharedFile, error) {
 	data, err := readIDFile(path)
@@ -121,81 +128,164 @@ func loadSharedFile(path string) (*sharedFile, error) {
 	if !valid(sf.MachineID) {
 		return nil, errNoValidID
 	}
+	var version struct {
+		SchemaVersion json.RawMessage `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &version); err != nil {
+		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
+	}
+	sf.replaceable = schemaReplaceable(version.SchemaVersion)
 	return &sf, nil
+}
+
+// schemaReplaceable reports whether a shared file's schema_version is one this code can replace: a
+// missing or integer version of 1 or older. A newer, non-integer or unparseable version is left alone
+// because its writer may store fields this code would drop.
+func schemaReplaceable(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var version int
+	if err := json.Unmarshal(raw, &version); err != nil {
+		return false
+	}
+	return version <= sharedSchemaVersion
 }
 
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
 // It never creates the machine-wide directory; any failure there falls back to the per-user path.
 func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
+	stored, err := storeSharedFileID(paths, candidateID, source, writer, false, logger)
+	return stored.id, err
+}
+
+// replaceSharedFileID stores candidateID in place of a different valid id, so every reader converges on it.
+// The result's machineWideErr reports why the machine-wide file was skipped, when it was.
+func replaceSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (storedID, error) {
+	return storeSharedFileID(paths, candidateID, source, writer, true, logger)
+}
+
+type storedID struct {
+	id             string
+	machineWideErr error
+}
+
+func storeSharedFileID(paths pathPair, candidateID, source, writer string, replace bool, logger *zerolog.Logger) (storedID, error) {
 	logger = effectiveLogger(logger)
 	var machineWideErr error
 	if paths.machineWide != "" {
-		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer)
+		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, replace)
 		if err == nil {
-			return id, nil
+			return storedID{id: id}, nil
+		}
+		if errors.Is(err, errNewerSchema) {
+			return storedID{}, err
 		}
 		machineWideErr = err
 		logger.Debug().Err(err).Str("path", paths.machineWide).Msg("machine id: machine-wide write failed, falling back to per-user")
 	}
-	id, err := writePerUser(paths.perUser, candidateID, source, writer)
+	id, err := writePerUser(paths.perUser, candidateID, source, writer, replace)
 	if err != nil {
-		return "", errors.Join(machineWideErr, err)
+		return storedID{}, errors.Join(machineWideErr, err)
 	}
-	return id, nil
+	return storedID{id: id, machineWideErr: machineWideErr}, nil
 }
 
-func writePerUser(path, candidateID, source, writer string) (string, error) {
+// isUnfixableLocation reports whether a write failed because the location is not writable by this process.
+func isUnfixableLocation(err error) bool {
+	return errors.Is(err, fs.ErrPermission)
+}
+
+func writePerUser(path, candidateID, source, writer string, replace bool) (string, error) {
 	if path == "" {
 		return "", errors.New("machine id: no per-user shared file path")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), fileperms.FILEPERM_755); err != nil {
 		return "", err
 	}
-	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer)
+	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer, replace)
 }
 
-func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string) (string, error) {
+func settled(existing *sharedFile, err error, candidateID string, replace bool) bool {
+	return err == nil && (!replace || existing.MachineID == candidateID)
+}
+
+// firstSeenAt keeps the first-seen time of a valid id being replaced, so replacing an id does not reset it.
+func firstSeenAt(existing *sharedFile, err error, stamp string) string {
+	if err == nil && existing.FirstSeenAt != "" {
+		return existing.FirstSeenAt
+	}
+	return stamp
+}
+
+// blockedByNewerSchema reports whether replacing the file would overwrite a newer schema's id. Checked
+// before taking the lock too, so a lock that cannot be created does not turn into a per-user shadow file.
+func blockedByNewerSchema(existing *sharedFile, err error, replace bool) bool {
+	return replace && err == nil && !existing.replaceable
+}
+
+func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string, replace bool) (string, error) {
 	// Read before locking: the lock file cannot be created in a directory this process cannot write.
-	if existing, err := loadSharedFile(path); err == nil {
+	existing, err := loadSharedFile(path)
+	if settled(existing, err, candidateID, replace) {
 		return existing.MachineID, nil
+	}
+	if blockedByNewerSchema(existing, err, replace) {
+		return "", errNewerSchema
 	}
 	lock := flock.New(path + ".lock")
 	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
-	if _, err := lock.TryLockContext(ctx, lockRetryDelay); err != nil {
+	if _, lockErr := lock.TryLockContext(ctx, lockRetryDelay); lockErr != nil {
 		// A slow writer may have stored an id while this process waited; use it rather than fail.
-		if existing, loadErr := loadSharedFile(path); loadErr == nil {
-			return existing.MachineID, nil
+		current, currentErr := loadSharedFile(path)
+		if settled(current, currentErr, candidateID, replace) {
+			return current.MachineID, nil
 		}
-		return "", fmt.Errorf("locking %s: %w", lock.Path(), err)
+		if blockedByNewerSchema(current, currentErr, replace) {
+			return "", errNewerSchema
+		}
+		return "", fmt.Errorf("locking %s: %w", lock.Path(), lockErr)
 	}
 	defer func() { _ = lock.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
 
-	existing, err := loadSharedFile(path)
-	if err == nil {
+	// Only a missing or invalid file is replaced; a file that cannot be read is an error, never clobbered.
+	existing, err = loadSharedFile(path)
+	if settled(existing, err, candidateID, replace) {
 		return existing.MachineID, nil
 	}
-	if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNoValidID) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNoValidID) {
 		return "", err
+	}
+	if blockedByNewerSchema(existing, err, replace) {
+		return "", errNewerSchema
 	}
 
 	stamp := time.Now().UTC().Format(time.RFC3339)
 	data, err := json.Marshal(sharedFile{
 		MachineID:        candidateID,
 		IdentifierSource: source,
-		SchemaVersion:    1,
+		SchemaVersion:    sharedSchemaVersion,
 		Scope:            scope,
-		FirstSeenAt:      stamp,
+		FirstSeenAt:      firstSeenAt(existing, err, stamp),
 		UpdatedAt:        stamp,
 		Writer:           writer,
 	})
 	if err != nil {
 		return "", err
 	}
-	// Readers take no lock, so the file is replaced by rename rather than rewritten in place.
+	if err := renameIntoPlace(path, data, mode); err != nil {
+		return "", err
+	}
+	return candidateID, nil
+}
+
+// renameIntoPlace swaps path for data in one rename. Readers take no lock, so the file is never
+// rewritten in place.
+func renameIntoPlace(path string, data []byte, mode fs.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".machine-id-*.tmp")
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	_, err = tmp.Write(data)
@@ -212,8 +302,5 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	if err == nil {
 		err = os.Rename(tmp.Name(), path)
 	}
-	if err != nil {
-		return "", err
-	}
-	return candidateID, nil
+	return err
 }

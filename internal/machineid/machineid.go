@@ -54,8 +54,8 @@ func writerIdentity(o resolveOptions) string {
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. A valid value
 // supplied on MACHINE_ID itself (trailing whitespace trimmed) is returned. Otherwise the first
 // lookup takes the first of: the hardware serial, the shared file, the Snyk Studio device-id file,
-// or a newly generated id. A different id already in the shared file is not replaced yet, so the
-// serial wins only for this process. Later lookups through the same resolver return that id,
+// or a newly generated id. A valid serial replaces a different id in the shared file. A file written
+// by a newer or unknown schema is left unchanged, with a warning. Later lookups through the same resolver return that id,
 // together with an error for each file that exists but could not be read. If no id was found, it
 // returns runtimeinfo.ErrNoMachineID joined with those errors and an error describing why a
 // generated id could not be stored; the configuration caching does not hold it, so the next lookup
@@ -199,9 +199,23 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			logger.Debug().Str("reason", reason).Msg("machine id: hardware serial number failed validation, ignoring")
 		} else {
 			machine.ID = hw.serial
-			_, sharedReadErr := readSharedFile(paths, logger)
-			if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
-				logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
+			existing, sharedReadErr := readSharedFile(paths, logger)
+			if existing == nil || existing.MachineID != hw.serial {
+				stored, err := replaceSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger)
+				switch {
+				case errors.Is(err, errNewerSchema):
+					logger.Warn().Err(err).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
+				case err != nil:
+					logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
+				default:
+					if after, afterErr := readSharedFile(paths, logger); after != nil && after.MachineID != hw.serial {
+						event := logger.Warn()
+						if isUnfixableLocation(stored.machineWideErr) {
+							event = logger.Debug()
+						}
+						event.Err(afterErr).Str("shared_machine_id", after.MachineID).Msg("machine id: shared file holds a different machine id that could not be replaced by the hardware serial")
+					}
+				}
 			}
 			return machine, sharedReadErr
 		}
