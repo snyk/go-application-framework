@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,9 +39,11 @@ func TestEnrollMachine(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, e.Key.Equal(stored))
 
-	info, err := os.Stat(keyFile)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if runtime.GOOS != "windows" { // Windows does not honour POSIX permission bits
+		info, err := os.Stat(keyFile)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 }
 
 func TestEnrollMachineUsesDefaultKeyFileWhenNoneConfigured(t *testing.T) {
