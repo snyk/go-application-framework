@@ -1,9 +1,8 @@
 package machineenrollment
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -13,6 +12,7 @@ import (
 )
 
 const (
+	keyBits     = 2048
 	keyFileMode = 0o600
 	keyDirMode  = 0o700
 	pemType     = "PRIVATE KEY"
@@ -28,8 +28,8 @@ func DefaultKeyFile() (string, error) {
 }
 
 // GenerateKey generates a new machine client key.
-func GenerateKey() (*ecdsa.PrivateKey, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func GenerateKey() (*rsa.PrivateKey, error) {
+	key, err := rsa.GenerateKey(rand.Reader, keyBits)
 	if err != nil {
 		return nil, fmt.Errorf("failed generating machine client key: %w", err)
 	}
@@ -37,7 +37,7 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 // WriteKeyFile atomically replaces the key file at path with key, readable only by its owner.
-func WriteKeyFile(path string, key *ecdsa.PrivateKey) error {
+func WriteKeyFile(path string, key *rsa.PrivateKey) error {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return fmt.Errorf("failed encoding machine client key: %w", err)
@@ -71,7 +71,7 @@ func WriteKeyFile(path string, key *ecdsa.PrivateKey) error {
 }
 
 // ReadKeyFile reads a key written by WriteKeyFile.
-func ReadKeyFile(path string) (*ecdsa.PrivateKey, error) {
+func ReadKeyFile(path string) (*rsa.PrivateKey, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed reading machine client key file: %w", err)
@@ -84,9 +84,9 @@ func ReadKeyFile(path string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed parsing machine client key: %w", err)
 	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok || key.Curve != elliptic.P256() {
-		return nil, errors.New("machine client key is not a P-256 key")
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("machine client key is not an RSA key")
 	}
 	return key, nil
 }

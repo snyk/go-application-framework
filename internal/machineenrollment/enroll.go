@@ -2,7 +2,8 @@ package machineenrollment
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -38,7 +39,7 @@ type Enrollment struct {
 	KeyID     string
 	// Key is the machine client's private key, which the caller stores. It is the only credential
 	// the machine needs from now on.
-	Key *ecdsa.PrivateKey
+	Key *rsa.PrivateKey
 }
 
 // Enroll enrolls this device with the API at apiURL. It fetches a challenge, signs it with both the
@@ -142,7 +143,7 @@ func requestChallenge(ctx context.Context, httpClient *http.Client, apiURL strin
 // keyAssertion proves the machine holds key: it is signed by key, carries its public key, and is
 // addressed to the enrollment endpoint at audience. The claim named by name is what the machine
 // enrolls with: the challenge nonce or the join token.
-func keyAssertion(key *ecdsa.PrivateKey, audience, name, value string, now time.Time) (string, error) {
+func keyAssertion(key *rsa.PrivateKey, audience, name, value string, now time.Time) (string, error) {
 	jwk, err := publicJWK(&key.PublicKey)
 	if err != nil {
 		return "", err
@@ -156,7 +157,7 @@ func keyAssertion(key *ecdsa.PrivateKey, audience, name, value string, now time.
 
 // deviceAttestation proves the machine holds the identity's private key, and binds the new machine
 // client key to it through the key's thumbprint.
-func deviceAttestation(identity DeviceIdentity, info DeviceInfo, clientKey *ecdsa.PublicKey, audience, nonce string, now time.Time) (string, error) {
+func deviceAttestation(identity DeviceIdentity, info DeviceInfo, clientKey crypto.PublicKey, audience, nonce string, now time.Time) (string, error) {
 	jkt, err := thumbprint(clientKey)
 	if err != nil {
 		return "", err

@@ -93,7 +93,7 @@ func TestClientAssertion(t *testing.T) {
 
 	require.NoError(t, enrollmenttest.VerifyJWT(assertion, &key.PublicKey))
 	header, claims := enrollmenttest.DecodeJWT(t, assertion)
-	assert.Equal(t, "ES256", header["alg"])
+	assert.Equal(t, "RS256", header["alg"])
 	assert.NotEmpty(t, header["kid"])
 	assert.Equal(t, "client-1", claims["iss"])
 	assert.Equal(t, "client-1", claims["sub"])

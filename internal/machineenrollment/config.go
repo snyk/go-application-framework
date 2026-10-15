@@ -3,9 +3,9 @@
 //
 // A machine enrolls in one of two ways. Attested enrollment proves, in one request, that the device
 // holds the private key of an identity certificate issued by its device management CA (read from
-// the platform's keychain) and that it holds a newly generated ES256 key. Join-token enrollment
+// the platform's keychain) and that it holds a newly generated RS256 key. Join-token enrollment
 // presents a single-use token an admin issued for the machine instead of the certificate, so it
-// works on any platform. Either way the server answers with an OAuth client_id bound to the ES256
+// works on any platform. Either way the server answers with an OAuth client_id bound to the RS256
 // key, which then authenticates with private_key_jwt client assertions, so the certificate or token
 // is only used once.
 package machineenrollment

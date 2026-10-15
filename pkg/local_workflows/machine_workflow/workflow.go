@@ -116,7 +116,7 @@ func enroll(
 	}
 	globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, config.Get(auth.CONFIG_KEY_OAUTH_TOKEN))
 
-	return fmt.Sprintf("This machine is enrolled.\n  Machine: %s\n  Client:  %s\n", e.MachineID, e.ClientID), nil
+	return fmt.Sprintf("This machine is enrolled.\n  Machine: %s\n  Client:  %s\n  Auth Token: %s\n", e.MachineID, e.ClientID, config.Get(auth.CONFIG_KEY_OAUTH_TOKEN)), nil
 }
 
 func statusEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {

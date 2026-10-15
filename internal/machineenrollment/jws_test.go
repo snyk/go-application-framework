@@ -56,9 +56,20 @@ func TestSignJWTRejectsUnsupportedKeys(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestThumbprint(t *testing.T) {
-	// The example key from RFC 7638 is RSA, so check against a value computed independently from
-	// the canonical JWK instead.
+func TestThumbprintRSA(t *testing.T) {
+	// The example key from RFC 7638 section 3.1.
+	n, err := base64.RawURLEncoding.DecodeString("0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw")
+	require.NoError(t, err)
+	pub := &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: 65537}
+
+	got, err := thumbprint(pub)
+	require.NoError(t, err)
+
+	assert.Equal(t, "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", got)
+}
+
+func TestThumbprintEC(t *testing.T) {
+	// Check against a value computed independently from the canonical JWK.
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	jwk, err := publicJWK(&key.PublicKey)

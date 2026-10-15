@@ -1,8 +1,9 @@
 package machineenrollment
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -43,13 +44,13 @@ func TestWriteAndReadKeyFile(t *testing.T) {
 
 func TestReadKeyFileRejectsOtherKeys(t *testing.T) {
 	dir := t.TempDir()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	der, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	der, err := x509.MarshalPKCS8PrivateKey(ecKey)
 	require.NoError(t, err)
 
 	files := map[string][]byte{
-		"rsa.pem":     pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: der}),
+		"ec.pem":      pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: der}),
 		"garbage.pem": []byte("not a key"),
 	}
 	for name, data := range files {

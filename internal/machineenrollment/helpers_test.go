@@ -1,7 +1,7 @@
 package machineenrollment_test
 
 import (
-	"crypto/ecdsa"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -15,7 +15,7 @@ import (
 )
 
 // accessToken gets an access token for clientID from srv with a client assertion.
-func accessToken(t *testing.T, srv *enrollmenttest.Server, key *ecdsa.PrivateKey, clientID string) string {
+func accessToken(t *testing.T, srv *enrollmenttest.Server, key *rsa.PrivateKey, clientID string) string {
 	t.Helper()
 	assertion, err := machineenrollment.ClientAssertion(key, clientID, srv.URL+"/oauth2/token", time.Now())
 	require.NoError(t, err)

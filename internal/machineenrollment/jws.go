@@ -79,29 +79,45 @@ func ecdsaSignatureToJWS(der []byte) ([]byte, error) {
 	return out, nil
 }
 
-// publicJWK returns the RFC 7517 JWK of a P-256 public key with only its required members.
-func publicJWK(pub *ecdsa.PublicKey) (map[string]string, error) {
-	b, err := pub.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed encoding public key: %w", err)
+// publicJWK returns the RFC 7517 JWK of an RSA or P-256 public key with only its required members.
+func publicJWK(pub crypto.PublicKey) (map[string]string, error) {
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		return map[string]string{
+			"kty": "RSA",
+			"n":   base64.RawURLEncoding.EncodeToString(k.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(k.E)).Bytes()),
+		}, nil
+	case *ecdsa.PublicKey:
+		b, err := k.Bytes()
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding public key: %w", err)
+		}
+		// Bytes returns the uncompressed point: 0x04 || X || Y.
+		return map[string]string{
+			"kty": "EC",
+			"crv": "P-256",
+			"x":   base64.RawURLEncoding.EncodeToString(b[1 : 1+p256CoordinateBytes]),
+			"y":   base64.RawURLEncoding.EncodeToString(b[1+p256CoordinateBytes:]),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported public key type %T", pub)
 	}
-	// Bytes returns the uncompressed point: 0x04 || X || Y.
-	return map[string]string{
-		"kty": "EC",
-		"crv": "P-256",
-		"x":   base64.RawURLEncoding.EncodeToString(b[1 : 1+p256CoordinateBytes]),
-		"y":   base64.RawURLEncoding.EncodeToString(b[1+p256CoordinateBytes:]),
-	}, nil
 }
 
-// thumbprint returns the RFC 7638 JWK thumbprint of a P-256 public key, which is also its kid.
-func thumbprint(pub *ecdsa.PublicKey) (string, error) {
+// thumbprint returns the RFC 7638 JWK thumbprint of an RSA or P-256 public key, which is also its kid.
+func thumbprint(pub crypto.PublicKey) (string, error) {
 	jwk, err := publicJWK(pub)
 	if err != nil {
 		return "", err
 	}
 	// The required members in lexicographic order, with no whitespace.
-	canonical := fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`, jwk["x"], jwk["y"])
+	var canonical string
+	if jwk["kty"] == "RSA" {
+		canonical = fmt.Sprintf(`{"e":%q,"kty":"RSA","n":%q}`, jwk["e"], jwk["n"])
+	} else {
+		canonical = fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`, jwk["x"], jwk["y"])
+	}
 	sum := sha256.Sum256([]byte(canonical))
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
