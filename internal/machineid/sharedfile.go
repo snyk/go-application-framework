@@ -155,55 +155,42 @@ func schemaReplaceable(raw json.RawMessage) bool {
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
 // It never creates the machine-wide directory; any failure there falls back to the per-user path.
 func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
-	stored, err := storeSharedFileID(paths, candidateID, source, writer, false, logger)
-	return stored.id, err
-}
-
-// replaceSharedFileID stores candidateID in place of a different valid id, so every reader converges on it.
-// The result's machineWideErr reports why the machine-wide file was skipped, when it was.
-func replaceSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (storedID, error) {
-	return storeSharedFileID(paths, candidateID, source, writer, true, logger)
-}
-
-type storedID struct {
-	id             string
-	machineWideErr error
-}
-
-func storeSharedFileID(paths pathPair, candidateID, source, writer string, replace bool, logger *zerolog.Logger) (storedID, error) {
 	logger = effectiveLogger(logger)
 	var machineWideErr error
 	if paths.machineWide != "" {
-		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, replace)
+		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, false)
 		if err == nil {
-			return storedID{id: id}, nil
+			return id, nil
 		}
 		if errors.Is(err, errNewerSchema) {
-			return storedID{}, err
+			return "", err
 		}
 		machineWideErr = err
 		logger.Debug().Err(err).Str("path", paths.machineWide).Msg("machine id: machine-wide write failed, falling back to per-user")
 	}
-	id, err := writePerUser(paths.perUser, candidateID, source, writer, replace)
+	id, err := writePerUser(paths.perUser, candidateID, source, writer)
 	if err != nil {
-		return storedID{}, errors.Join(machineWideErr, err)
+		return "", errors.Join(machineWideErr, err)
 	}
-	return storedID{id: id, machineWideErr: machineWideErr}, nil
+	return id, nil
 }
 
-// isUnfixableLocation reports whether a write failed because the location is not writable by this process.
-func isUnfixableLocation(err error) bool {
-	return errors.Is(err, fs.ErrPermission)
+// replaceSharedFileID stores candidateID in the machine-wide file in place of a different valid id, best effort: a file that cannot be replaced is left unchanged and no per-user file is written.
+func replaceSharedFileID(paths pathPair, candidateID, source, writer string) (string, error) {
+	if paths.machineWide == "" {
+		return "", errors.New("machine id: no machine-wide shared file path")
+	}
+	return writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, true)
 }
 
-func writePerUser(path, candidateID, source, writer string, replace bool) (string, error) {
+func writePerUser(path, candidateID, source, writer string) (string, error) {
 	if path == "" {
 		return "", errors.New("machine id: no per-user shared file path")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), fileperms.FILEPERM_755); err != nil {
 		return "", err
 	}
-	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer, replace)
+	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer, false)
 }
 
 func settled(existing *sharedFile, err error, candidateID string, replace bool) bool {
