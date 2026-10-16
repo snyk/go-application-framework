@@ -56,8 +56,8 @@ func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultVal
 	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio), withHardware(m.serial, "test-host")}, opts...)...)
 }
 
-// machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
-func machineID(t *testing.T, config configuration.Configuration) string {
+// machineOf reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
+func machineOf(t *testing.T, config configuration.Configuration) runtimeinfo.Machine {
 	t.Helper()
 	value, err := config.GetWithError(configuration.MACHINE_ID)
 	machine, ok := value.(runtimeinfo.Machine)
@@ -67,7 +67,13 @@ func machineID(t *testing.T, config configuration.Configuration) string {
 	} else {
 		require.NoError(t, err)
 	}
-	return machine.ID
+	return machine
+}
+
+// machineID reads the identifier of MACHINE_ID, see machineOf.
+func machineID(t *testing.T, config configuration.Configuration) string {
+	t.Helper()
+	return machineOf(t, config).ID
 }
 
 // snykJSON returns the contents of the configuration file newIsolatedMachine creates.
@@ -453,13 +459,131 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
 }
 
+func TestAcceptance_StudioIDFromDiskIsRecordedOnTheMachineWhateverSourcedTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+
+	machine := machineOf(t, m.newRun())
+
+	require.Equal(t, "from-shared-file", machine.ID)
+	require.Equal(t, "studio-device-id", machine.StudioID)
+}
+
+func TestAcceptance_StudioCLIVariableFillsStudioIDWithoutSupplyingTheMachineID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value")
+
+	machine := machineOf(t, m.newRun())
+
+	require.NotEqual(t, "studio-cli-value", machine.ID)
+	require.Equal(t, "studio-cli-value", machine.StudioID)
+	require.Equal(t, machine.ID, readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_InvalidStudioCLIValueFallsBackToTheStudioFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a b")
+
+	require.Equal(t, "studio-device-id", machineOf(t, m.newRun()).StudioID)
+}
+
+func TestAcceptance_InvalidStudioCLIValueIsLoggedOncePerResolvedLookup(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a b")
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	failures := 0
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "Snyk Studio CLI value failed validation") {
+			failures++
+		}
+	}
+	require.Equal(t, 1, failures)
+}
+
+func TestAcceptance_TrailingNewlineIsTrimmedFromStudioCLIValue(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value\n")
+
+	require.Equal(t, "studio-cli-value", machineOf(t, m.newRun()).StudioID)
+}
+
+func TestAcceptance_StudioIDIsTheSameWhetherTheMachineIDIsSuppliedOrResolved(t *testing.T) {
+	for name, cliValue := range map[string]string{"from disk": "", "from Studio CLI variable": "studio-cli-value"} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			seed(t, m.studio.perUser, "studio-device-id")
+			if cliValue != "" {
+				t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", cliValue)
+			}
+			want := "studio-device-id"
+			if cliValue != "" {
+				want = cliValue
+			}
+
+			resolved := machineOf(t, m.newRun())
+			t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+			supplied := machineOf(t, m.newRun())
+
+			require.Equal(t, want, resolved.StudioID)
+			require.Equal(t, want, supplied.StudioID)
+		})
+	}
+}
+
+func TestAcceptance_StudioCLIVariableSetAfterTheFirstLookupIsUsedOnTheResolvedPath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	config := m.newRun()
+	require.Equal(t, "studio-device-id", machineOf(t, config).StudioID)
+
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value")
+
+	require.Equal(t, "studio-cli-value", machineOf(t, config).StudioID)
+}
+
+func TestAcceptance_UnreadableStudioFileIsLoggedOnceForASuppliedMachine(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	seed(t, m.studio.perUser, "studio-device-id")
+	restore := makeUnreadable(t, m.studio.perUser)
+	defer restore()
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config := m.newRun(WithLogger(&logger))
+
+	for range 3 {
+		machineOf(t, config)
+	}
+
+	require.Equal(t, 1, strings.Count(logs.String(), "could not be read for the machine description"))
+}
+
+func TestAcceptance_StudioIDOfASuppliedMachineIsReadOnce(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	config := m.newRun()
+	first := machineOf(t, config)
+
+	seed(t, m.studio.perUser, "changed-studio-device-id")
+
+	require.Equal(t, "studio-device-id", first.StudioID)
+	require.Equal(t, first.StudioID, machineOf(t, config).StudioID)
+}
+
 func TestAcceptance_HardwareSerialWinsOverAnIDInTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
 
-	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
-	require.NoError(t, err)
+	machine := machineOf(t, m.newRun())
 
 	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
 	require.Equal(t, "C02Q7KHTGFWF", machine.SerialNumber)
@@ -491,7 +615,7 @@ func TestAcceptance_HardwareSerialLeavesAFileAlreadyHoldingTheSerialUntouched(t 
 	past := before.ModTime().Add(-time.Hour)
 	require.NoError(t, os.Chtimes(m.shared.perUser, past, past))
 
-	machineID(t, m.newRun())
+	machineOf(t, m.newRun())
 
 	after, err := os.Stat(m.shared.perUser)
 	require.NoError(t, err)
@@ -520,20 +644,6 @@ func TestAcceptance_HardwareSerialIsStoredInAnEmptyOrMissingSharedFile(t *testin
 	}
 }
 
-func TestAcceptance_StudioDeviceIDIsNotReadWhenTheHardwareSerialWins(t *testing.T) {
-	m := newIsolatedMachine(t)
-	m.serial = "C02Q7KHTGFWF"
-	seed(t, m.studio.perUser, "studio-device-id")
-	restore := makeUnreadable(t, m.studio.perUser)
-	defer restore()
-	var logs bytes.Buffer
-	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-
-	require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
-
-	require.NotContains(t, logs.String(), "device-id file candidate")
-}
-
 func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenAnExistingIDCannotBeReplaced(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
@@ -553,11 +663,11 @@ func TestAcceptance_HardwareSerialOutsideTheAllowedCharactersIsNotUsedAsTheID(t 
 	m := newIsolatedMachine(t)
 	m.serial = "C02 Q7KHTGFWF"
 
-	id := machineID(t, m.newRun())
+	machine := machineOf(t, m.newRun())
 
-	require.NotEqual(t, "C02 Q7KHTGFWF", id)
-	require.True(t, valid(id))
-	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
+	require.NotEqual(t, "C02 Q7KHTGFWF", machine.ID)
+	require.True(t, valid(machine.ID))
+	require.Equal(t, machine.ID, readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestAcceptance_HardwareSerialReadErrorIsLoggedAtDebugAndNotReturned(t *testing.T) {
@@ -594,7 +704,7 @@ func TestAcceptance_APermanentlyFailingHardwareSerialProbeRunsOnceForAllLookups(
 			config := m.newRun(failingSerial)
 
 			for range 3 {
-				machineID(t, config)
+				machineOf(t, config)
 			}
 
 			require.Equal(t, 1, probes)
@@ -614,8 +724,8 @@ func TestAcceptance_HardwareSerialIsReadOnceForASuppliedMachine(t *testing.T) {
 	}
 	config := m.newRun(countSerial)
 
-	machineID(t, config)
-	machineID(t, config)
+	machineOf(t, config)
+	machineOf(t, config)
 
 	require.Equal(t, 1, reads)
 }
