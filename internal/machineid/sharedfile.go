@@ -153,7 +153,7 @@ func schemaReplaceable(raw json.RawMessage) bool {
 }
 
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
-// It never creates the machine-wide directory; any failure there falls back to the per-user path.
+// It never creates the machine-wide directory; any failure there falls back to the per-user path, except errNewerSchema, which is returned at once so a newer-schema file is not shadowed.
 func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
 	logger = effectiveLogger(logger)
 	var machineWideErr error
