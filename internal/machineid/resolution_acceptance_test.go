@@ -721,6 +721,51 @@ func TestAcceptance_HardwareSerialLeavesANonIntegerSchemaSharedFileUnchanged(t *
 	}
 }
 
+func TestAcceptance_HardwareSerialLeavesAnInvalidIDSharedFileWithANewerSchemaUnchanged(t *testing.T) {
+	for name, original := range map[string]string{
+		"overlong id": `{"machine_id":"` + strings.Repeat("a", 129) + `","schema_version":2}`,
+		"empty id":    `{"machine_id":"","schema_version":2}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			seed(t, m.shared.machineWide, original)
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+			machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+			raw, readErr := os.ReadFile(m.shared.machineWide)
+			require.NoError(t, readErr)
+			require.Equal(t, original, string(raw))
+			require.NoFileExists(t, m.shared.perUser)
+			require.Contains(t, logLineContaining(t, logs.String(), "newer or unknown schema"), `"level":"warn"`)
+			require.NotContains(t, logs.String(), "could not be stored")
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialReplacesAnInvalidIDSharedFileWithoutANewerSchema(t *testing.T) {
+	for name, original := range map[string]string{
+		"missing schema": `{"machine_id":""}`,
+		"not json":       `not json at all`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			seed(t, m.shared.machineWide, original)
+
+			machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+			require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+		})
+	}
+}
+
 func TestAcceptance_HardwareSerialDoesNotWarnOrWriteWhenAReadOnlyMachineWideFileAlreadyHoldsIt(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"

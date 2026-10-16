@@ -125,9 +125,6 @@ func loadSharedFile(path string) (*sharedFile, error) {
 	if err := json.Unmarshal(data, &sf); err != nil && !errors.As(err, &typeErr) {
 		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
 	}
-	if !valid(sf.MachineID) {
-		return nil, errNoValidID
-	}
 	var version struct {
 		SchemaVersion json.RawMessage `json:"schema_version"`
 	}
@@ -135,6 +132,9 @@ func loadSharedFile(path string) (*sharedFile, error) {
 		return nil, fmt.Errorf("%w: %w", errNoValidID, err)
 	}
 	sf.replaceable = schemaReplaceable(version.SchemaVersion)
+	if !valid(sf.MachineID) {
+		return &sf, errNoValidID
+	}
 	return &sf, nil
 }
 
@@ -205,10 +205,11 @@ func firstSeenAt(existing *sharedFile, err error, stamp string) string {
 	return stamp
 }
 
-// blockedByNewerSchema reports whether replacing the file would overwrite a newer schema's id. Checked
-// before taking the lock too, so a lock that cannot be created does not turn into a per-user shadow file.
-func blockedByNewerSchema(existing *sharedFile, err error, replace bool) bool {
-	return replace && err == nil && !existing.replaceable
+// blockedByNewerSchema reports whether the file was written by a schema this code must not overwrite,
+// even when its id is invalid. Checked before taking the lock too, so a lock that cannot be created
+// does not turn into a per-user shadow file.
+func blockedByNewerSchema(existing *sharedFile) bool {
+	return existing != nil && !existing.replaceable
 }
 
 func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string, replace bool) (string, error) {
@@ -217,7 +218,7 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	if settled(existing, err, candidateID, replace) {
 		return existing.MachineID, nil
 	}
-	if blockedByNewerSchema(existing, err, replace) {
+	if blockedByNewerSchema(existing) {
 		return "", errNewerSchema
 	}
 	lock := flock.New(path + ".lock")
@@ -229,7 +230,7 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 		if settled(current, currentErr, candidateID, replace) {
 			return current.MachineID, nil
 		}
-		if blockedByNewerSchema(current, currentErr, replace) {
+		if blockedByNewerSchema(current) {
 			return "", errNewerSchema
 		}
 		return "", fmt.Errorf("locking %s: %w", lock.Path(), lockErr)
@@ -244,7 +245,7 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 	if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNoValidID) {
 		return "", err
 	}
-	if blockedByNewerSchema(existing, err, replace) {
+	if blockedByNewerSchema(existing) {
 		return "", errNewerSchema
 	}
 
