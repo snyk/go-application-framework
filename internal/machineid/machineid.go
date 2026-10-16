@@ -54,8 +54,9 @@ func writerIdentity(o resolveOptions) string {
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. A valid value
 // supplied on MACHINE_ID itself (trailing whitespace trimmed) is returned. Otherwise the first
 // lookup takes the first of: the hardware serial, the shared file, the Snyk Studio device-id file,
-// or a newly generated id. A valid serial replaces a different id in the machine-wide shared file, best effort. A file written
-// by a newer or unknown schema is left unchanged, with a warning. Later lookups through the same resolver return that id,
+// or a newly generated id. A valid serial replaces a different id in the machine-wide shared file, best
+// effort. A file written by a newer or unknown schema is left unchanged, and storing a hardware serial
+// logs a warning about it. Later lookups through the same resolver return that id,
 // together with an error for each file that exists but could not be read. If no id was found, it
 // returns runtimeinfo.ErrNoMachineID joined with those errors and an error describing why a
 // generated id could not be stored; the configuration caching does not hold it, so the next lookup
