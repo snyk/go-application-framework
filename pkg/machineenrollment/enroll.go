@@ -3,6 +3,8 @@ package machineenrollment
 import (
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -14,18 +16,34 @@ import (
 )
 
 const (
-	apiVersion               = "2024-10-15"
-	joinTokenEnrollmentsPath = "/hidden/machines/enrollments"
-	joinTokenEnrollmentType  = "machine_enrollment"
-	jsonAPIContentType       = "application/vnd.api+json"
-	maxResponseBodySize      = 64 << 10
+	apiVersion              = "2024-10-15"
+	enrollmentsPath         = "/hidden/machines/enrollments"
+	enrollmentType          = "machine_enrollment"
+	jsonAPIContentType      = "application/vnd.api+json"
+	maxResponseBodySize     = 64 << 10
+	methodDeviceToken       = "device_token"
+	methodFleetKey          = "fleet_key"
+	clientAssertionTyp      = "client-key-assertion+jwt"
+	fleetAuthorizationTyp   = "fleet-key-authorization+jwt"
+	maxIdentifiers          = 32
+	maxIdentifierValueChars = 256
 
-	// JoinTokenPrefix starts every join key.
-	JoinTokenPrefix = "sjt_"
+	// DeviceTokenPrefix starts every device token.
+	DeviceTokenPrefix = "sdt_"
+
+	// retiredJoinKeyPrefix started the single-use join keys that device tokens replaced.
+	retiredJoinKeyPrefix = "sjt_"
 )
 
-// ErrMalformedJoinToken is returned for a join key that can't be one, before it is sent anywhere.
-var ErrMalformedJoinToken = errors.New("the join key is malformed: join keys start with " + JoinTokenPrefix)
+// ErrMalformedDeviceToken is returned for a device token that can't be one, before it is sent anywhere.
+var ErrMalformedDeviceToken = errors.New("the device token is malformed: device tokens start with " + DeviceTokenPrefix)
+
+// ErrRetiredJoinKey is returned for a retired join key (sjt_), which the machine identity service no
+// longer accepts.
+var ErrRetiredJoinKey = errors.New("join keys (" + retiredJoinKeyPrefix + "...) are no longer supported: ask an admin for a device token (" + DeviceTokenPrefix + "...) for this machine, or use a fleet key")
+
+// ErrNoIdentifiers is returned when a fleet key enrollment has no valid identifier to name the machine with.
+var ErrNoIdentifiers = errors.New("a fleet key enrollment needs between 1 and 32 machine identifiers, each of 1 to 256 characters")
 
 // Enrollment is the result of enrolling this device.
 type Enrollment struct {
@@ -37,55 +55,83 @@ type Enrollment struct {
 	Key *rsa.PrivateKey
 }
 
-// EnrollWithJoinToken enrolls this machine with the single-use join key an admin issued for it,
+// EnrollWithDeviceToken enrolls this machine with the single-use device token an admin issued for it,
 // exchanging it for an OAuth client bound to a newly generated machine client key. It needs no
-// device identity, so it works on any platform. httpClient must not add authentication.
-//
-// knownMachineID is not sent to the server, whose enrollment request takes only the assertion; it is
-// the machine id reported in the result if the server's response omits one.
-func EnrollWithJoinToken(ctx context.Context, httpClient *http.Client, apiURL, joinToken, knownMachineID string, now time.Time) (Enrollment, error) {
-	if !strings.HasPrefix(joinToken, JoinTokenPrefix) || len(joinToken) == len(JoinTokenPrefix) {
-		return Enrollment{}, ErrMalformedJoinToken
+// device identity, so it works on any platform, and it enrolls the machine even if it is enrolled
+// already. httpClient must not add authentication.
+func EnrollWithDeviceToken(ctx context.Context, httpClient *http.Client, apiURL, deviceToken string, now time.Time) (Enrollment, error) {
+	if strings.HasPrefix(deviceToken, retiredJoinKeyPrefix) {
+		return Enrollment{}, ErrRetiredJoinKey
+	}
+	if !strings.HasPrefix(deviceToken, DeviceTokenPrefix) || len(deviceToken) == len(DeviceTokenPrefix) {
+		return Enrollment{}, ErrMalformedDeviceToken
 	}
 
+	// The device token is a bearer secret that TLS and single use protect, so it is sent as is
+	// instead of being signed into the assertion.
+	return enroll(ctx, httpClient, apiURL, now, func(_ crypto.Signer, _ string) (string, string, error) {
+		return methodDeviceToken, deviceToken, nil
+	})
+}
+
+// EnrollWithFleetKey enrolls this machine with a fleet key, the P-256 key an admin registered and
+// allowed for the machines of a fleet. The machine names itself by identifiers, which must be the
+// ones an admin registered it with (see SerialNumbers), and signs them with the fleet key. Like
+// EnrollWithDeviceToken, it exchanges them for an OAuth client bound to a newly generated machine
+// client key, but it enrolls only a machine that has no active client. httpClient must not add
+// authentication.
+func EnrollWithFleetKey(ctx context.Context, httpClient *http.Client, apiURL string, fleetKey *ecdsa.PrivateKey, identifiers []Identifier, now time.Time) (Enrollment, error) {
+	if err := validateIdentifiers(identifiers); err != nil {
+		return Enrollment{}, err
+	}
+	if fleetKey == nil || fleetKey.Curve != elliptic.P256() {
+		return Enrollment{}, errors.New("the fleet key must be a P-256 key")
+	}
+
+	return enroll(ctx, httpClient, apiURL, now, func(clientKey crypto.Signer, audience string) (string, string, error) {
+		authorization, err := fleetKeyAuthorization(fleetKey, clientKey, audience, identifiers, now)
+		return methodFleetKey, authorization, err
+	})
+}
+
+// enroll generates a client key and sends the enrollment that authorize makes for it. authorize
+// returns the enrollment method and the authorization it carries, given the client key and the
+// audience of the request.
+func enroll(ctx context.Context, httpClient *http.Client, apiURL string, now time.Time, authorize func(clientKey crypto.Signer, audience string) (method, authorization string, err error)) (Enrollment, error) {
 	key, err := GenerateKey()
 	if err != nil {
 		return Enrollment{}, err
 	}
 
-	url := apiURL + joinTokenEnrollmentsPath
-	assertion, err := keyAssertion(key, url, "join_token", joinToken, now)
+	url := apiURL + enrollmentsPath
+	assertion, err := keyAssertion(key, url, now)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	method, authorization, err := authorize(key, url)
 	if err != nil {
 		return Enrollment{}, err
 	}
 
-	// The server rejects any attribute but the assertion (additionalProperties: false), so the
-	// machine id is never sent; the server assigns one.
-	attributes := map[string]string{"assertion": assertion}
-
-	res, err := postEnrollment(ctx, httpClient, url, joinTokenEnrollmentType, attributes)
+	// The server rejects any other attribute (additionalProperties: false).
+	attributes := map[string]string{"method": method, "assertion": assertion, "authorization": authorization}
+	res, err := postEnrollment(ctx, httpClient, url, attributes)
 	if err != nil {
 		return Enrollment{}, err
 	}
-	machineID := res.MachineID
-	if machineID == "" {
-		machineID = knownMachineID
-	}
-	return Enrollment{MachineID: machineID, ClientID: res.ClientID, KeyID: res.KeyID, Key: key}, nil
+	return Enrollment{MachineID: res.MachineID, ClientID: res.ClientID, KeyID: res.KeyID, Key: key}, nil
 }
 
 // keyAssertion proves the machine holds key: it is signed by key, carries its public key, and is
-// addressed to the enrollment endpoint at audience. The claim named by name is what the machine
-// enrolls with: the join key.
-func keyAssertion(key crypto.Signer, audience, name, value string, now time.Time) (string, error) {
+// addressed to the enrollment endpoint at audience.
+func keyAssertion(key crypto.Signer, audience string, now time.Time) (string, error) {
 	jwk, err := publicJWK(key.Public())
 	if err != nil {
 		return "", err
 	}
-	return signJWT(key, map[string]any{"jwk": jwk}, map[string]any{
+	return signJWT(key, clientAssertionTyp, map[string]any{"jwk": jwk}, map[string]any{
 		"aud": audience,
 		"iat": now.Unix(),
-		name:  value,
 	})
 }
 
@@ -95,9 +141,9 @@ type enrollmentResult struct {
 	KeyID     string `json:"key_id"`
 }
 
-func postEnrollment(ctx context.Context, httpClient *http.Client, url, resourceType string, attributes map[string]string) (enrollmentResult, error) {
+func postEnrollment(ctx context.Context, httpClient *http.Client, url string, attributes map[string]string) (enrollmentResult, error) {
 	req := map[string]any{"data": map[string]any{
-		"type":       resourceType,
+		"type":       enrollmentType,
 		"attributes": attributes,
 	}}
 	body, err := json.Marshal(req)
@@ -119,8 +165,8 @@ func postEnrollment(ctx context.Context, httpClient *http.Client, url, resourceT
 	return res.Data.Attributes, nil
 }
 
-// doJSONAPI sends a JSON:API request and decodes the response into out, or returns the error
-// details the server sent.
+// doJSONAPI sends a JSON:API request and decodes the response into out, or returns the
+// EnrollmentError the server sent.
 func doJSONAPI(ctx context.Context, httpClient *http.Client, method, url, body string, want int, out any) error {
 	var reqBody io.Reader
 	if body != "" {
@@ -146,33 +192,10 @@ func doJSONAPI(ctx context.Context, httpClient *http.Client, method, url, body s
 		return fmt.Errorf("failed reading response: %w", err)
 	}
 	if res.StatusCode != want {
-		return fmt.Errorf("%s %s returned %d%s", method, req.URL.Path, res.StatusCode, errorDetail(data))
+		return newEnrollmentError(method, req.URL.Path, res.StatusCode, data)
 	}
 	if err = json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("failed decoding response: %w", err)
 	}
 	return nil
-}
-
-// errorDetail returns the detail of a JSON:API error response, prefixed for appending to an error
-// message, or "" if it has none.
-func errorDetail(body []byte) string {
-	var res struct {
-		Errors []struct {
-			Detail string `json:"detail"`
-		} `json:"errors"`
-	}
-	if json.Unmarshal(body, &res) != nil {
-		return ""
-	}
-	var details []string
-	for _, e := range res.Errors {
-		if e.Detail != "" {
-			details = append(details, e.Detail)
-		}
-	}
-	if len(details) == 0 {
-		return ""
-	}
-	return ": " + strings.Join(details, "; ")
 }

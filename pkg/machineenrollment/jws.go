@@ -19,15 +19,16 @@ import (
 const p256CoordinateBytes = 32
 
 // signJWT returns a compact JWS of claims, signed by signer. The alg header is chosen from the
-// signer's public key: RS256 for RSA keys (what the machine identity service accepts) and ES256 for P-256 keys. extraHeader adds members to
+// signer's public key: RS256 for RSA keys (what the machine identity service accepts) and ES256 for P-256 keys. typ is the
+// type header, which the machine identity service requires to be specific to what the JWT is for. extraHeader adds members to
 // the protected header.
-func signJWT(signer crypto.Signer, extraHeader, claims map[string]any) (string, error) {
+func signJWT(signer crypto.Signer, typ string, extraHeader, claims map[string]any) (string, error) {
 	alg, err := algorithmFor(signer.Public())
 	if err != nil {
 		return "", err
 	}
 
-	header := map[string]any{"alg": alg, "typ": "JWT"}
+	header := map[string]any{"alg": alg, "typ": typ}
 	maps.Copy(header, extraHeader)
 	headerJSON, err := json.Marshal(header)
 	if err != nil {

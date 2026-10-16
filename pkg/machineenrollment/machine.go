@@ -2,6 +2,8 @@ package machineenrollment
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,9 +14,10 @@ import (
 type EnrollMachineOption func(*enrollMachineOptions)
 
 type enrollMachineOptions struct {
-	httpClient *http.Client
-	joinKey    string
-	machineID  string
+	httpClient      *http.Client
+	deviceToken     string
+	fleetKeyFile    string
+	identifiersFunc IdentifierSource
 }
 
 // WithHttpClient sets the HTTP client used for the enrollment request. It must not add
@@ -24,17 +27,26 @@ func WithHttpClient(httpClient *http.Client) EnrollMachineOption {
 	return func(o *enrollMachineOptions) { o.httpClient = httpClient }
 }
 
-// WithJoinKey enrolls with the single-use join key an admin issued for this machine, identifying it
-// as machineID.
-func WithJoinKey(joinKey, machineID string) EnrollMachineOption {
-	return func(o *enrollMachineOptions) {
-		o.joinKey = joinKey
-		o.machineID = machineID
-	}
+// WithDeviceToken enrolls with the single-use device token an admin issued for this machine.
+func WithDeviceToken(deviceToken string) EnrollMachineOption {
+	return func(o *enrollMachineOptions) { o.deviceToken = deviceToken }
 }
 
-// EnrollMachine enrolls this device as a machine principal, using the join key supplied via
-// WithJoinKey. It generates a new machine client key, exchanges the join key for an OAuth client
+// WithFleetKeyFile enrolls with the fleet key in the PEM file at path (see ReadFleetKeyFile), naming
+// this machine by its serial numbers, unless WithIdentifierSource says otherwise.
+func WithFleetKeyFile(path string) EnrollMachineOption {
+	return func(o *enrollMachineOptions) { o.fleetKeyFile = path }
+}
+
+// WithIdentifierSource sets where a fleet key enrollment gets the identifiers of this machine from.
+// If unset, SerialNumbers is used.
+func WithIdentifierSource(source IdentifierSource) EnrollMachineOption {
+	return func(o *enrollMachineOptions) { o.identifiersFunc = source }
+}
+
+// EnrollMachine enrolls this device as a machine principal, using the device token supplied via
+// WithDeviceToken or the fleet key supplied via WithFleetKeyFile, and exactly one of them. It
+// generates a new machine client key, exchanges the device token or fleet key for an OAuth client
 // bound to that key, writes the key to disk, and persists the enrolled machine's client id, key
 // file path, and machine id into config so the caller doesn't have to wire that up itself.
 func EnrollMachine(ctx context.Context, config configuration.Configuration, opts ...EnrollMachineOption) (Enrollment, error) {
@@ -43,6 +55,10 @@ func EnrollMachine(ctx context.Context, config configuration.Configuration, opts
 	}
 	for _, opt := range opts {
 		opt(&o)
+	}
+
+	if (o.deviceToken == "") == (o.fleetKeyFile == "") {
+		return Enrollment{}, errors.New("enrolling needs either a device token or a fleet key file")
 	}
 
 	keyFile := config.GetString(CONFIG_KEY_CLIENT_KEY_FILE)
@@ -54,7 +70,7 @@ func EnrollMachine(ctx context.Context, config configuration.Configuration, opts
 	}
 
 	apiURL := config.GetString(configuration.API_URL)
-	e, err := EnrollWithJoinToken(ctx, o.httpClient, apiURL, o.joinKey, o.machineID, time.Now())
+	e, err := enrollWithOptions(ctx, apiURL, o)
 	if err != nil {
 		return Enrollment{}, err
 	}
@@ -73,4 +89,24 @@ func EnrollMachine(ctx context.Context, config configuration.Configuration, opts
 	}
 
 	return e, nil
+}
+
+func enrollWithOptions(ctx context.Context, apiURL string, o enrollMachineOptions) (Enrollment, error) {
+	if o.deviceToken != "" {
+		return EnrollWithDeviceToken(ctx, o.httpClient, apiURL, o.deviceToken, time.Now())
+	}
+
+	fleetKey, err := ReadFleetKeyFile(o.fleetKeyFile)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	source := o.identifiersFunc
+	if source == nil {
+		source = SerialNumbers
+	}
+	identifiers, err := source(ctx)
+	if err != nil {
+		return Enrollment{}, fmt.Errorf("failed finding the identifiers of this machine: %w", err)
+	}
+	return EnrollWithFleetKey(ctx, o.httpClient, apiURL, fleetKey, identifiers, time.Now())
 }

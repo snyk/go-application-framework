@@ -31,7 +31,7 @@ func ClientAssertion(key crypto.Signer, clientID, tokenURL string, now time.Time
 
 	// No iat or nbf: the authorization server checks them without clock skew leeway, so a client
 	// clock running slightly fast would get the assertion rejected.
-	return signJWT(key, map[string]any{"kid": kid}, map[string]any{
+	return signJWT(key, "JWT", map[string]any{"kid": kid}, map[string]any{
 		"iss": clientID,
 		"sub": clientID,
 		"aud": tokenURL,
