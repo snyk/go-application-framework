@@ -202,7 +202,11 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			existing, sharedReadErr := readSharedFile(paths, logger)
 			switch {
 			case existing == nil:
-				if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
+				_, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger)
+				switch {
+				case errors.Is(err, errNewerSchema):
+					logger.Warn().Err(err).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
+				case err != nil:
 					logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
 				}
 			case existing.MachineID != hw.serial:
