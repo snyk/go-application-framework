@@ -173,7 +173,7 @@ func (r *resolver) resolve(config configuration.Configuration) (runtimeinfo.Mach
 	defer r.mu.Unlock()
 
 	if r.machine.ID == "" {
-		m, err := r.resolveFromDisk(config)
+		m, err := r.resolveFromDisk()
 		if m.ID == "" {
 			return runtimeinfo.Machine{}, errors.Join(runtimeinfo.ErrNoMachineID, err)
 		}
@@ -184,7 +184,7 @@ func (r *resolver) resolve(config configuration.Configuration) (runtimeinfo.Mach
 	return machine, r.readErr
 }
 
-func (r *resolver) resolveFromDisk(config configuration.Configuration) (runtimeinfo.Machine, error) {
+func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 	logger := r.opts.logger
 	writer := writerIdentity(r.opts)
 	paths := r.opts.shared
@@ -192,7 +192,7 @@ func (r *resolver) resolveFromDisk(config configuration.Configuration) (runtimei
 
 	disk := r.studioOnDisk()
 	diskStudioID, studioPath, studioOK, studioReadErr := disk.id, disk.path, disk.found, disk.readErr
-	machine := runtimeinfo.Machine{Hostname: hw.hostname, SerialNumber: hw.serial, StudioID: studioID(config, logger, diskStudioID)}
+	machine := runtimeinfo.Machine{Hostname: hw.hostname, SerialNumber: hw.serial}
 
 	if hw.serial != "" {
 		if reason, ok := validate(hw.serial); !ok {

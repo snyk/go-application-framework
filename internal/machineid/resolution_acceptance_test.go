@@ -489,6 +489,24 @@ func TestAcceptance_InvalidStudioCLIValueFallsBackToTheStudioFile(t *testing.T) 
 	require.Equal(t, "studio-device-id", machineOf(t, m.newRun()).StudioID)
 }
 
+func TestAcceptance_InvalidStudioCLIValueIsLoggedOncePerResolvedLookup(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a b")
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	failures := 0
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "Snyk Studio CLI value failed validation") {
+			failures++
+		}
+	}
+	require.Equal(t, 1, failures)
+}
+
 func TestAcceptance_TrailingNewlineIsTrimmedFromStudioCLIValue(t *testing.T) {
 	m := newIsolatedMachine(t)
 	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value\n")
