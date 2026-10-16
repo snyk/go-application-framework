@@ -175,7 +175,9 @@ func writeSharedFileID(paths pathPair, candidateID, source, writer string, logge
 	return id, nil
 }
 
-// replaceSharedFileID stores candidateID in the machine-wide file in place of a different valid id, best effort: a file that cannot be replaced is left unchanged and no per-user file is written.
+// replaceSharedFileID stores candidateID in the machine-wide file, best effort: a different valid id there
+// is replaced, and a missing file is created. A file that cannot be replaced is left unchanged, and no
+// per-user file is written.
 func replaceSharedFileID(paths pathPair, candidateID, source, writer string) (string, error) {
 	if paths.machineWide == "" {
 		return "", errors.New("machine id: no machine-wide shared file path")
