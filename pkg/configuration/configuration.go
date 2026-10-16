@@ -276,7 +276,6 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	}
 
 	config.viper.AddConfigPath(configPath)
-	config.viper.AddConfigPath(".")
 
 	// read config files
 	//nolint:errcheck // breaking api change needed to fix this
