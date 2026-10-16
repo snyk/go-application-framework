@@ -11,6 +11,7 @@ import (
 
 var _ configuration.Configuration = (*MockConfiguration)(nil)
 var _ auth.Authenticator = (*MockAuthenticator)(nil)
+var _ auth.BearerTokenScoper = (*MockBearerTokenScoper)(nil)
 var _ configuration.Storage = (*MockStorage)(nil)
 var _ networking.NetworkAccess = (*MockNetworkAccess)(nil)
 var _ ui.ProgressBar = (*MockProgressBar)(nil)
