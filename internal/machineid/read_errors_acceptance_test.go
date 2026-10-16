@@ -128,19 +128,16 @@ func TestAcceptance_SuppliedIDIsReturnedWithoutReportingUnreadableFiles(t *testi
 	require.Equal(t, "supplied-id", id)
 }
 
-func TestAcceptance_UnreadableStudioDeviceIDFilesAreReportedAlongsideTheGeneratedID(t *testing.T) {
+func TestAcceptance_UnreadableSharedFileIsReportedAlongsideTheHardwareSerial(t *testing.T) {
 	m := newIsolatedMachine(t)
-	for _, p := range []string{m.studio.machineWide, m.studio.perUser} {
-		seed(t, p, "studio-device-id")
-		makeUnreadable(t, p)
-	}
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "machine-wide-id"})
+	makeUnreadable(t, m.shared.machineWide)
 
 	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
-	id := machine.ID
 
-	require.Equal(t, readFile(t, m.shared.perUser).MachineID, id)
-	requireUnreadableFileReported(t, err, m.studio.machineWide)
-	requireUnreadableFileReported(t, err, m.studio.perUser)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	requireUnreadableFileReported(t, err, m.shared.machineWide)
 }
 
 func TestAcceptance_ADirectoryAtTheSharedFilePathIsReportedAsUnreadable(t *testing.T) {

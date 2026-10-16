@@ -267,33 +267,40 @@ func skipIfExists(t *testing.T, machineWideDirs ...string) {
 }
 
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {
-	sharedFilePath := isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+	for name, serial := range map[string]string{"with serial": "TEST-SERIAL-123", "without serial": ""} {
+		t.Run(name, func(t *testing.T) {
+			sharedFilePath := isolateMachineIDStorage(t)
+			engine := newAppEngineWithHost(t, hostOpts(serial))
 
-	machineID := machineIDOf(t, engine.GetConfiguration())
+			machineID := machineIDOf(t, engine.GetConfiguration())
 
-	content, err := os.ReadFile(sharedFilePath)
-	require.NoError(t, err)
-	assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
-	assert.Equal(t, machineID, machineIDOf(t, CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts())).GetConfiguration()),
-		"a second engine on the same machine must resolve the same machine id")
+			content, err := os.ReadFile(sharedFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
+			assert.Equal(t, machineID, machineIDOf(t, newAppEngineWithHost(t, hostOpts(serial)).GetConfiguration()),
+				"a second engine on the same machine must resolve the same machine id")
+		})
+	}
 }
 
 func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsUsed(t *testing.T) {
-	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
-	resolved := machineIDOf(t, engine.GetConfiguration())
+	for name, serial := range map[string]string{"with serial": "TEST-SERIAL-123", "without serial": ""} {
+		t.Run(name, func(t *testing.T) {
+			isolateMachineIDStorage(t)
+			engine := newAppEngineWithHost(t, hostOpts(serial))
+			resolved := machineIDOf(t, engine.GetConfiguration())
 
-	engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
+			engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
 
-	assert.NotEqual(t, "supplied-machine-id", resolved)
-	assert.Equal(t, "supplied-machine-id", machineIDOf(t, engine.GetConfiguration()))
+			assert.NotEqual(t, "supplied-machine-id", resolved)
+			assert.Equal(t, "supplied-machine-id", machineIDOf(t, engine.GetConfiguration()))
+		})
+	}
 }
 
 func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
 	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(
-		WithConfiguration(configuration.NewWithOpts()),
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
 	)
 	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
@@ -316,8 +323,7 @@ func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(
 
 func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *testing.T) {
 	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(
-		WithConfiguration(configuration.NewWithOpts()),
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
 	)
 
@@ -2140,13 +2146,4 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 		"the flag behind a locally set key must not be evaluated remotely")
 	assert.False(t, config.GetBool(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES),
 		"the local value must win over the remote one")
-}
-
-func machineIDOf(t *testing.T, config configuration.Configuration) string {
-	t.Helper()
-	value, err := config.GetWithError(configuration.MACHINE_ID)
-	require.NoError(t, err)
-	machine, ok := value.(runtimeinfo.Machine)
-	require.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
-	return machine.ID
 }
