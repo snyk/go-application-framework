@@ -127,6 +127,9 @@ const AnalyticsV2EventSchema = `{
         },
         "performance": {
           "$ref": "#/schemas/Performance"
+        },
+        "machine": {
+          "$ref": "#/schemas/Machine"
         }
       }
     },
@@ -219,6 +222,39 @@ const AnalyticsV2EventSchema = `{
           "type": "string"
         },
         "arch": {
+          "type": "string"
+        },
+        "configuration": {
+          "$ref": "#/schemas/PlatformConfiguration"
+        }
+      }
+    },
+    "PlatformConfiguration": {
+      "type": "object",
+      "description": "Client network and security configuration values.",
+      "properties": {
+        "extra_ca_certs": {
+          "type": "boolean"
+        },
+        "fips": {
+          "type": "boolean"
+        },
+        "insecure_https": {
+          "type": "boolean"
+        },
+        "network_request_attempts": {
+          "type": "integer"
+        },
+        "proxy": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Machine": {
+      "type": "object",
+      "description": "The machine identifier used to correlate analytics events from the same machine.",
+      "properties": {
+        "id": {
           "type": "string"
         }
       }
