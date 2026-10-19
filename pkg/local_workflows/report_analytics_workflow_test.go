@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -59,51 +60,21 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsMachineIdToV2Input(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
-	payload := testGetAnalyticsV2PayloadString()
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testWithPlatformConfiguration(testWithMachineID(payload, "test-machine-id"), testDefaultPlatformConfiguration)), ri)
-
-	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
-
-	require.NoError(t, err)
-}
-
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsMachineIdToConvertedScanDoneInput(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
-	ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
-	expected := testWithPlatformConfiguration(testWithMachineID(testGetAnalyticsV2PayloadString(), "test-machine-id"), testDefaultPlatformConfiguration)
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
-
-	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetScanDonePayloadString())})
-
-	require.NoError(t, err)
-}
-
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_leavesOutMachineIdWhenUnavailable(t *testing.T) {
-	tests := map[string]func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo{
-		"no runtime info": func(*gomock.Controller) runtimeinfo.RuntimeInfo { return nil },
-		"no stable machine id": func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo {
-			ri := mocks.NewMockRuntimeInfo(ctrl)
-			ri.EXPECT().GetMachineID().Return("", runtimeinfo.ErrNoMachineID).AnyTimes()
-			return ri
-		},
-		"error reading the machine id": func(ctrl *gomock.Controller) runtimeinfo.RuntimeInfo {
-			ri := mocks.NewMockRuntimeInfo(ctrl)
-			ri.EXPECT().GetMachineID().Return("", errors.New("read failed")).AnyTimes()
-			return ri
-		},
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testing.T) {
+	tests := map[string]string{
+		"v2 input":                   testGetAnalyticsV2PayloadString(),
+		"v1 scan-done input":         testGetScanDonePayloadString(),
+		"machine id of the producer": testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
 	}
-	for name, newRuntimeInfo := range tests {
+	for name, payload := range tests {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			payload := testGetAnalyticsV2PayloadString()
-			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testWithPlatformConfiguration(payload, testDefaultPlatformConfiguration)), newRuntimeInfo(ctrl))
+			ri := mocks.NewMockRuntimeInfo(ctrl)
+			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
+			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
+			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+			expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
@@ -112,16 +83,34 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_leavesOutMachineIdWhenUnavai
 	}
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsMachineIdOfTheProducer(t *testing.T) {
+func Test_ReportAnalytics_addMachineID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
-	payload := testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id")
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testWithPlatformConfiguration(payload, testDefaultPlatformConfiguration)), ri)
+	logger := zerolog.New(io.Discard)
+	machineIDSource := func(id string, err error) runtimeinfo.RuntimeInfo {
+		ri := mocks.NewMockRuntimeInfo(ctrl)
+		ri.EXPECT().GetMachineID().Return(id, err).AnyTimes()
+		return ri
+	}
+	tests := map[string]struct {
+		machine  *api.Machine
+		ri       runtimeinfo.RuntimeInfo
+		expected *api.Machine
+	}{
+		"sets the machine id":                  {ri: machineIDSource("test-machine-id", nil), expected: &api.Machine{Id: new("test-machine-id")}},
+		"keeps the machine id of the producer": {machine: &api.Machine{Id: new("producer-machine-id")}, ri: machineIDSource("test-machine-id", nil), expected: &api.Machine{Id: new("producer-machine-id")}},
+		"no runtime info":                      {ri: nil, expected: nil},
+		"no stable machine id":                 {ri: machineIDSource("", runtimeinfo.ErrNoMachineID), expected: nil},
+		"error reading the machine id":         {ri: machineIDSource("", errors.New("read failed")), expected: nil},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			rt := &api.Runtime{Machine: tc.machine}
 
-	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+			addMachineID(rt, tc.ri, &logger)
 
-	require.NoError(t, err)
+			require.Equal(t, tc.expected, rt.Machine)
+		})
+	}
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t *testing.T) {

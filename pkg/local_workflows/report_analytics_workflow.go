@@ -175,6 +175,8 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	}
 	addMachineID(body.Data.Attributes.Runtime, invocationCtx.GetRuntimeInfo(), logger)
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
+	// shortcut: the machine id is withheld until sending it is approved, remove this line to send it
+	body.Data.Attributes.Runtime.Machine = nil
 
 	enriched, err := json.Marshal(body)
 	if err != nil {
