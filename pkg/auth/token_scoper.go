@@ -19,6 +19,8 @@ import (
 const (
 	grantTypeTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange"
 	tokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"
+	// maxErrorResponseBytes bounds how much of a failed exchange response is read into the error.
+	maxErrorResponseBytes = 1 << 20
 )
 
 // BearerTokenScoper derives bearer tokens that are restricted to a subset of scopes from the
@@ -81,7 +83,7 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		body, readErr := io.ReadAll(io.LimitReader(res.Body, maxErrorResponseBytes))
 		if readErr != nil {
 			return "", fmt.Errorf("token exchange failed with status %d: %w", res.StatusCode, readErr)
 		}
