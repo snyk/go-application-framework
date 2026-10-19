@@ -501,6 +501,19 @@ func TestAcceptance_HardwareSerialLeavesAFileAlreadyHoldingTheSerialUntouched(t 
 	require.True(t, past.Equal(after.ModTime()), "mtime changed from %v to %v", past, after.ModTime())
 }
 
+func TestAcceptance_HardwareSerialIsNotWrittenToTheMachineWideFileWhileAnotherIDIsInUse(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-per-user-file"})
+
+	id := machineID(t, m.newRun())
+
+	require.Equal(t, "C02Q7KHTGFWF", id)
+	require.NoFileExists(t, m.shared.machineWide)
+	require.Equal(t, "from-per-user-file", readFile(t, m.shared.perUser).MachineID)
+}
+
 func TestAcceptance_HardwareSerialIsStoredInAnEmptyOrMissingSharedFile(t *testing.T) {
 	for name, content := range map[string]*string{"missing": nil, "empty": new(string)} {
 		t.Run(name, func(t *testing.T) {

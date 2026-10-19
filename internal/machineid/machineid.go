@@ -171,9 +171,11 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			logger.Debug().Str("reason", reason).Msg("machine id: hardware serial number failed validation, ignoring")
 		} else {
 			machine.ID = hw.serial
-			_, sharedReadErr := readSharedFile(paths, logger)
-			if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
-				logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
+			sf, sharedReadErr := readSharedFile(paths, logger)
+			if sf == nil {
+				if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
+					logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
+				}
 			}
 			return machine, sharedReadErr
 		}
