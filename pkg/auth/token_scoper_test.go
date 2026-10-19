@@ -138,6 +138,38 @@ func Test_bearerTokenScoperImpl_GetToken_FallsBackToStoredOAuthToken(t *testing.
 	assert.Equal(t, "scoped-token", token)
 }
 
+func Test_bearerTokenScoperImpl_GetToken_RefreshesExpiredStoredOAuthToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.PostForm.Get("grant_type") {
+		case "refresh_token":
+			assert.Equal(t, "stored-refresh-token", r.PostForm.Get("refresh_token"))
+			_, err := w.Write([]byte(`{"access_token":"refreshed-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expires_in":3600}`))
+			assert.NoError(t, err)
+		case grantTypeTokenExchange:
+			assert.Equal(t, "refreshed-access-token", r.PostForm.Get("subject_token"))
+			_, err := w.Write([]byte(`{"access_token":"scoped-token","token_type":"bearer","expires_in":2874}`))
+			assert.NoError(t, err)
+		default:
+			assert.Fail(t, "unexpected grant type", r.PostForm.Get("grant_type"))
+		}
+	}))
+	defer server.Close()
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
+
+	scoper := NewBearerTokenScoper(config, server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+	assert.Contains(t, config.GetString(CONFIG_KEY_OAUTH_TOKEN), "refreshed-access-token")
+}
+
 func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.example.invalid")

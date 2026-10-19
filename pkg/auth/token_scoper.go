@@ -43,7 +43,7 @@ type bearerTokenScoperImpl struct {
 // It exchanges the configured access token for a token limited to the given scopes (RFC 8693).
 // A positive ttl is passed to the server as the "ttl" query parameter in seconds.
 func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error) {
-	subjectToken, err := b.getSubjectToken()
+	subjectToken, err := b.getSubjectToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -102,8 +102,8 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 }
 
 // getSubjectToken returns the access token to exchange: the configured bearer token, or else the
-// access token stored by the OAuth login flow.
-func (b bearerTokenScoperImpl) getSubjectToken() (string, error) {
+// access token stored by the OAuth login flow, refreshed if it has expired.
+func (b bearerTokenScoperImpl) getSubjectToken(ctx context.Context) (string, error) {
 	if bearerToken := b.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN); bearerToken != "" {
 		return bearerToken, nil
 	}
@@ -115,7 +115,25 @@ func (b bearerTokenScoperImpl) getSubjectToken() (string, error) {
 	if oauthToken == nil || oauthToken.AccessToken == "" {
 		return "", fmt.Errorf("no user authentication available to exchange a scoped token")
 	}
-	return oauthToken.AccessToken, nil
+	if oauthToken.Valid() {
+		return oauthToken.AccessToken, nil
+	}
+
+	return refreshedAccessToken(ctx, b.config, b.httpClient)
+}
+
+// refreshedAccessToken goes through the authenticator so that an expired token is refreshed and
+// persisted exactly as it is for regular requests.
+func refreshedAccessToken(ctx context.Context, config configuration.Configuration, httpClient *http.Client) (string, error) {
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request for oauth token refresh: %w", err)
+	}
+	if err = authenticator.AddAuthenticationHeader(req); err != nil {
+		return "", fmt.Errorf("failed to refresh stored oauth token: %w", err)
+	}
+	return strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer "), nil
 }
 
 // RevokeToken implements [BearerTokenScoper].
