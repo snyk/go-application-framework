@@ -10,7 +10,7 @@ import (
 )
 
 type win32BIOS struct {
-	SerialNumber string
+	SerialNumber *string
 }
 
 // The BIOS registry key does not reliably hold the SMBIOS serial, so WMI is queried instead.
@@ -22,5 +22,5 @@ func readSerialPlatform() (string, error) {
 	if len(bios) == 0 {
 		return "", errors.New("wmi Win32_BIOS: no results")
 	}
-	return bios[0].SerialNumber, nil
+	return serialFromBIOS(bios[0].SerialNumber), nil
 }
