@@ -469,11 +469,19 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	config := engine.GetConfiguration()
 	if config != nil {
+		removeProtectedEnvVars(config)
 		initConfiguration(engine, config, engine.GetLogger(), nil)
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
 	return engine
+}
+
+// removeProtectedEnvVars removes the env vars that the configuration snapshotted from the process environment.
+func removeProtectedEnvVars(config configuration.Configuration) {
+	for _, envVar := range config.GetStringSlice(configuration.PROTECTED_ENV_VARS) {
+		_ = os.Unsetenv(envVar)
+	}
 }
 
 // Deprecated: Use CreateAppEngineWithOptions instead.

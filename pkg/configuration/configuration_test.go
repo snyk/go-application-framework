@@ -104,6 +104,58 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	cleanUpEnvVars()
 }
 
+func Test_WithProtectedEnvVars(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "mytoken")
+	t.Setenv("SNYK_OAUTH_TOKEN", "")
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
+
+	config := NewWithOpts(
+		WithSupportedEnvVarPrefixes("snyk_"),
+		WithProtectedEnvVars("SNYK_TOKEN", "SNYK_OAUTH_TOKEN", "SNYK_DOCKER_TOKEN"),
+	)
+	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, []string{"snyk_cfg_api", "api"})
+
+	t.Run("leaves the process environment untouched", func(t *testing.T) {
+		assert.Equal(t, "mytoken", os.Getenv("SNYK_TOKEN"))
+		_, oauthSet := os.LookupEnv("SNYK_OAUTH_TOKEN")
+		assert.True(t, oauthSet)
+		assert.Equal(t, "1", os.Getenv("SNYK_DISABLE_ANALYTICS"))
+	})
+
+	t.Run("keeps the values readable", func(t *testing.T) {
+		assert.Equal(t, "mytoken", config.GetString(AUTHENTICATION_TOKEN))
+		assert.Equal(t, "mytoken", config.Clone().GetString(AUTHENTICATION_TOKEN))
+		assert.Empty(t, config.GetString("snyk_oauth_token"))
+	})
+
+	t.Run("still reports them as set via env var", func(t *testing.T) {
+		assert.Equal(t, []string{"snyk_token"}, config.GetAllKeysThatContainValues(AUTHENTICATION_TOKEN))
+		assert.Equal(t, []string{"snyk_token"}, config.Clone().GetAllKeysThatContainValues(AUTHENTICATION_TOKEN))
+	})
+
+	t.Run("still reports empty ones as set via env var", func(t *testing.T) {
+		assert.Equal(t, []string{"snyk_oauth_token"}, config.GetAllKeysThatContainValues("snyk_oauth_token"))
+		assert.Empty(t, config.GetAllKeysThatContainValues("snyk_docker_token"))
+	})
+
+	t.Run("names are case-insensitive", func(t *testing.T) {
+		lowerConfig := NewWithOpts(WithProtectedEnvVars("snyk_token"))
+		assert.Equal(t, "mytoken", lowerConfig.GetString("snyk_token"))
+		assert.Equal(t, []string{"SNYK_TOKEN"}, lowerConfig.GetStringSlice(PROTECTED_ENV_VARS))
+	})
+
+	t.Run("lists the uppercase names of the present env vars without duplicates", func(t *testing.T) {
+		listConfig := NewWithOpts(WithProtectedEnvVars("snyk_token", "SNYK_OAUTH_TOKEN", "SNYK_TOKEN", "SNYK_ABSENT_TOKEN"))
+		expected := []string{"SNYK_TOKEN", "SNYK_OAUTH_TOKEN"}
+		assert.Equal(t, expected, listConfig.GetStringSlice(PROTECTED_ENV_VARS))
+		assert.Equal(t, expected, listConfig.Clone().GetStringSlice(PROTECTED_ENV_VARS))
+	})
+
+	t.Run("lists nothing without protected env vars", func(t *testing.T) {
+		assert.Empty(t, NewWithOpts().GetStringSlice(PROTECTED_ENV_VARS))
+	})
+}
+
 func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	fakehome := t.TempDir()
 	t.Setenv("HOME", fakehome)
