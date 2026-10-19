@@ -60,7 +60,7 @@ func writerIdentity(o resolveOptions) string {
 // returns runtimeinfo.ErrNoMachineID joined with those errors and an error describing why a
 // generated id could not be stored; the configuration caching does not hold it, so the next lookup
 // tries the disk again. Machine.StudioID is the INTERNAL_SNYK_CLIENT_MACHINE_ID value when it is
-// valid, otherwise the Snyk Studio device-id file; neither supplies the id.
+// valid, otherwise the Snyk Studio device-id file. The CLI value never supplies the machine id.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{
 		shared:       defaultSharedFilePaths(),
