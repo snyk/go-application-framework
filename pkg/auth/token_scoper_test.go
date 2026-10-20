@@ -124,7 +124,7 @@ func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) 
 	scoper := NewBearerTokenScoper(newBearerConfig("https://api.example.invalid"), httpClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, cli.NewGenericNetworkError("").ErrorCode)
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
 	assert.ErrorIs(t, err, sentinel)
 	assert.Empty(t, token)
 }

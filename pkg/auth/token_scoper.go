@@ -86,7 +86,7 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	}
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return "", cli.NewGenericNetworkError("token exchange request failed", snyk_errors.WithCause(err))
+		return "", cli.NewTokenScoperError("token exchange request failed", snyk_errors.WithCause(err))
 	}
 	defer res.Body.Close()
 
