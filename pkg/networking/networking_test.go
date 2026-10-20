@@ -551,7 +551,9 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 
 func TestNetworkImpl_GetUnauthorizedHttpClient_NetworkStackErrorHandlerMiddleware(t *testing.T) {
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	network := NewNetworkAccess(config)
+	network, ok := NewNetworkAccess(config).(*networkImpl)
+	require.True(t, ok)
+	network.proxy = http.ProxyURL(nil)
 	count := 0
 
 	// Add error handler to capture and verify the processed error
