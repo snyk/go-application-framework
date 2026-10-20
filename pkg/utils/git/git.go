@@ -34,10 +34,10 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
-// Linked worktrees keep their config and refs in the common git dir, not in their private gitdir.
 func openRepository(inputDir string) (*git.Repository, error) {
 	return git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit:          true,
+		DetectDotGit: true,
+		// Linked worktrees keep config and refs in the common git dir, not their private gitdir.
 		EnableDotGitCommonDir: true,
 	})
 }

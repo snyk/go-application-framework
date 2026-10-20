@@ -4,13 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/testutils/gitworktree"
 )
 
 func TestStripGitCredentials(t *testing.T) {
@@ -210,68 +210,108 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
 }
 
-const linkedWorktreeOriginUrl = "https://github.com/example/repo.git"
-
-func linkedWorktreeFixture(t *testing.T) string {
-	t.Helper()
-	const branch = "feature"
-	mainDir := t.TempDir()
-	repo, err := git.PlainInit(mainDir, false)
-	assert.NoError(t, err)
-
-	wt, err := repo.Worktree()
-	assert.NoError(t, err)
-	assert.NoError(t, os.WriteFile(filepath.Join(mainDir, "README.md"), []byte("readme"), 0o600))
-	_, err = wt.Add("README.md")
-	assert.NoError(t, err)
-	hash, err := wt.Commit("initial commit", &git.CommitOptions{
-		Author: &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()},
-	})
-	assert.NoError(t, err)
-	assert.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference(plumbing.NewBranchReferenceName(branch), hash)))
-	_, err = repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{linkedWorktreeOriginUrl}})
-	assert.NoError(t, err)
-
-	privateDir := filepath.Join(mainDir, ".git", "worktrees", "wt")
-	assert.NoError(t, os.MkdirAll(privateDir, 0o750))
-	assert.NoError(t, os.WriteFile(filepath.Join(privateDir, "HEAD"), []byte("ref: refs/heads/"+branch+"\n"), 0o600))
-	assert.NoError(t, os.WriteFile(filepath.Join(privateDir, "commondir"), []byte("../..\n"), 0o600))
-
-	worktreeDir := filepath.Join(t.TempDir(), "wt")
-	assert.NoError(t, os.MkdirAll(worktreeDir, 0o750))
-	assert.NoError(t, os.WriteFile(filepath.Join(worktreeDir, ".git"), []byte("gitdir: "+privateDir+"\n"), 0o600))
-
-	return worktreeDir
-}
-
 func TestLinkedWorktree_remoteAndBranchResolution(t *testing.T) {
-	t.Run("RepoUrlFromDir returns origin", func(t *testing.T) {
-		remoteUrl, err := RepoUrlFromDir(linkedWorktreeFixture(t))
-		assert.NoError(t, err)
-		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
-	})
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, gitworktree.NewMainRepo(t))
 
-	t.Run("GetRemoteUrl returns origin", func(t *testing.T) {
-		remoteUrl, err := GetRemoteUrl(linkedWorktreeFixture(t))
-		assert.NoError(t, err)
-		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
-	})
-
-	t.Run("GetOriginRemote returns origin", func(t *testing.T) {
-		remoteUrl, err := GetOriginRemote(linkedWorktreeFixture(t))
-		assert.NoError(t, err)
-		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
-	})
-
-	t.Run("GetFirstRemote returns the configured remote", func(t *testing.T) {
-		remoteUrl, err := GetFirstRemote(linkedWorktreeFixture(t))
-		assert.NoError(t, err)
-		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
-	})
+	remoteFns := map[string]func(string) (string, error){
+		"RepoUrlFromDir":  RepoUrlFromDir,
+		"GetRemoteUrl":    GetRemoteUrl,
+		"GetOriginRemote": GetOriginRemote,
+		"GetFirstRemote":  GetFirstRemote,
+	}
+	for name, fn := range remoteFns {
+		t.Run(name+" returns origin", func(t *testing.T) {
+			remoteUrl, err := fn(worktreeDir)
+			require.NoError(t, err)
+			assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+		})
+	}
 
 	t.Run("BranchNameFromDir returns the worktree branch", func(t *testing.T) {
-		branch, err := BranchNameFromDir(linkedWorktreeFixture(t))
-		assert.NoError(t, err)
-		assert.Equal(t, "feature", branch)
+		branch, err := BranchNameFromDir(worktreeDir)
+		require.NoError(t, err)
+		assert.Equal(t, gitworktree.BranchName, branch)
 	})
+}
+
+func TestLinkedWorktree_detachedHeadHasNoBranch(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	gitworktree.DetachHead(t, mainDir)
+
+	branch, err := BranchNameFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Empty(t, branch)
+}
+
+func TestLinkedWorktree_withoutOriginRemote(t *testing.T) {
+	mainDir := gitworktree.NewMainRepoWithoutOrigin(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+
+	_, err := GetOriginRemote(worktreeDir)
+	assert.Error(t, err)
+	_, err = RepoUrlFromDir(worktreeDir)
+	assert.Error(t, err)
+	_, err = GetFirstRemote(worktreeDir)
+	assert.Error(t, err)
+}
+
+func TestLinkedWorktree_realGitWorktreeAddResolvesOrigin(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.GitWorktreeAdd(t, mainDir)
+
+	remoteUrl, err := GetOriginRemote(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+
+	branch, err := BranchNameFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.BranchName, branch)
+}
+
+func TestLinkedWorktree_mainRepoRemoved(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	require.NoError(t, os.RemoveAll(mainDir))
+
+	_, err := GetOriginRemote(worktreeDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestLinkedWorktree_commonDirMissing(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	gitworktree.SetCommonDir(t, mainDir, filepath.Join(t.TempDir(), "gone"))
+
+	_, err := GetOriginRemote(worktreeDir)
+	require.ErrorIs(t, err, git.ErrRepositoryIncomplete)
+}
+
+func TestLinkedWorktree_emptyCommonDirPinsExistingGoGitBehavior(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	gitworktree.SetCommonDir(t, mainDir, "")
+
+	_, err := GetOriginRemote(worktreeDir)
+	require.Error(t, err)
+}
+
+func TestLinkedWorktree_relativeGitDir(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktreeRelative(t, mainDir)
+
+	remoteUrl, err := GetOriginRemote(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+}
+
+func TestLinkedWorktree_opensFromSubdirectory(t *testing.T) {
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, gitworktree.NewMainRepo(t))
+	subDir := filepath.Join(worktreeDir, "nested", "deeper")
+	require.NoError(t, os.MkdirAll(subDir, 0o750))
+
+	remoteUrl, err := GetOriginRemote(subDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
 }
