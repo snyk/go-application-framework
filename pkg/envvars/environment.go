@@ -4,11 +4,12 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -20,14 +21,93 @@ const (
 	ShellEnvVarName = "SHELL"
 )
 
+var mu sync.Mutex
+
+//nolint:containedctx // This options struct is local to a single call and not stored beyond function execution.
+type loadConfiguredEnvironmentOptions struct {
+	ctx               context.Context
+	customConfigFiles []string
+	logger            *zerolog.Logger
+}
+
+type loadConfiguredEnvironmentOption func(opts *loadConfiguredEnvironmentOptions)
+
+func WithContext(ctx context.Context) loadConfiguredEnvironmentOption {
+	return func(opts *loadConfiguredEnvironmentOptions) {
+		opts.ctx = ctx
+	}
+}
+
+// WithCustomConfigFiles sets the list of custom config files to load.
+// All paths must be absolute; use [utils.MakeRelativePathsAbsolute] to resolve relative paths before calling.
+func WithCustomConfigFiles(absoluteFilePaths []string) loadConfiguredEnvironmentOption {
+	return func(opts *loadConfiguredEnvironmentOptions) {
+		opts.customConfigFiles = absoluteFilePaths
+	}
+}
+
+func WithLogger(logger *zerolog.Logger) loadConfiguredEnvironmentOption {
+	return func(opts *loadConfiguredEnvironmentOptions) {
+		if logger == nil {
+			return
+		}
+		opts.logger = logger
+	}
+}
+
 // LoadConfiguredEnvironment updates the environment with user and local configuration.
 // First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
 // The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
+//
+// Deprecated: Use LoadConfiguredEnvironmentWithOptions instead.
 func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
-	bashOutput := getEnvFromShell("bash")
+	absoluteFilePaths := utils.MakeRelativePathsAbsolute(workingDirectory, customConfigFiles)
+	LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles(absoluteFilePaths))
+}
+
+// LoadConfiguredEnvironmentWithOptions updates the environment with user and local configuration.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
+// The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
+func LoadConfiguredEnvironmentWithOptions(opts ...loadConfiguredEnvironmentOption) {
+	options := loadConfiguredEnvironmentOptions{
+		ctx:    context.Background(),
+		logger: utils.Ptr(zerolog.Nop()),
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	logger := options.logger.With().Str("method", "LoadConfiguredEnvironment").Logger()
+
+	mu.Lock()
+	defer func() {
+		mu.Unlock()
+		if options.ctx.Err() == nil {
+			logger.Trace().Msg("Loaded configured environment")
+		} else {
+			logger.Trace().Err(options.ctx.Err()).Msg("Loading configured environment was canceled")
+		}
+	}()
+	logger.Debug().Msg("Loading configured environment")
+
+	// Check the context hasn't been canceled before loading the environment.
+	if ctxErr := options.ctx.Err(); ctxErr != nil {
+		return
+	}
+
+	bashOutput := getEnvFromShell(options.ctx, options.logger, "bash")
+
+	// Check the context hadn't been canceled while loading the Bash environment.
+	if ctxErr := options.ctx.Err(); ctxErr != nil {
+		return
+	}
 
 	// this is applied at the end always, as it does not overwrite existing variables
-	defer func() { _ = gotenv.Apply(strings.NewReader(bashOutput)) }() //nolint:errcheck // we can't do anything with the error
+	defer func() {
+		applyErr := gotenv.Apply(strings.NewReader(bashOutput))
+		if applyErr != nil {
+			logger.Trace().Err(applyErr).Msg("Failed to apply environment variables from Bash")
+		}
+	}()
 
 	bashEnv := gotenv.Parse(strings.NewReader(bashOutput))
 
@@ -37,8 +117,17 @@ func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory stri
 
 	specificShell, ok := bashEnv[ShellEnvVarName]
 	if ok {
-		fromSpecificShell := getEnvFromShell(specificShell)
-		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
+		fromSpecificShell := getEnvFromShell(options.ctx, options.logger, specificShell)
+
+		// Check the context hadn't been canceled while loading the user's preferred shell environment.
+		if ctxErr := options.ctx.Err(); ctxErr != nil {
+			return
+		}
+
+		applyErr := gotenv.Apply(strings.NewReader(fromSpecificShell))
+		if applyErr != nil {
+			logger.Trace().Err(applyErr).Str("shell", specificShell).Msg("Failed to apply environment variables from the user's preferred shell")
+		}
 
 		specificShellEnv := gotenv.Parse(strings.NewReader(fromSpecificShell))
 		if specificShellPATH, ok := specificShellEnv[PathEnvVarName]; ok {
@@ -47,9 +136,10 @@ func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory stri
 	}
 
 	// process config files
-	for _, file := range customConfigFiles {
-		if !filepath.IsAbs(file) {
-			file = filepath.Join(workingDirectory, file)
+	for _, file := range options.customConfigFiles {
+		// Check the context hadn't been canceled while loading config files.
+		if options.ctx.Err() != nil {
+			return
 		}
 		loadFile(file)
 	}
@@ -86,7 +176,8 @@ var shellWhiteList = map[string]bool{
 	"/usr/bin/bash": true,
 }
 
-func getEnvFromShell(shell string) string {
+func getEnvFromShell(ctx context.Context, logger *zerolog.Logger, shell string) string {
+	funcLogger := logger.With().Str("method", "getEnvFromShell").Str("shell", shell).Logger()
 	// under windows, the shell environment is irrelevant
 	if runtime.GOOS == "windows" {
 		return ""
@@ -96,14 +187,17 @@ func getEnvFromShell(shell string) string {
 		return ""
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelFunc := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelFunc()
 
+	funcLogger.Trace().Msg("get env from shell")
 	// deepcode ignore CommandInjection: false positive
 	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "printenv && exit").Output()
 	if err != nil {
+		funcLogger.Trace().Err(err).Msg("failed to get env from shell")
 		return ""
 	}
+	funcLogger.Trace().Msg("got env from shell")
 
 	return string(env)
 }
