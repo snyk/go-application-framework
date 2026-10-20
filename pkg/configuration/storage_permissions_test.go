@@ -52,15 +52,18 @@ func Test_JsonStorage_Permissions(t *testing.T) {
 
 func Test_Configuration_Load_Permissions(t *testing.T) {
 	tests := []struct {
-		name   string
-		exists bool
-		mode   os.FileMode
+		name         string
+		exists       bool
+		mode         os.FileMode
+		expectedMode os.FileMode
 	}{
 		{name: "absent"},
-		{name: "private", exists: true, mode: 0600},
-		{name: "group and other readable", exists: true, mode: 0644},
-		{name: "group and other writable", exists: true, mode: 0666},
-		{name: "executable", exists: true, mode: 0755},
+		{name: "owner read only", exists: true, mode: 0400, expectedMode: 0400},
+		{name: "group readable read only", exists: true, mode: 0440, expectedMode: 0400},
+		{name: "private", exists: true, mode: 0600, expectedMode: 0600},
+		{name: "group and other readable", exists: true, mode: 0644, expectedMode: 0600},
+		{name: "group and other writable", exists: true, mode: 0666, expectedMode: 0600},
+		{name: "executable", exists: true, mode: 0755, expectedMode: 0600},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,7 +83,7 @@ func Test_Configuration_Load_Permissions(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+			assert.Equal(t, tt.expectedMode, info.Mode().Perm())
 			assert.Equal(t, "dummy-token", config.GetString("api"))
 			assert.Equal(t, "value", config.GetString("existing"))
 			actual, err := os.ReadFile(file)
@@ -91,7 +94,7 @@ func Test_Configuration_Load_Permissions(t *testing.T) {
 			require.NoError(t, config.ReloadConfig())
 			info, err = os.Stat(file)
 			require.NoError(t, err)
-			assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+			assert.Equal(t, tt.expectedMode, info.Mode().Perm())
 		})
 	}
 }
