@@ -48,49 +48,125 @@ func intPtr(v int) *int {
 
 func TestGetResultTargetId(t *testing.T) {
 	const recorded = "pkg:git/github.com/acme/recorded@0123456789abcdef?branch=main"
+	derivedRepo := func(t *testing.T) string {
+		t.Helper()
+		return newGitRepoWithOrigin(t, "https://github.com/acme/derived.git")
+	}
 
-	t.Run("recorded value wins over target directory", func(t *testing.T) {
-		result := newTargetIdResult(t, map[string]interface{}{
-			testapi.TestResultMetadataKeyTargetId:        recorded,
-			testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+	testCases := []struct {
+		name     string
+		metadata func(t *testing.T) map[string]interface{}
+		config   func() configuration.Configuration
+		want     string
+		wantErr  bool
+		wantRe   string
+	}{
+		{
+			name: "recorded value wins over target directory",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId:        recorded,
+					testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+				}
+			},
+			want: recorded,
+		},
+		{
+			name: "empty recorded value falls back to deriving from target directory",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId:        "",
+					testapi.TestResultMetadataKeyTargetDirectory: derivedRepo(t),
+				}
+			},
+			wantRe: `^pkg:git/github\.com/acme/derived@[0-9a-f]{40}\?branch=`,
+		},
+		{
+			name: "non-string recorded value falls back to target directory",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId:        42,
+					testapi.TestResultMetadataKeyTargetDirectory: derivedRepo(t),
+				}
+			},
+			wantRe: `^pkg:git/github\.com/acme/derived@[0-9a-f]{40}\?branch=`,
+		},
+		{
+			name: "nil recorded value falls back to target directory",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId:        nil,
+					testapi.TestResultMetadataKeyTargetDirectory: derivedRepo(t),
+				}
+			},
+			wantRe: `^pkg:git/github\.com/acme/derived@[0-9a-f]{40}\?branch=`,
+		},
+		{
+			name: "neither key present gives empty id",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{}
+			},
+			want: "",
+		},
+		{
+			name: "fallback honors remote repo url flag",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+				}
+			},
+			config: func() configuration.Configuration {
+				config := configuration.NewInMemory()
+				config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+				return config
+			},
+			want: "pkg:git/github.com/acme/remote@unknown?branch=unknown",
+		},
+		{
+			name: "derivation failure propagates its error",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetDirectory: derivedRepo(t),
+				}
+			},
+			config: func() configuration.Configuration {
+				config := configuration.NewInMemory()
+				config.Set(target.RemoteRepoUrlFlagname, "https://[::1")
+				return config
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := newTargetIdResult(t, tc.metadata(t))
+			config := configuration.NewInMemory()
+			if tc.config != nil {
+				config = tc.config()
+			}
+
+			got, err := getResultTargetId(result, config)
+			if tc.wantErr {
+				require.ErrorContains(t, err, "unknown repoUrl format")
+				assert.Empty(t, got)
+				return
+			}
+			require.NoError(t, err)
+			if tc.wantRe != "" {
+				assert.Regexp(t, tc.wantRe, got)
+				return
+			}
+			assert.Equal(t, tc.want, got)
 		})
-
-		got, err := getResultTargetId(result, configuration.NewInMemory())
-		require.NoError(t, err)
-		assert.Equal(t, recorded, got)
-	})
-
-	t.Run("empty recorded value falls back to deriving from target directory", func(t *testing.T) {
-		dir := newGitRepoWithOrigin(t, "https://github.com/acme/derived.git")
-		result := newTargetIdResult(t, map[string]interface{}{
-			testapi.TestResultMetadataKeyTargetId:        "",
-			testapi.TestResultMetadataKeyTargetDirectory: dir,
-		})
-
-		got, err := getResultTargetId(result, configuration.NewInMemory())
-		require.NoError(t, err)
-		assert.Regexp(t, `^pkg:git/github\.com/acme/derived@[0-9a-f]{40}\?branch=`, got)
-	})
-
-	t.Run("neither present gives no id", func(t *testing.T) {
-		result := newTargetIdResult(t, map[string]interface{}{})
-
-		got, err := getResultTargetId(result, configuration.NewInMemory())
-		require.NoError(t, err)
-		assert.Empty(t, got)
-	})
-
-	t.Run("fallback honors remote repo url flag", func(t *testing.T) {
-		result := newTargetIdResult(t, map[string]interface{}{
-			testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
-		})
-		config := configuration.NewInMemory()
-		config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
-
-		got, err := getResultTargetId(result, config)
-		require.NoError(t, err)
-		assert.Equal(t, "pkg:git/github.com/acme/remote@unknown?branch=unknown", got)
-	})
+	}
 }
 
 func newTargetIdResult(t *testing.T, metadata map[string]interface{}) testapi.TestResult {

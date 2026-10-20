@@ -18,9 +18,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
 	"github.com/muesli/termenv"
 	"github.com/snyk/code-client-go/sarif"
@@ -37,6 +34,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/utils/target"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 )
 
@@ -2490,6 +2488,7 @@ func renderHumanReadableFixture(t *testing.T, fixturePath string, mutate func(te
 	t.Helper()
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 	lipgloss.SetColorProfile(termenv.Ascii)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
 
 	fixtureBytes, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
@@ -2509,46 +2508,58 @@ func renderHumanReadableFixture(t *testing.T, fixturePath string, mutate func(te
 	return writer.String()
 }
 
-func newGitCheckout(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	repo, err := git.PlainInit(dir, false)
-	require.NoError(t, err)
-	_, err = repo.CreateRemote(&gitconfig.RemoteConfig{
-		Name: "origin",
-		URLs: []string{"https://github.com/acme/project.git"},
-	})
-	require.NoError(t, err)
-
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("probe\n"), 0o600))
-	wt, err := repo.Worktree()
-	require.NoError(t, err)
-	_, err = wt.Add("README.md")
-	require.NoError(t, err)
-	_, err = wt.Commit("init", &git.CommitOptions{
-		Author: &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()},
-	})
-	require.NoError(t, err)
-	return dir
-}
-
 func Test_UfmPresenter_HumanReadable_RecordedTargetId(t *testing.T) {
 	const cliFixture = "testdata/ufm/testresult_cli.json"
 
 	t.Run("recorded git target id suppresses hint when target directory does not exist", func(t *testing.T) {
 		output := renderHumanReadableFixture(t, cliFixture, func(r testapi.TestResult) {
-			r.SetMetadata("target-directory", "/does/not/exist/project")
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetDirectory, "/does/not/exist/project")
 			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:git/github.com/acme/project@0123456789abcdef?branch=main")
 		})
 
 		assert.NotContains(t, output, unavailableCapabilitiesHint)
 	})
 
+	t.Run("without recorded target id a nonexistent target directory still shows hint", func(t *testing.T) {
+		output := renderHumanReadableFixture(t, cliFixture, func(r testapi.TestResult) {
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetDirectory, "/does/not/exist/project")
+		})
+
+		assert.Contains(t, output, unavailableCapabilitiesHint)
+	})
+
+	// CHARACTERIZATION (open decision): documents current behavior only. Recorded id wins
+	// even when --remote-repo-url is set. Flip the assertion if the user decides otherwise.
+	t.Run("CHARACTERIZATION recorded filesystem id with remote repo url flag still shows hint", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(configuration.ORGANIZATION_SLUG, "My Org")
+		config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+		fixtureBytes, err := os.ReadFile(cliFixture)
+		require.NoError(t, err)
+		results, err := ufm.NewSerializableTestResultFromBytes(fixtureBytes)
+		require.NoError(t, err)
+		results[0].SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
+
+		writer := &bytes.Buffer{}
+		presenter := presenters.NewUfmRenderer(results, config, writer, presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))))
+		require.NoError(t, presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType))
+
+		assert.Contains(t, writer.String(), unavailableCapabilitiesHint)
+	})
+
+	t.Run("recorded filesystem target id alone shows hint without a target directory", func(t *testing.T) {
+		output := renderHumanReadableFixture(t, cliFixture, func(r testapi.TestResult) {
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
+		})
+
+		assert.Contains(t, output, unavailableCapabilitiesHint)
+	})
+
 	t.Run("recorded filesystem target id shows hint inside a git checkout", func(t *testing.T) {
-		checkout := newGitCheckout(t)
+		checkout := presenters.NewGitCheckout(t)
 
 		output := renderHumanReadableFixture(t, cliFixture, func(r testapi.TestResult) {
-			r.SetMetadata("target-directory", checkout)
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetDirectory, checkout)
 			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
 		})
 
@@ -2556,12 +2567,12 @@ func Test_UfmPresenter_HumanReadable_RecordedTargetId(t *testing.T) {
 	})
 
 	t.Run("output with recorded target id is independent of working directory", func(t *testing.T) {
-		checkout := newGitCheckout(t)
+		checkout := presenters.NewGitCheckout(t)
 		fixturePath, err := filepath.Abs(cliFixture)
 		require.NoError(t, err)
 
 		mutate := func(r testapi.TestResult) {
-			r.SetMetadata("target-directory", ".")
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetDirectory, ".")
 			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
 		}
 

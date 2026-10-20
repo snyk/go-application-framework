@@ -1190,8 +1190,7 @@ func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []
 	return findingTypesList
 }
 
-// getResultTargetId prefers the target id recorded by the producer; deriving it from the
-// target directory is only a fallback because the directory may no longer match the project.
+// The target directory may no longer match the project, so the recorded id wins.
 func getResultTargetId(result testapi.TestResult, config configuration.Configuration) (string, error) {
 	if recorded, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyTargetId).(string); ok && recorded != "" {
 		return recorded, nil
