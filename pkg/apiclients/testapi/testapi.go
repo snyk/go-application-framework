@@ -41,12 +41,9 @@ const (
 const (
 	TestResultMetadataKeyAsset = "asset"
 
-	// TestResultMetadataKeyTargetId holds the target id recorded by the producer at scan time.
-	// Renderers prefer it over deriving the id from TestResultMetadataKeyTargetDirectory.
-	TestResultMetadataKeyTargetId = "targetid"
-
-	// TestResultMetadataKeyTargetDirectory holds the scanned directory. Renderers use it to
-	// derive a target id only when no recorded TestResultMetadataKeyTargetId is present.
+	// The producer records the target id at scan time; renderers prefer it over
+	// deriving one from the directory, which may have moved or belong to another project.
+	TestResultMetadataKeyTargetId        = "targetid"
 	TestResultMetadataKeyTargetDirectory = "target-directory"
 )
 

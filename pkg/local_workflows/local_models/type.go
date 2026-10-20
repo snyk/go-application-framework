@@ -16,7 +16,4 @@ type UnionInterface interface {
 	ValueByDiscriminator() (interface{}, error)
 }
 
-const (
-	LINKS_KEY_REPORT    = "report"
-	LINKS_KEY_TARGET_ID = "targetid"
-)
+const LINKS_KEY_REPORT = "report"
