@@ -18,6 +18,7 @@ func Test_Configuration_ReadableFile_ChmodFailure(t *testing.T) {
 	file := filepath.Join(os.Getenv("HOME"), ".config", "configstore", "snyk.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(file), 0755))
 	require.NoError(t, os.WriteFile(file, []byte(`{"api":"initial-token"}`), 0644))
+	require.NoError(t, os.Chmod(file, 0644))
 	t.Cleanup(func() { assert.NoError(t, syscall.Chflags(file, 0)) })
 	// Immutable files remain readable while rejecting chmod and writes.
 	require.NoError(t, syscall.Chflags(file, immutable))
@@ -37,4 +38,22 @@ func Test_Configuration_ReadableFile_ChmodFailure(t *testing.T) {
 	contents, err := os.ReadFile(file)
 	require.NoError(t, err)
 	assert.Equal(t, updated, string(contents))
+}
+
+func Test_Configuration_ReadOnlyFile_NoChmod(t *testing.T) {
+	const immutable = 0x2 // Darwin UF_IMMUTABLE.
+	t.Setenv("HOME", t.TempDir())
+	file := filepath.Join(os.Getenv("HOME"), ".config", "configstore", "snyk.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(file), 0755))
+	require.NoError(t, os.WriteFile(file, []byte(`{"api":"dummy-token"}`), 0400))
+	t.Cleanup(func() { assert.NoError(t, syscall.Chflags(file, 0)) })
+	require.NoError(t, syscall.Chflags(file, immutable))
+	require.ErrorIs(t, os.Chmod(file, 0400), os.ErrPermission)
+
+	config := configuration.NewWithOpts(configuration.WithFiles("snyk"))
+	assert.Equal(t, "dummy-token", config.GetString("api"))
+	require.NoError(t, config.ReloadConfig())
+	info, err := os.Stat(file)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0400), info.Mode().Perm())
 }

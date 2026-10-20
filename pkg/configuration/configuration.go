@@ -851,9 +851,14 @@ func (ev *extendedViper) GetFiles() []string {
 func (ev *extendedViper) ReloadConfig() error {
 	var permissionErr error
 	if storage, ok := ev.GetStorage().(*JsonStorage); ok {
-		permissionErr = os.Chmod(storage.path, fileperms.FILEPERM_600)
-		if os.IsNotExist(permissionErr) {
-			permissionErr = nil
+		info, err := os.Stat(storage.path)
+		if err == nil {
+			mode := info.Mode().Perm() & fileperms.FILEPERM_600
+			if mode != info.Mode().Perm() {
+				permissionErr = os.Chmod(storage.path, mode)
+			}
+		} else if !os.IsNotExist(err) {
+			permissionErr = err
 		}
 	}
 	if err := ev.viper.ReadInConfig(); err != nil {
