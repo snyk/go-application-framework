@@ -1191,8 +1191,9 @@ func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []
 }
 
 // The target directory may no longer match the project, so the recorded id wins.
+// An explicit remote repo url is an override and takes precedence over the recorded id.
 func getResultTargetId(result testapi.TestResult, config configuration.Configuration) (string, error) {
-	if recorded, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyTargetId).(string); ok && recorded != "" {
+	if recorded, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyTargetId).(string); ok && recorded != "" && config.GetString(target.RemoteRepoUrlFlagname) == "" {
 		return recorded, nil
 	}
 

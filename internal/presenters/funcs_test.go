@@ -129,6 +129,37 @@ func TestGetResultTargetId(t *testing.T) {
 			want: "pkg:git/github.com/acme/remote@unknown?branch=unknown",
 		},
 		{
+			name: "remote repo url flag overrides a recorded filesystem id",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId:        "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project",
+					testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+				}
+			},
+			config: func() configuration.Configuration {
+				config := configuration.NewInMemory()
+				config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+				return config
+			},
+			want: "pkg:git/github.com/acme/remote@unknown?branch=unknown",
+		},
+		{
+			name: "remote repo url flag with no target directory gives empty id",
+			metadata: func(t *testing.T) map[string]interface{} {
+				t.Helper()
+				return map[string]interface{}{
+					testapi.TestResultMetadataKeyTargetId: "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project",
+				}
+			},
+			config: func() configuration.Configuration {
+				config := configuration.NewInMemory()
+				config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+				return config
+			},
+			want: "",
+		},
+		{
 			name: "derivation failure propagates its error",
 			metadata: func(t *testing.T) map[string]interface{} {
 				t.Helper()

@@ -2486,6 +2486,11 @@ const unavailableCapabilitiesHint = "Some capabilities, including the ability to
 
 func renderHumanReadableFixture(t *testing.T, fixturePath string, mutate func(testapi.TestResult)) string {
 	t.Helper()
+	return renderHumanReadableFixtureWithConfig(t, fixturePath, nil, mutate)
+}
+
+func renderHumanReadableFixtureWithConfig(t *testing.T, fixturePath string, configure func(configuration.Configuration), mutate func(testapi.TestResult)) string {
+	t.Helper()
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 	lipgloss.SetColorProfile(termenv.Ascii)
 	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
@@ -2501,6 +2506,9 @@ func renderHumanReadableFixture(t *testing.T, fixturePath string, mutate func(te
 
 	config := configuration.NewWithOpts()
 	config.Set(configuration.ORGANIZATION_SLUG, "My Org")
+	if configure != nil {
+		configure(config)
+	}
 
 	writer := &bytes.Buffer{}
 	presenter := presenters.NewUfmRenderer(results, config, writer, presenters.UfmWithRuntimeInfo(ri))
@@ -2528,23 +2536,22 @@ func Test_UfmPresenter_HumanReadable_RecordedTargetId(t *testing.T) {
 		assert.Contains(t, output, unavailableCapabilitiesHint)
 	})
 
-	// CHARACTERIZATION (open decision): documents current behavior only. Recorded id wins
-	// even when --remote-repo-url is set. Flip the assertion if the user decides otherwise.
-	t.Run("CHARACTERIZATION recorded filesystem id with remote repo url flag still shows hint", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(configuration.ORGANIZATION_SLUG, "My Org")
-		config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
-		fixtureBytes, err := os.ReadFile(cliFixture)
-		require.NoError(t, err)
-		results, err := ufm.NewSerializableTestResultFromBytes(fixtureBytes)
-		require.NoError(t, err)
-		results[0].SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
+	t.Run("remote repo url flag overrides a recorded filesystem id", func(t *testing.T) {
+		output := renderHumanReadableFixtureWithConfig(t, cliFixture, func(config configuration.Configuration) {
+			config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+		}, func(r testapi.TestResult) {
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
+		})
 
-		writer := &bytes.Buffer{}
-		presenter := presenters.NewUfmRenderer(results, config, writer, presenters.UfmWithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))))
-		require.NoError(t, presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType))
+		assert.NotContains(t, output, unavailableCapabilitiesHint)
+	})
 
-		assert.Contains(t, writer.String(), unavailableCapabilitiesHint)
+	t.Run("recorded filesystem id without remote repo url flag still shows hint", func(t *testing.T) {
+		output := renderHumanReadableFixture(t, cliFixture, func(r testapi.TestResult) {
+			r.SetMetadata(testapi.TestResultMetadataKeyTargetId, "pkg:filesystem/aafc908c69bc6d8cc4715275f9c19fa3be69aebc/project")
+		})
+
+		assert.Contains(t, output, unavailableCapabilitiesHint)
 	})
 
 	t.Run("recorded filesystem target id alone shows hint without a target directory", func(t *testing.T) {
