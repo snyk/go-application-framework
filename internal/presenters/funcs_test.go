@@ -7,15 +7,99 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/ufm_helpers"
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils/target"
 )
+
+func newGitRepoWithOrigin(t *testing.T, originURL string) string {
+	t.Helper()
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+	_, err = repo.CreateRemote(&gitconfig.RemoteConfig{Name: "origin", URLs: []string{originURL}})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("probe\n"), 0o600))
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+	_, err = wt.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()},
+	})
+	require.NoError(t, err)
+	return dir
+}
 
 func intPtr(v int) *int {
 	return &v
+}
+
+func TestGetResultTargetId(t *testing.T) {
+	const recorded = "pkg:git/github.com/acme/recorded@0123456789abcdef?branch=main"
+
+	t.Run("recorded value wins over target directory", func(t *testing.T) {
+		result := newTargetIdResult(t, map[string]interface{}{
+			testapi.TestResultMetadataKeyTargetId:        recorded,
+			testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+		})
+
+		got, err := getResultTargetId(result, configuration.NewInMemory())
+		require.NoError(t, err)
+		assert.Equal(t, recorded, got)
+	})
+
+	t.Run("empty recorded value falls back to deriving from target directory", func(t *testing.T) {
+		dir := newGitRepoWithOrigin(t, "https://github.com/acme/derived.git")
+		result := newTargetIdResult(t, map[string]interface{}{
+			testapi.TestResultMetadataKeyTargetId:        "",
+			testapi.TestResultMetadataKeyTargetDirectory: dir,
+		})
+
+		got, err := getResultTargetId(result, configuration.NewInMemory())
+		require.NoError(t, err)
+		assert.Regexp(t, `^pkg:git/github\.com/acme/derived@[0-9a-f]{40}\?branch=`, got)
+	})
+
+	t.Run("neither present gives no id", func(t *testing.T) {
+		result := newTargetIdResult(t, map[string]interface{}{})
+
+		got, err := getResultTargetId(result, configuration.NewInMemory())
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+
+	t.Run("fallback honors remote repo url flag", func(t *testing.T) {
+		result := newTargetIdResult(t, map[string]interface{}{
+			testapi.TestResultMetadataKeyTargetDirectory: t.TempDir(),
+		})
+		config := configuration.NewInMemory()
+		config.Set(target.RemoteRepoUrlFlagname, "https://github.com/acme/remote.git")
+
+		got, err := getResultTargetId(result, config)
+		require.NoError(t, err)
+		assert.Equal(t, "pkg:git/github.com/acme/remote@unknown?branch=unknown", got)
+	})
+}
+
+func newTargetIdResult(t *testing.T, metadata map[string]interface{}) testapi.TestResult {
+	t.Helper()
+	result := mocks.NewMockTestResult(gomock.NewController(t))
+	result.EXPECT().GetMetadataValue(gomock.Any()).DoAndReturn(func(key string) interface{} {
+		return metadata[key]
+	}).AnyTimes()
+	return result
 }
 
 func TestResolveMessageArgs(t *testing.T) {
