@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/errorcatalog"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=token_scoper.go -destination ../mocks/token_scoper.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
@@ -115,20 +116,10 @@ func exchangeStatusError(status int, body []byte, readErr error) error {
 	} else {
 		options = oauthErrorOptions(body)
 	}
-	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return snyk.NewUnauthorisedError(detail, options...)
-	case http.StatusBadRequest:
-		return snyk.NewBadRequestError(detail, options...)
-	case http.StatusTooManyRequests:
-		return snyk.NewTooManyRequestsError(detail, options...)
-	case http.StatusBadGateway:
-		return snyk.NewBadGatewayError(detail, options...)
-	case http.StatusServiceUnavailable:
-		return snyk.NewServiceUnavailableError(detail, options...)
-	default:
-		return snyk.NewServerError(detail, options...)
+	if err, ok := errorcatalog.ErrorFromHTTPStatus(status, detail, options...); ok {
+		return err
 	}
+	return snyk.NewServerError(detail, options...)
 }
 
 // oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The
