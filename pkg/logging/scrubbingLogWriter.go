@@ -341,7 +341,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// Same as above, but for values with no surrounding quotes at all, e.g. u: john.doe,
 	// The value class excludes ':' too: without that, a greedy separator backtracking off an
 	// already-redacted 'key': '***' leaves the colon for this group to swallow instead.
-	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s]+)[,}]?`, shortForm)
+	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s}\]]+)[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -486,6 +486,9 @@ func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 		quoted := qs.inQuotes
 		builder.WriteString(s[end:start])
 		switch {
+		case quoted && isJSONObjectKey(s, matchEnd):
+			// Keep keys; redact values.
+			builder.WriteString(s[start:matchEnd])
 		case !quoted && isFusedToAdjacentBareTokenChar(s, start, matchEnd):
 			builder.WriteString(s[start:matchEnd])
 		case !quoted && isBareJSONValueSpan(s, start, matchEnd):
@@ -582,6 +585,26 @@ func isBareJSONValueSpan(s string, start, end int) bool {
 	return precededByValueStart && followedByValueEnd
 }
 
+// matchEnd must be inside a quoted string.
+func isJSONObjectKey(s string, matchEnd int) bool {
+	i := matchEnd
+	for i < len(s) {
+		switch s[i] {
+		case '\\':
+			i += 2
+			continue
+		case '"':
+			j := i + 1
+			for j < len(s) && isJSONWhitespace(s[j]) {
+				j++
+			}
+			return j < len(s) && s[j] == ':'
+		}
+		i++
+	}
+	return false
+}
+
 func isJSONWhitespace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
@@ -614,6 +637,8 @@ func isJSONNumberChar(b byte) bool {
 // happens to be `{`, `,` or `"` — blank out identical text elsewhere in the same event, which
 // corrupts the surrounding payload (see CLI-1732). Matches returned by FindAll are non-overlapping
 // and in order, so the spans can be stitched back together in a single pass.
+//
+// Bare values need quotes around *** to keep JSON valid.
 func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) string {
 	matches := regex.FindAllStringSubmatchIndex(s, -1)
 	if len(matches) == 0 {
@@ -623,14 +648,23 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) strin
 	var builder strings.Builder
 	builder.Grow(len(s))
 	end := 0
+	var qs quoteState
 	for _, match := range matches {
 		lo, hi := 2*groupToRedact, 2*groupToRedact+1
 		// group out of range, or it did not participate in the match, or it matched empty
 		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
 			continue
 		}
+		qs = qs.advance(s[end:match[lo]])
 		builder.WriteString(s[end:match[lo]])
-		builder.WriteString(SANITIZE_REPLACEMENT_STRING)
+		replacement := SANITIZE_REPLACEMENT_STRING
+		if !qs.inQuotes && !isFusedToAdjacentBareTokenChar(s, match[lo], match[hi]) &&
+			isBareJSONValueSpan(s, match[lo], match[hi]) &&
+			!strings.ContainsAny(s[match[lo]:match[hi]], " \t\n\r\"',") {
+			replacement = `"` + replacement + `"`
+		}
+		builder.WriteString(replacement)
+		qs = qs.advance(s[match[lo]:match[hi]])
 		end = match[hi]
 	}
 	builder.WriteString(s[end:])
