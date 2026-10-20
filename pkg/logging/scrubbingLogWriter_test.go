@@ -628,6 +628,97 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 	}
 }
 
+func TestScrub_RegexBareValuesAreQuoted(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "numeric short-form value keeps closing brace",
+			input:    `{"level":"debug","u":123456}`,
+			expected: `{"level":"debug","u":"***"}`,
+		},
+		{
+			name:     "unquoted token value is quoted",
+			input:    `{"level":"debug","token":abcdef}`,
+			expected: `{"level":"debug","token":"***"}`,
+		},
+		{
+			name:     "unquoted short-form value is quoted",
+			input:    `{"level":"debug","p":hunter2}`,
+			expected: `{"level":"debug","p":"***"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(scrub([]byte(test.input), dict, true))
+
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func TestScrub_LiteralTermsLeaveJSONKeysIntact(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"message", "Content"})
+	config.Set(configuration.AUTHENTICATION_TOKEN, "s3cr3t-v4lu3")
+	dict := GetScrubDictFromConfig(config)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "unterminated string is still redacted",
+			input:    `{"message:"hello"}`,
+			expected: `{"***:"hello"}`,
+		},
+		{
+			name:     "message key intact",
+			input:    `{"level":"debug","message":"hello"}`,
+			expected: `{"level":"debug","message":"hello"}`,
+		},
+		{
+			name:     "Content-Type key intact",
+			input:    `{"Content-Type":"text/plain","body":"hi"}`,
+			expected: `{"Content-Type":"text/plain","body":"hi"}`,
+		},
+		{
+			name:     "same term as value still redacted",
+			input:    `{"message":"message"}`,
+			expected: `{"message":"***"}`,
+		},
+		{
+			name:     "secret value under skipped key still redacted",
+			input:    `{"message":"s3cr3t-v4lu3"}`,
+			expected: `{"message":"***"}`,
+		},
+		{
+			name:     "key containing an escaped quote stays intact",
+			input:    `{"a\"message\"b":"v"}`,
+			expected: `{"a\"message\"b":"v"}`,
+		},
+		{
+			name:     "hyphenated key with whitespace before the colon stays intact",
+			input:    `{"Content-Type" :"text/plain"}`,
+			expected: `{"Content-Type" :"text/plain"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(Scrub([]byte(test.input), dict))
+
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
 		"token":    {groupToRedact: 0, regex: regexp.MustCompile("token")},
