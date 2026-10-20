@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -163,6 +164,30 @@ func Test_bearerTokenScoperImpl_GetToken_InternalServerError(t *testing.T) {
 	requireExchangeStatusError(t, http.StatusInternalServerError, "SNYK-9999")
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) {
+	sentinel := errors.New("sentinel transport failure")
+	httpClient := &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, sentinel
+	})}
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.example.invalid")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
+
+	scoper := NewBearerTokenScoper(config, httpClient)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, "SNYK-CLI-0022")
+	assert.ErrorIs(t, err, sentinel)
+	assert.Empty(t, token)
+}
+
 func Test_bearerTokenScoperImpl_GetToken_NoUserAuthentication(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.example.invalid")
@@ -210,6 +235,27 @@ func Test_bearerTokenScoperImpl_GetToken_MalformedResponseBody(t *testing.T) {
 
 	requireCatalogError(t, err, "SNYK-9999")
 	assert.NotNil(t, errors.Unwrap(err))
+	assert.Empty(t, token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`not-json`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
+
+	scoper := NewBearerTokenScoper(config, server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, "SNYK-9999")
+	var syntaxErr *json.SyntaxError
+	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
 }
 
@@ -319,6 +365,8 @@ func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, "SNYK-0005")
+	var syntaxErr *json.SyntaxError
+	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
 }
 
