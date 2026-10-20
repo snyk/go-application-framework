@@ -981,6 +981,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getTargetId"] = func(path string) (string, error) {
 		return target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 	}
+	defaultMap["getResultTargetId"] = func(result testapi.TestResult) (string, error) {
+		return getResultTargetId(result, config)
+	}
 	defaultMap["deduplicateIssues"] = deduplicateIssues
 
 	return defaultMap
@@ -1185,6 +1188,21 @@ func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []
 	slices.Sort(findingTypesList)
 	slices.Reverse(findingTypesList)
 	return findingTypesList
+}
+
+// The target directory may no longer match the project, so the recorded id wins.
+// An explicit remote repo url is an override and takes precedence over the recorded id.
+func getResultTargetId(result testapi.TestResult, config configuration.Configuration) (string, error) {
+	if recorded, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyTargetId).(string); ok && recorded != "" && config.GetString(target.RemoteRepoUrlFlagname) == "" {
+		return recorded, nil
+	}
+
+	dir, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyTargetDirectory).(string)
+	if !ok || dir == "" {
+		return "", nil
+	}
+
+	return target.GetTargetId(dir, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 }
 
 func assetLink(testResults []testapi.TestResult) string {
