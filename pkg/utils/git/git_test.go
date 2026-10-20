@@ -2,10 +2,14 @@ package git
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -204,4 +208,70 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	remoteUrl, err := GetRemoteUrl(tempDir)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
+}
+
+const linkedWorktreeOriginUrl = "https://github.com/example/repo.git"
+
+func linkedWorktreeFixture(t *testing.T) string {
+	t.Helper()
+	const branch = "feature"
+	mainDir := t.TempDir()
+	repo, err := git.PlainInit(mainDir, false)
+	assert.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	assert.NoError(t, err)
+	assert.NoError(t, os.WriteFile(filepath.Join(mainDir, "README.md"), []byte("readme"), 0o600))
+	_, err = wt.Add("README.md")
+	assert.NoError(t, err)
+	hash, err := wt.Commit("initial commit", &git.CommitOptions{
+		Author: &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()},
+	})
+	assert.NoError(t, err)
+	assert.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference(plumbing.NewBranchReferenceName(branch), hash)))
+	_, err = repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{linkedWorktreeOriginUrl}})
+	assert.NoError(t, err)
+
+	privateDir := filepath.Join(mainDir, ".git", "worktrees", "wt")
+	assert.NoError(t, os.MkdirAll(privateDir, 0o750))
+	assert.NoError(t, os.WriteFile(filepath.Join(privateDir, "HEAD"), []byte("ref: refs/heads/"+branch+"\n"), 0o600))
+	assert.NoError(t, os.WriteFile(filepath.Join(privateDir, "commondir"), []byte("../..\n"), 0o600))
+
+	worktreeDir := filepath.Join(t.TempDir(), "wt")
+	assert.NoError(t, os.MkdirAll(worktreeDir, 0o750))
+	assert.NoError(t, os.WriteFile(filepath.Join(worktreeDir, ".git"), []byte("gitdir: "+privateDir+"\n"), 0o600))
+
+	return worktreeDir
+}
+
+func TestLinkedWorktree_remoteAndBranchResolution(t *testing.T) {
+	t.Run("RepoUrlFromDir returns origin", func(t *testing.T) {
+		remoteUrl, err := RepoUrlFromDir(linkedWorktreeFixture(t))
+		assert.NoError(t, err)
+		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
+	})
+
+	t.Run("GetRemoteUrl returns origin", func(t *testing.T) {
+		remoteUrl, err := GetRemoteUrl(linkedWorktreeFixture(t))
+		assert.NoError(t, err)
+		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
+	})
+
+	t.Run("GetOriginRemote returns origin", func(t *testing.T) {
+		remoteUrl, err := GetOriginRemote(linkedWorktreeFixture(t))
+		assert.NoError(t, err)
+		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
+	})
+
+	t.Run("GetFirstRemote returns the configured remote", func(t *testing.T) {
+		remoteUrl, err := GetFirstRemote(linkedWorktreeFixture(t))
+		assert.NoError(t, err)
+		assert.Equal(t, linkedWorktreeOriginUrl, remoteUrl)
+	})
+
+	t.Run("BranchNameFromDir returns the worktree branch", func(t *testing.T) {
+		branch, err := BranchNameFromDir(linkedWorktreeFixture(t))
+		assert.NoError(t, err)
+		assert.Equal(t, "feature", branch)
+	})
 }

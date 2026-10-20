@@ -8,9 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -179,6 +184,49 @@ func Test_GetTargetId(t *testing.T) {
 		assert.Error(t, err)
 		assert.Empty(t, targetId)
 	})
+}
+
+func Test_GetTargetId_linkedWorktree(t *testing.T) {
+	worktreeDir := linkedWorktreeFixture(t, "https://github.com/example/repo.git", "feature")
+
+	targetId, err := GetTargetId(worktreeDir, AutoDetectedTargetId)
+	assert.NoError(t, err)
+
+	pattern := `^pkg:git/github\.com/example/repo@[a-fA-F0-9]{40}\?branch=feature$`
+	assert.Regexp(t, pattern, targetId)
+}
+
+// linkedWorktreeFixture builds a main repository with one commit, a branch and an origin remote,
+// then lays out a linked worktree at the returned path the way `git worktree add` does.
+func linkedWorktreeFixture(t *testing.T, originUrl string, branch string) string {
+	t.Helper()
+	mainDir := t.TempDir()
+	repo, err := git.PlainInit(mainDir, false)
+	require.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(mainDir, "README.md"), []byte("readme"), 0o600))
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+	hash, err := wt.Commit("initial commit", &git.CommitOptions{
+		Author: &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()},
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference(plumbing.NewBranchReferenceName(branch), hash)))
+	_, err = repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{originUrl}})
+	require.NoError(t, err)
+
+	privateDir := filepath.Join(mainDir, ".git", "worktrees", "wt")
+	require.NoError(t, os.MkdirAll(privateDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(privateDir, "HEAD"), []byte("ref: refs/heads/"+branch+"\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(privateDir, "commondir"), []byte("../..\n"), 0o600))
+
+	worktreeDir := filepath.Join(t.TempDir(), "wt")
+	require.NoError(t, os.MkdirAll(worktreeDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, ".git"), []byte("gitdir: "+privateDir+"\n"), 0o600))
+
+	return worktreeDir
 }
 
 func clone(t *testing.T) string {
