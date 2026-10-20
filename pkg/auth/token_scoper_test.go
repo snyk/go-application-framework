@@ -4,18 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+const testSubjectToken = "subject-token"
 
 func Test_bearerTokenScoperImpl_GetToken(t *testing.T) {
 	const subjectToken = "subject-token"
@@ -60,11 +68,7 @@ func Test_bearerTokenScoperImpl_GetToken_WithoutTTL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, 0)
 
 	require.NoError(t, err)
@@ -79,89 +83,30 @@ func Test_bearerTokenScoperImpl_GetToken_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Error(t, err)
 	assert.Empty(t, token)
 }
 
+func newBearerConfig(apiURL string) configuration.Configuration {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, apiURL)
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, testSubjectToken)
+	return config
+}
+
+func catalogErrorOf(t *testing.T, err error) snyk_errors.Error {
+	t.Helper()
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	return catalogErr
+}
+
 func requireCatalogError(t *testing.T, err error, errorCode string) {
 	t.Helper()
-	var catalogErr snyk_errors.Error
-	require.ErrorAs(t, err, &catalogErr)
-	require.Equal(t, errorCode, catalogErr.ErrorCode)
-}
-
-func Test_bearerTokenScoperImpl_GetToken_NetworkFailure(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	server.Close()
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
-	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
-
-	requireCatalogError(t, err, "SNYK-CLI-0022")
-	assert.Empty(t, token)
-}
-
-func requireExchangeStatusError(t *testing.T, status int, errorCode string) {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(status)
-		_, err := w.Write([]byte(`{"error":"server_said_no"}`))
-		assert.NoError(t, err)
-	}))
-	defer server.Close()
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
-	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
-
-	require.Empty(t, token)
-	requireCatalogError(t, err, errorCode)
-	var catalogErr snyk_errors.Error
-	require.ErrorAs(t, err, &catalogErr)
-	assert.Contains(t, catalogErr.Detail, strconv.Itoa(status))
-	assert.Equal(t, `{"error":"server_said_no"}`, catalogErr.Meta["body"])
-}
-
-func Test_bearerTokenScoperImpl_GetToken_Unauthorized(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusUnauthorized, "SNYK-0005")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_BadRequest(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusBadRequest, "SNYK-0003")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_TooManyRequests(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusTooManyRequests, "SNYK-0001")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_BadGateway(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusBadGateway, "SNYK-0008")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_ServiceUnavailable(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusServiceUnavailable, "SNYK-0009")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_Forbidden(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusForbidden, "SNYK-0005")
-}
-
-func Test_bearerTokenScoperImpl_GetToken_InternalServerError(t *testing.T) {
-	requireExchangeStatusError(t, http.StatusInternalServerError, "SNYK-9999")
+	require.Equal(t, errorCode, catalogErrorOf(t, err).ErrorCode)
 }
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
@@ -176,15 +121,174 @@ func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) 
 		return nil, sentinel
 	})}
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, "https://api.example.invalid")
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, httpClient)
+	scoper := NewBearerTokenScoper(newBearerConfig("https://api.example.invalid"), httpClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-CLI-0022")
+	requireCatalogError(t, err, cli.NewGenericNetworkError("").ErrorCode)
 	assert.ErrorIs(t, err, sentinel)
+	assert.Empty(t, token)
+}
+
+func requireExchangeStatusError(t *testing.T, status int, errorCode string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, err := w.Write([]byte(`{"error":"server_said_no"}`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.Empty(t, token)
+	catalogErr := catalogErrorOf(t, err)
+	require.Equal(t, errorCode, catalogErr.ErrorCode)
+	assert.Contains(t, catalogErr.Detail, strconv.Itoa(status))
+	assert.Equal(t, "server_said_no", catalogErr.Meta[metaKeyOAuthError])
+}
+
+func Test_bearerTokenScoperImpl_GetToken_ExchangeStatusErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		code   string
+	}{
+		{"unauthorized", http.StatusUnauthorized, snyk.NewUnauthorisedError("").ErrorCode},
+		{"forbidden", http.StatusForbidden, snyk.NewUnauthorisedError("").ErrorCode},
+		{"bad request", http.StatusBadRequest, snyk.NewBadRequestError("").ErrorCode},
+		{"too many requests", http.StatusTooManyRequests, snyk.NewTooManyRequestsError("").ErrorCode},
+		{"bad gateway", http.StatusBadGateway, snyk.NewBadGatewayError("").ErrorCode},
+		{"service unavailable", http.StatusServiceUnavailable, snyk.NewServiceUnavailableError("").ErrorCode},
+		{"internal server error", http.StatusInternalServerError, snyk.NewServerError("").ErrorCode},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requireExchangeStatusError(t, tt.status, tt.code)
+		})
+	}
+}
+
+func requireNoSecretLeak(t *testing.T, err error, secret string) {
+	t.Helper()
+	catalogErr := catalogErrorOf(t, err)
+	assert.NotContains(t, catalogErr.Detail, secret)
+	assert.NotContains(t, err.Error(), secret)
+	for _, value := range catalogErr.Meta {
+		assert.NotContains(t, fmt.Sprint(value), secret)
+	}
+}
+
+func Test_bearerTokenScoperImpl_GetToken_ErrorBodyKeepsOnlyOAuthErrorFields(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(configuration.Configuration)
+		secret    string
+	}{
+		{
+			name: "bearer subject token",
+			configure: func(c configuration.Configuration) {
+				c.Set(configuration.AUTHENTICATION_BEARER_TOKEN, testSubjectToken)
+			},
+			secret: testSubjectToken,
+		},
+		{
+			name: "stored oauth access token",
+			configure: func(c configuration.Configuration) {
+				c.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer"}`)
+			},
+			secret: "stored-access-token",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, err := fmt.Fprintf(w, `{"error":"invalid_request","error_description":"token rejected","echo":"%s"}`, tt.secret)
+				assert.NoError(t, err)
+			}))
+			defer server.Close()
+
+			config := configuration.NewWithOpts()
+			config.Set(configuration.API_URL, server.URL)
+			tt.configure(config)
+
+			scoper := NewBearerTokenScoper(config, server.Client())
+			token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+			require.Empty(t, token)
+			catalogErr := catalogErrorOf(t, err)
+			assert.Equal(t, "invalid_request", catalogErr.Meta[metaKeyOAuthError])
+			assert.Equal(t, "token rejected", catalogErr.Meta[metaKeyOAuthErrorDescription])
+			assert.NotContains(t, catalogErr.Meta, "body")
+			assert.NotContains(t, catalogErr.Meta, "echo")
+			requireNoSecretLeak(t, err, tt.secret)
+		})
+	}
+}
+
+func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"non-json", "upstream says: " + testSubjectToken},
+		{"oversized", `{"error":"invalid_request","error_description":"` + strings.Repeat("a", 2<<20) + `"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, err := w.Write([]byte(tt.body))
+				assert.NoError(t, err)
+			}))
+			defer server.Close()
+
+			scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+			token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+			require.Empty(t, token)
+			catalogErr := catalogErrorOf(t, err)
+			assert.Equal(t, snyk.NewBadRequestError("").ErrorCode, catalogErr.ErrorCode)
+			assert.Empty(t, catalogErr.Meta)
+			requireNoSecretLeak(t, err, testSubjectToken)
+		})
+	}
+}
+
+func Test_bearerTokenScoperImpl_GetToken_UnauthorizedWithUnreadableBodyIsUnauthorised(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, err := w.Write([]byte("partial"))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.Empty(t, token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_TruncatedBodyStoresNothing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"error":"invalid_request"}`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, snyk.NewBadRequestError("").ErrorCode)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.Empty(t, catalogErrorOf(t, err).Meta)
 	assert.Empty(t, token)
 }
 
@@ -195,7 +299,7 @@ func Test_bearerTokenScoperImpl_GetToken_NoUserAuthentication(t *testing.T) {
 	scoper := NewBearerTokenScoper(config, http.DefaultClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-CLI-0006")
+	requireCatalogError(t, err, cli.NewAuthConfigError("").ErrorCode)
 	assert.Empty(t, token)
 }
 
@@ -207,35 +311,13 @@ func Test_bearerTokenScoperImpl_GetToken_MissingAccessToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-9999")
-	assert.Empty(t, token)
-}
-
-func Test_bearerTokenScoperImpl_GetToken_MalformedResponseBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`not-json`))
-		assert.NoError(t, err)
-	}))
-	defer server.Close()
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
-	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
-
-	requireCatalogError(t, err, "SNYK-9999")
-	assert.NotNil(t, errors.Unwrap(err))
-	assert.Empty(t, token)
+	require.Empty(t, token)
+	catalogErr := catalogErrorOf(t, err)
+	require.Equal(t, snyk.NewServerError("").ErrorCode, catalogErr.ErrorCode)
+	assert.Equal(t, "token exchange response did not contain an access token", catalogErr.Detail)
 }
 
 func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
@@ -246,14 +328,10 @@ func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-9999")
+	requireCatalogError(t, err, snyk.NewServerError("").ErrorCode)
 	var syntaxErr *json.SyntaxError
 	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
@@ -268,15 +346,11 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
-
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-9999")
-	assert.NotNil(t, errors.Unwrap(err))
+	requireCatalogError(t, err, snyk.NewServerError("").ErrorCode)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.Empty(t, token)
 }
 
@@ -352,8 +426,12 @@ func Test_bearerTokenScoperImpl_GetToken_FailedRefreshOfExpiredStoredOAuthToken(
 	scoper := NewBearerTokenScoper(config, server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-0005")
+	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
+	var retrieveErr *oauth2.RetrieveError
+	assert.ErrorAs(t, err, &retrieveErr)
 	assert.Empty(t, token)
+	requireNoSecretLeak(t, err, "stored-refresh-token")
+	requireNoSecretLeak(t, err, "stored-access-token")
 }
 
 func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
@@ -364,7 +442,7 @@ func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
 	scoper := NewBearerTokenScoper(config, http.DefaultClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, "SNYK-0005")
+	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
 	var syntaxErr *json.SyntaxError
 	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
@@ -375,5 +453,5 @@ func Test_bearerTokenScoperImpl_RevokeToken_NotImplemented(t *testing.T) {
 
 	err := scoper.RevokeToken(context.Background(), "scoped-token")
 
-	requireCatalogError(t, err, "SNYK-0002")
+	requireCatalogError(t, err, snyk.NewNotImplementedError("").ErrorCode)
 }

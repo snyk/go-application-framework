@@ -25,6 +25,9 @@ const (
 	tokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"
 	// maxErrorResponseBytes bounds how much of a failed exchange response is read into the error.
 	maxErrorResponseBytes = 1 << 20
+
+	metaKeyOAuthError            = "error"
+	metaKeyOAuthErrorDescription = "error_description"
 )
 
 // BearerTokenScoper derives bearer tokens that are restricted to a subset of scopes from the
@@ -88,10 +91,7 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 
 	if res.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(io.LimitReader(res.Body, maxErrorResponseBytes))
-		if readErr != nil {
-			return "", snyk.NewServerError(fmt.Sprintf("token exchange failed with status %d", res.StatusCode), snyk_errors.WithCause(readErr))
-		}
-		return "", exchangeStatusError(res.StatusCode, string(body))
+		return "", exchangeStatusError(res.StatusCode, body, readErr)
 	}
 
 	var tokenResponse struct {
@@ -107,23 +107,48 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	return tokenResponse.AccessToken, nil
 }
 
-func exchangeStatusError(status int, body string) error {
+func exchangeStatusError(status int, body []byte, readErr error) error {
 	detail := fmt.Sprintf("token exchange failed with status %d", status)
-	meta := snyk_errors.WithMeta("body", body)
+	var options []snyk_errors.Option
+	if readErr != nil {
+		options = append(options, snyk_errors.WithCause(readErr))
+	} else {
+		options = oauthErrorOptions(body)
+	}
 	switch status {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return snyk.NewUnauthorisedError(detail, meta)
+		return snyk.NewUnauthorisedError(detail, options...)
 	case http.StatusBadRequest:
-		return snyk.NewBadRequestError(detail, meta)
+		return snyk.NewBadRequestError(detail, options...)
 	case http.StatusTooManyRequests:
-		return snyk.NewTooManyRequestsError(detail, meta)
+		return snyk.NewTooManyRequestsError(detail, options...)
 	case http.StatusBadGateway:
-		return snyk.NewBadGatewayError(detail, meta)
+		return snyk.NewBadGatewayError(detail, options...)
 	case http.StatusServiceUnavailable:
-		return snyk.NewServiceUnavailableError(detail, meta)
+		return snyk.NewServiceUnavailableError(detail, options...)
 	default:
-		return snyk.NewServerError(detail, meta)
+		return snyk.NewServerError(detail, options...)
 	}
+}
+
+// oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The
+// body is never stored as a whole because the server may echo the submitted tokens back.
+func oauthErrorOptions(body []byte) []snyk_errors.Option {
+	var oauthErr struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &oauthErr); err != nil {
+		return nil
+	}
+	var options []snyk_errors.Option
+	if oauthErr.Error != "" {
+		options = append(options, snyk_errors.WithMeta(metaKeyOAuthError, oauthErr.Error))
+	}
+	if oauthErr.ErrorDescription != "" {
+		options = append(options, snyk_errors.WithMeta(metaKeyOAuthErrorDescription, oauthErr.ErrorDescription))
+	}
+	return options
 }
 
 // getSubjectToken returns the access token to exchange: the configured bearer token, or else the
