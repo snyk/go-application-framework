@@ -40,6 +40,34 @@ func getConfig() configuration.Configuration {
 	return config
 }
 
+func Test_BearerTokenScoper_ThroughNetworkClient_WrapsMiddlewareCatalogErrorWithCause(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, err := w.Write([]byte(`{"error":"invalid_client"}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"subject-token","token_type":"Bearer"}`)
+	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+	net := NewNetworkAccess(config)
+	net.AddErrorHandler(func(err error, _ context.Context) error { return err })
+
+	scoper := auth.NewBearerTokenScoper(config, net.GetHttpClient())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.Empty(t, token)
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
+	var causeErr snyk_errors.Error
+	require.ErrorAs(t, catalogErr.Cause, &causeErr)
+	assert.Equal(t, snyk.NewUnauthorisedError("").ErrorCode, causeErr.ErrorCode)
+}
+
 func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
