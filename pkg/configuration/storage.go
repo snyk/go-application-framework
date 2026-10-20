@@ -143,7 +143,11 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(s.path, os.O_WRONLY|os.O_CREATE, fileperms.FILEPERM_600)
+	return writeConfigFile(s.path, configJson)
+}
+
+func writeConfigFile(path string, contents []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, fileperms.FILEPERM_600)
 	if err != nil {
 		return err
 	}
@@ -152,7 +156,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 		err = file.Truncate(0)
 	}
 	if err == nil {
-		_, err = file.Write(configJson)
+		_, err = file.Write(contents)
 	}
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
