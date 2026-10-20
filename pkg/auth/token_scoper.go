@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -78,29 +82,48 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	}
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("token exchange request failed: %w", err)
+		return "", cli.NewGenericNetworkError("token exchange request failed", snyk_errors.WithCause(err))
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(io.LimitReader(res.Body, maxErrorResponseBytes))
 		if readErr != nil {
-			return "", fmt.Errorf("token exchange failed with status %d: %w", res.StatusCode, readErr)
+			return "", snyk.NewServerError(fmt.Sprintf("token exchange failed with status %d", res.StatusCode), snyk_errors.WithCause(readErr))
 		}
-		return "", fmt.Errorf("token exchange failed with status %d: %s", res.StatusCode, body)
+		return "", exchangeStatusError(res.StatusCode, string(body))
 	}
 
 	var tokenResponse struct {
 		AccessToken string `json:"access_token"`
 	}
 	if err = json.NewDecoder(res.Body).Decode(&tokenResponse); err != nil {
-		return "", fmt.Errorf("failed to decode token exchange response: %w", err)
+		return "", snyk.NewServerError("failed to decode token exchange response", snyk_errors.WithCause(err))
 	}
 	if tokenResponse.AccessToken == "" {
-		return "", fmt.Errorf("token exchange response did not contain an access token")
+		return "", snyk.NewServerError("token exchange response did not contain an access token")
 	}
 
 	return tokenResponse.AccessToken, nil
+}
+
+func exchangeStatusError(status int, body string) error {
+	detail := fmt.Sprintf("token exchange failed with status %d", status)
+	meta := snyk_errors.WithMeta("body", body)
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return snyk.NewUnauthorisedError(detail, meta)
+	case http.StatusBadRequest:
+		return snyk.NewBadRequestError(detail, meta)
+	case http.StatusTooManyRequests:
+		return snyk.NewTooManyRequestsError(detail, meta)
+	case http.StatusBadGateway:
+		return snyk.NewBadGatewayError(detail, meta)
+	case http.StatusServiceUnavailable:
+		return snyk.NewServiceUnavailableError(detail, meta)
+	default:
+		return snyk.NewServerError(detail, meta)
+	}
 }
 
 // getSubjectToken returns the access token to exchange: the configured bearer token, or else the
@@ -112,10 +135,10 @@ func (b bearerTokenScoperImpl) getSubjectToken(ctx context.Context) (string, err
 
 	oauthToken, err := GetOAuthToken(b.config)
 	if err != nil {
-		return "", fmt.Errorf("failed to read stored oauth token: %w", err)
+		return "", snyk.NewUnauthorisedError("failed to read stored oauth token", snyk_errors.WithCause(err))
 	}
 	if oauthToken == nil || oauthToken.AccessToken == "" {
-		return "", fmt.Errorf("no user authentication available to exchange a scoped token")
+		return "", cli.NewAuthConfigError("no user authentication available to exchange a scoped token")
 	}
 	if oauthToken.Valid() {
 		return oauthToken.AccessToken, nil
@@ -133,7 +156,7 @@ func refreshedAccessToken(ctx context.Context, config configuration.Configuratio
 		return "", fmt.Errorf("failed to create request for oauth token refresh: %w", err)
 	}
 	if err = authenticator.AddAuthenticationHeader(req); err != nil {
-		return "", fmt.Errorf("failed to refresh stored oauth token: %w", err)
+		return "", snyk.NewUnauthorisedError("failed to refresh stored oauth token", snyk_errors.WithCause(err))
 	}
 	return strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer "), nil
 }
@@ -141,7 +164,7 @@ func refreshedAccessToken(ctx context.Context, config configuration.Configuratio
 // RevokeToken implements [BearerTokenScoper].
 // Revocation is not supported yet, so it always returns an error rather than reporting success.
 func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) error {
-	return fmt.Errorf("token revocation is not implemented")
+	return snyk.NewNotImplementedError("token revocation is not implemented")
 }
 
 func NewBearerTokenScoper(config configuration.Configuration, httpClient *http.Client) BearerTokenScoper {
