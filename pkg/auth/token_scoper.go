@@ -16,7 +16,6 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/errorcatalog"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=token_scoper.go -destination ../mocks/token_scoper.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
@@ -92,7 +91,7 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 
 	if res.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(io.LimitReader(res.Body, maxErrorResponseBytes))
-		return "", exchangeStatusError(res.StatusCode, body, readErr)
+		return "", exchangeResponseError(res.StatusCode, body, readErr)
 	}
 
 	var tokenResponse struct {
@@ -108,18 +107,13 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	return tokenResponse.AccessToken, nil
 }
 
-func exchangeStatusError(status int, body []byte, readErr error) error {
+func exchangeResponseError(status int, body []byte, readErr error) error {
 	detail := fmt.Sprintf("token exchange failed with status %d", status)
 	var options []snyk_errors.Option
 	if readErr != nil {
 		options = append(options, snyk_errors.WithCause(readErr))
 	} else {
 		options = oauthErrorOptions(body)
-	}
-	if status != http.StatusInternalServerError {
-		if err, ok := errorcatalog.ErrorFromHTTPStatus(status, detail, options...); ok {
-			return err
-		}
 	}
 	return cli.NewTokenScoperError(detail, options...)
 }

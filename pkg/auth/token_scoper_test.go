@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -129,47 +128,6 @@ func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) 
 	assert.Empty(t, token)
 }
 
-func requireExchangeStatusError(t *testing.T, status int, errorCode string) {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(status)
-		_, err := w.Write([]byte(`{"error":"server_said_no"}`))
-		assert.NoError(t, err)
-	}))
-	defer server.Close()
-
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
-	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
-
-	require.Empty(t, token)
-	catalogErr := catalogErrorOf(t, err)
-	require.Equal(t, errorCode, catalogErr.ErrorCode)
-	assert.Contains(t, catalogErr.Detail, strconv.Itoa(status))
-	assert.Equal(t, "server_said_no", catalogErr.Meta[metaKeyOAuthError])
-}
-
-func Test_bearerTokenScoperImpl_GetToken_ExchangeStatusErrors(t *testing.T) {
-	tests := []struct {
-		name   string
-		status int
-		code   string
-	}{
-		{"unauthorized", http.StatusUnauthorized, snyk.NewUnauthorisedError("").ErrorCode},
-		{"forbidden", http.StatusForbidden, snyk.NewUnauthorisedError("").ErrorCode},
-		{"bad request", http.StatusBadRequest, snyk.NewBadRequestError("").ErrorCode},
-		{"too many requests", http.StatusTooManyRequests, snyk.NewTooManyRequestsError("").ErrorCode},
-		{"bad gateway", http.StatusBadGateway, snyk.NewBadGatewayError("").ErrorCode},
-		{"service unavailable", http.StatusServiceUnavailable, snyk.NewServiceUnavailableError("").ErrorCode},
-		{"internal server error", http.StatusInternalServerError, cli.NewTokenScoperError("").ErrorCode},
-		{"unmapped status", http.StatusGatewayTimeout, cli.NewTokenScoperError("").ErrorCode},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			requireExchangeStatusError(t, tt.status, tt.code)
-		})
-	}
-}
-
 func requireNoSecretLeak(t *testing.T, err error, secret string) {
 	t.Helper()
 	catalogErr := catalogErrorOf(t, err)
@@ -251,7 +209,7 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 
 			require.Empty(t, token)
 			catalogErr := catalogErrorOf(t, err)
-			assert.Equal(t, snyk.NewBadRequestError("").ErrorCode, catalogErr.ErrorCode)
+			assert.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
 			assert.Empty(t, catalogErr.Meta)
 			requireNoSecretLeak(t, err, testSubjectToken)
 		})
@@ -275,23 +233,6 @@ func Test_bearerTokenScoperImpl_GetToken_ServerErrorWithUnreadableBodyKeepsCause
 	assert.Empty(t, token)
 }
 
-func Test_bearerTokenScoperImpl_GetToken_UnauthorizedWithUnreadableBodyIsUnauthorised(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "100")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, err := w.Write([]byte("partial"))
-		assert.NoError(t, err)
-	}))
-	defer server.Close()
-
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
-	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
-
-	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
-	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
-	assert.Empty(t, token)
-}
-
 func Test_bearerTokenScoperImpl_GetToken_TruncatedBodyStoresNothing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "1000")
@@ -304,9 +245,46 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedBodyStoresNothing(t *testing.T
 	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, snyk.NewBadRequestError("").ErrorCode)
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.Empty(t, catalogErrorOf(t, err).Meta)
+	assert.Empty(t, token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_PlainClientNon200ReturnsScoperErrorWithStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, err := w.Write([]byte(`{"error":"invalid_client","error_description":"bad subject"}`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.Empty(t, token)
+	catalogErr := catalogErrorOf(t, err)
+	require.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
+	assert.Contains(t, catalogErr.Detail, "401")
+	assert.Equal(t, "invalid_client", catalogErr.Meta[metaKeyOAuthError])
+	assert.Equal(t, "bad subject", catalogErr.Meta[metaKeyOAuthErrorDescription])
+	requireNoSecretLeak(t, err, testSubjectToken)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_TransportCatalogErrorIsWrappedWithCause(t *testing.T) {
+	middlewareErr := snyk.NewUnauthorisedError("x")
+	httpClient := &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, middlewareErr
+	})}
+
+	scoper := NewBearerTokenScoper(newBearerConfig("https://api.example.invalid"), httpClient)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
+	var causeErr snyk_errors.Error
+	require.ErrorAs(t, catalogErrorOf(t, err).Cause, &causeErr)
+	assert.Equal(t, middlewareErr.ErrorCode, causeErr.ErrorCode)
 	assert.Empty(t, token)
 }
 
