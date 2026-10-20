@@ -52,7 +52,7 @@ type bearerTokenScoperImpl struct {
 // It exchanges the configured access token for a token limited to the given scopes (RFC 8693).
 // A positive ttl is passed to the server as the "ttl" query parameter in seconds.
 func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error) {
-	subjectToken, err := b.getSubjectToken(ctx)
+	subjectToken, err := refreshedAccessToken(ctx, b.config)
 	if err != nil {
 		return "", err
 	}
@@ -83,6 +83,8 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
+	defer func(Body io.ReadCloser) { _ = Body.Close() }(req.Body)
+
 	res, err := httpClient.Do(req)
 	if err != nil {
 		return "", cli.NewTokenScoperError("token exchange request failed", snyk_errors.WithCause(err))
@@ -138,39 +140,23 @@ func oauthErrorOptions(body []byte) []snyk_errors.Option {
 	return options
 }
 
-// getSubjectToken returns the access token to exchange: the configured bearer token, or else the
-// access token stored by the OAuth login flow, refreshed if it has expired.
-func (b bearerTokenScoperImpl) getSubjectToken(ctx context.Context) (string, error) {
-	if bearerToken := b.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN); bearerToken != "" {
-		return bearerToken, nil
-	}
-
-	oauthToken, err := GetOAuthToken(b.config)
-	if err != nil {
-		return "", snyk.NewUnauthorisedError("failed to read stored oauth token", snyk_errors.WithCause(err))
-	}
-	if oauthToken == nil || oauthToken.AccessToken == "" {
-		return "", cli.NewAuthConfigError("no user authentication available to exchange a scoped token")
-	}
-	if oauthToken.Valid() {
-		return oauthToken.AccessToken, nil
-	}
-
-	return refreshedAccessToken(ctx, b.config, b.httpClient)
-}
-
 // refreshedAccessToken goes through the authenticator so that an expired token is refreshed and
 // persisted exactly as it is for regular requests.
-func refreshedAccessToken(ctx context.Context, config configuration.Configuration, httpClient *http.Client) (string, error) {
-	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "", nil)
+func refreshedAccessToken(ctx context.Context, config configuration.Configuration) (string, error) {
+	authenticator := NewOAuth2AuthenticatorWithOpts(config)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GetString(configuration.API_URL), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request for oauth token refresh: %w", err)
 	}
 	if err = authenticator.AddAuthenticationHeader(req); err != nil {
 		return "", snyk.NewUnauthorisedError("failed to refresh stored oauth token", snyk_errors.WithCause(err))
 	}
-	return strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer "), nil
+	authHeader := req.Header.Get("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid or no authorization header")
+	}
+	return strings.Trim(parts[1], " "), nil
 }
 
 // RevokeToken implements [BearerTokenScoper].

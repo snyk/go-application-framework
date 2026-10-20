@@ -51,7 +51,7 @@ func Test_BearerTokenScoper_ThroughNetworkClient_WrapsMiddlewareCatalogErrorWith
 
 	config := getConfig()
 	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "subject-token")
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"subject-token","token_type":"Bearer"}`)
 	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
 	net := NewNetworkAccess(config)
 	net.AddErrorHandler(func(err error, _ context.Context) error { return err })

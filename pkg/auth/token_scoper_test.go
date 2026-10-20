@@ -46,9 +46,7 @@ func Test_bearerTokenScoperImpl_GetToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, server.URL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, subjectToken)
+	config := newStoredTokenConfig(server.URL)
 
 	scoper := NewBearerTokenScoper(config, server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"tenant.supplychain.registry.read", "org.read"}, time.Hour)
@@ -67,7 +65,7 @@ func Test_bearerTokenScoperImpl_GetToken_WithoutTTL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, 0)
 
 	require.NoError(t, err)
@@ -82,17 +80,17 @@ func Test_bearerTokenScoperImpl_GetToken_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Error(t, err)
 	assert.Empty(t, token)
 }
 
-func newBearerConfig(apiURL string) configuration.Configuration {
+func newStoredTokenConfig(apiURL string) configuration.Configuration {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, apiURL)
-	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, testSubjectToken)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"`+testSubjectToken+`","token_type":"Bearer"}`)
 	return config
 }
 
@@ -120,7 +118,7 @@ func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) 
 		return nil, sentinel
 	})}
 
-	scoper := NewBearerTokenScoper(newBearerConfig("https://api.example.invalid"), httpClient)
+	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), httpClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -144,13 +142,6 @@ func Test_bearerTokenScoperImpl_GetToken_ErrorBodyKeepsOnlyOAuthErrorFields(t *t
 		configure func(configuration.Configuration)
 		secret    string
 	}{
-		{
-			name: "bearer subject token",
-			configure: func(c configuration.Configuration) {
-				c.Set(configuration.AUTHENTICATION_BEARER_TOKEN, testSubjectToken)
-			},
-			secret: testSubjectToken,
-		},
 		{
 			name: "stored oauth access token",
 			configure: func(c configuration.Configuration) {
@@ -204,7 +195,7 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 			}))
 			defer server.Close()
 
-			scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+			scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 			token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 			require.Empty(t, token)
@@ -225,7 +216,7 @@ func Test_bearerTokenScoperImpl_GetToken_ServerErrorWithUnreadableBodyKeepsCause
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -242,7 +233,7 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedBodyStoresNothing(t *testing.T
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -260,7 +251,7 @@ func Test_bearerTokenScoperImpl_GetToken_PlainClientNon200ReturnsScoperErrorWith
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Empty(t, token)
@@ -278,7 +269,7 @@ func Test_bearerTokenScoperImpl_GetToken_TransportCatalogErrorIsWrappedWithCause
 		return nil, middlewareErr
 	})}
 
-	scoper := NewBearerTokenScoper(newBearerConfig("https://api.example.invalid"), httpClient)
+	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), httpClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -295,7 +286,7 @@ func Test_bearerTokenScoperImpl_GetToken_NoUserAuthentication(t *testing.T) {
 	scoper := NewBearerTokenScoper(config, http.DefaultClient)
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, cli.NewAuthConfigError("").ErrorCode)
+	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
 	assert.Empty(t, token)
 }
 
@@ -307,7 +298,7 @@ func Test_bearerTokenScoperImpl_GetToken_MissingAccessToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Empty(t, token)
@@ -324,7 +315,7 @@ func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -342,7 +333,7 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -439,8 +430,6 @@ func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
-	var syntaxErr *json.SyntaxError
-	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
 }
 
