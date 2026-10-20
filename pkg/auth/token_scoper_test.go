@@ -160,7 +160,8 @@ func Test_bearerTokenScoperImpl_GetToken_ExchangeStatusErrors(t *testing.T) {
 		{"too many requests", http.StatusTooManyRequests, snyk.NewTooManyRequestsError("").ErrorCode},
 		{"bad gateway", http.StatusBadGateway, snyk.NewBadGatewayError("").ErrorCode},
 		{"service unavailable", http.StatusServiceUnavailable, snyk.NewServiceUnavailableError("").ErrorCode},
-		{"internal server error", http.StatusInternalServerError, snyk.NewServerError("").ErrorCode},
+		{"internal server error", http.StatusInternalServerError, cli.NewTokenScoperError("").ErrorCode},
+		{"unmapped status", http.StatusGatewayTimeout, cli.NewTokenScoperError("").ErrorCode},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -257,6 +258,23 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 	}
 }
 
+func Test_bearerTokenScoperImpl_GetToken_ServerErrorWithUnreadableBodyKeepsCause(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("partial"))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.Empty(t, token)
+}
+
 func Test_bearerTokenScoperImpl_GetToken_UnauthorizedWithUnreadableBodyIsUnauthorised(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "100")
@@ -316,7 +334,7 @@ func Test_bearerTokenScoperImpl_GetToken_MissingAccessToken(t *testing.T) {
 
 	require.Empty(t, token)
 	catalogErr := catalogErrorOf(t, err)
-	require.Equal(t, snyk.NewServerError("").ErrorCode, catalogErr.ErrorCode)
+	require.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
 	assert.Equal(t, "token exchange response did not contain an access token", catalogErr.Detail)
 }
 
@@ -331,7 +349,7 @@ func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
 	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, snyk.NewServerError("").ErrorCode)
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
 	var syntaxErr *json.SyntaxError
 	assert.ErrorAs(t, err, &syntaxErr)
 	assert.Empty(t, token)
@@ -349,7 +367,7 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedErrorBody(t *testing.T) {
 	scoper := NewBearerTokenScoper(newBearerConfig(server.URL), server.Client())
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
-	requireCatalogError(t, err, snyk.NewServerError("").ErrorCode)
+	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.Empty(t, token)
 }

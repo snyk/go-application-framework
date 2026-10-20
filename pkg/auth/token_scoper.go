@@ -99,10 +99,10 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 		AccessToken string `json:"access_token"`
 	}
 	if err = json.NewDecoder(res.Body).Decode(&tokenResponse); err != nil {
-		return "", snyk.NewServerError("failed to decode token exchange response", snyk_errors.WithCause(err))
+		return "", cli.NewTokenScoperError("failed to decode token exchange response", snyk_errors.WithCause(err))
 	}
 	if tokenResponse.AccessToken == "" {
-		return "", snyk.NewServerError("token exchange response did not contain an access token")
+		return "", cli.NewTokenScoperError("token exchange response did not contain an access token")
 	}
 
 	return tokenResponse.AccessToken, nil
@@ -116,10 +116,12 @@ func exchangeStatusError(status int, body []byte, readErr error) error {
 	} else {
 		options = oauthErrorOptions(body)
 	}
-	if err, ok := errorcatalog.ErrorFromHTTPStatus(status, detail, options...); ok {
-		return err
+	if status != http.StatusInternalServerError {
+		if err, ok := errorcatalog.ErrorFromHTTPStatus(status, detail, options...); ok {
+			return err
+		}
 	}
-	return snyk.NewServerError(detail, options...)
+	return cli.NewTokenScoperError(detail, options...)
 }
 
 // oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The
