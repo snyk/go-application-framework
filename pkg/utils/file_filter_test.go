@@ -2087,6 +2087,20 @@ func TestFileFilter_GetFilteredFiles_keepsTrackedFilesInLinkedWorktree(t *testin
 	}
 	gitworktree.StageInWorktreeIndex(t, worktreeDir, ".gitignore", "tracked.log", "regular.txt")
 
+	pointerFile := filepath.Join(worktreeDir, ".git")
+	info, err := os.Stat(pointerFile)
+	require.NoError(t, err)
+	require.False(t, info.IsDir(), "linked worktree .git must be a pointer file, not a directory")
+
+	fileFilter := NewFileFilter(worktreeDir, &log.Logger, WithConfig(newTestConfig(map[string]bool{
+		FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+	})))
+	unfiltered := drainFilteredFiles(t, fileFilter.GetAllFiles())
+	require.Contains(t, unfiltered, pointerFile)
+
+	filtered := runFileFilter(t, fileFilter, ".gitignore")
+	assert.NotContains(t, filtered, pointerFile)
+
 	assertGitTrackedFiles(t, worktreeDir, []string{".gitignore"}, true, []string{
 		".gitignore",
 		"tracked.log",
