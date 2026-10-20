@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
-	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/errorcatalog"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/humanfmt"
@@ -146,20 +146,28 @@ func errFromResponse(res *http.Response) error {
 // errFromStatusCode matches the status code to an Error Catalog error.
 // If no match is found, nil is returned.
 func errFromStatusCode(code int) error {
-	switch code {
-	case http.StatusUnauthorized:
-		return snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
-	case http.StatusBadRequest:
-		return snyk.NewBadRequestError("The request cannot be processed.")
-	case http.StatusInternalServerError:
-		return snyk.NewServerError("Internal server error.")
-	case http.StatusTooManyRequests:
-		err := snyk.NewTooManyRequestsError("")
-		err.Level = "error"
-		return err
-	default:
+	detail, handled := responseErrorDetail[code]
+	if !handled {
 		return nil
 	}
+
+	err, ok := errorcatalog.ErrorFromHTTPStatus(code, detail)
+	if !ok {
+		return nil
+	}
+	if code == http.StatusTooManyRequests {
+		err.Level = "error"
+	}
+	return err
+}
+
+// responseErrorDetail lists the statuses the response middleware converts into errors. Other
+// statuses are left to the caller, so 403, 502 and 503 pass through unchanged.
+var responseErrorDetail = map[int]string{
+	http.StatusUnauthorized:        "Use `snyk auth` to authenticate.",
+	http.StatusBadRequest:          "The request cannot be processed.",
+	http.StatusInternalServerError: "Internal server error.",
+	http.StatusTooManyRequests:     "",
 }
 
 // enrichRateLimitError adds rate-limit header data to a 429 error so the user

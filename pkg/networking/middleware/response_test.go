@@ -259,6 +259,42 @@ func Test_ResponseMiddleware(t *testing.T) {
 	})
 }
 
+func Test_ResponseMiddleware_UnmappedStatusesPassThrough(t *testing.T) {
+	statuses := []int{http.StatusForbidden, http.StatusBadGateway, http.StatusServiceUnavailable}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	for _, code := range statuses {
+		t.Run(fmt.Sprintf("%d", code), func(t *testing.T) {
+			config := getBaseConfig()
+			config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+			rt := middleware.NewReponseMiddleware(stubStatusTransport{status: code}, config, func(err error, _ context.Context) error {
+				return err
+			})
+
+			res, err := rt.RoundTrip(buildRequest(server.URL + "/unmapped"))
+
+			assert.NotNil(t, res)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+type stubStatusTransport struct {
+	status int
+}
+
+func (s stubStatusTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: s.status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(http.NoBody),
+		Request:    req,
+	}, nil
+}
+
 func Test_ResponseMiddleware_RateLimitEnrichment(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
