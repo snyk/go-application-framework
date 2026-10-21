@@ -106,7 +106,7 @@ var brokenFiles = map[string]string{
 	"string":     `"some-id"`,
 	"number":     "42",
 	"blank id":   `{"machine_id": "  "}`,
-	"invalid id": `{"machine_id": "not a valid id"}`,
+	"invalid id": `{"machine_id": "not/a/valid/id"}`,
 	"oversized":  `{"machine_id": "some-id", "padding": "` + strings.Repeat("a", maxIDFileSize) + `"}`,
 }
 
@@ -207,7 +207,7 @@ func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
 	shortenLockTimeout(t)
 	paths := tempPaths(t)
 	paths.machineWide = ""
-	seed(t, paths.perUser, `{"machine_id": "not a valid id"}`)
+	seed(t, paths.perUser, `{"machine_id": "not/a/valid/id"}`)
 	holdLock(t, paths.perUser)
 	// Another writer stores an id while this one waits for the lock it holds.
 	stored := make(chan error, 1)

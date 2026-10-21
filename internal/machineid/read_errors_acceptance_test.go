@@ -155,7 +155,7 @@ func TestAcceptance_ADirectoryAtTheSharedFilePathIsReportedAsUnreadable(t *testi
 func TestAcceptance_FilesThatAreMissingOrHoldNoValidIDAreNotReported(t *testing.T) {
 	m := newIsolatedMachine(t)
 	seed(t, m.shared.machineWide, "{not json")
-	seed(t, m.studio.machineWide, "not a valid id")
+	seed(t, m.studio.machineWide, "not/a/valid/id")
 	seed(t, m.studio.perUser, strings.Repeat("a", maxIDFileSize+1))
 
 	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()

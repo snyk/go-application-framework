@@ -255,7 +255,7 @@ func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *t
 func TestAcceptance_AnInvalidSuppliedValueIsLoggedAtDebugOnEachRead(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not valid")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not/valid")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	config := m.newRun(WithLogger(&logger))
@@ -533,6 +533,21 @@ func TestAcceptance_HardwareSerialIsStoredInAnEmptyOrMissingSharedFile(t *testin
 	}
 }
 
+func TestAcceptance_HardwareSerialWithInternalSpacesIsUsedAndStored(t *testing.T) {
+	m := newIsolatedMachine(t)
+	serial := "VMware-56 4d 12 34 ab cd ef 01-23 45 67 89 ab cd ef 01"
+	m.serial = serial
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	require.NoError(t, err)
+
+	require.Equal(t, serial, machine.ID)
+	stored := readFile(t, m.shared.perUser)
+	require.Equal(t, serial, stored.MachineID)
+	require.Equal(t, "serial", stored.IdentifierSource)
+	require.Equal(t, serial, machineID(t, m.newRun()))
+}
+
 func TestAcceptance_StudioDeviceIDIsNotReadWhenTheHardwareSerialWins(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
@@ -564,11 +579,11 @@ func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenAnExistingIDCannot
 
 func TestAcceptance_HardwareSerialOutsideTheAllowedCharactersIsNotUsedAsTheID(t *testing.T) {
 	m := newIsolatedMachine(t)
-	m.serial = "C02 Q7KHTGFWF"
+	m.serial = "C02/Q7KHTGFWF"
 
 	id := machineID(t, m.newRun())
 
-	require.NotEqual(t, "C02 Q7KHTGFWF", id)
+	require.NotEqual(t, "C02/Q7KHTGFWF", id)
 	require.True(t, valid(id))
 	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
 }
@@ -635,7 +650,7 @@ func TestAcceptance_HardwareSerialIsReadOnceForASuppliedMachine(t *testing.T) {
 
 func TestAcceptance_InvalidHardwareSerialReasonIsLoggedAtDebug(t *testing.T) {
 	m := newIsolatedMachine(t)
-	m.serial = "C02 Q7KHTGFWF"
+	m.serial = "C02/Q7KHTGFWF"
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
