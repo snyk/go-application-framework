@@ -18,16 +18,6 @@ const (
 	Unknown  InteractionStage = "unknown"
 )
 
-// Defines values for MachineIdentifierSource.
-const (
-	Agent     MachineIdentifierSource = "agent"
-	Ephemeral MachineIdentifierSource = "ephemeral"
-	Generated MachineIdentifierSource = "generated"
-	Legacy    MachineIdentifierSource = "legacy"
-	Os        MachineIdentifierSource = "os"
-	Provided  MachineIdentifierSource = "provided"
-)
-
 // ActualVersion Resolved API version
 type ActualVersion = string
 
@@ -186,18 +176,6 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
-// Machine The machine identifier used to correlate analytics events from the same machine.
-type Machine struct {
-	// Id The resolved machine identifier.
-	Id *string `json:"id,omitempty"`
-
-	// IdentifierSource The source that provided the machine identifier.
-	IdentifierSource *MachineIdentifierSource `json:"identifier_source,omitempty"`
-}
-
-// MachineIdentifierSource The source that provided the machine identifier.
-type MachineIdentifierSource string
-
 // Meta Free-form object that may contain non-standard information.
 type Meta map[string]interface{}
 
@@ -258,8 +236,8 @@ type Runtime struct {
 	// Integration TODO UPDATE with correct samples of integration name. The name of the integration, could be a plugin or extension (e.g. Snyk Security plugin for intelliJ). The version of the integration (2.3.4).
 	Integration *Integration `json:"integration,omitempty"`
 
-	// Machine The machine identifier used to correlate analytics events from the same machine.
-	Machine *Machine `json:"machine,omitempty"`
+	// MachineId The machine identifier used to correlate analytics events from the same machine.
+	MachineId *string `json:"machine_id,omitempty"`
 
 	// Performance The scan duration in milliseconds
 	Performance *Performance `json:"performance,omitempty"`

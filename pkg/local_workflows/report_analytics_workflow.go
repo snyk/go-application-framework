@@ -176,7 +176,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	addMachineID(body.Data.Attributes.Runtime, invocationCtx.GetRuntimeInfo(), logger)
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
 	// shortcut: the machine id is withheld until sending it is approved, remove this line to send it
-	body.Data.Attributes.Runtime.Machine = nil
+	body.Data.Attributes.Runtime.MachineId = nil
 
 	enriched, err := json.Marshal(body)
 	if err != nil {
@@ -187,7 +187,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 }
 
 func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {
-	if ri == nil || (rt.Machine != nil && rt.Machine.Id != nil) {
+	if ri == nil || rt.MachineId != nil {
 		return
 	}
 	id, err := ri.GetMachineID()
@@ -197,10 +197,7 @@ func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.L
 		}
 		return
 	}
-	if rt.Machine == nil {
-		rt.Machine = &api.Machine{}
-	}
-	rt.Machine.Id = &id
+	rt.MachineId = &id
 }
 
 func addPlatformConfiguration(rt *api.Runtime, config configuration.Configuration, logger *zerolog.Logger) {

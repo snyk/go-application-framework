@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -83,6 +84,47 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testin
 	}
 }
 
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNoMachineKeysInRuntime(t *testing.T) {
+	tests := map[string]string{
+		"v2 input":                       testGetAnalyticsV2PayloadString(),
+		"v1 scan-done input":             testGetScanDonePayloadString(),
+		"machine id of the producer":     testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
+		"nested machine of the producer": strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": {"id": "producer-machine-id"}, "performance"`, 1),
+	}
+	for name, payload := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ri := mocks.NewMockRuntimeInfo(ctrl)
+			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
+			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
+			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+			var sent []byte
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				body, err := io.ReadAll(req.Body)
+				require.NoError(t, err)
+				sent = body
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, ri)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+			require.NoError(t, err)
+			var body struct {
+				Data struct {
+					Attributes struct {
+						Runtime map[string]any `json:"runtime"`
+					} `json:"attributes"`
+				} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(sent, &body))
+			require.NotEmpty(t, body.Data.Attributes.Runtime)
+			require.NotContains(t, body.Data.Attributes.Runtime, "machine")
+			require.NotContains(t, body.Data.Attributes.Runtime, "machine_id")
+		})
+	}
+}
+
 func Test_ReportAnalytics_addMachineID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	logger := zerolog.New(io.Discard)
@@ -92,25 +134,39 @@ func Test_ReportAnalytics_addMachineID(t *testing.T) {
 		return ri
 	}
 	tests := map[string]struct {
-		machine  *api.Machine
-		ri       runtimeinfo.RuntimeInfo
-		expected *api.Machine
+		machineID *string
+		ri        runtimeinfo.RuntimeInfo
+		expected  *string
 	}{
-		"sets the machine id":                  {ri: machineIDSource("test-machine-id", nil), expected: &api.Machine{Id: new("test-machine-id")}},
-		"keeps the machine id of the producer": {machine: &api.Machine{Id: new("producer-machine-id")}, ri: machineIDSource("test-machine-id", nil), expected: &api.Machine{Id: new("producer-machine-id")}},
+		"sets the machine id":                  {ri: machineIDSource("test-machine-id", nil), expected: new("test-machine-id")},
+		"keeps the machine id of the producer": {machineID: new("producer-machine-id"), ri: machineIDSource("test-machine-id", nil), expected: new("producer-machine-id")},
 		"no runtime info":                      {ri: nil, expected: nil},
 		"no stable machine id":                 {ri: machineIDSource("", runtimeinfo.ErrNoMachineID), expected: nil},
 		"error reading the machine id":         {ri: machineIDSource("", errors.New("read failed")), expected: nil},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			rt := &api.Runtime{Machine: tc.machine}
+			rt := &api.Runtime{MachineId: tc.machineID}
 
 			addMachineID(rt, tc.ri, &logger)
 
-			require.Equal(t, tc.expected, rt.Machine)
+			require.Equal(t, tc.expected, rt.MachineId)
 		})
 	}
+}
+
+func Test_ReportAnalytics_addMachineID_encodesAFlatMachineId(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := zerolog.New(io.Discard)
+	ri := mocks.NewMockRuntimeInfo(ctrl)
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil)
+	rt := &api.Runtime{}
+
+	addMachineID(rt, ri, &logger)
+
+	encoded, err := json.Marshal(rt)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"machine_id": "test-machine-id"}`, string(encoded))
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t *testing.T) {
@@ -273,8 +329,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testi
 	tests := map[string]string{
 		"empty object":                         `{}`,
 		"not json":                             ``,
-		"machine is not object":                strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": "test-machine-id", "performance"`, 1),
-		"machine id not string":                strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": {"id": 5}, "performance"`, 1),
+		"machine id not string":                strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine_id": 5, "performance"`, 1),
 		"platform configuration is not object": testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `5`),
 		"proxy not boolean":                    testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"proxy": "yes"}`),
 		"network request attempts not integer": testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"network_request_attempts": 1.5}`),
@@ -605,9 +660,9 @@ func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller,
 	return invocationCtx
 }
 
-// testWithMachineID returns the v2 payload with runtime.machine.id set, in the key order the workflow encodes it.
+// testWithMachineID returns the v2 payload with runtime.machine_id set, in the key order the workflow encodes it.
 func testWithMachineID(payload string, machineID string) string {
-	return strings.Replace(payload, `"performance"`, `"machine": {"id": "`+machineID+`"}, "performance"`, 1)
+	return strings.Replace(payload, `"performance"`, `"machine_id": "`+machineID+`", "performance"`, 1)
 }
 
 const (

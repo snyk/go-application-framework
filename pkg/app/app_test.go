@@ -360,6 +360,7 @@ func Test_CreateAppEngine_reportAnalyticsSendsTheRuntimeFieldsOfTheEngine(t *tes
 
 	require.NoError(t, err)
 	assert.NotContains(t, requestBody.Load(), `"machine"`)
+	assert.NotContains(t, requestBody.Load(), `"machine_id"`)
 	assert.Contains(t, requestBody.Load(), `"network_request_attempts":1,`)
 }
 

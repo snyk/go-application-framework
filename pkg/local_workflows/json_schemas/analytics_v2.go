@@ -128,8 +128,8 @@ const AnalyticsV2EventSchema = `{
         "performance": {
           "$ref": "#/schemas/Performance"
         },
-        "machine": {
-          "$ref": "#/schemas/Machine"
+        "machine_id": {
+          "type": "string"
         }
       }
     },
@@ -247,15 +247,6 @@ const AnalyticsV2EventSchema = `{
         },
         "proxy": {
           "type": "boolean"
-        }
-      }
-    },
-    "Machine": {
-      "type": "object",
-      "description": "The machine identifier used to correlate analytics events from the same machine.",
-      "properties": {
-        "id": {
-          "type": "string"
         }
       }
     },

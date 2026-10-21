@@ -411,24 +411,6 @@ components:
         required:
         - href
         type: object
-    Machine:
-      description: The machine identifier used to correlate analytics events from
-        the same machine.
-      properties:
-        id:
-          description: The resolved machine identifier.
-          type: string
-        identifier_source:
-          description: The source that provided the machine identifier.
-          enum:
-          - provided
-          - os
-          - legacy
-          - generated
-          - ephemeral
-          - agent
-          type: string
-      type: object
     Meta:
       additionalProperties: true
       description: Free-form object that may contain non-standard information.
@@ -508,8 +490,10 @@ components:
           $ref: '#/components/schemas/Environment'
         integration:
           $ref: '#/components/schemas/Integration'
-        machine:
-          $ref: '#/components/schemas/Machine'
+        machine_id:
+          description: The machine identifier used to correlate analytics events from
+            the same machine.
+          type: string
         performance:
           $ref: '#/components/schemas/Performance'
         platform:
