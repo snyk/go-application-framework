@@ -1,4 +1,4 @@
-package machineenrollment
+package machineidentity
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -17,7 +18,7 @@ type enrollMachineOptions struct {
 	httpClient      *http.Client
 	deviceToken     string
 	fleetKeyFile    string
-	identifiersFunc IdentifierSource
+	identifiersFunc machineenrollment.IdentifierSource
 }
 
 // WithHttpClient sets the HTTP client used for the enrollment request. It must not add
@@ -32,15 +33,15 @@ func WithDeviceToken(deviceToken string) EnrollMachineOption {
 	return func(o *enrollMachineOptions) { o.deviceToken = deviceToken }
 }
 
-// WithFleetKeyFile enrolls with the fleet key in the PEM file at path (see ReadFleetKeyFile), naming
+// WithFleetKeyFile enrolls with the fleet key in the PEM file at path (see machineenrollment.ReadFleetKeyFile), naming
 // this machine by its serial numbers, unless WithIdentifierSource says otherwise.
 func WithFleetKeyFile(path string) EnrollMachineOption {
 	return func(o *enrollMachineOptions) { o.fleetKeyFile = path }
 }
 
 // WithIdentifierSource sets where a fleet key enrollment gets the identifiers of this machine from.
-// If unset, SerialNumbers is used.
-func WithIdentifierSource(source IdentifierSource) EnrollMachineOption {
+// If unset, machineenrollment.SerialNumbers is used.
+func WithIdentifierSource(source machineenrollment.IdentifierSource) EnrollMachineOption {
 	return func(o *enrollMachineOptions) { o.identifiersFunc = source }
 }
 
@@ -49,7 +50,7 @@ func WithIdentifierSource(source IdentifierSource) EnrollMachineOption {
 // generates a new machine client key, exchanges the device token or fleet key for an OAuth client
 // bound to that key, writes the key to disk, and persists the enrolled machine's client id, key
 // file path, and machine id into config so the caller doesn't have to wire that up itself.
-func EnrollMachine(ctx context.Context, config configuration.Configuration, opts ...EnrollMachineOption) (Enrollment, error) {
+func EnrollMachine(ctx context.Context, config configuration.Configuration, opts ...EnrollMachineOption) (machineenrollment.Enrollment, error) {
 	o := enrollMachineOptions{
 		httpClient: http.DefaultClient,
 	}
@@ -58,25 +59,25 @@ func EnrollMachine(ctx context.Context, config configuration.Configuration, opts
 	}
 
 	if (o.deviceToken == "") == (o.fleetKeyFile == "") {
-		return Enrollment{}, errors.New("enrolling needs either a device token or a fleet key file")
+		return machineenrollment.Enrollment{}, errors.New("enrolling needs either a device token or a fleet key file")
 	}
 
 	keyFile := config.GetString(CONFIG_KEY_CLIENT_KEY_FILE)
 	if keyFile == "" {
 		var err error
-		if keyFile, err = DefaultKeyFile(); err != nil {
-			return Enrollment{}, err
+		if keyFile, err = machineenrollment.DefaultKeyFile(); err != nil {
+			return machineenrollment.Enrollment{}, err
 		}
 	}
 
 	apiURL := config.GetString(configuration.API_URL)
 	e, err := enrollWithOptions(ctx, apiURL, o)
 	if err != nil {
-		return Enrollment{}, err
+		return machineenrollment.Enrollment{}, err
 	}
 
-	if err = WriteKeyFile(keyFile, e.Key); err != nil {
-		return Enrollment{}, err
+	if err = machineenrollment.WriteKeyFile(keyFile, e.Key); err != nil {
+		return machineenrollment.Enrollment{}, err
 	}
 
 	for key, value := range map[string]string{
@@ -91,22 +92,22 @@ func EnrollMachine(ctx context.Context, config configuration.Configuration, opts
 	return e, nil
 }
 
-func enrollWithOptions(ctx context.Context, apiURL string, o enrollMachineOptions) (Enrollment, error) {
+func enrollWithOptions(ctx context.Context, apiURL string, o enrollMachineOptions) (machineenrollment.Enrollment, error) {
 	if o.deviceToken != "" {
-		return EnrollWithDeviceToken(ctx, o.httpClient, apiURL, o.deviceToken, time.Now())
+		return machineenrollment.EnrollWithDeviceToken(ctx, o.httpClient, apiURL, o.deviceToken, time.Now())
 	}
 
-	fleetKey, err := ReadFleetKeyFile(o.fleetKeyFile)
+	fleetKey, err := machineenrollment.ReadFleetKeyFile(o.fleetKeyFile)
 	if err != nil {
-		return Enrollment{}, err
+		return machineenrollment.Enrollment{}, err
 	}
 	source := o.identifiersFunc
 	if source == nil {
-		source = SerialNumbers
+		source = machineenrollment.SerialNumbers
 	}
 	identifiers, err := source(ctx)
 	if err != nil {
-		return Enrollment{}, fmt.Errorf("failed finding the identifiers of this machine: %w", err)
+		return machineenrollment.Enrollment{}, fmt.Errorf("failed finding the identifiers of this machine: %w", err)
 	}
-	return EnrollWithFleetKey(ctx, o.httpClient, apiURL, fleetKey, identifiers, time.Now())
+	return machineenrollment.EnrollWithFleetKey(ctx, o.httpClient, apiURL, fleetKey, identifiers, time.Now())
 }

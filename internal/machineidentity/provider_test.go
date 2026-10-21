@@ -1,4 +1,4 @@
-package machineenrollment_test
+package machineidentity_test
 
 import (
 	"context"
@@ -11,8 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/internal/machineidentity"
 )
 
 func TestAssertionProviderClientAssertion(t *testing.T) {
@@ -21,7 +22,7 @@ func TestAssertionProviderClientAssertion(t *testing.T) {
 	keyFile := filepath.Join(t.TempDir(), "key.pem")
 	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, key))
 
-	provider := machineenrollment.NewAssertionProvider(keyFile)
+	provider := machineidentity.NewAssertionProvider(keyFile)
 
 	assertionType, assertion, err := provider.ClientAssertion(context.Background(), "client-1", "https://api.example.com/oauth2/token")
 	require.NoError(t, err)
@@ -45,7 +46,7 @@ func TestAssertionProviderTokenExchange(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, e.Key))
 
-	provider := machineenrollment.NewAssertionProvider(keyFile)
+	provider := machineidentity.NewAssertionProvider(keyFile)
 	tokenURL := srv.URL + "/oauth2/token"
 	assertionType, assertion, err := provider.ClientAssertion(context.Background(), e.ClientID, tokenURL)
 	require.NoError(t, err)

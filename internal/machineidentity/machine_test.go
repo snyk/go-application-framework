@@ -1,7 +1,10 @@
-package machineenrollment_test
+package machineidentity_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -12,9 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/internal/machineidentity"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment/enrollmenttest"
 )
 
 func TestEnrollMachine(t *testing.T) {
@@ -24,18 +28,18 @@ func TestEnrollMachine(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, srv.URL)
 	keyFile := filepath.Join(t.TempDir(), "key.pem")
-	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
+	config.Set(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
 
-	e, err := machineenrollment.EnrollMachine(context.Background(), config, machineenrollment.WithDeviceToken(token))
+	e, err := machineidentity.EnrollMachine(context.Background(), config, machineidentity.WithDeviceToken(token))
 	require.NoError(t, err)
 
 	assert.Equal(t, "client-1", e.ClientID)
 	require.NotNil(t, e.Key)
 	assert.True(t, e.Key.PublicKey.Equal(srv.ClientKey(e.ClientID)))
 
-	assert.Equal(t, e.ClientID, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
-	assert.Equal(t, keyFile, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE))
-	assert.Equal(t, e.MachineID, config.GetString(machineenrollment.CONFIG_KEY_MACHINE_ID))
+	assert.Equal(t, e.ClientID, config.GetString(machineidentity.CONFIG_KEY_CLIENT_ID))
+	assert.Equal(t, keyFile, config.GetString(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE))
+	assert.Equal(t, e.MachineID, config.GetString(machineidentity.CONFIG_KEY_MACHINE_ID))
 
 	stored, err := machineenrollment.ReadKeyFile(keyFile)
 	require.NoError(t, err)
@@ -57,12 +61,12 @@ func TestEnrollMachineUsesDefaultKeyFileWhenNoneConfigured(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, srv.URL)
 
-	e, err := machineenrollment.EnrollMachine(context.Background(), config, machineenrollment.WithDeviceToken(token))
+	e, err := machineidentity.EnrollMachine(context.Background(), config, machineidentity.WithDeviceToken(token))
 	require.NoError(t, err)
 
 	defaultKeyFile, err := machineenrollment.DefaultKeyFile()
 	require.NoError(t, err)
-	assert.Equal(t, defaultKeyFile, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE))
+	assert.Equal(t, defaultKeyFile, config.GetString(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE))
 
 	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(defaultKeyFile)) })
 	assert.NotEmpty(t, e.ClientID)
@@ -79,15 +83,15 @@ func TestEnrollMachineWithFleetKeyFile(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, srv.URL)
-	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
+	config.Set(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
 	source := func(context.Context) ([]machineenrollment.Identifier, error) { return serials("SERIAL-1"), nil }
 
-	e, err := machineenrollment.EnrollMachine(context.Background(), config,
-		machineenrollment.WithFleetKeyFile(fleetKeyFile), machineenrollment.WithIdentifierSource(source))
+	e, err := machineidentity.EnrollMachine(context.Background(), config,
+		machineidentity.WithFleetKeyFile(fleetKeyFile), machineidentity.WithIdentifierSource(source))
 	require.NoError(t, err)
 
 	assert.Equal(t, "machine-1", e.MachineID)
-	assert.Equal(t, e.ClientID, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+	assert.Equal(t, e.ClientID, config.GetString(machineidentity.CONFIG_KEY_CLIENT_ID))
 }
 
 func TestEnrollMachineReportsIdentifierSourceFailures(t *testing.T) {
@@ -97,25 +101,40 @@ func TestEnrollMachineReportsIdentifierSourceFailures(t *testing.T) {
 	fleetKeyFile := filepath.Join(t.TempDir(), "fleet.pem")
 	require.NoError(t, os.WriteFile(fleetKeyFile, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0o600))
 	config := configuration.NewInMemory()
-	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
+	config.Set(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
 	source := func(context.Context) ([]machineenrollment.Identifier, error) {
 		return nil, machineenrollment.ErrUnsupportedPlatform
 	}
 
-	_, err = machineenrollment.EnrollMachine(context.Background(), config,
-		machineenrollment.WithFleetKeyFile(fleetKeyFile), machineenrollment.WithIdentifierSource(source))
+	_, err = machineidentity.EnrollMachine(context.Background(), config,
+		machineidentity.WithFleetKeyFile(fleetKeyFile), machineidentity.WithIdentifierSource(source))
 
 	assert.ErrorIs(t, err, machineenrollment.ErrUnsupportedPlatform)
 }
 
 func TestEnrollMachineNeedsExactlyOneJoinMaterial(t *testing.T) {
 	config := configuration.NewInMemory()
-	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
+	config.Set(machineidentity.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(t.TempDir(), "key.pem"))
 
-	_, err := machineenrollment.EnrollMachine(context.Background(), config)
+	_, err := machineidentity.EnrollMachine(context.Background(), config)
 	assert.Error(t, err)
 
-	_, err = machineenrollment.EnrollMachine(context.Background(), config,
-		machineenrollment.WithDeviceToken("sdt_a"), machineenrollment.WithFleetKeyFile("fleet.pem"))
+	_, err = machineidentity.EnrollMachine(context.Background(), config,
+		machineidentity.WithDeviceToken("sdt_a"), machineidentity.WithFleetKeyFile("fleet.pem"))
 	assert.Error(t, err)
+}
+
+func newFleetKey(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	return key
+}
+
+func serials(values ...string) []machineenrollment.Identifier {
+	var ids []machineenrollment.Identifier
+	for _, v := range values {
+		ids = append(ids, machineenrollment.Identifier{Type: machineenrollment.IdentifierTypeSerialNumber, Value: v})
+	}
+	return ids
 }

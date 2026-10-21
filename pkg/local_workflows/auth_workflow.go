@@ -8,9 +8,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/machineidentity"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -89,7 +89,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		if _, statErr := os.Stat(keyFile); statErr != nil {
 			return nil, fmt.Errorf("cannot use --%s %q: %w", ClientPrivateKeyFileParameter, keyFile, statErr)
 		}
-		authenticatorOpts = append(authenticatorOpts, auth.WithClientAssertionProvider(clientID, machineenrollment.NewAssertionProvider(keyFile)))
+		authenticatorOpts = append(authenticatorOpts, auth.WithClientAssertionProvider(clientID, machineidentity.NewAssertionProvider(keyFile)))
 	}
 
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
