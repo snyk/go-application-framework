@@ -71,6 +71,7 @@ type Server struct {
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
 	credentialHeaders []string
+	enrollAttempts    int
 	machines          []*machine
 	deviceTokens      map[string]*deviceToken
 	fleetKeys         map[string]fleetKey // by thumbprint
@@ -100,6 +101,7 @@ func NewServer(t *testing.T) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
+	mux.HandleFunc("GET /rest/whoami", s.whoami)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -196,6 +198,13 @@ func (s *Server) ClientCount() int {
 	return len(s.clients)
 }
 
+// EnrollmentRequests returns how many requests reached the enrollment endpoint, accepted or not.
+func (s *Server) EnrollmentRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.enrollAttempts
+}
+
 func (s *Server) machineByID(id string) *machine {
 	for _, m := range s.machines {
 		if m.id == id {
@@ -247,6 +256,10 @@ type enrollmentRequest struct {
 }
 
 func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.enrollAttempts++
+	s.mu.Unlock()
+
 	attrs, ok := parseRequest(w, r)
 	if !ok {
 		return
@@ -473,6 +486,18 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	accessToken := fmt.Sprintf("token-%s-%d", clientID, s.TokenRequests)
 	s.tokens[accessToken] = clientID
 	writeJSON(w, http.StatusOK, map[string]any{"access_token": accessToken, "token_type": "bearer", "expires_in": 3600})
+}
+
+func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
+	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	s.mu.Lock()
+	_, issued := s.tokens[bearer]
+	s.mu.Unlock()
+	if !found || !issued {
+		writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
