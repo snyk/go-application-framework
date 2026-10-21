@@ -29,14 +29,11 @@ const InteractionIdKey = keyTypeString("interactionId")
 // NetworkAccess is the interface for network access.
 // It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
 type NetworkAccess interface {
+	auth.NetworkClients
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
 	// GetRoundTripper returns the http.RoundTripper that is used by the http.Client.
 	GetRoundTripper() http.RoundTripper
-	// GetHttpClient returns the http client.
-	GetHttpClient() *http.Client
-	// GetUnauthorizedHttpClient returns an HTTP client that does not use authentication headers.
-	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
 	// AddDynamicHeaderField adds a dynamic header field to the request.
