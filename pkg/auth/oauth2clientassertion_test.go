@@ -3,9 +3,12 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -125,4 +128,82 @@ func Test_AddAuthenticationHeader_ClientAssertionGrant(t *testing.T) {
 
 	assert.Equal(t, "Bearer a", req.Header.Get("Authorization"))
 	assert.Equal(t, 1, provider.calls, "no stored token yet, so a fresh one must be fetched via the assertion provider")
+}
+
+func newFileBackedAssertionAuthenticator(t *testing.T, apiURL string, provider *fakeAssertionProvider) (*oAuth2Authenticator, string) {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "snyk.json")
+	config := configuration.NewWithOpts()
+	config.SetStorage(configuration.NewJsonStorage(path, configuration.WithConfiguration(config)))
+	config.Set(configuration.API_URL, apiURL)
+
+	var authenticator Authenticator = NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithHttpClient(http.DefaultClient),
+		WithClientAssertionProvider("machine-client-1", provider),
+	)
+	oauthAuthenticator, ok := authenticator.(*oAuth2Authenticator)
+	require.True(t, ok)
+	return oauthAuthenticator, path
+}
+
+func Test_AddAuthenticationHeader_ClientAssertionGrant_ConfigFileDoesNotExistYet(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+		data, err := json.Marshal(&oauth2.Token{AccessToken: "a", TokenType: "bearer", Expiry: time.Now().Add(60 * time.Second).UTC()})
+		assert.NoError(t, err)
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, err = w.Write(data)
+		assert.NoError(t, err)
+	})
+
+	provider := &fakeAssertionProvider{}
+	authenticator, path := newFileBackedAssertionAuthenticator(t, srv.URL, provider)
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+	require.NoError(t, authenticator.AddAuthenticationHeader(req))
+
+	assert.Equal(t, "Bearer a", req.Header.Get("Authorization"))
+	assert.Equal(t, 1, provider.calls)
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(contents, &doc))
+	storedToken, ok := doc[CONFIG_KEY_OAUTH_TOKEN].(string)
+	require.True(t, ok, "the minted token is persisted")
+	var token oauth2.Token
+	require.NoError(t, json.Unmarshal([]byte(storedToken), &token))
+	assert.Equal(t, "a", token.AccessToken)
+}
+
+func Test_AddAuthenticationHeader_ClientAssertionGrant_CorruptConfigFileStillFails(t *testing.T) {
+	provider := &fakeAssertionProvider{}
+	authenticator, path := newFileBackedAssertionAuthenticator(t, "https://example.invalid", provider)
+	require.NoError(t, os.WriteFile(path, []byte("{not json"), 0o600))
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+
+	assert.Error(t, authenticator.AddAuthenticationHeader(req))
+	assert.Equal(t, 0, provider.calls)
+}
+
+func Test_AddAuthenticationHeader_TokenOnly_ConfigFileDoesNotExistStillFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snyk.json")
+	config := configuration.NewWithOpts()
+	config.SetStorage(configuration.NewJsonStorage(path, configuration.WithConfiguration(config)))
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+	oauthAuthenticator, ok := authenticator.(*oAuth2Authenticator)
+	require.True(t, ok)
+	oauthAuthenticator.token = &oauth2.Token{AccessToken: "expired", Expiry: time.Now().Add(-time.Hour)}
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+
+	assert.ErrorIs(t, oauthAuthenticator.AddAuthenticationHeader(req), fs.ErrNotExist)
 }
