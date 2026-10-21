@@ -1,3 +1,6 @@
+// Package machineenrollment enrolls a device as a machine principal using a device token or a fleet key.
+// The server answers with an OAuth client_id bound to a newly generated RSA key, which authenticates
+// with private_key_jwt client assertions.
 package machineenrollment
 
 import (

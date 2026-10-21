@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 )
 
 func TestClientAssertion(t *testing.T) {
