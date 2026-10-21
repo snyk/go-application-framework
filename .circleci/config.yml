@@ -57,7 +57,11 @@ jobs:
           command: git config --global core.autocrlf input
       - checkout
       - run:
+          name: Install make
+          command: choco install make -y
+      - run:
           name: Run unit tests
+          shell: bash.exe
           command: make test
 
   build:
