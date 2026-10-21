@@ -2,20 +2,13 @@ package localworkflows
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"golang.org/x/oauth2"
 
-	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -275,101 +268,15 @@ func Test_autodetectAuth(t *testing.T) {
 	})
 }
 
-// Test_auth_clientPrivateKeyFile exercises the real authEntryPoint (not the DI'd one), end to end,
-// to verify that setting --client-private-key-file makes it authenticate with a private_key_jwt
-// client assertion instead of a client secret.
-func Test_auth_clientPrivateKeyFile(t *testing.T) {
-	key, err := machineenrollment.GenerateKey()
-	require.NoError(t, err)
-	keyFile := filepath.Join(t.TempDir(), "key.pem")
-	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, key))
+func Test_InitAuth_NoLongerOffersAClientPrivateKeyFile(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	require.NoError(t, InitAuth(engine))
 
-	var gotForm url.Values
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, r.ParseForm())
-		gotForm = r.Form
-
-		newToken := &oauth2.Token{
-			AccessToken: "a",
-			TokenType:   "bearer",
-			Expiry:      time.Now().Add(60 * time.Second).UTC(),
-		}
-		data, marshalErr := json.Marshal(newToken)
-		require.NoError(t, marshalErr)
-		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-		_, writeErr := w.Write(data)
-		require.NoError(t, writeErr)
-	})
-
-	mockCtl := gomock.NewController(t)
-	logContent := &bytes.Buffer{}
-	logger := zerolog.New(logContent)
-	a := analytics.New()
-	engine := mocks.NewMockEngine(mockCtl)
-	networkAccess := mocks.NewMockNetworkAccess(mockCtl)
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, srv.URL)
-	config.Set(auth.PARAMETER_CLIENT_ID, "machine-client-1")
-	config.Set(ClientPrivateKeyFileParameter, keyFile)
-
-	engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	networkAccess.EXPECT().GetUnauthorizedHttpClient().Return(http.DefaultClient).AnyTimes()
-
-	mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
-	mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-	mockInvocationContext.EXPECT().GetEngine().Return(engine).AnyTimes()
-	mockInvocationContext.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
-	mockInvocationContext.EXPECT().GetAnalytics().Return(a).AnyTimes()
-
-	_, err = authEntryPoint(mockInvocationContext, nil)
-	require.NoError(t, err)
-
-	assert.Equal(t, "machine-client-1", gotForm.Get("client_id"))
-	assert.Equal(t, machineenrollment.ClientAssertionType, gotForm.Get("client_assertion_type"))
-	assert.NotEmpty(t, gotForm.Get("client_assertion"))
-	assert.Empty(t, gotForm.Get("client_secret"))
-	assert.NotEmpty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
-}
-
-func Test_auth_clientPrivateKeyFile_errors(t *testing.T) {
-	newCtx := func(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
-		t.Helper()
-		mockCtl := gomock.NewController(t)
-		logger := zerolog.New(&bytes.Buffer{})
-		networkAccess := mocks.NewMockNetworkAccess(mockCtl)
-		networkAccess.EXPECT().GetUnauthorizedHttpClient().Return(http.DefaultClient).AnyTimes()
-		engine := mocks.NewMockEngine(mockCtl)
-		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
-		ictx := mocks.NewMockInvocationContext(mockCtl)
-		ictx.EXPECT().GetConfiguration().Return(config).AnyTimes()
-		ictx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-		ictx.EXPECT().GetEngine().Return(engine).AnyTimes()
-		ictx.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
-		ictx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
-		return ictx
-	}
-
-	t.Run("missing client id", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(ClientPrivateKeyFileParameter, "/some/key.pem")
-		_, err := authEntryPoint(newCtx(t, config), nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "--client-id")
-	})
-
-	t.Run("missing key file", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(auth.PARAMETER_CLIENT_ID, "c")
-		config.Set(ClientPrivateKeyFileParameter, filepath.Join(t.TempDir(), "nope.pem"))
-		_, err := authEntryPoint(newCtx(t, config), nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "nope.pem")
-	})
+	entry, ok := engine.GetWorkflow(WORKFLOWID_AUTH)
+	require.True(t, ok)
+	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	assert.Nil(t, flags.Lookup("client-private-key-file"))
+	assert.NotNil(t, flags.Lookup(auth.PARAMETER_CLIENT_ID))
 }
 
 func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T) {
@@ -382,6 +289,7 @@ func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T
 		for name, config := range map[string]configuration.Configuration{"local": localConfig, "global": globalConfig} {
 			assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "%s config oauth token", name)
 			assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN), "%s config authentication token", name)
+			assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE), "%s config machine credential", name)
 		}
 	}
 
@@ -445,6 +353,7 @@ func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T
 			for _, config := range []configuration.Configuration{localConfig, globalConfig} {
 				config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
 				config.Set(configuration.AUTHENTICATION_TOKEN, "existing-auth-token")
+				config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"c","private_key_pem":"k"}`)
 			}
 			localConfig.Set(AuthTypeParameter, tc.authType)
 			if tc.authType == auth.AUTH_TYPE_PAT {
