@@ -66,9 +66,7 @@ jobs:
           shell: bash.exe
           command: |
             set -euo pipefail
-            gcc_path=$(find /c/ProgramData/mingw64 -name gcc.exe -print -quit)
-            test -n "$gcc_path"
-            export PATH="$(dirname "$gcc_path"):$PATH"
+            export PATH="/c/ProgramData/mingw64/mingw64/bin:$PATH"
             gcc --version
             make test
 
