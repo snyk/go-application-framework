@@ -15,11 +15,12 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -369,4 +370,132 @@ func Test_auth_clientPrivateKeyFile_errors(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "nope.pem")
 	})
+}
+
+func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T) {
+	const pat = "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456"
+
+	// The flows overwrite some of these keys after clearing them, so the cleared state is
+	// asserted at the moment each flow starts authenticating, not only after it returns.
+	assertCleared := func(t *testing.T, localConfig, globalConfig configuration.Configuration) {
+		t.Helper()
+		for name, config := range map[string]configuration.Configuration{"local": localConfig, "global": globalConfig} {
+			assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "%s config oauth token", name)
+			assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN), "%s config authentication token", name)
+		}
+	}
+
+	testCases := []struct {
+		name       string
+		authType   string
+		setupMocks func(t *testing.T, engine *mocks.MockEngine, authenticator *mocks.MockAuthenticator, localConfig, globalConfig configuration.Configuration)
+		assertPost func(t *testing.T, localConfig, globalConfig configuration.Configuration)
+	}{
+		{
+			name:     "OAuth flow",
+			authType: auth.AUTH_TYPE_OAUTH,
+			setupMocks: func(t *testing.T, _ *mocks.MockEngine, authenticator *mocks.MockAuthenticator, localConfig, globalConfig configuration.Configuration) {
+				t.Helper()
+				authenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+					assertCleared(t, localConfig, globalConfig)
+					return nil
+				})
+			},
+		},
+		{
+			name:     "PAT flow",
+			authType: auth.AUTH_TYPE_PAT,
+			setupMocks: func(t *testing.T, engine *mocks.MockEngine, _ *mocks.MockAuthenticator, localConfig, globalConfig configuration.Configuration) {
+				t.Helper()
+				engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), gomock.Any()).
+					DoAndReturn(func(_ workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
+						assertCleared(t, localConfig, globalConfig)
+						return nil, nil
+					})
+			},
+			assertPost: func(t *testing.T, localConfig, globalConfig configuration.Configuration) {
+				t.Helper()
+				assert.Equal(t, pat, globalConfig.GetString(auth.CONFIG_KEY_TOKEN))
+				assert.Empty(t, localConfig.GetString(auth.CONFIG_KEY_TOKEN))
+			},
+		},
+		{
+			name:     "legacy flow",
+			authType: auth.AUTH_TYPE_TOKEN,
+			setupMocks: func(t *testing.T, engine *mocks.MockEngine, _ *mocks.MockAuthenticator, localConfig, globalConfig configuration.Configuration) {
+				t.Helper()
+				engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), gomock.Any()).
+					DoAndReturn(func(_ workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
+						assertCleared(t, localConfig, globalConfig)
+						return nil, nil
+					})
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtl := gomock.NewController(t)
+			logger := zerolog.New(&bytes.Buffer{})
+			engine := mocks.NewMockEngine(mockCtl)
+			authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+			localConfig := configuration.NewWithOpts()
+			globalConfig := configuration.NewWithOpts()
+			for _, config := range []configuration.Configuration{localConfig, globalConfig} {
+				config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
+				config.Set(configuration.AUTHENTICATION_TOKEN, "existing-auth-token")
+			}
+			localConfig.Set(AuthTypeParameter, tc.authType)
+			if tc.authType == auth.AUTH_TYPE_PAT {
+				localConfig.Set(ConfigurationNewAuthenticationToken, pat)
+			}
+
+			engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+			mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+			mockInvocationContext.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+			mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+			mockInvocationContext.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+			tc.setupMocks(t, engine, authenticator, localConfig, globalConfig)
+
+			err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
+			require.NoError(t, err)
+
+			assertCleared(t, localConfig, globalConfig)
+			if tc.assertPost != nil {
+				tc.assertPost(t, localConfig, globalConfig)
+			}
+		})
+	}
+}
+
+func Test_AuthEntryPointDI_OAuthFlow_CopiesNewOAuthTokenFromLocalToGlobalConfig(t *testing.T) {
+	const newToken = "newly-obtained-oauth-token"
+
+	mockCtl := gomock.NewController(t)
+	logger := zerolog.New(&bytes.Buffer{})
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	for _, config := range []configuration.Configuration{localConfig, globalConfig} {
+		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
+	}
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+	mockInvocationContext.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	mockInvocationContext.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+		localConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newToken)
+		return nil
+	})
+
+	err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
+	require.NoError(t, err)
+
+	assert.Equal(t, newToken, globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 }

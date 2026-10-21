@@ -25,7 +25,7 @@ import (
 
 	"github.com/xeipuuv/gojsonschema"
 
-	"github.com/snyk/go-application-framework/pkg/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 )
 
 const (
