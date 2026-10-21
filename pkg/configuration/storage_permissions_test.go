@@ -99,6 +99,36 @@ func Test_Configuration_Load_Permissions(t *testing.T) {
 	}
 }
 
+func Test_JsonStorage_Refresh_Permissions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		mode         os.FileMode
+		expectedMode os.FileMode
+	}{
+		{name: "private", mode: 0600, expectedMode: 0600},
+		{name: "group and other readable", mode: 0644, expectedMode: 0600},
+		{name: "owner read only", mode: 0400, expectedMode: 0400},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			file := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(file, []byte(`{"someKey":"someValue"}`), 0600))
+			require.NoError(t, os.Chmod(file, tt.mode))
+
+			storage := configuration.NewJsonStorage(file)
+			config := configuration.NewWithOpts()
+			require.NoError(t, storage.Refresh(config, key))
+			assert.Equal(t, expectedValue, config.GetString(key))
+
+			info, err := os.Stat(file)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedMode, info.Mode().Perm())
+		})
+	}
+}
+
 func Test_Configuration_PermissionFailure_PreservesFile(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory permissions")

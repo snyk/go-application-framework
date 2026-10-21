@@ -146,6 +146,17 @@ func (s *JsonStorage) Set(key string, value any) error {
 	return writeConfigFile(s.path, configJson)
 }
 
+// ensureFilePermissions removes non-owner permissions without failing reads if repair fails.
+func ensureFilePermissions(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if mode := info.Mode().Perm() & fileperms.FILEPERM_600; mode != info.Mode().Perm() {
+		_ = os.Chmod(path, mode) //nolint:errcheck // Permission repair is best effort when reading.
+	}
+}
+
 func writeConfigFile(path string, contents []byte) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, fileperms.FILEPERM_600)
 	if err != nil {
@@ -165,6 +176,7 @@ func writeConfigFile(path string, contents []byte) error {
 }
 
 func (s *JsonStorage) Refresh(config Configuration, key string) error {
+	ensureFilePermissions(s.path)
 	contents, err := os.ReadFile(s.path)
 	if err != nil {
 		return err

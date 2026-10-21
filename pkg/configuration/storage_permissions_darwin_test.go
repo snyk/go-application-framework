@@ -31,7 +31,7 @@ func Test_Configuration_ReadableFile_ChmodFailure(t *testing.T) {
 	const updated = `{"api":"updated-token"}`
 	require.NoError(t, os.WriteFile(file, []byte(updated), 0644))
 	require.NoError(t, syscall.Chflags(file, immutable))
-	require.ErrorIs(t, config.ReloadConfig(), os.ErrPermission)
+	require.NoError(t, config.ReloadConfig())
 	assert.Equal(t, "updated-token", config.GetString("api"))
 
 	require.ErrorIs(t, config.GetStorage().Set("api", "new-token"), os.ErrPermission)

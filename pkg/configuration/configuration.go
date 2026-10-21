@@ -16,8 +16,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-
-	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
@@ -849,22 +847,10 @@ func (ev *extendedViper) GetFiles() []string {
 }
 
 func (ev *extendedViper) ReloadConfig() error {
-	var permissionErr error
 	if storage, ok := ev.GetStorage().(*JsonStorage); ok {
-		info, err := os.Stat(storage.path)
-		if err == nil {
-			mode := info.Mode().Perm() & fileperms.FILEPERM_600
-			if mode != info.Mode().Perm() {
-				permissionErr = os.Chmod(storage.path, mode)
-			}
-		} else if !os.IsNotExist(err) {
-			permissionErr = err
-		}
+		ensureFilePermissions(storage.path)
 	}
-	if err := ev.viper.ReadInConfig(); err != nil {
-		return err
-	}
-	return permissionErr
+	return ev.viper.ReadInConfig()
 }
 
 func (ev *extendedViper) ClearCache() {
