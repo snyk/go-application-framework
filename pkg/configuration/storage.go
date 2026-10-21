@@ -3,7 +3,6 @@ package configuration
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,20 +15,6 @@ import (
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
-
-// UsabilityChecker is an optional interface of a Storage.
-//
-// CheckUsable checks that the config file, if present, parses the way Set parses it and can be opened
-// for writing; nothing is written. A missing file is usable, as Set and Lock create the directory. A
-// file that cannot be read is refused although Set would overwrite it. The answer is an advisory
-// snapshot: callers hold the storage lock (Lock) while checking, and it can change afterwards. It is
-// safe for concurrent use with Set.
-//
-// Implementing it is optional, but a host whose own Storage lacks it cannot run workflows that check
-// before an irreversible step: machine.enroll refuses such a storage.
-type UsabilityChecker interface {
-	CheckUsable() error
-}
 
 // Storage persists configuration values that outlive a single process run.
 type Storage interface {
@@ -69,8 +54,6 @@ var keyDeleted = struct{}{}
 func IsKeyDeleted(val any) bool {
 	return val == keyDeleted
 }
-
-var _ UsabilityChecker = (*JsonStorage)(nil)
 
 type JsonStorage struct {
 	path   string
@@ -133,14 +116,19 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 
-	// A failed read, which can come with partial bytes, is treated as an empty file and overwritten.
-	fileBytes, readErr := os.ReadFile(s.path)
-	if readErr != nil {
-		fileBytes = nil
+	fileBytes, err := os.ReadFile(s.path)
+	if len(fileBytes) == 0 || err != nil {
+		const emptyJson = "{}"
+		fileBytes = []byte(emptyJson)
 	}
-	config, err := parseDocument(fileBytes)
+
+	config := make(map[string]any)
+	err = json.Unmarshal(fileBytes, &config)
 	if err != nil {
 		return err
+	}
+	if config == nil { // the file holds the JSON literal null
+		config = make(map[string]any)
 	}
 
 	if tmpKey := s.getNonEnvVarKey(key); len(tmpKey) > 0 {
@@ -161,43 +149,6 @@ func (s *JsonStorage) Set(key string, value any) error {
 	err = os.WriteFile(s.path, configJson, fileperms.FILEPERM_666)
 
 	return err
-}
-
-// parseDocument is the single place that decides what a config file may contain: nothing, the JSON
-// literal null, or a JSON object.
-func parseDocument(contents []byte) (map[string]any, error) {
-	doc := make(map[string]any)
-	if len(contents) > 0 {
-		if err := json.Unmarshal(contents, &doc); err != nil {
-			return nil, err
-		}
-	}
-	if doc == nil {
-		doc = make(map[string]any)
-	}
-	return doc, nil
-}
-
-// CheckUsable implements UsabilityChecker; see there for the contract. Refusing an unreadable file is
-// safer than the overwrite Set would do.
-func (s *JsonStorage) CheckUsable() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	contents, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if _, err = parseDocument(contents); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(s.path, os.O_WRONLY, 0)
-	if err != nil {
-		return err
-	}
-	return f.Close()
 }
 
 func (s *JsonStorage) Refresh(config Configuration, key string) error {

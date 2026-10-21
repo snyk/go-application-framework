@@ -293,107 +293,6 @@ func TestSave_WritesTheStorageOncePerSave(t *testing.T) {
 	assert.NoError(t, err, "the in-memory view has the credential")
 }
 
-func makeReadOnlyConfigFile(t *testing.T) {
-	t.Helper()
-	require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-	require.NoError(t, os.WriteFile(configFilePath(t), []byte("{}"), 0o400))
-	if f, openErr := os.OpenFile(configFilePath(t), os.O_WRONLY, 0); openErr == nil {
-		_ = f.Close()
-		t.Skip("file permissions are not enforced here (running as a privileged user)")
-	}
-}
-
-func TestCheckWritable(t *testing.T) {
-	t.Run("a fresh config directory is writable", func(t *testing.T) {
-		open := fileBackedConfig(t)
-
-		assert.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
-	})
-	t.Run("an existing valid config file is writable", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		require.NoError(t, machinecredential.Save(t.Context(), open(), newCredential(t)))
-
-		assert.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
-	})
-	t.Run("no storage", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.SetStorage(nil)
-
-		assert.Error(t, machinecredential.CheckWritable(t.Context(), config))
-	})
-	t.Run("corrupt config file", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-		require.NoError(t, os.WriteFile(configFilePath(t), []byte("{not json"), 0o600))
-
-		assert.Error(t, machinecredential.CheckWritable(t.Context(), open()))
-	})
-	t.Run("zero-byte config file", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-		require.NoError(t, os.WriteFile(configFilePath(t), nil, 0o600))
-		config := open()
-
-		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
-		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)), "Save accepts it too")
-	})
-	t.Run("config file holding only null", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-		require.NoError(t, os.WriteFile(configFilePath(t), []byte("null"), 0o600))
-		config := open()
-
-		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
-		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
-	})
-	t.Run("read-only config file", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		makeReadOnlyConfigFile(t)
-
-		assert.Error(t, machinecredential.CheckWritable(t.Context(), open()))
-	})
-	t.Run("leaves the content of the config file as it was", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-		require.NoError(t, os.WriteFile(configFilePath(t), []byte(`{"a": 1}`), 0o600))
-
-		require.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
-
-		content, err := os.ReadFile(configFilePath(t))
-		require.NoError(t, err)
-		assert.Equal(t, `{"a": 1}`, string(content))
-	})
-	t.Run("storage that cannot be checked", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		storage := mocks.NewMockStorage(ctrl)
-		storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil)
-		storage.EXPECT().Unlock().Return(nil)
-		config := configuration.NewWithOpts()
-		config.SetStorage(storage)
-
-		err := machinecredential.CheckWritable(t.Context(), config)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "must implement configuration.UsabilityChecker")
-	})
-	t.Run("lock that cannot be taken", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		storage := mocks.NewMockStorage(ctrl)
-		storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(context.DeadlineExceeded)
-		config := configuration.NewWithOpts()
-		config.SetStorage(storage)
-
-		assert.ErrorIs(t, machinecredential.CheckWritable(t.Context(), config), context.DeadlineExceeded)
-	})
-	t.Run("leaves the lock released", func(t *testing.T) {
-		open := fileBackedConfig(t)
-		config := open()
-		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
-
-		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
-	})
-}
-
 func TestPublish_MakesTheCredentialLoadableWithoutTouchingStorage(t *testing.T) {
 	storage := mocks.NewMockStorage(gomock.NewController(t))
 	config := configuration.NewWithOpts()
@@ -405,4 +304,14 @@ func TestPublish_MakesTheCredentialLoadableWithoutTouchingStorage(t *testing.T) 
 	loaded, err := machinecredential.Load(config)
 	require.NoError(t, err)
 	assert.Equal(t, credential.ClientID, loaded.ClientID)
+}
+
+func TestSecretTerms_IgnoresAPEMTooShortToBeAKey(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"c","private_key_pem":"a"}`)
+
+	terms := machinecredential.SecretTerms(config)
+
+	assert.NotContains(t, terms, "a", "it would redact every a in the logs")
+	assert.Empty(t, terms)
 }
