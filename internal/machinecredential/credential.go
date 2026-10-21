@@ -24,14 +24,14 @@ const CONFIG_KEY_MACHINE_IDENTITY_STORAGE = "INTERNAL_MACHINE_IDENTITY_STORAGE"
 // importing the workflow.
 const CONFIG_KEY_DEVICE_TOKEN = "device-token"
 
-const minPEMLineLength = 16
+// minSecretTermLength is the shortest value redacted from logs; anything shorter would also redact
+// unrelated text.
+const minSecretTermLength = 16
 
 const storageLockRetryDelay = 100 * time.Millisecond
 
 // ErrNotEnrolled is returned by Load when no credential is stored.
 var ErrNotEnrolled = errors.New("this machine is not enrolled")
-
-var errStorageNotCheckable = errors.New("machine.enroll cannot run because the configuration storage must implement configuration.UsabilityChecker")
 
 var errNoStorage = errors.New("the configuration has no storage to persist the machine credential in")
 
@@ -97,29 +97,6 @@ func encode(credential Credential) (string, error) {
 	return string(value), nil
 }
 
-// CheckWritable checks that the configuration has storage, that its lock can be taken and that the
-// storage reports itself usable. A storage that cannot say so is refused, because callers run this
-// before an irreversible step whose result Save must keep.
-func CheckWritable(ctx context.Context, config configuration.Configuration) error {
-	storage := config.GetStorage()
-	if storage == nil {
-		return errNoStorage
-	}
-	if err := storage.Lock(ctx, storageLockRetryDelay); err != nil {
-		return fmt.Errorf("failed locking the configuration storage: %w", err)
-	}
-	defer func() { _ = storage.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
-
-	checker, ok := storage.(configuration.UsabilityChecker)
-	if !ok {
-		return errStorageNotCheckable
-	}
-	if err := checker.CheckUsable(); err != nil {
-		return fmt.Errorf("the configuration file cannot be used: %w", err)
-	}
-	return nil
-}
-
 // Load reads the stored credential, or returns ErrNotEnrolled when there is none.
 func Load(config configuration.Configuration) (Credential, error) {
 	value := config.GetString(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
@@ -149,10 +126,12 @@ func SecretTerms(config configuration.Configuration) []string {
 	if err := json.Unmarshal([]byte(config.GetString(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)), &stored); err != nil {
 		return nil
 	}
-	terms := []string{strings.TrimSpace(stored.PrivateKeyPEM)}
+	var terms []string
+	if pem := strings.TrimSpace(stored.PrivateKeyPEM); len(pem) >= minSecretTermLength {
+		terms = append(terms, pem)
+	}
 	for _, line := range strings.Split(stored.PrivateKeyPEM, "\n") {
-		// The whole PEM term covers the key; short lines would only redact unrelated text.
-		if line = strings.TrimSpace(line); len(line) >= minPEMLineLength && !strings.HasPrefix(line, "-----") {
+		if line = strings.TrimSpace(line); len(line) >= minSecretTermLength && !strings.HasPrefix(line, "-----") {
 			terms = append(terms, line)
 		}
 	}

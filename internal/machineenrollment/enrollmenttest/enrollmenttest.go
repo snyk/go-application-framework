@@ -69,18 +69,16 @@ type Server struct {
 
 	mu sync.Mutex
 	// TokenRequests counts accepted token requests.
-	TokenRequests int
-	// enrollmentRequests counts the requests the enrollment endpoint received, whatever their outcome.
-	enrollmentRequests int
-	credentialHeaders  []string
-	machines           []*machine
-	deviceTokens       map[string]*deviceToken
-	fleetKeys          map[string]fleetKey // by thumbprint
-	enrolledKeys       map[string]bool     // client key thumbprints
-	clients            map[string]*rsa.PublicKey
-	jtis               map[string]bool
-	tokens             map[string]string // access token -> client id
-	next               int
+	TokenRequests     int
+	credentialHeaders []string
+	machines          []*machine
+	deviceTokens      map[string]*deviceToken
+	fleetKeys         map[string]fleetKey // by thumbprint
+	enrolledKeys      map[string]bool     // client key thumbprints
+	clients           map[string]*rsa.PublicKey
+	jtis              map[string]bool
+	tokens            map[string]string // access token -> client id
+	next              int
 }
 
 type fleetKey struct {
@@ -126,13 +124,6 @@ func (s *Server) CredentialHeaders() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.credentialHeaders)
-}
-
-// EnrollmentRequests returns how many requests the enrollment endpoint received, whatever their outcome.
-func (s *Server) EnrollmentRequests() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.enrollmentRequests
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
@@ -256,10 +247,6 @@ type enrollmentRequest struct {
 }
 
 func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	s.enrollmentRequests++
-	s.mu.Unlock()
-
 	attrs, ok := parseRequest(w, r)
 	if !ok {
 		return

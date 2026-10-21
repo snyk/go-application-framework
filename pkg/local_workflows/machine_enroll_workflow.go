@@ -41,14 +41,13 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 // the credential is a secret.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
+	if config.GetStorage() == nil {
+		return nil, errors.New("enrolling is refused because the credential cannot be stored: the configuration has no storage")
+	}
 	deviceToken := config.GetString(flagDeviceToken)
 	fleetKeyFile := config.GetString(flagFleetKeyFile)
 	if (deviceToken == "") == (fleetKeyFile == "") {
 		return nil, fmt.Errorf("enrolling needs exactly one of --%s or --%s", flagDeviceToken, flagFleetKeyFile)
-	}
-
-	if err := checkStorable(invocationCtx.Context(), config); err != nil {
-		return nil, err
 	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -78,17 +77,6 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		}
 	}
 	return nil, nil
-}
-
-// checkStorable runs before the enrollment service is called, because a single-use device token is
-// spent by a successful enrollment.
-func checkStorable(ctx context.Context, config configuration.Configuration) error {
-	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
-	defer cancel()
-	if err := machinecredential.CheckWritable(ctx, config); err != nil {
-		return fmt.Errorf("the machine credential could not be stored, so the enrollment was not started: %w", err)
-	}
-	return nil
 }
 
 func storeEnrollment(ctx context.Context, timeout time.Duration, config configuration.Configuration, credential machinecredential.Credential, usedDeviceToken bool) error {

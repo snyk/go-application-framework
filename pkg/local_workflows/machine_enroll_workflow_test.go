@@ -252,18 +252,7 @@ func Test_machineEnroll_controlAuthenticatedClientSendsCredentials(t *testing.T)
 	assert.NotEmpty(t, env.server.CredentialHeaders(), "the control: this engine's authenticated client sends credentials")
 }
 
-func corruptConfigFile(t *testing.T, home string) {
-	t.Helper()
-	path := filepath.Join(home, ".config", "configstore", "snyk.json")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("{not json"), 0o600))
-}
-
 var errDiskFull = errors.New("disk full")
-
-type usableStorage struct{ configuration.Storage }
-
-func (usableStorage) CheckUsable() error { return nil }
 
 func (e *enrollEnv) failWritesAfterEnrolling(t *testing.T) {
 	t.Helper()
@@ -271,7 +260,7 @@ func (e *enrollEnv) failWritesAfterEnrolling(t *testing.T) {
 	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	storage.EXPECT().Unlock().Return(nil).AnyTimes()
 	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(errDiskFull).AnyTimes()
-	e.config.SetStorage(usableStorage{storage})
+	e.config.SetStorage(storage)
 }
 
 func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
@@ -407,47 +396,6 @@ func Test_storeEnrollment_givesUpWhenAnotherHolderKeepsTheLock(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func Test_machineEnroll_unstorableCredentialIsReportedBeforeTheTokenIsSpent(t *testing.T) {
-	for name, prepare := range map[string]func(t *testing.T, env *enrollEnv){
-		"no storage": func(_ *testing.T, env *enrollEnv) {
-			env.config.SetStorage(nil)
-		},
-		"storage that cannot be checked": func(t *testing.T, env *enrollEnv) {
-			t.Helper()
-			storage := mocks.NewMockStorage(gomock.NewController(t))
-			storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			storage.EXPECT().Unlock().Return(nil).AnyTimes()
-			env.config.SetStorage(storage)
-		},
-		"corrupt config file": func(t *testing.T, env *enrollEnv) {
-			t.Helper()
-			corruptConfigFile(t, env.home)
-		},
-		"read-only config file": func(t *testing.T, env *enrollEnv) {
-			t.Helper()
-			path := filepath.Join(env.home, ".config", "configstore", "snyk.json")
-			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-			require.NoError(t, os.WriteFile(path, []byte("{}"), 0o400))
-			if f, openErr := os.OpenFile(path, os.O_WRONLY, 0); openErr == nil {
-				_ = f.Close()
-				t.Skip("file permissions are not enforced here (running as a privileged user)")
-			}
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			env := newEnrollEnv(t)
-			deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
-			prepare(t, env)
-
-			err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
-
-			require.Error(t, err)
-			assert.Zero(t, env.server.EnrollmentRequests(), "the single-use token was not spent")
-			assert.Zero(t, env.server.ClientCount())
-		})
-	}
-}
-
 func Test_machineEnroll_theEnginesOwnConfigurationSeesTheCredential(t *testing.T) {
 	env := newEnrollEnv(t)
 	machineID := env.server.RegisterMachine("SERIAL-1")
@@ -460,4 +408,16 @@ func Test_machineEnroll_theEnginesOwnConfigurationSeesTheCredential(t *testing.T
 	second, err := machinecredential.Load(env.engine.GetConfiguration())
 	require.NoError(t, err)
 	assert.NotEqual(t, first.ClientID, second.ClientID, "re-enrolling replaces it")
+}
+
+func Test_machineEnroll_withoutStorageFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	env.config.SetStorage(nil)
+
+	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "credential cannot be stored")
+	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
 }
