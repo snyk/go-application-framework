@@ -1,9 +1,11 @@
 package localworkflows
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
@@ -104,6 +106,9 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return auth.AUTH_TYPE_OAUTH
 }
 
+// clearCredentialTimeout bounds the wait for the storage lock held by another process.
+const clearCredentialTimeout = 10 * time.Second
+
 func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
@@ -125,8 +130,15 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
 	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	// A person logging in must not keep authenticating as the enrolled machine.
-	machinecredential.Clear(config)
-	machinecredential.Clear(globalConfig)
+	// A failed clear (for example a corrupt or read-only snyk.json) is only logged: that scenario is
+	// unsupported and being reworked, so it gets no further handling.
+	clearCtx, cancelClear := context.WithTimeout(context.Background(), clearCredentialTimeout)
+	defer cancelClear()
+	for name, c := range map[string]configuration.Configuration{"local": config, "global": globalConfig} {
+		if clearErr := machinecredential.Clear(clearCtx, c); clearErr != nil {
+			logger.Warn().Err(clearErr).Msgf("Failed to clear the stored machine credential of the %s configuration", name)
+		}
+	}
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)

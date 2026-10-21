@@ -89,10 +89,63 @@ func TestClear_RemovesTheStoredCredential(t *testing.T) {
 	open := fileBackedConfig(t)
 	require.NoError(t, machinecredential.Save(t.Context(), open(), newCredential(t)))
 
-	machinecredential.Clear(open())
+	require.NoError(t, machinecredential.Clear(t.Context(), open()))
 
 	_, err := machinecredential.Load(open())
 	assert.ErrorIs(t, err, machinecredential.ErrNotEnrolled)
+}
+
+func TestClear_KeepsOtherStoredValues(t *testing.T) {
+	open := fileBackedConfig(t)
+	config := open()
+	config.PersistInStorage(configuration.API_URL)
+	config.Set(configuration.API_URL, "https://api.example.test")
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+
+	require.NoError(t, machinecredential.Clear(t.Context(), config))
+
+	assert.Equal(t, "https://api.example.test", open().GetString(configuration.API_URL))
+	assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE), "the in-memory view is cleared")
+}
+
+func TestClear_ReportsACorruptConfigFileAndKeepsTheInMemoryCredential(t *testing.T) {
+	open := fileBackedConfig(t)
+	config := open()
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	require.NoError(t, os.WriteFile(configFilePath(t), []byte("{not json"), 0o600))
+
+	err := machinecredential.Clear(t.Context(), config)
+
+	require.Error(t, err)
+	assert.NotEmpty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
+}
+
+func TestClear_ReturnsTheStorageErrorFromTheMarker(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(ctrl)
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+	writeErr := errors.New("disk full")
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil)
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).DoAndReturn(func(_ string, value any) error {
+		assert.True(t, configuration.IsKeyDeleted(value), "the deletion marker is written")
+		return writeErr
+	}).Times(1)
+	storage.EXPECT().Unlock().Return(nil)
+
+	err := machinecredential.Clear(t.Context(), config)
+
+	require.ErrorIs(t, err, writeErr)
+}
+
+func TestClear_WithoutStorageClearsTheInMemoryView(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.SetStorage(nil)
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"c"}`)
+
+	require.NoError(t, machinecredential.Clear(t.Context(), config))
+
+	assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
 }
 
 func TestSave_WritesOneValueUnderTheStorageLock(t *testing.T) {
@@ -222,4 +275,134 @@ func TestSecretTerms_SkipShortPEMLines(t *testing.T) {
 	assert.Contains(t, terms, "AAAAAAAAAAAAAAAAAAAAAAAA")
 	assert.NotContains(t, terms, "client-1", "a client id is not a secret")
 	assert.NotContains(t, terms, "QQ==", "a short line would redact unrelated text")
+}
+
+func TestSave_WritesTheStorageOncePerSave(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(ctrl)
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(nil).Times(2)
+	storage.EXPECT().Unlock().Return(nil).Times(2)
+
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+
+	_, err := machinecredential.Load(config)
+	assert.NoError(t, err, "the in-memory view has the credential")
+}
+
+func makeReadOnlyConfigFile(t *testing.T) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
+	require.NoError(t, os.WriteFile(configFilePath(t), []byte("{}"), 0o400))
+	if f, openErr := os.OpenFile(configFilePath(t), os.O_WRONLY, 0); openErr == nil {
+		_ = f.Close()
+		t.Skip("file permissions are not enforced here (running as a privileged user)")
+	}
+}
+
+func TestCheckWritable(t *testing.T) {
+	t.Run("a fresh config directory is writable", func(t *testing.T) {
+		open := fileBackedConfig(t)
+
+		assert.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
+	})
+	t.Run("an existing valid config file is writable", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		require.NoError(t, machinecredential.Save(t.Context(), open(), newCredential(t)))
+
+		assert.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
+	})
+	t.Run("no storage", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.SetStorage(nil)
+
+		assert.Error(t, machinecredential.CheckWritable(t.Context(), config))
+	})
+	t.Run("corrupt config file", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
+		require.NoError(t, os.WriteFile(configFilePath(t), []byte("{not json"), 0o600))
+
+		assert.Error(t, machinecredential.CheckWritable(t.Context(), open()))
+	})
+	t.Run("zero-byte config file", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
+		require.NoError(t, os.WriteFile(configFilePath(t), nil, 0o600))
+		config := open()
+
+		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
+		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)), "Save accepts it too")
+	})
+	t.Run("config file holding only null", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
+		require.NoError(t, os.WriteFile(configFilePath(t), []byte("null"), 0o600))
+		config := open()
+
+		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
+		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	})
+	t.Run("read-only config file", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		makeReadOnlyConfigFile(t)
+
+		assert.Error(t, machinecredential.CheckWritable(t.Context(), open()))
+	})
+	t.Run("leaves the content of the config file as it was", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
+		require.NoError(t, os.WriteFile(configFilePath(t), []byte(`{"a": 1}`), 0o600))
+
+		require.NoError(t, machinecredential.CheckWritable(t.Context(), open()))
+
+		content, err := os.ReadFile(configFilePath(t))
+		require.NoError(t, err)
+		assert.Equal(t, `{"a": 1}`, string(content))
+	})
+	t.Run("storage that cannot be checked", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		storage := mocks.NewMockStorage(ctrl)
+		storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil)
+		storage.EXPECT().Unlock().Return(nil)
+		config := configuration.NewWithOpts()
+		config.SetStorage(storage)
+
+		err := machinecredential.CheckWritable(t.Context(), config)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must implement configuration.UsabilityChecker")
+	})
+	t.Run("lock that cannot be taken", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		storage := mocks.NewMockStorage(ctrl)
+		storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(context.DeadlineExceeded)
+		config := configuration.NewWithOpts()
+		config.SetStorage(storage)
+
+		assert.ErrorIs(t, machinecredential.CheckWritable(t.Context(), config), context.DeadlineExceeded)
+	})
+	t.Run("leaves the lock released", func(t *testing.T) {
+		open := fileBackedConfig(t)
+		config := open()
+		require.NoError(t, machinecredential.CheckWritable(t.Context(), config))
+
+		assert.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	})
+}
+
+func TestPublish_MakesTheCredentialLoadableWithoutTouchingStorage(t *testing.T) {
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+	credential := newCredential(t)
+
+	require.NoError(t, machinecredential.Publish(config, credential))
+
+	loaded, err := machinecredential.Load(config)
+	require.NoError(t, err)
+	assert.Equal(t, credential.ClientID, loaded.ClientID)
 }
