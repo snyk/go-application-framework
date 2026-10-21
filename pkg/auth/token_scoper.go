@@ -143,6 +143,13 @@ func oauthErrorOptions(body []byte) []snyk_errors.Option {
 // refreshedAccessToken goes through the authenticator so that an expired token is refreshed and
 // persisted exactly as it is for regular requests.
 func refreshedAccessToken(ctx context.Context, config configuration.Configuration) (string, error) {
+	storedToken, err := GetOAuthToken(config)
+	if err != nil {
+		return "", snyk.NewUnauthorisedError("stored oauth token is corrupt", snyk_errors.WithCause(err))
+	}
+	if storedToken == nil || (storedToken.AccessToken == "" && storedToken.RefreshToken == "") {
+		return "", snyk.NewUnauthorisedError("no user authentication is available")
+	}
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GetString(configuration.API_URL), nil)
 	if err != nil {
@@ -154,7 +161,7 @@ func refreshedAccessToken(ctx context.Context, config configuration.Configuratio
 	authHeader := req.Header.Get("Authorization")
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid or no authorization header")
+		return "", snyk.NewUnauthorisedError("authorization header has an unexpected format")
 	}
 	return strings.Trim(parts[1], " "), nil
 }
