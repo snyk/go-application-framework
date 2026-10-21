@@ -295,8 +295,25 @@ func Test_machineEnroll_secondEnrollmentReplacesAndLogsTheOldClient(t *testing.T
 	second, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 	assert.NotEqual(t, first.ClientID, second.ClientID)
-	assert.Contains(t, logs.String(), "replacing the credential of client "+first.ClientID)
+	assert.Contains(t, logs.String(), "replaced the credential of client "+first.ClientID)
 	assert.NotContains(t, logs.String(), "PRIVATE KEY")
+}
+
+func Test_machineEnroll_failedSaveDoesNotLogAReplacement(t *testing.T) {
+	env := newEnrollEnv(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs)
+	env.engine.SetLogger(&logger)
+	machineID := env.server.RegisterMachine("SERIAL-1")
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	first, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	env.failWritesAfterEnrolling(t)
+
+	err = env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)})
+
+	require.ErrorIs(t, err, errDiskFull, "the second enrollment reached the store and failed there")
+	assert.NotContains(t, logs.String(), "credential of client "+first.ClientID)
 }
 
 func Test_machineEnroll_corruptStoredCredentialDoesNotBlockEnrollment(t *testing.T) {
@@ -414,6 +431,18 @@ func Test_machineEnroll_withoutStorageFailsBeforeSpendingTheDeviceToken(t *testi
 	env := newEnrollEnv(t)
 	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
 	env.config.SetStorage(nil)
+
+	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "credential cannot be stored")
+	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	env.config.SetStorage(&configuration.EmptyStorage{})
 
 	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
 

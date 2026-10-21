@@ -1299,3 +1299,12 @@ func TestScrubbingWriter_GetScrubDictFromConfig_DeviceToken(t *testing.T) {
 
 	assert.Equal(t, "enrolling with *** now", scrubbed)
 }
+
+func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "a")
+
+	scrubbed := string(Scrub([]byte("a banana"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "a banana", scrubbed)
+}
