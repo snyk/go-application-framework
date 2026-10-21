@@ -18,7 +18,8 @@ var knownPlaceholderSerials = map[string]struct{}{
 	"n/a":                    {},
 }
 
-// serialFromBIOS maps a nullable WMI string to a serial; a VT_NULL property is nil.
+// serialFromBIOS guards against a nil pointer, which only a wmi client with PtrNil set produces.
+// The default client returns a pointer to "" for a VT_NULL property.
 func serialFromBIOS(raw *string) string {
 	if raw == nil {
 		return ""
