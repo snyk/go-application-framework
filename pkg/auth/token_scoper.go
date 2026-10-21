@@ -25,9 +25,6 @@ const (
 	tokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"
 	// maxErrorResponseBytes bounds how much of a failed exchange response is read into the error.
 	maxErrorResponseBytes = 1 << 20
-
-	metaKeyOAuthError            = "error"
-	metaKeyOAuthErrorDescription = "error_description"
 )
 
 // BearerTokenScoper derives bearer tokens that are restricted to a subset of scopes from the
