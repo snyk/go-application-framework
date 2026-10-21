@@ -23,6 +23,8 @@ const (
 	flagFleetKeyFile          = "fleet-key-file"
 )
 
+const storeTimeout = 30 * time.Second
+
 var WORKFLOWID_MACHINE_ENROLL workflow.Identifier = workflow.NewWorkflowIdentifier(machineEnrollWorkflowName)
 
 // InitMachineEnrollWorkflow initializes the machine.enroll workflow before registering it with the engine.
@@ -45,6 +47,10 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		return nil, fmt.Errorf("enrolling needs exactly one of --%s or --%s", flagDeviceToken, flagFleetKeyFile)
 	}
 
+	if err := checkStorable(invocationCtx.Context(), config); err != nil {
+		return nil, err
+	}
+
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 	apiURL := config.GetString(configuration.API_URL)
 
@@ -60,11 +66,48 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 	}
 
 	logReplacedCredential(invocationCtx, config)
-	err = machinecredential.Save(invocationCtx.Context(), config, machinecredential.Credential{ClientID: enrollment.ClientID, Key: enrollment.Key})
-	if err != nil {
-		return nil, fmt.Errorf("enrolled as client %s but the credential could not be stored; the single-use device token is spent, so ask an admin to revoke the client before enrolling again: %w", enrollment.ClientID, err)
+	credential := machinecredential.Credential{ClientID: enrollment.ClientID, Key: enrollment.Key}
+	if err = storeEnrollment(invocationCtx.Context(), storeTimeout, config, credential, deviceToken != ""); err != nil {
+		return nil, err
+	}
+	// Workflows run on a clone, so the engine's own configuration would not see the credential
+	// until the next start.
+	if engineConfig := invocationCtx.GetEngine().GetConfiguration(); engineConfig != config {
+		if err = machinecredential.Publish(engineConfig, credential); err != nil {
+			return nil, err
+		}
 	}
 	return nil, nil
+}
+
+// checkStorable runs before the enrollment service is called, because a single-use device token is
+// spent by a successful enrollment.
+func checkStorable(ctx context.Context, config configuration.Configuration) error {
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	if err := machinecredential.CheckWritable(ctx, config); err != nil {
+		return fmt.Errorf("the machine credential could not be stored, so the enrollment was not started: %w", err)
+	}
+	return nil
+}
+
+func storeEnrollment(ctx context.Context, timeout time.Duration, config configuration.Configuration, credential machinecredential.Credential, usedDeviceToken bool) error {
+	// The client exists already: an interrupted invocation must not orphan it, and another process's
+	// lock must not hold this one forever. WithoutCancel only helps if the host does not exit on SIGINT.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+	err := machinecredential.Save(ctx, config, credential)
+	if err != nil {
+		return storeFailure(credential.ClientID, usedDeviceToken, err)
+	}
+	return nil
+}
+
+func storeFailure(clientID string, usedDeviceToken bool, cause error) error {
+	if usedDeviceToken {
+		return fmt.Errorf("enrolled as client %s but the credential could not be stored; the single-use device token is spent, so ask an admin to revoke the client before enrolling again: %w", clientID, cause)
+	}
+	return fmt.Errorf("enrolled as client %s but the credential could not be stored; the enrollment service created a client for this machine, which an admin may want to revoke: %w", clientID, cause)
 }
 
 // logReplacedCredential never blocks enrolling: a stored credential that can't be read is replaced too.

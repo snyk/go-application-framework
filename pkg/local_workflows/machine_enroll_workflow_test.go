@@ -2,11 +2,11 @@ package localworkflows
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -25,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -257,12 +259,25 @@ func corruptConfigFile(t *testing.T, home string) {
 	require.NoError(t, os.WriteFile(path, []byte("{not json"), 0o600))
 }
 
+var errDiskFull = errors.New("disk full")
+
+type usableStorage struct{ configuration.Storage }
+
+func (usableStorage) CheckUsable() error { return nil }
+
+func (e *enrollEnv) failWritesAfterEnrolling(t *testing.T) {
+	t.Helper()
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(errDiskFull).AnyTimes()
+	e.config.SetStorage(usableStorage{storage})
+}
+
 func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
 	env := newEnrollEnv(t)
 	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
-	corruptConfigFile(t, env.home)
-	env.config = openFileBackedConfig()
-	env.config.Set(configuration.API_URL, env.server.URL)
+	env.failWritesAfterEnrolling(t)
 
 	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
 
@@ -271,21 +286,20 @@ func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "ask an admin to revoke the client")
 	assert.NotContains(t, err.Error(), "PRIVATE KEY")
 	assert.NotContains(t, err.Error(), "private_key_pem")
-	var syntaxErr *json.SyntaxError
-	assert.ErrorAs(t, err, &syntaxErr, "the underlying error is wrapped")
+	assert.ErrorIs(t, err, errDiskFull, "the underlying error is wrapped")
 }
 
 func Test_machineEnroll_secondEnrollmentReplacesAndLogsTheOldClient(t *testing.T) {
 	env := newEnrollEnv(t)
 	logs := &bytes.Buffer{}
-	logger := zerolog.New(logs)
-	env.engine.SetLogger(&logger)
 	machineID := env.server.RegisterMachine("SERIAL-1")
 	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
 	first, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 	env.config = openFileBackedConfig()
 	env.config.Set(configuration.API_URL, env.server.URL)
+	logger := zerolog.New(logging.NewScrubbingWriter(zerolog.MultiLevelWriter(logs), logging.GetScrubDictFromConfig(env.config)))
+	env.engine.SetLogger(&logger)
 
 	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
 
@@ -331,4 +345,119 @@ func Test_machineEnroll_fleetKeyRejectsNoMachineIDEvenWithASerialNumber(t *testi
 	_, err := enrollWithFleetKeyFile(t.Context(), runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", fleetKeyFile)
 
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+}
+
+func Test_machineEnroll_failedSaveAfterFleetKeyEnrollmentDoesNotMentionTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-42")
+	fleetKeyFile, fleetKey := writeFleetKey(t)
+	env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+	env.failWritesAfterEnrolling(t)
+
+	err := env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
+	assert.Contains(t, err.Error(), "created a client for this machine")
+	assert.NotContains(t, err.Error(), "before enrolling again")
+	assert.NotContains(t, err.Error(), "device token")
+	assert.NotContains(t, err.Error(), "PRIVATE KEY")
+	assert.NotContains(t, err.Error(), "private_key_pem")
+	assert.ErrorIs(t, err, errDiskFull, "the underlying error is wrapped")
+}
+
+func newTestEnrollment(t *testing.T) machinecredential.Credential {
+	t.Helper()
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	return machinecredential.Credential{ClientID: "client-9", Key: key}
+}
+
+func Test_storeEnrollment_persistsEvenWhenTheInvocationIsAlreadyCancelled(t *testing.T) {
+	_ = newEnrollEnv(t)
+	config := openFileBackedConfig()
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := storeEnrollment(canceled, time.Minute, config, newTestEnrollment(t), true)
+
+	require.NoError(t, err)
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, "client-9", credential.ClientID)
+}
+
+func Test_storeEnrollment_givesUpWhenAnotherHolderKeepsTheLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(ctrl)
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ time.Duration) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+
+	start := time.Now()
+	err := storeEnrollment(t.Context(), 50*time.Millisecond, config, newTestEnrollment(t), false)
+
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second)
+	assert.Contains(t, err.Error(), "enrolled as client client-9 but the credential could not be stored")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func Test_machineEnroll_unstorableCredentialIsReportedBeforeTheTokenIsSpent(t *testing.T) {
+	for name, prepare := range map[string]func(t *testing.T, env *enrollEnv){
+		"no storage": func(_ *testing.T, env *enrollEnv) {
+			env.config.SetStorage(nil)
+		},
+		"storage that cannot be checked": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			storage := mocks.NewMockStorage(gomock.NewController(t))
+			storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			storage.EXPECT().Unlock().Return(nil).AnyTimes()
+			env.config.SetStorage(storage)
+		},
+		"corrupt config file": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			corruptConfigFile(t, env.home)
+		},
+		"read-only config file": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			path := filepath.Join(env.home, ".config", "configstore", "snyk.json")
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+			require.NoError(t, os.WriteFile(path, []byte("{}"), 0o400))
+			if f, openErr := os.OpenFile(path, os.O_WRONLY, 0); openErr == nil {
+				_ = f.Close()
+				t.Skip("file permissions are not enforced here (running as a privileged user)")
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+			prepare(t, env)
+
+			err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+			require.Error(t, err)
+			assert.Zero(t, env.server.EnrollmentRequests(), "the single-use token was not spent")
+			assert.Zero(t, env.server.ClientCount())
+		})
+	}
+}
+
+func Test_machineEnroll_theEnginesOwnConfigurationSeesTheCredential(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-1")
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	first, err := machinecredential.Load(env.engine.GetConfiguration())
+	require.NoError(t, err, "a host that authenticates in the same process sees the credential")
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	second, err := machinecredential.Load(env.engine.GetConfiguration())
+	require.NoError(t, err)
+	assert.NotEqual(t, first.ClientID, second.ClientID, "re-enrolling replaces it")
 }

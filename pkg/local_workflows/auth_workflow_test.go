@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -407,4 +408,40 @@ func Test_AuthEntryPointDI_OAuthFlow_CopiesNewOAuthTokenFromLocalToGlobalConfig(
 	require.NoError(t, err)
 
 	assert.Equal(t, newToken, globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+}
+
+func Test_AuthEntryPointDI_FailedClearOfTheStoredCredentialWarnsAndStillAuthenticates(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs)
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	storage := mocks.NewMockStorage(mockCtl)
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(errors.New("disk full")).AnyTimes()
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	localConfig.SetStorage(storage)
+	globalConfig.SetStorage(storage)
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+	secret := `{"client_id":"c","private_key_pem":"super-secret-key-material"}`
+	localConfig.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, secret)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	invocationCtx := mocks.NewMockInvocationContext(mockCtl)
+	invocationCtx.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	invocationCtx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().Return(nil).Times(1)
+	engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	err := AuthEntryPointDI(invocationCtx, &logger, engine, authenticator)
+
+	require.NoError(t, err)
+	assert.Contains(t, logs.String(), `"level":"warn"`)
+	assert.Contains(t, logs.String(), "machine credential")
+	assert.NotContains(t, logs.String(), "super-secret-key-material")
 }
