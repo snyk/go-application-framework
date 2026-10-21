@@ -64,7 +64,13 @@ jobs:
       - run:
           name: Run unit tests
           shell: bash.exe
-          command: make test
+          command: |
+            set -euo pipefail
+            gcc_path=$(find /c/ProgramData/mingw64 -name gcc.exe -print -quit)
+            test -n "$gcc_path"
+            export PATH="$(dirname "$gcc_path"):$PATH"
+            gcc --version
+            make test
 
   build:
     <<: *base_image
