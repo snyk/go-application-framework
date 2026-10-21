@@ -1,7 +1,7 @@
 package machineenrollment
 
 import (
-	"crypto/ecdsa"
+	"crypto"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -19,8 +19,8 @@ const (
 // ClientAssertion returns a private_key_jwt client assertion (RFC 7523) for clientID, signed by
 // key, for a token request to tokenURL. Each assertion has a unique jti, so the authorization
 // server accepts it once.
-func ClientAssertion(key *ecdsa.PrivateKey, clientID, tokenURL string, now time.Time) (string, error) {
-	kid, err := thumbprint(&key.PublicKey)
+func ClientAssertion(key crypto.Signer, clientID, tokenURL string, now time.Time) (string, error) {
+	kid, err := thumbprint(key.Public())
 	if err != nil {
 		return "", err
 	}
@@ -31,7 +31,7 @@ func ClientAssertion(key *ecdsa.PrivateKey, clientID, tokenURL string, now time.
 
 	// No iat or nbf: the authorization server checks them without clock skew leeway, so a client
 	// clock running slightly fast would get the assertion rejected.
-	return signJWT(key, map[string]any{"kid": kid}, map[string]any{
+	return signJWT(key, "JWT", map[string]any{"kid": kid}, map[string]any{
 		"iss": clientID,
 		"sub": clientID,
 		"aud": tokenURL,

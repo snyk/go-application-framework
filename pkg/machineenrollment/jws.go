@@ -19,15 +19,16 @@ import (
 const p256CoordinateBytes = 32
 
 // signJWT returns a compact JWS of claims, signed by signer. The alg header is chosen from the
-// signer's public key: ES256 for P-256 keys and RS256 for RSA keys. extraHeader adds members to
+// signer's public key: RS256 for RSA keys (what the enrollment service accepts) and ES256 for P-256 keys. typ is the
+// type header, which the enrollment service requires to be specific to what the JWT is for. extraHeader adds members to
 // the protected header.
-func signJWT(signer crypto.Signer, extraHeader, claims map[string]any) (string, error) {
+func signJWT(signer crypto.Signer, typ string, extraHeader, claims map[string]any) (string, error) {
 	alg, err := algorithmFor(signer.Public())
 	if err != nil {
 		return "", err
 	}
 
-	header := map[string]any{"alg": alg, "typ": "JWT"}
+	header := map[string]any{"alg": alg, "typ": typ}
 	maps.Copy(header, extraHeader)
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
@@ -79,29 +80,46 @@ func ecdsaSignatureToJWS(der []byte) ([]byte, error) {
 	return out, nil
 }
 
-// publicJWK returns the RFC 7517 JWK of a P-256 public key with only its required members.
-func publicJWK(pub *ecdsa.PublicKey) (map[string]string, error) {
-	b, err := pub.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed encoding public key: %w", err)
+// publicJWK returns the RFC 7517 JWK of a public key with only its required members: kty, n and e
+// for an RSA key, and kty, crv, x and y for a P-256 key.
+func publicJWK(pub crypto.PublicKey) (map[string]string, error) {
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		return map[string]string{
+			"kty": "RSA",
+			"n":   base64.RawURLEncoding.EncodeToString(k.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(k.E)).Bytes()),
+		}, nil
+	case *ecdsa.PublicKey:
+		b, err := k.Bytes()
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding public key: %w", err)
+		}
+		// Bytes returns the uncompressed point: 0x04 || X || Y.
+		return map[string]string{
+			"kty": "EC",
+			"crv": "P-256",
+			"x":   base64.RawURLEncoding.EncodeToString(b[1 : 1+p256CoordinateBytes]),
+			"y":   base64.RawURLEncoding.EncodeToString(b[1+p256CoordinateBytes:]),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported public key type %T", pub)
 	}
-	// Bytes returns the uncompressed point: 0x04 || X || Y.
-	return map[string]string{
-		"kty": "EC",
-		"crv": "P-256",
-		"x":   base64.RawURLEncoding.EncodeToString(b[1 : 1+p256CoordinateBytes]),
-		"y":   base64.RawURLEncoding.EncodeToString(b[1+p256CoordinateBytes:]),
-	}, nil
 }
 
-// thumbprint returns the RFC 7638 JWK thumbprint of a P-256 public key, which is also its kid.
-func thumbprint(pub *ecdsa.PublicKey) (string, error) {
+// thumbprint returns the RFC 7638 JWK thumbprint of a public key, which is also its kid.
+func thumbprint(pub crypto.PublicKey) (string, error) {
 	jwk, err := publicJWK(pub)
 	if err != nil {
 		return "", err
 	}
 	// The required members in lexicographic order, with no whitespace.
-	canonical := fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`, jwk["x"], jwk["y"])
+	var canonical string
+	if jwk["kty"] == "RSA" {
+		canonical = fmt.Sprintf(`{"e":%q,"kty":"RSA","n":%q}`, jwk["e"], jwk["n"])
+	} else {
+		canonical = fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`, jwk["x"], jwk["y"])
+	}
 	sum := sha256.Sum256([]byte(canonical))
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }

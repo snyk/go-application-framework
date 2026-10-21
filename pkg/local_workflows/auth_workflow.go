@@ -83,6 +83,12 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 	if keyFile := config.GetString(ClientPrivateKeyFileParameter); keyFile != "" {
 		clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
+		if clientID == "" {
+			return nil, fmt.Errorf("--%s requires --client-id (the OAuth client id of the enrolled machine)", ClientPrivateKeyFileParameter)
+		}
+		if _, statErr := os.Stat(keyFile); statErr != nil {
+			return nil, fmt.Errorf("cannot use --%s %q: %w", ClientPrivateKeyFileParameter, keyFile, statErr)
+		}
 		authenticatorOpts = append(authenticatorOpts, auth.WithClientAssertionProvider(clientID, machineenrollment.NewAssertionProvider(keyFile)))
 	}
 
