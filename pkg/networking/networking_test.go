@@ -675,3 +675,55 @@ func Test_AddMiddleware_SurvivesClone(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func Test_GetHttpClient_StoredOAuthTokenAndFlagOn_ServerReceivesBearerAccessToken(t *testing.T) {
+	tokenJSON, err := json.Marshal(&oauth2.Token{
+		AccessToken:  "stored-access-token",
+		TokenType:    "bearer",
+		RefreshToken: "stored-refresh-token",
+		Expiry:       time.Now().Add(20 * time.Minute).UTC(),
+	})
+	require.NoError(t, err)
+
+	received := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Clone()
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenJSON))
+	config.Set(configuration.AUTHENTICATION_TOKEN, "ignored-legacy-token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+
+	rsp, err := NewNetworkAccess(config).GetHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+
+	headers := <-received
+	assert.Equal(t, []string{"Bearer stored-access-token"}, headers.Values("Authorization"))
+	assert.Equal(t, []string{"Bearer stored-access-token"}, headers.Values("Session-Token"))
+}
+
+func Test_GetHttpClient_StoredLegacyTokenAndOAuthFlagOff_ServerReceivesTokenScheme(t *testing.T) {
+	received := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Clone()
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+
+	rsp, err := NewNetworkAccess(config).GetHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+
+	headers := <-received
+	assert.Equal(t, []string{"token legacy-api-token"}, headers.Values("Authorization"))
+	assert.Equal(t, []string{"token legacy-api-token"}, headers.Values("Session-Token"))
+}
