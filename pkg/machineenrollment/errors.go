@@ -13,7 +13,6 @@ const (
 	CodeIdentifiersAmbiguous = "identifiers_ambiguous"
 	CodeMachineDeprovisioned = "machine_deprovisioned"
 	CodeMachineEnrolled      = "machine_enrolled"
-	CodeMachineRegistering   = "machine_registering"
 )
 
 // Errors for the typed enrollment errors, for use with errors.Is.
@@ -27,9 +26,6 @@ var (
 	// ErrMachineEnrolled: a fleet key can't enroll a machine that has an active client. An admin has to
 	// issue a device token to re-enroll it.
 	ErrMachineEnrolled = &EnrollmentError{Code: CodeMachineEnrolled}
-	// ErrMachineRegistering: another enrollment registered the machine meanwhile. The enrollment can be
-	// retried.
-	ErrMachineRegistering = &EnrollmentError{Code: CodeMachineRegistering}
 )
 
 // hints say what to do about an error code.
@@ -38,7 +34,6 @@ var hints = map[string]string{
 	CodeIdentifiersAmbiguous: "ask an admin which machine holds which identifier",
 	CodeMachineDeprovisioned: "the machine is retired and can't enroll again",
 	CodeMachineEnrolled:      "the machine is enrolled already: ask an admin for a device token to enroll it again",
-	CodeMachineRegistering:   "retry the enrollment",
 }
 
 // EnrollmentError is an error response of the enrollment service. Match one of the typed

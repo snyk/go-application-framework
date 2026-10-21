@@ -35,13 +35,13 @@ func TestNewEnrollmentErrorToleratesOtherBodies(t *testing.T) {
 
 func TestEnrollmentErrorWithoutACodeMatchesNoSentinel(t *testing.T) {
 	err := error(&EnrollmentError{Status: 401})
-	for _, target := range []error{ErrMachineNotRegistered, ErrIdentifiersAmbiguous, ErrMachineDeprovisioned, ErrMachineEnrolled, ErrMachineRegistering} {
+	for _, target := range []error{ErrMachineNotRegistered, ErrIdentifiersAmbiguous, ErrMachineDeprovisioned, ErrMachineEnrolled} {
 		assert.NotErrorIs(t, err, target)
 	}
 }
 
 func TestEnrollmentErrorHints(t *testing.T) {
-	for _, code := range []string{CodeMachineNotRegistered, CodeIdentifiersAmbiguous, CodeMachineDeprovisioned, CodeMachineEnrolled, CodeMachineRegistering} {
+	for _, code := range []string{CodeMachineNotRegistered, CodeIdentifiersAmbiguous, CodeMachineDeprovisioned, CodeMachineEnrolled} {
 		require.NotEmpty(t, hints[code], code)
 	}
 	assert.Contains(t, (&EnrollmentError{Status: 409, Code: CodeMachineEnrolled}).Error(), "device token")
