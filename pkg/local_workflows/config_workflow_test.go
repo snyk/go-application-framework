@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"io"
+	"net"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -47,7 +48,20 @@ func Test_ConfigEnvironment_determineUrlFromAlias(t *testing.T) {
 	assert.Empty(t, envUrl)
 }
 
+func stubLookupHostResolving(t *testing.T, host string) {
+	t.Helper()
+	original := lookupHost
+	t.Cleanup(func() { lookupHost = original })
+	lookupHost = func(h string) ([]string, error) {
+		if h == host {
+			return []string{"127.0.0.1"}, nil
+		}
+		return nil, &net.DNSError{Err: "no such host", Name: h, IsNotFound: true}
+	}
+}
+
 func Test_ConfigEnvironment_entryPoint_changeEnv(t *testing.T) {
+	stubLookupHostResolving(t, "api.dev.snyk.io")
 	var inputData []workflow.Data
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -79,6 +93,7 @@ func Test_ConfigEnvironment_entryPoint_changeEnv(t *testing.T) {
 }
 
 func Test_ConfigEnvironment_entryPoint_NoChangeEnv(t *testing.T) {
+	stubLookupHostResolving(t, "api.dev.snyk.io")
 	var inputData []workflow.Data
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
