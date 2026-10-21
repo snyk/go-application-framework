@@ -47,6 +47,7 @@ jobs:
     executor:
       name: win/server-2022
       version: "current"
+      size: large
     environment:
       GAF_MACHINEID_HARDWARE_TESTS: "1"
       CGO_ENABLED: "1"
