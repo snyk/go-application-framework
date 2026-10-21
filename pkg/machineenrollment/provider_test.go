@@ -38,10 +38,10 @@ func TestAssertionProviderClientAssertion(t *testing.T) {
 // package, the same way pkg/auth's assertion-based grant does internally.
 func TestAssertionProviderTokenExchange(t *testing.T) {
 	srv := enrollmenttest.NewServer(t)
-	token := srv.IssueJoinToken()
+	token := srv.IssueDeviceToken(srv.RegisterMachine())
 
 	keyFile := filepath.Join(t.TempDir(), "key.pem")
-	e, err := machineenrollment.EnrollWithJoinToken(context.Background(), http.DefaultClient, srv.URL, token, "", time.Now())
+	e, err := machineenrollment.EnrollWithDeviceToken(context.Background(), http.DefaultClient, srv.URL, token, time.Now())
 	require.NoError(t, err)
 	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, e.Key))
 

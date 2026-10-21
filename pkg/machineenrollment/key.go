@@ -1,9 +1,11 @@
 package machineenrollment
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -27,9 +29,13 @@ func DefaultKeyFile() (string, error) {
 	return filepath.Join(home, ".snyk", "machine-client", "key.pem"), nil
 }
 
-// GenerateKey generates a new machine client key.
-func GenerateKey() (*ecdsa.PrivateKey, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+// rsaKeyBits is the modulus size of generated keys; the enrollment service requires at least 2048.
+const rsaKeyBits = 2048
+
+// GenerateKey generates a new machine client key: an RSA key, for RS256 signatures, which is the
+// algorithm the enrollment service and the OAuth token server accept.
+func GenerateKey() (*rsa.PrivateKey, error) {
+	key, err := rsa.GenerateKey(rand.Reader, rsaKeyBits)
 	if err != nil {
 		return nil, fmt.Errorf("failed generating machine client key: %w", err)
 	}
@@ -37,7 +43,7 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 // WriteKeyFile atomically replaces the key file at path with key, readable only by its owner.
-func WriteKeyFile(path string, key *ecdsa.PrivateKey) error {
+func WriteKeyFile(path string, key crypto.Signer) error {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return fmt.Errorf("failed encoding machine client key: %w", err)
@@ -70,8 +76,8 @@ func WriteKeyFile(path string, key *ecdsa.PrivateKey) error {
 	return nil
 }
 
-// ReadKeyFile reads a key written by WriteKeyFile.
-func ReadKeyFile(path string) (*ecdsa.PrivateKey, error) {
+// ReadKeyFile reads a PKCS8 PEM key written by WriteKeyFile: an RSA key, or a P-256 ECDSA key.
+func ReadKeyFile(path string) (crypto.Signer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed reading machine client key file: %w", err)
@@ -84,9 +90,13 @@ func ReadKeyFile(path string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed parsing machine client key: %w", err)
 	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok || key.Curve != elliptic.P256() {
-		return nil, errors.New("machine client key is not a P-256 key")
+	switch key := parsed.(type) {
+	case *rsa.PrivateKey:
+		return key, nil
+	case *ecdsa.PrivateKey:
+		if key.Curve == elliptic.P256() {
+			return key, nil
+		}
 	}
-	return key, nil
+	return nil, errors.New("machine client key is not an RSA or P-256 key")
 }

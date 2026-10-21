@@ -1,8 +1,10 @@
 package machineenrollment
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -26,7 +28,7 @@ func TestWriteAndReadKeyFile(t *testing.T) {
 
 	got, err := ReadKeyFile(path)
 	require.NoError(t, err)
-	assert.True(t, got.Equal(second))
+	assert.True(t, second.Equal(got), "the stored RSA key is read back")
 
 	if runtime.GOOS != "windows" {
 		info, statErr := os.Stat(path)
@@ -43,13 +45,18 @@ func TestWriteAndReadKeyFile(t *testing.T) {
 
 func TestReadKeyFileRejectsOtherKeys(t *testing.T) {
 	dir := t.TempDir()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	require.NoError(t, err)
-	der, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	der, err := x509.MarshalPKCS8PrivateKey(p384)
+	require.NoError(t, err)
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	edDER, err := x509.MarshalPKCS8PrivateKey(edKey)
 	require.NoError(t, err)
 
 	files := map[string][]byte{
-		"rsa.pem":     pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: der}),
+		"p384.pem":    pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: der}),
+		"ed25519.pem": pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: edDER}),
 		"garbage.pem": []byte("not a key"),
 	}
 	for name, data := range files {
@@ -61,4 +68,21 @@ func TestReadKeyFileRejectsOtherKeys(t *testing.T) {
 
 	_, err = ReadKeyFile(filepath.Join(dir, "missing.pem"))
 	assert.Error(t, err)
+}
+
+func TestGenerateKeyIsRSA(t *testing.T) {
+	key, err := GenerateKey()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, key.N.BitLen(), 2048)
+}
+
+func TestReadKeyFileAcceptsP256(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "key.pem")
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	require.NoError(t, WriteKeyFile(path, key))
+
+	got, err := ReadKeyFile(path)
+	require.NoError(t, err)
+	assert.True(t, key.Equal(got))
 }
