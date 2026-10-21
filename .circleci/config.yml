@@ -51,6 +51,7 @@ jobs:
       version: "current"
     environment:
       GAF_MACHINEID_HARDWARE_TESTS: "1"
+      CGO_ENABLED: "1"
     steps:
       - run:
           name: Configure git to translate line terminators locally
@@ -59,6 +60,9 @@ jobs:
       - run:
           name: Install make
           command: choco install make -y
+      - run:
+          name: Install C toolchain
+          command: choco install mingw -y
       - run:
           name: Run unit tests
           shell: bash.exe
