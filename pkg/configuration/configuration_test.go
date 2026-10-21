@@ -22,6 +22,19 @@ const (
 	TEST_FILENAME_JSON string = "test.json"
 )
 
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "gaf-configuration-test-home")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Setenv("HOME", home)
+	os.Setenv("USERPROFILE", home)
+	code := m.Run()
+	os.RemoveAll(home)
+	os.Exit(code)
+}
+
 func prepareConfigstore(content string) error {
 	file, err := CreateConfigurationFile(TEST_FILENAME_JSON)
 	if err != nil {
