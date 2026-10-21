@@ -13,6 +13,16 @@ import (
 	"time"
 )
 
+// IdentifierTypeSerialNumber is the type of a hardware serial number, the only identifier the
+// enrollment service knows.
+const IdentifierTypeSerialNumber = "serial_number"
+
+// Identifier names a machine, as an admin registered it.
+type Identifier struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 // ReadFleetKeyFile reads a fleet key: the private half of the P-256 keypair an admin registered, as a
 // PEM file with a PKCS8 ("PRIVATE KEY") or SEC1 ("EC PRIVATE KEY") key.
 func ReadFleetKeyFile(path string) (*ecdsa.PrivateKey, error) {
