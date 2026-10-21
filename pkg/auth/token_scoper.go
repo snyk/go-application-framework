@@ -14,9 +14,8 @@ import (
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
-	"github.com/snyk/go-application-framework/pkg/networking/networking_types"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=token_scoper.go -destination ../mocks/token_scoper.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
@@ -46,7 +45,7 @@ var _ BearerTokenScoper = bearerTokenScoperImpl{}
 
 type bearerTokenScoperImpl struct {
 	config  configuration.Configuration
-	clients networking_types.NetworkClients
+	clients networktypes.NetworkClients
 }
 
 // GetToken implements [BearerTokenScoper].
@@ -199,7 +198,7 @@ func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) er
 // returned by a getter, falls back to http.DefaultClient, which lacks the consumer's proxy, TLS and
 // auth settings. A typed nil pointer stored in the interface is not detected and is unsupported.
 // networking.NetworkAccess can be passed directly.
-func NewBearerTokenScoper(config configuration.Configuration, clients networking_types.NetworkClients) BearerTokenScoper {
+func NewBearerTokenScoper(config configuration.Configuration, clients networktypes.NetworkClients) BearerTokenScoper {
 	return bearerTokenScoperImpl{
 		config:  config,
 		clients: clients,

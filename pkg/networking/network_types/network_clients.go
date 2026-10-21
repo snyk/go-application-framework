@@ -1,4 +1,4 @@
-package networking_types
+package networktypes
 
 import "net/http"
 
