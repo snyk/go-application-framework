@@ -12,7 +12,7 @@ base_image: &base_image
 
 # Define the jobs we want to run for this project
 jobs:
-  unit_test:
+  unit_test_linux:
     <<: *base_image
     resource_class: medium
     steps:
@@ -21,11 +21,36 @@ jobs:
           name: Run unit tests
           command: make test
 
-  windows_test:
+  unit_test_macos:
+    macos:
+      xcode: "15.3.0"
+    resource_class: m4pro.medium
+    environment:
+      # Bump this alongside the "go" directive in go.mod.
+      GO_VERSION: "1.26.2"
+      GAF_MACHINEID_HARDWARE_TESTS: "1"
+    steps:
+      - checkout
+      - run:
+          name: Install Go
+          command: |
+            set -euo pipefail
+            curl -sSfL -o go.tar.gz "https://go.dev/dl/go${GO_VERSION}.darwin-arm64.tar.gz"
+            mkdir -p "$HOME/go-toolchain"
+            tar -C "$HOME/go-toolchain" -xzf go.tar.gz
+            rm go.tar.gz
+            echo 'export PATH="$HOME/go-toolchain/go/bin:$PATH"' >> "$BASH_ENV"
+            "$HOME/go-toolchain/go/bin/go" version | grep -q "go${GO_VERSION}"
+      - run:
+          name: Run unit tests
+          command: make test
+
+  unit_test_windows:
     executor:
       name: win/server-2022
       version: "current"
-
+    environment:
+      GAF_MACHINEID_HARDWARE_TESTS: "1"
     steps:
       - run:
           name: Configure git to translate line terminators locally
@@ -33,7 +58,7 @@ jobs:
       - checkout
       - run:
           name: Run unit tests
-          command: go test ./...
+          command: make test
 
   build:
     <<: *base_image
@@ -93,12 +118,15 @@ workflows:
             - devex_cli
             - endpoint-experience
             - prodsec-orb-runtime
-      - unit_test:
-          name: Unit tests
-      - windows_test:
-          name: Windows tests
+      - unit_test_linux:
+          name: Unit tests (Linux)
+      - unit_test_macos:
+          name: Unit tests (macOS)
+      - unit_test_windows:
+          name: Unit tests (Windows)
       - build:
           name: Build
           requires:
-            - Unit tests
-            - Windows tests
+            - Unit tests (Linux)
+            - Unit tests (macOS)
+            - Unit tests (Windows)
