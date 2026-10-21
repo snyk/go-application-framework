@@ -95,15 +95,15 @@ func Load(config configuration.Configuration) (Credential, error) {
 	return Credential{ClientID: stored.ClientID, Key: key}, nil
 }
 
-// SecretTerms returns the values of the stored credential that must not appear in logs: the client
-// id, the PEM of the key and each of its lines. It reads the stored value without validating it, so
-// it also covers a credential Load rejects.
+// SecretTerms returns the values of the stored credential that must not appear in logs: the PEM of
+// the key and each of its lines. The client id is deliberately left out. It reads the stored value
+// without validating it, so it also covers a credential Load rejects.
 func SecretTerms(config configuration.Configuration) []string {
 	var stored storedCredential
 	if err := json.Unmarshal([]byte(config.GetString(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)), &stored); err != nil {
 		return nil
 	}
-	terms := []string{stored.ClientID, strings.TrimSpace(stored.PrivateKeyPEM)}
+	terms := []string{strings.TrimSpace(stored.PrivateKeyPEM)}
 	for _, line := range strings.Split(stored.PrivateKeyPEM, "\n") {
 		// The whole PEM term covers the key; short lines would only redact unrelated text.
 		if line = strings.TrimSpace(line); len(line) >= minPEMLineLength && !strings.HasPrefix(line, "-----") {
