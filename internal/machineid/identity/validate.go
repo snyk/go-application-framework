@@ -18,15 +18,6 @@ var knownPlaceholderSerials = map[string]struct{}{
 	"n/a":                    {},
 }
 
-// serialFromBIOS guards against a nil pointer, which only a wmi client with PtrNil set produces.
-// The default client returns a pointer to "" for a VT_NULL property.
-func serialFromBIOS(raw *string) string {
-	if raw == nil {
-		return ""
-	}
-	return *raw
-}
-
 // NormalizeSerial returns the trimmed serial, or "" when raw is empty or a known placeholder.
 func NormalizeSerial(raw string) string {
 	serial := strings.TrimSpace(raw)

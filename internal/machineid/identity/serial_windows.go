@@ -22,5 +22,9 @@ func readSerialPlatform() (string, error) {
 	if len(bios) == 0 {
 		return "", errors.New("wmi Win32_BIOS: no results")
 	}
-	return serialFromBIOS(bios[0].SerialNumber), nil
+	serial := bios[0].SerialNumber
+	if serial == nil {
+		return "", nil
+	}
+	return *serial, nil
 }
