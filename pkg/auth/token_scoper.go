@@ -44,15 +44,17 @@ type BearerTokenScoper interface {
 var _ BearerTokenScoper = bearerTokenScoperImpl{}
 
 type bearerTokenScoperImpl struct {
-	config     configuration.Configuration
-	httpClient *http.Client
+	config  configuration.Configuration
+	clients NetworkClients
 }
 
 // GetToken implements [BearerTokenScoper].
 // It exchanges the configured access token for a token limited to the given scopes (RFC 8693).
 // A positive ttl is passed to the server as the "ttl" query parameter in seconds.
 func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error) {
-	subjectToken, err := refreshedAccessToken(ctx, b.config)
+	refreshClient, httpClient := b.refreshClient(), b.exchangeClient()
+
+	subjectToken, err := refreshedAccessToken(ctx, b.config, refreshClient)
 	if err != nil {
 		return "", err
 	}
@@ -79,10 +81,6 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	httpClient := b.httpClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
 	defer func(Body io.ReadCloser) { _ = Body.Close() }(req.Body)
 
 	res, err := httpClient.Do(req)
@@ -142,7 +140,7 @@ func oauthErrorOptions(body []byte) []snyk_errors.Option {
 
 // refreshedAccessToken goes through the authenticator so that an expired token is refreshed and
 // persisted exactly as it is for regular requests.
-func refreshedAccessToken(ctx context.Context, config configuration.Configuration) (string, error) {
+func refreshedAccessToken(ctx context.Context, config configuration.Configuration, refreshClient *http.Client) (string, error) {
 	storedToken, err := GetOAuthToken(config)
 	if err != nil {
 		return "", snyk.NewUnauthorisedError("stored oauth token is corrupt", snyk_errors.WithCause(err))
@@ -150,7 +148,7 @@ func refreshedAccessToken(ctx context.Context, config configuration.Configuratio
 	if storedToken == nil || (storedToken.AccessToken == "" && storedToken.RefreshToken == "") {
 		return "", snyk.NewUnauthorisedError("no user authentication is available")
 	}
-	authenticator := NewOAuth2AuthenticatorWithOpts(config)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(refreshClient))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GetString(configuration.API_URL), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request for oauth token refresh: %w", err)
@@ -166,15 +164,43 @@ func refreshedAccessToken(ctx context.Context, config configuration.Configuratio
 	return strings.Trim(parts[1], " "), nil
 }
 
+func (b bearerTokenScoperImpl) refreshClient() *http.Client {
+	if b.clients == nil {
+		return http.DefaultClient
+	}
+	return orDefaultClient(b.clients.GetUnauthorizedHttpClient())
+}
+
+func (b bearerTokenScoperImpl) exchangeClient() *http.Client {
+	if b.clients == nil {
+		return http.DefaultClient
+	}
+	return orDefaultClient(b.clients.GetHttpClient())
+}
+
+func orDefaultClient(client *http.Client) *http.Client {
+	if client == nil {
+		return http.DefaultClient
+	}
+	return client
+}
+
 // RevokeToken implements [BearerTokenScoper].
 // Revocation is not supported yet, so it always returns an error rather than reporting success.
 func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) error {
 	return snyk.NewNotImplementedError("token revocation is not implemented")
 }
 
-func NewBearerTokenScoper(config configuration.Configuration, httpClient *http.Client) BearerTokenScoper {
+// NewBearerTokenScoper creates a scoper that refreshes an expired stored token through
+// GetUnauthorizedHttpClient and exchanges tokens through GetHttpClient. The refresh must not use the
+// authenticated client: AddAuthenticationHeader holds a non-reentrant mutex during the refresh, and the
+// auth middleware of the authenticated client would re-enter it. A nil NetworkClients, or a nil client
+// returned by a getter, falls back to http.DefaultClient, which lacks the consumer's proxy, TLS and
+// auth settings. A typed nil pointer stored in the interface is not detected and is unsupported.
+// networking.NetworkAccess can be passed directly.
+func NewBearerTokenScoper(config configuration.Configuration, clients NetworkClients) BearerTokenScoper {
 	return bearerTokenScoperImpl{
-		config:     config,
-		httpClient: httpClient,
+		config:  config,
+		clients: clients,
 	}
 }
