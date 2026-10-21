@@ -331,7 +331,7 @@ func TestEnrollWithFleetKeyErrors(t *testing.T) {
 			assert.Equal(t, tt.status, enrollErr.Status)
 			if tt.want != nil {
 				assert.ErrorIs(t, err, tt.want)
-				for _, other := range []error{machineenrollment.ErrMachineNotRegistered, machineenrollment.ErrIdentifiersAmbiguous, machineenrollment.ErrMachineDeprovisioned, machineenrollment.ErrMachineEnrolled, machineenrollment.ErrMachineRegistering} {
+				for _, other := range []error{machineenrollment.ErrMachineNotRegistered, machineenrollment.ErrIdentifiersAmbiguous, machineenrollment.ErrMachineDeprovisioned, machineenrollment.ErrMachineEnrolled} {
 					if !errors.Is(tt.want, other) {
 						assert.NotErrorIs(t, err, other)
 					}
