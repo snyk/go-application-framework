@@ -155,22 +155,32 @@ func schemaReplaceable(raw json.RawMessage) bool {
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
 // It never creates the machine-wide directory; any failure there falls back to the per-user path, except errNewerSchema, which is returned at once so a newer-schema file is not shadowed.
 func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
+	id, failures := storeSharedFileID(paths, candidateID, source, writer, logger)
+	errs := make([]error, 0, len(failures))
+	for _, f := range failures {
+		errs = append(errs, f.err)
+	}
+	return id, errors.Join(errs...)
+}
+
+// storeSharedFileID is writeSharedFileID reporting each location's failure with its own path.
+func storeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, []replaceFailure) {
 	logger = effectiveLogger(logger)
-	var machineWideErr error
+	var failures []replaceFailure
 	if paths.machineWide != "" {
-		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, false)
+		id, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, false, true)
 		if err == nil {
 			return id, nil
 		}
+		failures = append(failures, replaceFailure{paths.machineWide, err})
 		if errors.Is(err, errNewerSchema) {
-			return "", err
+			return "", failures
 		}
-		machineWideErr = err
 		logger.Debug().Err(err).Str("path", paths.machineWide).Msg("machine id: machine-wide write failed, falling back to per-user")
 	}
 	id, err := writePerUser(paths.perUser, candidateID, source, writer)
 	if err != nil {
-		return "", errors.Join(machineWideErr, err)
+		return "", append(failures, replaceFailure{paths.perUser, err})
 	}
 	return id, nil
 }
@@ -181,21 +191,26 @@ type replaceFailure struct {
 }
 
 // replaceSharedFileID stores candidateID in the machine-wide file, best effort: a different valid id there
-// is replaced, and a missing file is created. A per-user file holding a different valid id is replaced
+// is replaced, and a missing file is created when its directory exists. A per-user file holding a different valid id is replaced
 // too, but never created. A file that cannot be replaced is left unchanged and reported in the result.
 func replaceSharedFileID(paths pathPair, candidateID, source, writer string) []replaceFailure {
 	var failures []replaceFailure
-	if paths.machineWide == "" {
-		failures = append(failures, replaceFailure{err: errors.New("machine id: no machine-wide shared file path")})
-	} else if _, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, true); err != nil {
-		failures = append(failures, replaceFailure{paths.machineWide, err})
-	}
-	if perUserHoldsOtherID(paths, candidateID) {
-		if _, err := writeAt(paths.perUser, "user", fileperms.FILEPERM_600, candidateID, source, writer, true); err != nil {
-			failures = append(failures, replaceFailure{paths.perUser, err})
+	if paths.machineWide != "" {
+		if _, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, true, true); err != nil {
+			failures = append(failures, replaceFailure{paths.machineWide, err})
 		}
 	}
-	return failures
+	return append(failures, replacePerUserID(paths, candidateID, source, writer)...)
+}
+
+func replacePerUserID(paths pathPair, candidateID, source, writer string) []replaceFailure {
+	if !perUserHoldsOtherID(paths, candidateID) {
+		return nil
+	}
+	if _, err := writeAt(paths.perUser, "user", fileperms.FILEPERM_600, candidateID, source, writer, true, false); err != nil {
+		return []replaceFailure{{paths.perUser, err}}
+	}
+	return nil
 }
 
 func perUserHoldsOtherID(paths pathPair, candidateID string) bool {
@@ -213,7 +228,7 @@ func writePerUser(path, candidateID, source, writer string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), fileperms.FILEPERM_755); err != nil {
 		return "", err
 	}
-	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer, false)
+	return writeAt(path, "user", fileperms.FILEPERM_600, candidateID, source, writer, false, true)
 }
 
 func settled(existing *sharedFile, err error, candidateID string, replace bool) bool {
@@ -235,7 +250,7 @@ func blockedByNewerSchema(existing *sharedFile) bool {
 	return existing != nil && !existing.replaceable
 }
 
-func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string, replace bool) (string, error) {
+func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer string, replace, create bool) (string, error) {
 	// Read before locking: the lock file cannot be created in a directory this process cannot write.
 	existing, err := loadSharedFile(path)
 	if settled(existing, err, candidateID, replace) {
@@ -266,6 +281,9 @@ func writeAt(path, scope string, mode fs.FileMode, candidateID, source, writer s
 		return existing.MachineID, nil
 	}
 	if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNoValidID) {
+		return "", err
+	}
+	if errors.Is(err, fs.ErrNotExist) && !create {
 		return "", err
 	}
 	if blockedByNewerSchema(existing) {

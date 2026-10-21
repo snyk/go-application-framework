@@ -1103,3 +1103,87 @@ func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenTheSharedFileCanno
 	require.NoError(t, err)
 	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
 }
+
+func TestAcceptance_HardwareSerialStoreFailuresAreLoggedPerLocationWithTheirOwnPath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.blockEverySharedFileLocation(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	perUser := logLineContaining(t, logs.String(), `"path":"`+jsonEscaped(t, m.shared.perUser)+`","message":"machine id: serial number could not be stored`)
+	require.Contains(t, perUser, `"level":"warn"`)
+	machineWide := logLineContaining(t, logs.String(), `"path":"`+jsonEscaped(t, m.shared.machineWide)+`","message":"machine id: serial number could not be stored`)
+	require.Contains(t, machineWide, `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialReplaceLogsAMissingMachineWideDirectoryAtDebug(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+	line := logLineContaining(t, logs.String(), "could not be replaced")
+	require.Contains(t, line, `"level":"debug"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.machineWide))
+}
+
+func TestAcceptance_HardwareSerialReplacesAPerUserIDSilentlyWhenThereIsNoMachineWidePath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.shared.machineWide = ""
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
+func TestAcceptance_HardwareSerialDoesNotWarnAboutANewerSchemaPerUserFileWhenMachineWideHoldsTheSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"C02Q7KHTGFWF","identifier_source":"serial"}`)
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.perUser, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	for range 2 {
+		require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
+	}
+
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+	raw, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, newer, string(raw))
+}
+
+func TestAcceptance_HardwareSerialWarnsAboutANewerSchemaPerUserFileThatResolutionRead(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.perUser, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
+
+	line := logLineContaining(t, logs.String(), "newer or unknown schema")
+	require.Contains(t, line, `"level":"warn"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.perUser))
+	raw, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, newer, string(raw))
+}
