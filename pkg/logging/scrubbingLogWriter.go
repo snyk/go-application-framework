@@ -147,13 +147,19 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 // REDACTION_TERMS configures literal terms redacted only as whole words.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
+// minDeviceTokenTermLength mirrors machinecredential's floor for secret terms: a shorter value would
+// also redact unrelated text.
+const minDeviceTokenTermLength = 16
+
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
-	addStaticTermToDict(config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN), dict)
+	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
+		addStaticTermToDict(token, dict)
+	}
 	for _, term := range machinecredential.SecretTerms(config) {
 		addStaticTermToDict(term, dict)
 	}
