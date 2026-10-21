@@ -109,13 +109,16 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 
 func exchangeResponseError(status int, body []byte, readErr error) error {
 	var oauthErrorDetail []string
+	var option []snyk_errors.Option
 	if readErr != nil {
 		oauthErrorDetail = append(oauthErrorDetail, readErr.Error())
+		option = append(option, snyk_errors.WithCause(readErr))
 	} else {
 		oauthErrorDetail = oauthErrorOptions(body)
 	}
 	detail := fmt.Sprintf("token exchange failed with status %d, detail: %v", status, strings.Join(oauthErrorDetail, ": "))
-	return cli.NewTokenScoperError(detail)
+
+	return cli.NewTokenScoperError(detail, option...)
 }
 
 // oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The

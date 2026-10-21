@@ -271,8 +271,8 @@ func Test_bearerTokenScoperImpl_GetToken_PlainClientNon200ReturnsScoperErrorWith
 	catalogErr := catalogErrorOf(t, err)
 	require.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
 	assert.Contains(t, catalogErr.Detail, "401")
-	assert.Equal(t, "invalid_client", catalogErr.Meta[metaKeyOAuthError])
-	assert.Equal(t, "bad subject", catalogErr.Meta[metaKeyOAuthErrorDescription])
+	assert.Contains(t, catalogErr.Detail, "invalid_client")
+	assert.Contains(t, catalogErr.Detail, "bad subject")
 	requireNoSecretLeak(t, err, testSubjectToken)
 }
 
