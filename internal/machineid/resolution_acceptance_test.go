@@ -845,7 +845,7 @@ func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedWhenItsLockCannot
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
 	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
-	require.NoError(t, os.Mkdir(m.shared.machineWide+".lock", 0o755))
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
