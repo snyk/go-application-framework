@@ -445,3 +445,30 @@ func Test_AuthEntryPointDI_FailedClearOfTheStoredCredentialWarnsAndStillAuthenti
 	assert.Contains(t, logs.String(), "machine credential")
 	assert.NotContains(t, logs.String(), "super-secret-key-material")
 }
+
+func Test_AuthEntryPointDI_NothingStoredLeavesTheStorageUntouched(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	logger := zerolog.New(&bytes.Buffer{})
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	storage := mocks.NewMockStorage(mockCtl)
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, _ any) error {
+		assert.NotEqual(t, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, key, "nothing stored, so nothing to clear")
+		return nil
+	}).AnyTimes()
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Times(0)
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	localConfig.SetStorage(storage)
+	globalConfig.SetStorage(storage)
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	invocationCtx := mocks.NewMockInvocationContext(mockCtl)
+	invocationCtx.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	invocationCtx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().Return(nil).Times(1)
+
+	require.NoError(t, AuthEntryPointDI(invocationCtx, &logger, engine, authenticator))
+}

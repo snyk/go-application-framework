@@ -135,6 +135,9 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	clearCtx, cancelClear := context.WithTimeout(context.Background(), clearCredentialTimeout)
 	defer cancelClear()
 	for name, c := range map[string]configuration.Configuration{"local": config, "global": globalConfig} {
+		if c.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE) == "" {
+			continue
+		}
 		if clearErr := machinecredential.Clear(clearCtx, c); clearErr != nil {
 			logger.Warn().Err(clearErr).Msgf("Failed to clear the stored machine credential of the %s configuration", name)
 		}
