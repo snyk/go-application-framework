@@ -65,6 +65,20 @@ func Test_CreateAuthenticator_OAuthFlagOffAndStoredLegacyToken_SendsTokenScheme(
 	assert.Equal(t, "token legacy-api-token", req.Header.Get("Session-Token"))
 }
 
+func Test_CreateAuthenticator_OAuthFlagOnNoStoredOAuthTokenAndLegacyToken_FallsBackToTokenScheme(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authenticator := CreateAuthenticator(config, http.DefaultClient)
+	req := newRequestForHeaders(t)
+	require.NoError(t, authenticator.AddAuthenticationHeader(req))
+
+	assert.Equal(t, "token legacy-api-token", req.Header.Get("Authorization"))
+	assert.Equal(t, "token legacy-api-token", req.Header.Get("Session-Token"))
+}
+
 func Test_CreateAuthenticator_NothingStored_AddsNoAuthHeadersAndNoError(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)

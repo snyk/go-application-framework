@@ -468,3 +468,34 @@ func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T
 		})
 	}
 }
+
+func Test_AuthEntryPointDI_OAuthFlow_CopiesNewOAuthTokenFromLocalToGlobalConfig(t *testing.T) {
+	const newToken = "newly-obtained-oauth-token"
+
+	mockCtl := gomock.NewController(t)
+	logger := zerolog.New(&bytes.Buffer{})
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	for _, config := range []configuration.Configuration{localConfig, globalConfig} {
+		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
+	}
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+	mockInvocationContext.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	mockInvocationContext.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+		localConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newToken)
+		return nil
+	})
+
+	err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
+	require.NoError(t, err)
+
+	assert.Equal(t, newToken, globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+}
