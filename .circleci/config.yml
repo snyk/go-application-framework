@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   prodsec: snyk/prodsec-orb@1
   win: circleci/windows@5.0
+  go: circleci/go@4.0.3
 
 
 base_image: &base_image
@@ -26,24 +27,21 @@ jobs:
       xcode: "15.3.0"
     resource_class: m4pro.medium
     environment:
-      # Bump this alongside the "go" directive in go.mod.
-      GO_VERSION: "1.26.2"
       GAF_MACHINEID_HARDWARE_TESTS: "1"
     steps:
       - checkout
       - run:
-          name: Install Go
-          command: |
-            set -euo pipefail
-            curl -sSfL -o go.tar.gz "https://go.dev/dl/go${GO_VERSION}.darwin-arm64.tar.gz"
-            mkdir -p "$HOME/go-toolchain"
-            tar -C "$HOME/go-toolchain" -xzf go.tar.gz
-            rm go.tar.gz
-            echo 'export PATH="$HOME/go-toolchain/go/bin:$PATH"' >> "$BASH_ENV"
-            "$HOME/go-toolchain/go/bin/go" version | grep -q "go${GO_VERSION}"
+          name: Show preinstalled Go
+          command: command -v go || echo "no go on PATH"; go version || true
+      - go/install
+      - go/load-mod-cache
+      - run:
+          name: Show Go toolchain
+          command: go version && go env GOTOOLCHAIN
       - run:
           name: Run unit tests
           command: make test
+      - go/save-mod-cache
 
   unit_test_windows:
     executor:
