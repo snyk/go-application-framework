@@ -82,19 +82,23 @@ func sharedFilePathsFor(goos string) pathPair {
 	}
 }
 
-func readSharedFile(paths pathPair, logger *zerolog.Logger) *sharedFile {
+// readSharedFile returns the first shared file holding a valid id, and an error for each file before
+// it that exists but could not be read.
+func readSharedFile(paths pathPair, logger *zerolog.Logger) (*sharedFile, error) {
 	logger = effectiveLogger(logger)
-	for _, p := range []string{paths.machineWide, paths.perUser} {
-		if p == "" {
+	var readErrs []error
+	for _, c := range paths.scoped() {
+		if c.path == "" {
 			continue
 		}
-		sf, err := loadSharedFile(p)
+		sf, err := loadSharedFile(c.path)
 		if err == nil {
-			return sf
+			return sf, errors.Join(readErrs...)
 		}
-		logger.Debug().Err(err).Str("path", p).Msg("machine id: skipping shared file")
+		logger.Debug().Err(err).Str("path", c.path).Msg("machine id: skipping shared file")
+		readErrs = append(readErrs, unreadableFileError(err, sourceSharedFile, c))
 	}
-	return nil
+	return nil, errors.Join(readErrs...)
 }
 
 var errNoValidID = errors.New("shared file holds no valid machine id")

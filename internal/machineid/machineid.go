@@ -3,6 +3,7 @@
 package machineid
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"unicode"
@@ -51,9 +52,10 @@ func writerIdentity(o resolveOptions) string {
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. A valid value
 // supplied on MACHINE_ID itself (trailing whitespace trimmed) is returned. Otherwise the first
 // lookup takes the first of: the shared file, the Snyk Studio device-id file, or a newly generated
-// id, and later lookups through the same resolver return that id. If no id was found, it returns
-// runtimeinfo.ErrNoMachineID, which configuration caching does not hold, so the next lookup tries
-// the disk again.
+// id, and later lookups through the same resolver return that id, together with an error for each
+// file that exists but could not be read. If no id was found, it returns runtimeinfo.ErrNoMachineID
+// joined with those errors and an error describing why a generated id could not be stored; the
+// configuration caching does not hold it, so the next lookup tries the disk again.
 func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o := resolveOptions{shared: defaultSharedFilePaths(), studio: defaultStudioDeviceIDPaths()}
 	for _, opt := range opts {
@@ -91,6 +93,8 @@ type resolver struct {
 
 	mu sync.Mutex
 	id string
+	// readErr is kept with id so every lookup returns the same pair, not only the first.
+	readErr error
 	// warnedUnstored records that the warning about an unstorable id was logged, so retries log at Debug.
 	warnedUnstored bool
 }
@@ -102,33 +106,39 @@ func (r *resolver) resolve() (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.id == "" {
-		r.id = r.resolveFromDisk()
+		r.id, r.readErr = r.resolveFromDisk()
+	}
+	if r.id == "" && r.readErr != nil {
+		return "", errors.Join(runtimeinfo.ErrNoMachineID, r.readErr)
 	}
 	if r.id == "" {
 		return "", runtimeinfo.ErrNoMachineID
 	}
-	return r.id, nil
+	return r.id, r.readErr
 }
 
-func (r *resolver) resolveFromDisk() string {
+func (r *resolver) resolveFromDisk() (string, error) {
 	logger := r.opts.logger
 	writer := writerIdentity(r.opts)
 	paths := r.opts.shared
 
-	if sf := readSharedFile(paths, logger); sf != nil {
+	sf, sharedReadErr := readSharedFile(paths, logger)
+	if sf != nil {
 		logger.Debug().Msg("machine id: adopting value from shared file")
-		return sf.MachineID
+		return sf.MachineID, sharedReadErr
 	}
 
-	if id, path, ok := readStudioDeviceID(r.opts.studio, logger); ok {
+	id, path, ok, studioReadErr := readStudioDeviceID(r.opts.studio, logger)
+	readErr := errors.Join(sharedReadErr, studioReadErr)
+	if ok {
 		logger.Debug().Str("path", path).Msg("machine id: adopting value from Snyk Studio device-id file")
 		stored, err := writeSharedFileID(paths, id, string(sourcePersisted), writer, logger)
 		if err != nil {
 			// The Studio file stays in place, so the id is still stable across runs.
 			logger.Debug().Err(err).Msg("machine id: Snyk Studio value could not be stored in the shared file, using it directly")
-			return id
+			return id, readErr
 		}
-		return stored
+		return stored, readErr
 	}
 
 	logger.Debug().Msg("machine id: no source produced a value, generating one")
@@ -141,7 +151,7 @@ func (r *resolver) resolveFromDisk() string {
 			r.warnedUnstored = true
 			logger.Warn().Err(err).Msg(msg)
 		}
-		return ""
+		return "", errors.Join(readErr, notPersistedError(err))
 	}
-	return stored
+	return stored, readErr
 }

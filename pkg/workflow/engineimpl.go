@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -562,15 +563,22 @@ type engineRuntimeInfo struct {
 	engine *EngineImpl
 }
 
+// GetMachineID reads through GetWithError rather than GetStringWithError, which drops the value
+// whenever there is an error, because resolution can return a usable id together with an error.
 func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
-	id, err := ri.engine.GetConfiguration().GetStringWithError(configuration.MACHINE_ID)
+	value, err := ri.engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	id, _ := value.(string) //nolint:errcheck // a non-string value counts as no machine id
+	var details snyk_errors.Error
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) && errors.As(err, &details) {
+		return "", err
+	}
 	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
 		return "", runtimeinfo.ErrNoMachineID
 	}
-	if err != nil {
+	if err != nil && id == "" {
 		return "", fmt.Errorf("failed to read machine id: %w", err)
 	}
-	return id, nil
+	return id, err
 }
 
 // GetGlobalConfiguration returns the global configuration options.

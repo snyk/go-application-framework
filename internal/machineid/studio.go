@@ -1,6 +1,7 @@
 package machineid
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,15 +44,19 @@ func studioDeviceIDPathsFor(goos string) pathPair {
 // It returns the first valid id from the machine-wide, then the per-user, file, so the result does not
 // depend on the user when the two disagree. Only trailing whitespace is trimmed (a trailing newline is
 // a file artifact) before validation.
-func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path string, ok bool) {
+// Each file before the returned one that exists but could not be read is reported in readErr.
+func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path string, ok bool, readErr error) {
 	logger = effectiveLogger(logger)
-	for _, p := range []string{paths.machineWide, paths.perUser} {
+	var readErrs []error
+	for _, c := range paths.scoped() {
+		p := c.path
 		if p == "" {
 			continue
 		}
 		data, err := readIDFile(p)
 		if err != nil {
 			logger.Debug().Err(err).Str("path", p).Msg("machine id: Snyk Studio device-id file candidate could not be read")
+			readErrs = append(readErrs, unreadableFileError(err, sourceStudioDeviceID, c))
 			continue
 		}
 		candidate := strings.TrimRightFunc(string(data), unicode.IsSpace)
@@ -63,7 +68,7 @@ func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path
 			logger.Debug().Str("path", p).Str("reason", reason).Msg("machine id: Snyk Studio device-id file candidate failed validation")
 			continue
 		}
-		return candidate, p, true
+		return candidate, p, true, errors.Join(readErrs...)
 	}
-	return "", "", false
+	return "", "", false, errors.Join(readErrs...)
 }
