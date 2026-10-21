@@ -33,8 +33,6 @@ import (
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
-var _ auth.NetworkClients = NetworkAccess(nil)
-
 func getConfig() configuration.Configuration {
 	config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)

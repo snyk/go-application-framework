@@ -1,4 +1,4 @@
-package auth
+package networking_types
 
 import "net/http"
 
