@@ -13,6 +13,43 @@ import (
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+// MockUsabilityChecker is a mock of UsabilityChecker interface.
+type MockUsabilityChecker struct {
+	ctrl     *gomock.Controller
+	recorder *MockUsabilityCheckerMockRecorder
+}
+
+// MockUsabilityCheckerMockRecorder is the mock recorder for MockUsabilityChecker.
+type MockUsabilityCheckerMockRecorder struct {
+	mock *MockUsabilityChecker
+}
+
+// NewMockUsabilityChecker creates a new mock instance.
+func NewMockUsabilityChecker(ctrl *gomock.Controller) *MockUsabilityChecker {
+	mock := &MockUsabilityChecker{ctrl: ctrl}
+	mock.recorder = &MockUsabilityCheckerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockUsabilityChecker) EXPECT() *MockUsabilityCheckerMockRecorder {
+	return m.recorder
+}
+
+// CheckUsable mocks base method.
+func (m *MockUsabilityChecker) CheckUsable() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckUsable")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CheckUsable indicates an expected call of CheckUsable.
+func (mr *MockUsabilityCheckerMockRecorder) CheckUsable() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUsable", reflect.TypeOf((*MockUsabilityChecker)(nil).CheckUsable))
+}
+
 // MockStorage is a mock of Storage interface.
 type MockStorage struct {
 	ctrl     *gomock.Controller

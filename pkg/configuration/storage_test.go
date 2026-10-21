@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,6 +147,65 @@ func Test_JsonStorage_Set_EmptyFile_SetsValidEmptyJson(t *testing.T) {
 	assertConfigContainsKey(t, storedConfig, key, expectedValue)
 }
 
+func Test_JsonStorage_Set_FileHoldingNull_SetsTheKey(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	assert.NoError(t, os.WriteFile(configFile, []byte("null"), 0666))
+	storage := configuration.NewJsonStorage(configFile)
+
+	err := storage.Set(key, expectedValue)
+
+	assert.NoError(t, err)
+	assertConfigContainsKey(t, readStoredConfigFile(t, configFile), key, expectedValue)
+}
+
+func Test_JsonStorage_CheckUsable(t *testing.T) {
+	t.Parallel()
+	write := func(t *testing.T, content string, mode os.FileMode) *configuration.JsonStorage {
+		t.Helper()
+		configFile := filepath.Join(t.TempDir(), "test.json")
+		assert.NoError(t, os.WriteFile(configFile, []byte(content), mode))
+		return configuration.NewJsonStorage(configFile)
+	}
+
+	t.Run("missing file", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, configuration.NewJsonStorage(filepath.Join(t.TempDir(), "none.json")).CheckUsable())
+	})
+	t.Run("empty and null files, which Set accepts", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, write(t, "", 0o600).CheckUsable())
+		assert.NoError(t, write(t, "null", 0o600).CheckUsable())
+	})
+	t.Run("valid file is left unchanged", func(t *testing.T) {
+		t.Parallel()
+		const content = `{"a": 1}`
+		configFile := filepath.Join(t.TempDir(), "test.json")
+		assert.NoError(t, os.WriteFile(configFile, []byte(content), 0o600))
+
+		assert.NoError(t, configuration.NewJsonStorage(configFile).CheckUsable())
+
+		after, err := os.ReadFile(configFile)
+		assert.NoError(t, err)
+		assert.Equal(t, content, string(after))
+	})
+	t.Run("corrupt file", func(t *testing.T) {
+		t.Parallel()
+		assert.Error(t, write(t, "{not json", 0o600).CheckUsable())
+	})
+	t.Run("read-only file", func(t *testing.T) {
+		t.Parallel()
+		configFile := filepath.Join(t.TempDir(), "test.json")
+		assert.NoError(t, os.WriteFile(configFile, []byte("{}"), 0o400))
+		if f, openErr := os.OpenFile(configFile, os.O_WRONLY, 0); openErr == nil {
+			_ = f.Close()
+			t.Skip("file permissions are not enforced here (running as a privileged user)")
+		}
+
+		assert.ErrorIs(t, configuration.NewJsonStorage(configFile).CheckUsable(), os.ErrPermission)
+	})
+}
+
 func storageWithTempConfigFile(t *testing.T, jsonBytes []byte) *configuration.JsonStorage {
 	t.Helper()
 	configFile := filepath.Join(t.TempDir(), "test.json")
@@ -194,4 +255,36 @@ func assertConfigContainsKey(
 ) {
 	t.Helper()
 	assert.Equal(t, expectedValue, storedConfig[expectedValueKey])
+}
+
+func Test_JsonStorage_CheckUsable_NeverSeesAHalfWrittenFileFromAConcurrentSet(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	storage := configuration.NewJsonStorage(configFile)
+	assert.NoError(t, storage.Set(key, strings.Repeat("x", 1<<18)))
+
+	done := make(chan struct{})
+	var writers sync.WaitGroup
+	writers.Add(1)
+	go func() {
+		defer writers.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				_ = storage.Set(key, strings.Repeat("y", 1<<18)) //nolint:errcheck // the checker below is under test
+			}
+		}
+	}()
+
+	for range 200 {
+		if err := storage.CheckUsable(); err != nil {
+			close(done)
+			writers.Wait()
+			t.Fatalf("CheckUsable refused a file that Set keeps rewriting: %v", err)
+		}
+	}
+	close(done)
+	writers.Wait()
 }
