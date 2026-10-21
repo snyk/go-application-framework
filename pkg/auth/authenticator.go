@@ -3,9 +3,11 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -42,7 +44,10 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 	var authenticator Authenticator
 
 	// try oauth authenticator
-	tmpAuthenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
+	tmpAuthenticator, err := newOAuth2AuthenticatorForStoredCredential(config, httpClient)
+	if err != nil {
+		return &failingAuthenticator{err: err}
+	}
 	if tmpAuthenticator.IsSupported() {
 		authenticator = tmpAuthenticator
 	}
@@ -54,6 +59,30 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 
 	return authenticator
 }
+
+// newOAuth2AuthenticatorForStoredCredential lets an enrolled machine re-mint its access token from the
+// stored key. A stored credential that cannot be read is an error rather than a reason to fall back.
+func newOAuth2AuthenticatorForStoredCredential(config configuration.Configuration, httpClient *http.Client) (Authenticator, error) {
+	opts := []OAuth2AuthenticatorOption{WithHttpClient(httpClient)}
+	credential, err := machinecredential.Load(config)
+	switch {
+	case err == nil:
+		opts = append(opts, WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
+	case !errors.Is(err, machinecredential.ErrNotEnrolled):
+		return nil, fmt.Errorf("machine authentication failed, the stored machine credential cannot be used: %w", err)
+	}
+	return NewOAuth2AuthenticatorWithOpts(config, opts...), nil
+}
+
+type failingAuthenticator struct {
+	err error
+}
+
+func (f *failingAuthenticator) Authenticate() error { return f.err }
+
+func (f *failingAuthenticator) AddAuthenticationHeader(*http.Request) error { return f.err }
+
+func (f *failingAuthenticator) IsSupported() bool { return true }
 
 func IsKnownOAuthEndpoint(endpoint string) bool {
 	return api.IsFedramp(endpoint)
