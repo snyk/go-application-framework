@@ -191,13 +191,7 @@ func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) er
 	return snyk.NewNotImplementedError("token revocation is not implemented")
 }
 
-// NewBearerTokenScoper creates a scoper that refreshes an expired stored token through
-// GetUnauthorizedHttpClient and exchanges tokens through GetHttpClient. The refresh must not use the
-// authenticated client: AddAuthenticationHeader holds a non-reentrant mutex during the refresh, and the
-// auth middleware of the authenticated client would re-enter it. A nil NetworkClients, or a nil client
-// returned by a getter, falls back to http.DefaultClient, which lacks the consumer's proxy, TLS and
-// auth settings. A typed nil pointer stored in the interface is not detected and is unsupported.
-// networking.NetworkAccess can be passed directly.
+// NewBearerTokenScoper creates a scoper that can down-scope the authentication token.
 func NewBearerTokenScoper(config configuration.Configuration, clients networktypes.NetworkClients) BearerTokenScoper {
 	return bearerTokenScoperImpl{
 		config:  config,
