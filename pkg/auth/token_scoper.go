@@ -108,19 +108,19 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 }
 
 func exchangeResponseError(status int, body []byte, readErr error) error {
-	detail := fmt.Sprintf("token exchange failed with status %d", status)
-	var options []snyk_errors.Option
+	var oauthErrorDetail []string
 	if readErr != nil {
-		options = append(options, snyk_errors.WithCause(readErr))
+		oauthErrorDetail = append(oauthErrorDetail, readErr.Error())
 	} else {
-		options = oauthErrorOptions(body)
+		oauthErrorDetail = oauthErrorOptions(body)
 	}
-	return cli.NewTokenScoperError(detail, options...)
+	detail := fmt.Sprintf("token exchange failed with status %d, detail: %v", status, strings.Join(oauthErrorDetail, ": "))
+	return cli.NewTokenScoperError(detail)
 }
 
 // oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The
 // body is never stored as a whole because the server may echo the submitted tokens back.
-func oauthErrorOptions(body []byte) []snyk_errors.Option {
+func oauthErrorOptions(body []byte) []string {
 	var oauthErr struct {
 		Error            string `json:"error"`
 		ErrorDescription string `json:"error_description"`
@@ -128,12 +128,12 @@ func oauthErrorOptions(body []byte) []snyk_errors.Option {
 	if err := json.Unmarshal(body, &oauthErr); err != nil {
 		return nil
 	}
-	var options []snyk_errors.Option
+	var options []string
 	if oauthErr.Error != "" {
-		options = append(options, snyk_errors.WithMeta(metaKeyOAuthError, oauthErr.Error))
+		options = append(options, oauthErr.Error)
 	}
 	if oauthErr.ErrorDescription != "" {
-		options = append(options, snyk_errors.WithMeta(metaKeyOAuthErrorDescription, oauthErr.ErrorDescription))
+		options = append(options, oauthErr.ErrorDescription)
 	}
 	return options
 }

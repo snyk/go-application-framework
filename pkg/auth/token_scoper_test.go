@@ -182,8 +182,8 @@ func Test_bearerTokenScoperImpl_GetToken_ErrorBodyKeepsOnlyOAuthErrorFields(t *t
 
 			require.Empty(t, token)
 			catalogErr := catalogErrorOf(t, err)
-			assert.Equal(t, "invalid_request", catalogErr.Meta[metaKeyOAuthError])
-			assert.Equal(t, "token rejected", catalogErr.Meta[metaKeyOAuthErrorDescription])
+			assert.Contains(t, catalogErr.Detail, "invalid_request")
+			assert.Contains(t, catalogErr.Detail, "token rejected")
 			assert.NotContains(t, catalogErr.Meta, "body")
 			assert.NotContains(t, catalogErr.Meta, "echo")
 			requireNoSecretLeak(t, err, tt.secret)
