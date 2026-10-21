@@ -631,20 +631,32 @@ func TestAcceptance_HardwareSerialConvergesOnAFileFirstWrittenByAnotherSource(t 
 	require.Equal(t, "serial", content.IdentifierSource)
 }
 
-func TestAcceptance_HardwareSerialLeavesAPerUserIDUnchangedWhenNoMachineWideFileExists(t *testing.T) {
+func TestAcceptance_HardwareSerialReplacesAPerUserIDWhenNoMachineWideFileExists(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
-	original := `{"machine_id":"from-shared-file","identifier_source":"generated"}`
-	seed(t, m.shared.perUser, original)
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
 
 	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
 
 	require.NoError(t, err)
 	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
-	raw, readErr := os.ReadFile(m.shared.perUser)
-	require.NoError(t, readErr)
-	require.Equal(t, original, string(raw))
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "C02Q7KHTGFWF", content.MachineID)
+	require.Equal(t, "serial", content.IdentifierSource)
 	require.NoFileExists(t, m.shared.machineWide)
+}
+
+func TestAcceptance_HardwareSerialReplacesAPerUserIDWhenTheMachineWideFileAlreadyHoldsTheSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"C02Q7KHTGFWF","identifier_source":"serial"}`)
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestAcceptance_HardwareSerialDoesNotReplaceASharedFileItCannotRead(t *testing.T) {
@@ -841,7 +853,7 @@ func TestAcceptance_HardwareSerialDoesNotWarnOnRepeatedRunsWithAReadOnlyMachineW
 	require.NoFileExists(t, m.shared.perUser)
 }
 
-func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedWhenItsLockCannotBeTaken(t *testing.T) {
+func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedWhenItsDirectoryIsReadOnly(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
 	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
@@ -856,13 +868,32 @@ func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedWhenItsLockCannot
 	require.Equal(t, "from-shared-file", readFile(t, m.shared.machineWide).MachineID)
 	require.NoFileExists(t, m.shared.perUser)
 	require.NotContains(t, logs.String(), `"level":"warn"`)
+	require.Contains(t, logLineContaining(t, logs.String(), "could not be replaced"), `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedAndWarnsWhenItsLockIsHeld(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
+	holdLock(t, m.shared.machineWide)
+	shortenLockTimeout(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.machineWide).MachineID)
+	line := logLineContaining(t, logs.String(), "could not be replaced")
+	require.Contains(t, line, `"level":"warn"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.machineWide))
 }
 
 func TestAcceptance_HardwareSerialCreatesTheMachineWideFileWhenOnlyAPerUserIDDiffers(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
-	original := `{"machine_id":"from-shared-file","identifier_source":"generated"}`
-	seed(t, m.shared.perUser, original)
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
 	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
 
 	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
@@ -870,9 +901,7 @@ func TestAcceptance_HardwareSerialCreatesTheMachineWideFileWhenOnlyAPerUserIDDif
 	require.NoError(t, err)
 	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
 	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
-	raw, readErr := os.ReadFile(m.shared.perUser)
-	require.NoError(t, readErr)
-	require.Equal(t, original, string(raw))
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
 }
 
 func TestAcceptance_HardwareSerialIsStoredPerUserWhenNoSharedFileExistsAndMachineWideIsReadOnly(t *testing.T) {

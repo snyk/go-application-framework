@@ -204,16 +204,25 @@ func holdLock(t *testing.T, path string) {
 }
 
 func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
-	shortenLockTimeout(t)
 	paths := tempPaths(t)
 	paths.machineWide = ""
 	seed(t, paths.perUser, `{"machine_id": "not a valid id"}`)
-	holdLock(t, paths.perUser)
-	// Another writer stores an id while this one waits for the lock it holds.
+	lock := flock.New(paths.perUser + ".lock")
+	locked, err := lock.TryLock()
+	require.NoError(t, err)
+	require.True(t, locked)
+	t.Cleanup(func() { _ = lock.Unlock() }) //nolint:errcheck // best-effort release of the test's own lock
+	// The other writer stores its id atomically and only then releases the lock this call waits for.
 	stored := make(chan error, 1)
 	go func() {
-		time.Sleep(lockTimeout / 5)
-		stored <- os.WriteFile(paths.perUser, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600)
+		stored <- func() error {
+			defer func() { _ = lock.Unlock() }() //nolint:errcheck // the cleanup above releases it again if needed
+			tmp := filepath.Join(filepath.Dir(paths.perUser), "other-writer.tmp")
+			if err := os.WriteFile(tmp, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600); err != nil {
+				return err
+			}
+			return os.Rename(tmp, paths.perUser)
+		}()
 	}()
 
 	id, err := writeSharedFileID(paths, "candidate", "generated", "test-writer", nil)

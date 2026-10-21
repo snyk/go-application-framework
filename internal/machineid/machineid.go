@@ -4,6 +4,7 @@ package machineid
 
 import (
 	"errors"
+	"io/fs"
 	"strings"
 	"sync"
 	"unicode"
@@ -129,6 +130,20 @@ type resolver struct {
 	warnedUnstored bool
 }
 
+// logSerialStoreFailure logs a permission failure at Debug, as it is expected on locked-down machines
+// and repeats on every run, and any other failure at Warn.
+func logSerialStoreFailure(logger *zerolog.Logger, err error, path, msg string) {
+	switch {
+	case err == nil:
+	case errors.Is(err, errNewerSchema):
+		logger.Warn().Err(err).Str("path", path).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
+	case errors.Is(err, fs.ErrPermission):
+		logger.Debug().Err(err).Str("path", path).Msg(msg)
+	default:
+		logger.Warn().Err(err).Str("path", path).Msg(msg)
+	}
+}
+
 func (r *resolver) hardware() hardwareIdentity {
 	r.hwOnce.Do(func() {
 		if hostname, err := r.opts.hostname(); err == nil {
@@ -201,22 +216,12 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 		} else {
 			machine.ID = hw.serial
 			existing, sharedReadErr := readSharedFile(paths, logger)
-			switch {
-			case existing == nil:
+			if existing == nil {
 				_, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger)
-				switch {
-				case errors.Is(err, errNewerSchema):
-					logger.Warn().Err(err).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
-				case err != nil:
-					logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
-				}
-			case existing.MachineID != hw.serial:
-				_, err := replaceSharedFileID(paths, hw.serial, string(sourceSerial), writer)
-				switch {
-				case errors.Is(err, errNewerSchema):
-					logger.Warn().Err(err).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
-				case err != nil:
-					logger.Debug().Err(err).Msg("machine id: shared file holds a different machine id that could not be replaced by the hardware serial, left unchanged")
+				logSerialStoreFailure(logger, err, paths.machineWide, "machine id: serial number could not be stored in the shared file, using it directly")
+			} else if existing.MachineID != hw.serial || perUserHoldsOtherID(paths, hw.serial) {
+				for _, f := range replaceSharedFileID(paths, hw.serial, string(sourceSerial), writer) {
+					logSerialStoreFailure(logger, f.err, f.path, "machine id: shared file holds a different machine id that could not be replaced by the hardware serial, left unchanged")
 				}
 			}
 			return machine, sharedReadErr

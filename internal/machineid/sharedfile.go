@@ -175,14 +175,35 @@ func writeSharedFileID(paths pathPair, candidateID, source, writer string, logge
 	return id, nil
 }
 
+type replaceFailure struct {
+	path string
+	err  error
+}
+
 // replaceSharedFileID stores candidateID in the machine-wide file, best effort: a different valid id there
-// is replaced, and a missing file is created. A file that cannot be replaced is left unchanged, and no
-// per-user file is written.
-func replaceSharedFileID(paths pathPair, candidateID, source, writer string) (string, error) {
+// is replaced, and a missing file is created. A per-user file holding a different valid id is replaced
+// too, but never created. A file that cannot be replaced is left unchanged and reported in the result.
+func replaceSharedFileID(paths pathPair, candidateID, source, writer string) []replaceFailure {
+	var failures []replaceFailure
 	if paths.machineWide == "" {
-		return "", errors.New("machine id: no machine-wide shared file path")
+		failures = append(failures, replaceFailure{err: errors.New("machine id: no machine-wide shared file path")})
+	} else if _, err := writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, true); err != nil {
+		failures = append(failures, replaceFailure{paths.machineWide, err})
 	}
-	return writeAt(paths.machineWide, "machine", fileperms.FILEPERM_644, candidateID, source, writer, true)
+	if perUserHoldsOtherID(paths, candidateID) {
+		if _, err := writeAt(paths.perUser, "user", fileperms.FILEPERM_600, candidateID, source, writer, true); err != nil {
+			failures = append(failures, replaceFailure{paths.perUser, err})
+		}
+	}
+	return failures
+}
+
+func perUserHoldsOtherID(paths pathPair, candidateID string) bool {
+	if paths.perUser == "" {
+		return false
+	}
+	existing, err := loadSharedFile(paths.perUser)
+	return err == nil && existing.MachineID != candidateID
 }
 
 func writePerUser(path, candidateID, source, writer string) (string, error) {
