@@ -190,8 +190,7 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				_, err := w.Write([]byte(tt.body))
-				assert.NoError(t, err)
+				_, _ = w.Write([]byte(tt.body))
 			}))
 			defer server.Close()
 
