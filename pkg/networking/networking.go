@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/rs/zerolog"
-
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -26,17 +25,16 @@ type keyTypeString string
 // e.g. It should be used if setting the interaction ID into a context.Context
 const InteractionIdKey = keyTypeString("interactionId")
 
+var _ networktypes.NetworkClients = NetworkAccess(nil)
+
 // NetworkAccess is the interface for network access.
 // It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
 type NetworkAccess interface {
+	networktypes.NetworkClients
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
 	// GetRoundTripper returns the http.RoundTripper that is used by the http.Client.
 	GetRoundTripper() http.RoundTripper
-	// GetHttpClient returns the http client.
-	GetHttpClient() *http.Client
-	// GetUnauthorizedHttpClient returns an HTTP client that does not use authentication headers.
-	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
 	// AddDynamicHeaderField adds a dynamic header field to the request.
