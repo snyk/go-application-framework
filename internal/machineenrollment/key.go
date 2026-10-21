@@ -100,3 +100,33 @@ func ReadKeyFile(path string) (crypto.Signer, error) {
 	}
 	return nil, errors.New("machine client key is not an RSA or P-256 key")
 }
+
+// EncodeKeyPEM encodes key as a PKCS8 PEM.
+func EncodeKeyPEM(key crypto.Signer) ([]byte, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed encoding machine client key: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: pemType, Bytes: der}), nil
+}
+
+// ParseKeyPEM parses a PKCS8 PEM key written by EncodeKeyPEM: an RSA key, or a P-256 ECDSA key.
+func ParseKeyPEM(data []byte) (crypto.Signer, error) {
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != pemType {
+		return nil, errors.New("machine client key is not a PEM private key")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing machine client key: %w", err)
+	}
+	switch key := parsed.(type) {
+	case *rsa.PrivateKey:
+		return key, nil
+	case *ecdsa.PrivateKey:
+		if key.Curve == elliptic.P256() {
+			return key, nil
+		}
+	}
+	return nil, errors.New("machine client key is not an RSA or P-256 key")
+}
