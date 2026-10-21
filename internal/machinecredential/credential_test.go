@@ -220,6 +220,6 @@ func TestSecretTerms_SkipShortPEMLines(t *testing.T) {
 	terms := machinecredential.SecretTerms(config)
 
 	assert.Contains(t, terms, "AAAAAAAAAAAAAAAAAAAAAAAA")
-	assert.Contains(t, terms, "client-1")
+	assert.NotContains(t, terms, "client-1", "a client id is not a secret")
 	assert.NotContains(t, terms, "QQ==", "a short line would redact unrelated text")
 }

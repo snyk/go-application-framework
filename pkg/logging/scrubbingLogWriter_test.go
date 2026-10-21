@@ -1272,16 +1272,23 @@ func TestScrubbingWriter_GetScrubDictFromConfig_MachineCredential(t *testing.T) 
 		"pem as is":        "key: " + string(keyPEM),
 		"stored value":     "value: " + stored,
 		"one pem line":     "line: " + pemBody,
-		"client id":        "client: machine-client-id",
 		"escaped newlines": "value: " + strings.ReplaceAll(string(keyPEM), "\n", `\n`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			scrubbed := string(Scrub([]byte(line), GetScrubDictFromConfig(config)))
 
 			assert.NotContains(t, scrubbed, pemBody)
-			assert.NotContains(t, scrubbed, "machine-client-id")
 		})
 	}
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_MachineClientIDStaysReadable(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"machine-client-id","private_key_pem":""}`)
+
+	scrubbed := string(Scrub([]byte("client: machine-client-id"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "client: machine-client-id", scrubbed)
 }
 
 func TestScrubbingWriter_GetScrubDictFromConfig_DeviceToken(t *testing.T) {
