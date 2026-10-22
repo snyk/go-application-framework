@@ -18,6 +18,8 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
 func TestSharedFilePathsArePinnedPerOS(t *testing.T) {
@@ -204,16 +206,25 @@ func holdLock(t *testing.T, path string) {
 }
 
 func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
-	shortenLockTimeout(t)
 	paths := tempPaths(t)
 	paths.machineWide = ""
 	seed(t, paths.perUser, `{"machine_id": "not/a/valid/id"}`)
-	holdLock(t, paths.perUser)
-	// Another writer stores an id while this one waits for the lock it holds.
+	lock := flock.New(paths.perUser + ".lock")
+	locked, err := lock.TryLock()
+	require.NoError(t, err)
+	require.True(t, locked)
+	t.Cleanup(func() { _ = lock.Unlock() }) //nolint:errcheck // best-effort release of the test's own lock
+	// The other writer stores its id atomically and only then releases the lock this call waits for.
 	stored := make(chan error, 1)
 	go func() {
-		time.Sleep(lockTimeout / 5)
-		stored <- os.WriteFile(paths.perUser, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600)
+		stored <- func() error {
+			defer func() { _ = lock.Unlock() }() //nolint:errcheck // the cleanup above releases it again if needed
+			tmp := filepath.Join(filepath.Dir(paths.perUser), "other-writer.tmp")
+			if writeErr := os.WriteFile(tmp, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600); writeErr != nil {
+				return writeErr
+			}
+			return os.Rename(tmp, paths.perUser)
+		}()
 	}()
 
 	id, err := writeSharedFileID(paths, "candidate", "generated", "test-writer", nil)
@@ -468,4 +479,88 @@ func TestWriteSharedFileIDSetsFileModes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, info.Mode().Perm(), path)
 	}
+}
+
+func TestSchemaReplaceableOnlyForCurrentOrOlderIntegerVersions(t *testing.T) {
+	cases := map[string]struct {
+		raw  string
+		want bool
+	}{
+		"absent":     {raw: "", want: true},
+		"current":    {raw: "1", want: true},
+		"older":      {raw: "0", want: true},
+		"newer":      {raw: "2", want: false},
+		"string":     {raw: `"1"`, want: false},
+		"fractional": {raw: "1.5", want: false},
+		"null":       {raw: "null", want: true},
+		"object":     {raw: `{"v":1}`, want: false},
+		"negative":   {raw: "-1", want: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, schemaReplaceable(json.RawMessage(tc.raw)))
+		})
+	}
+}
+
+func withLockTimeout(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	original := lockTimeout
+	lockTimeout = timeout
+	t.Cleanup(func() { lockTimeout = original })
+}
+
+func storeAtomicallyAfter(t *testing.T, delay time.Duration, path, content string) <-chan error {
+	t.Helper()
+	stored := make(chan error, 1)
+	go func() {
+		time.Sleep(delay)
+		tmp := filepath.Join(filepath.Dir(path), "other-writer.tmp")
+		if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+			stored <- err
+			return
+		}
+		stored <- os.Rename(tmp, path)
+	}()
+	return stored
+}
+
+func TestWriteAtUsesAnIDStoredAfterTheLockWaitTimedOut(t *testing.T) {
+	path := tempPaths(t).perUser
+	seed(t, path, `{"machine_id": "not/a/valid/id"}`)
+	holdLock(t, path)
+	withLockTimeout(t, 500*time.Millisecond)
+	stored := storeAtomicallyAfter(t, 50*time.Millisecond, path, `{"machine_id": "stored-by-other-writer"}`)
+
+	id, err := writeAt(path, "user", fileperms.FILEPERM_600, "candidate", "generated", "test-writer", false, true)
+
+	require.NoError(t, <-stored)
+	require.NoError(t, err)
+	require.Equal(t, "stored-by-other-writer", id)
+}
+
+func TestWriteAtRefusesAnIDStoredWithANewerSchemaAfterTheLockWaitTimedOut(t *testing.T) {
+	path := tempPaths(t).perUser
+	seed(t, path, `{"machine_id": "not/a/valid/id"}`)
+	holdLock(t, path)
+	withLockTimeout(t, 500*time.Millisecond)
+	stored := storeAtomicallyAfter(t, 50*time.Millisecond, path, `{"machine_id": "stored-by-other-writer", "schema_version": 2}`)
+
+	_, err := writeAt(path, "user", fileperms.FILEPERM_600, "candidate", "generated", "test-writer", true, true)
+
+	require.NoError(t, <-stored)
+	require.ErrorIs(t, err, errNewerSchema)
+}
+
+func TestWriteAtInReplaceOnlyModeDoesNotCreateAMissingFile(t *testing.T) {
+	path := tempPaths(t).perUser
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+
+	_, err := writeAt(path, "user", fileperms.FILEPERM_600, "candidate", "serial", "test-writer", true, false)
+
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.NoFileExists(t, path)
+	leftovers, globErr := filepath.Glob(filepath.Join(filepath.Dir(path), ".machine-id-*.tmp"))
+	require.NoError(t, globErr)
+	require.Empty(t, leftovers)
 }
