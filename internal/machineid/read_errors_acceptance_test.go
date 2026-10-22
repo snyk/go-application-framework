@@ -128,6 +128,44 @@ func TestAcceptance_SuppliedIDIsReturnedWithoutReportingUnreadableFiles(t *testi
 	require.Equal(t, "supplied-id", id)
 }
 
+func TestAcceptance_UnreadableStudioDeviceIDFilesAreNotReportedWhenAGeneratedIDIsUsed(t *testing.T) {
+	m := newIsolatedMachine(t)
+	for _, p := range []string{m.studio.machineWide, m.studio.perUser} {
+		seed(t, p, "studio-device-id")
+		makeUnreadable(t, p)
+	}
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
+
+	require.Equal(t, readFile(t, m.shared.perUser).MachineID, id)
+	require.NoError(t, err)
+}
+
+func TestAcceptance_UnreadableStudioFileIsNotReportedWhenTheSharedFileSuppliesTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "per-user-id"})
+	seed(t, m.studio.perUser, "studio-device-id")
+	makeUnreadable(t, m.studio.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Equal(t, "per-user-id", machine.ID)
+	require.NoError(t, err)
+}
+
+func TestAcceptance_UnreadableStudioFileIsNotReportedWhenTheHardwareSerialSuppliesTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.studio.perUser, "studio-device-id")
+	makeUnreadable(t, m.studio.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.NoError(t, err)
+}
+
 func TestAcceptance_UnreadableSharedFileIsReportedAlongsideTheHardwareSerial(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02Q7KHTGFWF"
