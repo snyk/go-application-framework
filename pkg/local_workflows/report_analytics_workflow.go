@@ -19,6 +19,7 @@ import (
 	"golang.org/x/net/http/httpproxy"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/osname"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
@@ -174,6 +175,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 		body.Data.Attributes.Runtime = &api.Runtime{}
 	}
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
+	addOSName(body.Data.Attributes.Runtime.Platform, osname.Get())
 	// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID here and remove this line
 	body.Data.Attributes.Runtime.MachineId = nil
 
@@ -251,6 +253,12 @@ func addPlatformConfiguration(rt *api.Runtime, config configuration.Configuratio
 		} else {
 			platformConfig.Proxy = &proxied
 		}
+	}
+}
+
+func addOSName(platform *api.Platform, name string) {
+	if platform.Osname == nil && name != "" {
+		platform.Osname = &name
 	}
 }
 

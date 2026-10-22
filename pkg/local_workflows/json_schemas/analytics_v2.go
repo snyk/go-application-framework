@@ -107,6 +107,27 @@ const AnalyticsV2EventSchema = `{
           "type": "object",
           "description": "Optional additional extension.\n\nOnly strings, integers, and boolean values are allowed.\n",
           "additionalProperties": true
+        },
+        "persona": {
+          "$ref": "#/schemas/Persona"
+        }
+      }
+    },
+    "Persona": {
+      "type": "object",
+      "description": "The agent context under which the interaction ran.",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "agent_version": {
+          "type": "string"
+        },
+        "interactive": {
+          "type": "boolean"
+        },
+        "interactive_mode": {
+          "type": "string"
         }
       }
     },
@@ -226,6 +247,10 @@ const AnalyticsV2EventSchema = `{
         },
         "configuration": {
           "$ref": "#/schemas/PlatformConfiguration"
+        },
+        "osname": {
+          "type": "string",
+          "description": "The operating system name and version."
         }
       }
     },

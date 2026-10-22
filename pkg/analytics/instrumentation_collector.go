@@ -67,6 +67,7 @@ type instrumentationCollectorImpl struct {
 	testSummary         json_schemas.TestSummary
 	targetId            string
 	instrumentationErr  []error
+	persona             *api.Persona
 	extensionMu         sync.Mutex
 	extension           map[string]interface{}
 }
@@ -191,9 +192,13 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
 	// does whole-string literal replacement, so running it over raw JSON would let a redacted
 	// value collide with an unrelated field that happens to contain the same substring.
-	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
-		scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, logging.GetScrubDictFromConfig(options.cfg))
-		d.Attributes.Interaction.Extension = &scrubbed
+	if options.cfg != nil {
+		dict := logging.GetScrubDictFromConfig(options.cfg)
+		if d.Attributes.Interaction.Extension != nil {
+			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, dict)
+			d.Attributes.Interaction.Extension = &scrubbed
+		}
+		d.Attributes.Interaction.Persona = scrubPersona(d.Attributes.Interaction.Persona, dict)
 	}
 
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
@@ -306,6 +311,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		Errors:      toInteractionErrors(ic.instrumentationErr),
 		Extension:   &extensionCopy,
 		Id:          ic.interactionId,
+		Persona:     ic.persona,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       &stage,
 		Status:      string(ic.status),
