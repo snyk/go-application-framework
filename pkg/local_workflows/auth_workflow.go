@@ -1,14 +1,16 @@
 package localworkflows
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
-	"github.com/snyk/go-application-framework/internal/machineidentity"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -20,10 +22,6 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	AuthTypeParameter = "auth-type"
-	// ClientPrivateKeyFileParameter names the flag/config key holding the path to a machine
-	// client's private key file, used together with auth.PARAMETER_CLIENT_ID to authenticate the
-	// client credentials grant with a private_key_jwt assertion instead of a static client secret.
-	ClientPrivateKeyFileParameter = "client-private-key-file"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
@@ -48,7 +46,6 @@ func InitAuth(engine workflow.Engine) error {
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
-	config.String(ClientPrivateKeyFileParameter, "", "Client Credential Grant, path to a private key file to authenticate with instead of a client secret")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
 	return err
@@ -81,17 +78,6 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	}
 
-	if keyFile := config.GetString(ClientPrivateKeyFileParameter); keyFile != "" {
-		clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
-		if clientID == "" {
-			return nil, fmt.Errorf("--%s requires --client-id (the OAuth client id of the enrolled machine)", ClientPrivateKeyFileParameter)
-		}
-		if _, statErr := os.Stat(keyFile); statErr != nil {
-			return nil, fmt.Errorf("cannot use --%s %q: %w", ClientPrivateKeyFileParameter, keyFile, statErr)
-		}
-		authenticatorOpts = append(authenticatorOpts, auth.WithClientAssertionProvider(clientID, machineidentity.NewAssertionProvider(keyFile)))
-	}
-
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
@@ -120,6 +106,9 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return auth.AUTH_TYPE_OAUTH
 }
 
+// clearCredentialTimeout bounds the wait for the storage lock held by another process.
+const clearCredentialTimeout = 10 * time.Second
+
 func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
@@ -140,6 +129,19 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
 	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	// A person logging in must not keep authenticating as the enrolled machine.
+	// A failed clear (for example a corrupt or read-only snyk.json) is only logged: that scenario is
+	// unsupported and being reworked, so it gets no further handling.
+	clearCtx, cancelClear := context.WithTimeout(context.Background(), clearCredentialTimeout)
+	defer cancelClear()
+	for name, c := range map[string]configuration.Configuration{"local": config, "global": globalConfig} {
+		if c.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE) == "" {
+			continue
+		}
+		if clearErr := machinecredential.Clear(clearCtx, c); clearErr != nil {
+			logger.Warn().Err(clearErr).Msgf("Failed to clear the stored machine credential of the %s configuration", name)
+		}
+	}
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)

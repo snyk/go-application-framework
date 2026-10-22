@@ -69,15 +69,16 @@ type Server struct {
 
 	mu sync.Mutex
 	// TokenRequests counts accepted token requests.
-	TokenRequests int
-	machines      []*machine
-	deviceTokens  map[string]*deviceToken
-	fleetKeys     map[string]fleetKey // by thumbprint
-	enrolledKeys  map[string]bool     // client key thumbprints
-	clients       map[string]*rsa.PublicKey
-	jtis          map[string]bool
-	tokens        map[string]string // access token -> client id
-	next          int
+	TokenRequests     int
+	credentialHeaders []string
+	machines          []*machine
+	deviceTokens      map[string]*deviceToken
+	fleetKeys         map[string]fleetKey // by thumbprint
+	enrolledKeys      map[string]bool     // client key thumbprints
+	clients           map[string]*rsa.PublicKey
+	jtis              map[string]bool
+	tokens            map[string]string // access token -> client id
+	next              int
 }
 
 type fleetKey struct {
@@ -99,9 +100,30 @@ func NewServer(t *testing.T) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
-	s.Server = httptest.NewServer(mux)
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.recordCredentialHeaders(r)
+		mux.ServeHTTP(w, r)
+	}))
 	t.Cleanup(s.Close)
 	return s
+}
+
+func (s *Server) recordCredentialHeaders(r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, name := range []string{"Authorization", "Session-Token"} {
+		if r.Header.Get(name) != "" {
+			s.credentialHeaders = append(s.credentialHeaders, name)
+		}
+	}
+}
+
+// CredentialHeaders returns the names of the credential headers (Authorization, Session-Token)
+// that requests carried, one entry per header per request. The enrollment endpoints take none.
+func (s *Server) CredentialHeaders() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.credentialHeaders)
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
