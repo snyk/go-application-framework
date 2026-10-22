@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // errorChain renders err and every error beneath it, so a failure shows the operating system error
@@ -75,9 +76,11 @@ func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
 			defer wg.Done()
 			config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
 			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
-			value, err := config.GetStringWithError(configuration.MACHINE_ID)
+			value, err := config.GetWithError(configuration.MACHINE_ID)
 			assert.NoError(t, err, errorChain(err))
-			results[i] = value
+			machine, ok := value.(runtimeinfo.Machine)
+			assert.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+			results[i] = machine.ID
 		}(i)
 	}
 	wg.Wait()
