@@ -215,13 +215,12 @@ func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.L
 		return
 	}
 	id, err := ri.GetMachineID()
-	if err != nil {
-		if !errors.Is(err, runtimeinfo.ErrNoMachineID) {
-			logger.Printf("Leaving out the machine id: %v", err)
-		}
-		return
+	if err != nil && !errors.Is(err, runtimeinfo.ErrNoMachineID) {
+		logger.Printf("Failed to read the machine id: %v", err)
 	}
-	rt.MachineId = &id
+	if id != "" {
+		rt.MachineId = &id
+	}
 }
 
 func addPlatformConfiguration(rt *api.Runtime, config configuration.Configuration, logger *zerolog.Logger) {

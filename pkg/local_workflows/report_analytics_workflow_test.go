@@ -143,6 +143,7 @@ func Test_ReportAnalytics_addMachineID(t *testing.T) {
 		"no runtime info":                      {ri: nil, expected: nil},
 		"no stable machine id":                 {ri: machineIDSource("", runtimeinfo.ErrNoMachineID), expected: nil},
 		"error reading the machine id":         {ri: machineIDSource("", errors.New("read failed")), expected: nil},
+		"usable machine id with an error":      {ri: machineIDSource("test-machine-id", errors.New("read failed")), expected: new("test-machine-id")},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
