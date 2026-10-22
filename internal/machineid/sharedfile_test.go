@@ -527,7 +527,7 @@ func storeAtomicallyAfter(t *testing.T, delay time.Duration, path, content strin
 
 func TestWriteAtUsesAnIDStoredAfterTheLockWaitTimedOut(t *testing.T) {
 	path := tempPaths(t).perUser
-	seed(t, path, `{"machine_id": "not a valid id"}`)
+	seed(t, path, `{"machine_id": "not/a/valid/id"}`)
 	holdLock(t, path)
 	withLockTimeout(t, 500*time.Millisecond)
 	stored := storeAtomicallyAfter(t, 50*time.Millisecond, path, `{"machine_id": "stored-by-other-writer"}`)
@@ -541,7 +541,7 @@ func TestWriteAtUsesAnIDStoredAfterTheLockWaitTimedOut(t *testing.T) {
 
 func TestWriteAtRefusesAnIDStoredWithANewerSchemaAfterTheLockWaitTimedOut(t *testing.T) {
 	path := tempPaths(t).perUser
-	seed(t, path, `{"machine_id": "not a valid id"}`)
+	seed(t, path, `{"machine_id": "not/a/valid/id"}`)
 	holdLock(t, path)
 	withLockTimeout(t, 500*time.Millisecond)
 	stored := storeAtomicallyAfter(t, 50*time.Millisecond, path, `{"machine_id": "stored-by-other-writer", "schema_version": 2}`)
