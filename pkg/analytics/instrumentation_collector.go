@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -174,12 +175,25 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
+	if options.cfg != nil && a.Interaction.Errors != nil {
+		scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(options.cfg))
+	}
+
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: a,
 	}
 
 	return ic.sanitizeExtensionData(options, d)
+}
+
+func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) {
+	for i, e := range errs {
+		if e.Url != nil {
+			scrubbed := string(logging.ScrubValue([]byte(*e.Url), dict))
+			errs[i].Url = &scrubbed
+		}
+	}
 }
 
 // Since the `extension` attribute in the analytics payload is a value any
@@ -387,7 +401,16 @@ func toInteractionError(e error) *api.InteractionError {
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
 		interactionError.Id = errorCatalogError.ErrorCode
 		interactionError.Code = &interactionErrorCode
+		interactionError.Url = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_REQUEST_PATH)
+		interactionError.Extension = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_EXTENSION_NAME)
 	}
 
 	return interactionError
+}
+
+func nonEmptyStringMeta(meta map[string]any, key string) *string {
+	if v, ok := meta[key].(string); ok && v != "" {
+		return &v
+	}
+	return nil
 }
