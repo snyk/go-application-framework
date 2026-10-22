@@ -115,6 +115,8 @@ func enrollWithFleetKeyFile(ctx context.Context, runtimeInfo runtimeinfo.Runtime
 		return machineenrollment.Enrollment{}, errors.New("failed finding the identifiers of this machine: the application provides no runtime information")
 	}
 	machine, err := runtimeInfo.GetMachineID()
+	// Only the serial number is sent for now, for the initial rollout. Later this will either send the
+	// derived machine id or the whole runtimeinfo.Machine and let the backend decide.
 	// A usable machine can come with an error; see runtimeinfo.RuntimeInfo.
 	if err != nil && (machine.SerialNumber == "" || errors.Is(err, runtimeinfo.ErrNoMachineID)) {
 		return machineenrollment.Enrollment{}, fmt.Errorf("failed finding the identifiers of this machine: %w", err)
