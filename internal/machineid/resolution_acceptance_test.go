@@ -484,7 +484,7 @@ func TestAcceptance_StudioCLIVariableFillsStudioIDWithoutSupplyingTheMachineID(t
 func TestAcceptance_InvalidStudioCLIValueFallsBackToTheStudioFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	seed(t, m.studio.perUser, "studio-device-id")
-	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a b")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a/b")
 
 	require.Equal(t, "studio-device-id", machineOf(t, m.newRun()).StudioID)
 }
@@ -492,7 +492,7 @@ func TestAcceptance_InvalidStudioCLIValueFallsBackToTheStudioFile(t *testing.T) 
 func TestAcceptance_InvalidStudioCLIValueIsLoggedOncePerResolvedLookup(t *testing.T) {
 	m := newIsolatedMachine(t)
 	seed(t, m.studio.perUser, "studio-device-id")
-	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a b")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a/b")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 
