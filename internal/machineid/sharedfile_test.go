@@ -108,7 +108,7 @@ var brokenFiles = map[string]string{
 	"string":     `"some-id"`,
 	"number":     "42",
 	"blank id":   `{"machine_id": "  "}`,
-	"invalid id": `{"machine_id": "not a valid id"}`,
+	"invalid id": `{"machine_id": "not/a/valid/id"}`,
 	"oversized":  `{"machine_id": "some-id", "padding": "` + strings.Repeat("a", maxIDFileSize) + `"}`,
 }
 
@@ -208,7 +208,7 @@ func holdLock(t *testing.T, path string) {
 func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
 	paths := tempPaths(t)
 	paths.machineWide = ""
-	seed(t, paths.perUser, `{"machine_id": "not a valid id"}`)
+	seed(t, paths.perUser, `{"machine_id": "not/a/valid/id"}`)
 	lock := flock.New(paths.perUser + ".lock")
 	locked, err := lock.TryLock()
 	require.NoError(t, err)

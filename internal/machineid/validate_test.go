@@ -25,7 +25,7 @@ func TestValid(t *testing.T) {
 		"control character":             {input: "device\x00id", want: false},
 		"embedded newline":              {input: "device\nid", want: false},
 		"embedded carriage return":      {input: "device\rid", want: false},
-		"embedded space":                {input: "device id", want: false},
+		"embedded space":                {input: "device id", want: true},
 		"placeholder zero":              {input: "0", want: false},
 		"placeholder none":              {input: "none", want: false},
 		"placeholder none mixed case":   {input: "None", want: false},
@@ -56,13 +56,40 @@ func TestValidateGivesTheReasonForARejectedID(t *testing.T) {
 	tests := map[string]string{
 		strings.Repeat("a", 129): "longer than 128 characters",
 		"":                       "contains characters outside the allowed set",
-		"device id":              "contains characters outside the allowed set",
+		"device/id":              "contains characters outside the allowed set",
 		"none":                   "matches a known placeholder serial number",
 	}
 	for input, want := range tests {
 		reason, ok := validate(input)
 		require.False(t, ok)
 		require.Equal(t, want, reason)
+	}
+}
+
+func TestValidateAllowsSpacesOnlyInsideAnID(t *testing.T) {
+	tests := map[string]struct {
+		input  string
+		reason string
+		ok     bool
+	}{
+		"single internal space":    {input: "C02 Q7KHTGFWF", ok: true},
+		"multiple internal spaces": {input: "VMware-56 4d 12 34 ab cd ef 01-23 45 67 89 ab cd ef 01", ok: true},
+		"leading space":            {input: " C02Q7KHTGFWF", reason: "contains characters outside the allowed set"},
+		"trailing space":           {input: "C02Q7KHTGFWF ", reason: "contains characters outside the allowed set"},
+		"internal tab":             {input: "C02\tQ7KHTGFWF", reason: "contains characters outside the allowed set"},
+		"internal newline":         {input: "C02\nQ7KHTGFWF", reason: "contains characters outside the allowed set"},
+		"single character":         {input: "a", ok: true},
+		"punctuation":              {input: "a._:@-b", ok: true},
+		"trailing punctuation":     {input: "a._:@-", ok: true},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			reason, ok := validate(tc.input)
+
+			require.Equal(t, tc.ok, ok)
+			require.Equal(t, tc.reason, reason)
+		})
 	}
 }
 
