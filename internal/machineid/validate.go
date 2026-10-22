@@ -7,7 +7,8 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineid/identity"
 )
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@-]*$`)
+// Hardware serials can contain spaces, so a space is allowed anywhere but at either end.
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._:@ -]*[A-Za-z0-9._:@-])?$`)
 
 func blank(raw string) bool {
 	return strings.TrimSpace(raw) == ""
