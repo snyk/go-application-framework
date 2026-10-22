@@ -220,8 +220,8 @@ func TestWriteSharedFileIDUsesAnIDStoredWhileWaitingForTheLock(t *testing.T) {
 		stored <- func() error {
 			defer func() { _ = lock.Unlock() }() //nolint:errcheck // the cleanup above releases it again if needed
 			tmp := filepath.Join(filepath.Dir(paths.perUser), "other-writer.tmp")
-			if err := os.WriteFile(tmp, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600); err != nil {
-				return err
+			if writeErr := os.WriteFile(tmp, []byte(`{"machine_id": "stored-by-other-writer"}`), 0o600); writeErr != nil {
+				return writeErr
 			}
 			return os.Rename(tmp, paths.perUser)
 		}()
