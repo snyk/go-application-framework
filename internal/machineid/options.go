@@ -8,10 +8,12 @@ import (
 
 // resolveOptions holds the configuration for a single Resolve call, built from ResolveOption values.
 type resolveOptions struct {
-	runtimeInfo func() runtimeinfo.RuntimeInfo
-	logger      *zerolog.Logger
-	shared      pathPair
-	studio      pathPair
+	runtimeInfo  func() runtimeinfo.RuntimeInfo
+	logger       *zerolog.Logger
+	shared       pathPair
+	studio       pathPair
+	serialNumber func() (string, error)
+	hostname     func() (string, error)
 }
 
 // ResolveOption configures optional behavior of Resolve.
@@ -23,6 +25,20 @@ type ResolveOption func(*resolveOptions)
 func WithLogger(logger *zerolog.Logger) ResolveOption {
 	return func(o *resolveOptions) {
 		o.logger = logger
+	}
+}
+
+// WithSerialNumber replaces the hardware serial lookup. Used by tests to make resolution independent of the host.
+func WithSerialNumber(get func() (string, error)) ResolveOption {
+	return func(o *resolveOptions) {
+		o.serialNumber = get
+	}
+}
+
+// WithHostname replaces the hostname lookup. Used by tests to make resolution independent of the host.
+func WithHostname(get func() (string, error)) ResolveOption {
+	return func(o *resolveOptions) {
+		o.hostname = get
 	}
 }
 

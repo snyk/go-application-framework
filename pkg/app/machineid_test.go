@@ -14,17 +14,37 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// hostOpts replaces the host lookups, so the machine id does not depend on the machine running the tests.
+// An empty serial makes the serial lookup fail, as on a machine without one.
+func hostOpts(serial string) []machineid.ResolveOption {
+	return []machineid.ResolveOption{
+		machineid.WithSerialNumber(func() (string, error) {
+			if serial == "" {
+				return "", errors.New("no serial number in test")
+			}
+			return serial, nil
+		}),
+		machineid.WithHostname(func() (string, error) { return "test-host", nil }),
+	}
+}
+
 func newAppEngine(t *testing.T, opts ...Opts) workflow.Engine {
+	t.Helper()
+	return newAppEngineWithHost(t, hostOpts(""), opts...)
+}
+
+func newAppEngineWithHost(t *testing.T, machineIDOpts []machineid.ResolveOption, opts ...Opts) workflow.Engine {
 	t.Helper()
 	_, err := configuration.CreateConfigurationFile("snyk.json")
 	require.NoError(t, err)
 	config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
-	return CreateAppEngineWithOptions(append([]Opts{WithConfiguration(config)}, opts...)...)
+	return createAppEngine(machineIDOpts, append([]Opts{WithConfiguration(config)}, opts...)...)
 }
 
 func readJSON(t *testing.T, path string) map[string]any {
@@ -76,6 +96,19 @@ func TestAcceptance_ViaAppEngineNoStorableMachineIDGivesErrNoMachineID(t *testin
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 }
 
+func TestAcceptance_ViaAppEngineSerialNumberIsReturnedWhenTheSharedFileCannotBeWritten(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	// The user-scoped directory cannot be created while a file occupies its path.
+	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(sharedFilePath)), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Dir(sharedFilePath), []byte("not a directory"), 0o600))
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"), WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+
+	machine, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "TEST-SERIAL-123", machine.ID)
+}
+
 func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *testing.T) {
 	isolateMachineIDStorage(t)
 	var logs bytes.Buffer
@@ -86,6 +119,21 @@ func TestAcceptance_ViaAppEngineLogsMachineIDResolutionForSupportBundles(t *test
 	require.NoError(t, err)
 
 	require.Contains(t, logs.String(), "machine id: no source produced a value, generating one", "the app wiring must pass its logger into machine id resolution")
+}
+
+func TestAcceptance_ViaAppEngineLogsSerialNumberStoreFailureForSupportBundles(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	// The user-scoped directory cannot be created while a file occupies its path.
+	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(sharedFilePath)), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Dir(sharedFilePath), []byte("not a directory"), 0o600))
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"), WithZeroLogger(&logger))
+
+	_, err := engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+
+	require.Contains(t, logs.String(), "serial number could not be stored in the shared file", "the app wiring must pass its logger into machine id resolution")
 }
 
 func TestAcceptance_ViaAppEngineSharedFileRecordsTheRuntimeInfoAsWriter(t *testing.T) {
@@ -157,4 +205,29 @@ func TestAcceptance_ViaAppEngineUnreadableSharedFileIsReportedWithTheMachineIDFo
 	require.True(t, errors.As(err, &catalogErr), "want an error catalog error, got %v", err)
 	require.Equal(t, "SNYK-CLI-0030", catalogErr.ErrorCode)
 	require.Equal(t, sharedFilePath, catalogErr.Meta["path"])
+}
+
+func TestAcceptance_ViaAppEngineUnreadableSharedFileIsReportedWithTheSerialNumberFoundAlongsideIt(t *testing.T) {
+	sharedFilePath := isolateMachineIDStorage(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(sharedFilePath), 0o755))
+	require.NoError(t, os.WriteFile(sharedFilePath, []byte(`{"machine_id":"shared-file-id"}`), 0o600))
+	makeUnreadable(t, sharedFilePath)
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"), WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
+
+	machine, err := engine.GetRuntimeInfo().GetMachineID()
+
+	require.Equal(t, "TEST-SERIAL-123", machine.ID)
+	var catalogErr snyk_errors.Error
+	require.True(t, errors.As(err, &catalogErr), "want an error catalog error, got %v", err)
+	require.Equal(t, "SNYK-CLI-0030", catalogErr.ErrorCode)
+	require.Equal(t, sharedFilePath, catalogErr.Meta["path"])
+}
+
+func machineIDOf(t *testing.T, config configuration.Configuration) string {
+	t.Helper()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+	return machine.ID
 }
