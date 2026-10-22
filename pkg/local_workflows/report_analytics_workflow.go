@@ -254,7 +254,8 @@ func addPlatformConfiguration(rt *api.Runtime, config configuration.Configuratio
 	}
 }
 
-// isProxied reads the environment on every call, unlike http.ProxyFromEnvironment, which caches it for the process.
+// isProxied reports whether the proxy environment variables, read when the event is sent, route apiURL through a proxy.
+// This can differ from the HTTP transport, which caches the environment for the process.
 func isProxied(apiURL string) (bool, error) {
 	target, err := url.Parse(apiURL)
 	if err != nil {
