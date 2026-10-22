@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -139,4 +141,73 @@ func Test_CreateAuthenticator_ExpiredOAuthTokenWithRefreshToken_RefreshesThrough
 	assert.Equal(t, "refreshed-access-token", persisted.AccessToken)
 	assert.Equal(t, "rotated-refresh-token", persisted.RefreshToken)
 	assert.True(t, persisted.Valid())
+}
+
+func storeMachineCredential(t *testing.T, config configuration.Configuration) {
+	t.Helper()
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	require.NoError(t, machinecredential.Publish(config, machinecredential.Credential{ClientID: "client-1", Key: key}))
+}
+
+func Test_CreateAuthenticator_StoredMachineCredentialAndValidCachedToken_UsesCachedTokenWithoutCallingTokenEndpoint(t *testing.T) {
+	var tokenCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { tokenCalls.Add(1) }))
+	t.Cleanup(srv.Close)
+	cached, err := json.Marshal(&oauth2.Token{AccessToken: "cached-access-token", TokenType: "bearer", Expiry: time.Now().Add(20 * time.Minute).UTC()})
+	require.NoError(t, err)
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(cached))
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	storeMachineCredential(t, config)
+
+	req := newRequestForHeaders(t)
+	require.NoError(t, CreateAuthenticator(config, srv.Client()).AddAuthenticationHeader(req))
+
+	assert.Equal(t, "Bearer cached-access-token", req.Header.Get("Authorization"))
+	assert.Zero(t, tokenCalls.Load())
+}
+
+func Test_CreateAuthenticator_StoredMachineCredentialAndOAuthFlagOff_SendsTokenScheme(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	storeMachineCredential(t, config)
+
+	req := newRequestForHeaders(t)
+	require.NoError(t, CreateAuthenticator(config, http.DefaultClient).AddAuthenticationHeader(req))
+
+	assert.Equal(t, "token legacy-api-token", req.Header.Get("Authorization"))
+}
+
+func Test_CreateAuthenticator_CorruptStoredMachineCredentialAndOAuthFlagOff_AddAuthenticationHeaderReturnsAnError(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+
+	req := newRequestForHeaders(t)
+	err := CreateAuthenticator(config, http.DefaultClient).AddAuthenticationHeader(req)
+
+	require.ErrorContains(t, err, "machine authentication failed, the stored machine credential cannot be used")
+	assert.NotContains(t, err.Error(), "enrol")
+	assert.Empty(t, req.Header.Values("Authorization"))
+	assert.Empty(t, req.Header.Values("Session-Token"))
+}
+
+func Test_CreateAuthenticator_CorruptStoredMachineCredential_AddAuthenticationHeaderReturnsAnError(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+
+	req := newRequestForHeaders(t)
+	err := CreateAuthenticator(config, http.DefaultClient).AddAuthenticationHeader(req)
+
+	require.ErrorContains(t, err, "machine authentication failed, the stored machine credential cannot be used")
+	assert.NotContains(t, err.Error(), "enrol")
+	assert.Empty(t, req.Header.Values("Authorization"))
+	assert.Empty(t, req.Header.Values("Session-Token"))
 }

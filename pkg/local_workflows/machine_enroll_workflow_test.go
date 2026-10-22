@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -449,4 +451,57 @@ func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDevi
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "credential cannot be stored")
 	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+func (e *enrollEnv) expireStoredAccessToken(t *testing.T) {
+	t.Helper()
+	var path string
+	for _, file := range filesUnder(t, e.home) {
+		if filepath.Base(file) == "snyk.json" {
+			path = file
+		}
+	}
+	require.NotEmpty(t, path, "the configuration file")
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(content, &values))
+	var token map[string]any
+	tokenJSON, ok := values[auth.CONFIG_KEY_OAUTH_TOKEN].(string)
+	require.True(t, ok, "stored oauth token is not a string")
+	require.NoError(t, json.Unmarshal([]byte(tokenJSON), &token))
+	token["expiry"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	expired, err := json.Marshal(token)
+	require.NoError(t, err)
+	values[auth.CONFIG_KEY_OAUTH_TOKEN] = string(expired)
+	content, err = json.Marshal(values)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+}
+
+func (e *enrollEnv) whoamiInNewProcess(t *testing.T) int {
+	t.Helper()
+	config := openFileBackedConfig()
+	config.Set(configuration.API_URL, e.server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	engine := workflow.NewWorkFlowEngine(config)
+	require.NoError(t, engine.Init())
+	res, err := engine.GetNetworkAccess().GetHttpClient().Get(e.server.URL + "/rest/whoami")
+	require.NoError(t, err)
+	_ = res.Body.Close()
+	return res.StatusCode
+}
+
+func Test_machineEnroll_enrolledMachineKeepsAuthenticatingAfterItsAccessTokenExpires(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	require.Equal(t, 1, env.server.TokenRequests)
+	env.expireStoredAccessToken(t)
+
+	assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+
+	assert.Equal(t, 2, env.server.TokenRequests, "a second token was minted")
+	assert.Equal(t, 1, env.server.EnrollmentRequests(), "the enrollment endpoint was not called again")
 }
