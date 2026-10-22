@@ -166,24 +166,48 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	// keeps the numbers in the extension and results maps exact
 	decoder.UseNumber()
 	if err := decoder.Decode(&body); err != nil {
-		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
-		return input
+		logger.Printf("Sending the event without enrichment, failed to decode it: %v", err)
+		return withoutMachineID(input, payload, logger)
 	}
 
 	if body.Data.Attributes.Runtime == nil {
 		body.Data.Attributes.Runtime = &api.Runtime{}
 	}
-	addMachineID(body.Data.Attributes.Runtime, invocationCtx.GetRuntimeInfo(), logger)
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
-	// shortcut: the machine id is withheld until sending it is approved, remove this line to send it
+	// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID here and remove this line
 	body.Data.Attributes.Runtime.MachineId = nil
 
 	enriched, err := json.Marshal(body)
 	if err != nil {
+		logger.Printf("Sending the event without enrichment, failed to encode it: %v", err)
+		return withoutMachineID(input, payload, logger)
+	}
+	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
+}
+
+// withoutMachineID removes runtime.machine_id from an event the request body type cannot represent.
+func withoutMachineID(input workflow.Data, payload []byte, logger *zerolog.Logger) workflow.Data {
+	var body map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&body); err != nil {
+		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
+		return input
+	}
+	if data, ok := body["data"].(map[string]any); ok {
+		if attributes, ok := data["attributes"].(map[string]any); ok {
+			if rt, ok := attributes["runtime"].(map[string]any); ok {
+				delete(rt, "machine_id")
+			}
+		}
+	}
+
+	stripped, err := json.Marshal(body)
+	if err != nil {
 		logger.Printf("Sending the event unchanged, failed to encode it: %v", err)
 		return input
 	}
-	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
+	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), stripped, workflow.WithLogger(logger))
 }
 
 func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {

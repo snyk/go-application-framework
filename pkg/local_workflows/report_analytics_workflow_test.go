@@ -73,7 +73,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testin
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
 			expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
 
@@ -97,7 +97,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNoMachineKeysInRuntime(
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
+			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
 			var sent []byte
 			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
 				body, err := io.ReadAll(req.Body)
@@ -315,10 +315,20 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsNumbersInExtensionAndRe
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsUndecodableInputUnchanged(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).AnyTimes()
-	// valid against the schema, but overflows the int64 duration of the request body type
-	payload := strings.Replace(testGetAnalyticsV2PayloadString(), `"duration_ms": 1000`, `"duration_ms": 99999999999999999999`, 1)
+	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
+	payload := testGetUndecodableAnalyticsV2PayloadString()
 	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), ri)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_removesMachineIdFromUndecodableInput(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	expected := testGetUndecodableAnalyticsV2PayloadString()
+	payload := testWithMachineID(expected, "producer-machine-id")
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
@@ -575,6 +585,11 @@ func testGetAnalyticsV2PayloadString() string {
     "type": "analytics"
   }
 }`, runtime.GOARCH, runtime.GOOS)
+}
+
+// testGetUndecodableAnalyticsV2PayloadString is valid against the schema, but overflows the int64 duration of the request body type.
+func testGetUndecodableAnalyticsV2PayloadString() string {
+	return strings.Replace(testGetAnalyticsV2PayloadString(), `"duration_ms": 1000`, `"duration_ms": 99999999999999999999`, 1)
 }
 
 func testGetScanDonePayloadString() string {
