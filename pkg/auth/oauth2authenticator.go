@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io/fs"
 	"math/big"
 	"net"
 	"net/http"
@@ -665,7 +666,7 @@ func (o *oAuth2Authenticator) syncTokenRefresh(ctx context.Context) (func(), err
 		//
 		// To avoid this, unconditionally refresh the configuation from its
 		// storage and re-parse the oauth token stored within.
-		if err = storage.Refresh(o.config, CONFIG_KEY_OAUTH_TOKEN); err != nil {
+		if err = storage.Refresh(o.config, CONFIG_KEY_OAUTH_TOKEN); err != nil && !(o.assertionProvider != nil && errors.Is(err, fs.ErrNotExist)) {
 			return cleanup, err
 		}
 		o.token, err = GetOAuthToken(o.config)
