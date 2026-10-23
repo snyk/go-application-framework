@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -23,6 +24,7 @@ type revisionState struct {
 // FakeSealableClient is a mock implementation of the SealableClient for testing.
 // It tracks revisions in memory and enforces the revision lifecycle (create -> upload -> seal).
 type FakeSealableClient struct {
+	mu        sync.Mutex
 	cfg       FakeClientConfig
 	revisions map[RevisionID]*revisionState
 }
@@ -42,6 +44,9 @@ func NewFakeSealableClient(cfg FakeClientConfig) *FakeSealableClient {
 }
 
 func (f *FakeSealableClient) CreateRevision(_ context.Context, orgID OrgID) (*ResponseBody, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	newRevisionID := uuid.New()
 	f.revisions[newRevisionID] = &revisionState{
 		orgID:  orgID,
@@ -56,6 +61,9 @@ func (f *FakeSealableClient) CreateRevision(_ context.Context, orgID OrgID) (*Re
 }
 
 func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisionID RevisionID, files []UploadFile) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	rev, ok := f.revisions[revisionID]
 	if !ok {
 		return fmt.Errorf("revision %s not found", revisionID)
@@ -105,6 +113,9 @@ func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisio
 }
 
 func (f *FakeSealableClient) SealRevision(_ context.Context, orgID OrgID, revisionID RevisionID) (*SealResponseBody, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	rev, ok := f.revisions[revisionID]
 	if !ok {
 		return nil, fmt.Errorf("revision %s not found", revisionID)
@@ -121,6 +132,9 @@ func (f *FakeSealableClient) SealRevision(_ context.Context, orgID OrgID, revisi
 // GetSealedRevisionFiles is a test helper to retrieve files for a sealed revision.
 // It is not part of the SealableClient interface.
 func (f *FakeSealableClient) GetSealedRevisionFiles(revisionID RevisionID) ([]LoadedFile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	rev, ok := f.revisions[revisionID]
 	if !ok {
 		return nil, fmt.Errorf("revision %s not found", revisionID)
