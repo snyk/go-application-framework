@@ -7,4 +7,6 @@ const (
 	SARIF_JSON          = "application/sarif+json"
 	HTML                = "text/html"
 	UFM_RESULT          = "application/ufm.result"
+	// MACHINE_ENROLLMENT is a JSON object with the fields client_id, enrolled_machine_id and key_id; the private key is never included.
+	MACHINE_ENROLLMENT = "application/json; schema=machine-enrollment"
 )

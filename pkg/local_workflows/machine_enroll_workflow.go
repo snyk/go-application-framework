@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -37,8 +39,10 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-// machineEnrollEntryPoint enrolls this machine and stores its credential. It returns no data, as
-// the credential is a secret.
+// machineEnrollEntryPoint enrolls this machine and stores its credential. It returns the identifiers of
+// the enrollment (client, machine and key) as content_type.MACHINE_ENROLLMENT JSON, so a host can log
+// them; hosts that render workflow output, such as the CLI, print them. The private key is a secret and
+// is never part of the output.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
@@ -77,7 +81,19 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 			return nil, err
 		}
 	}
-	return nil, nil
+	return enrollmentData(enrollment)
+}
+
+func enrollmentData(enrollment machineenrollment.Enrollment) ([]workflow.Data, error) {
+	payload, err := json.Marshal(struct {
+		ClientID  string `json:"client_id"`
+		MachineID string `json:"enrolled_machine_id"`
+		KeyID     string `json:"key_id"`
+	}{ClientID: enrollment.ClientID, MachineID: enrollment.MachineID, KeyID: enrollment.KeyID})
+	if err != nil {
+		return nil, err
+	}
+	return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_MACHINE_ENROLL, machineEnrollWorkflowName), content_type.MACHINE_ENROLLMENT, payload)}, nil
 }
 
 func isEmptyStorage(storage configuration.Storage) bool {
