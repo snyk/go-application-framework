@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/osname"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -48,7 +49,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 
 	testStubProxy(t, testNoProxy)
 	requestPayload := testGetAnalyticsV2PayloadString()
-	mockClient := testGetMockHTTPClient(t, testWithPlatformConfiguration(requestPayload, testDefaultPlatformConfiguration))
+	mockClient := testGetMockHTTPClient(t, testEnriched(requestPayload, testDefaultPlatformConfiguration))
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -76,7 +77,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testin
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
 			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
-			expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
+			expected := testEnriched(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
@@ -180,7 +181,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t 
 	for name, payload := range tests {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), testConfiguredPlatformConfiguration)
+			expected := testEnriched(testGetAnalyticsV2PayloadString(), testConfiguredPlatformConfiguration)
 			ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
 			testStubProxy(t, testProxy)
@@ -196,7 +197,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsPlatformConfigurationOfTheProducer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	payload := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"insecure_https": false}`)
-	expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(),
+	expected := testEnriched(testGetAnalyticsV2PayloadString(),
 		`{"extra_ca_certs": true, "fips": true, "insecure_https": false, "network_request_attempts": 3, "proxy": true}`)
 	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
 	testStubProxy(t, testProxy)
@@ -210,7 +211,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsPlatformConfigurationOf
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformWhenMissing(t *testing.T) {
 	interaction := `"interaction": {"id": "urn:snyk:interaction:8c846423-de44-4117-9d6d-2fca77f982a8", "status": "succeeded",
 		"target": {"id": "pkg:filesystem/abc/file"}, "timestamp_ms": 1693569600000, "type": "Scan done"}`
-	platform := fmt.Sprintf(`"platform": {"arch": "%s", "configuration": %s, "os": "%s"}`, runtime.GOARCH, testDefaultPlatformConfiguration, runtime.GOOS)
+	platform := testWithOSName(fmt.Sprintf(`"platform": {"arch": "%s", "configuration": %s, "os": "%s"}`, runtime.GOARCH, testDefaultPlatformConfiguration, runtime.GOOS))
 	tests := map[string]struct {
 		attributes string
 		expected   string
@@ -238,6 +239,59 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformWhenMissing(t *t
 	}
 }
 
+func Test_ReportAnalytics_addOSName(t *testing.T) {
+	tests := map[string]struct {
+		osname   *string
+		detected string
+		expected *string
+	}{
+		"sets the detected name":         {detected: "macOS 15.1", expected: new("macOS 15.1")},
+		"keeps the name of the producer": {osname: new("Ubuntu 22.04.4 LTS"), detected: "macOS 15.1", expected: new("Ubuntu 22.04.4 LTS")},
+		"leaves out an undetected name":  {detected: "", expected: nil},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			platform := &api.Platform{Os: "darwin", Arch: "arm64", Osname: tc.osname}
+
+			addOSName(platform, tc.detected)
+
+			require.Equal(t, tc.expected, platform.Osname)
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsOSName(t *testing.T) {
+	tests := map[string]string{
+		"v2 input":           testGetAnalyticsV2PayloadString(),
+		"v1 scan-done input": testGetScanDonePayloadString(),
+	}
+	for name, payload := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))
+			expected := testEnriched(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsOSNameAndPersonaOfTheProducer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	payload := strings.Replace(testGetAnalyticsV2PayloadString(), `"os": "`+runtime.GOOS+`"`, `"os": "`+runtime.GOOS+`", "osname": "Plan 9 4"`, 1)
+	payload = strings.Replace(payload, `"results":`,
+		`"persona": {"agent": "claude_code", "agent_version": "2.1.233", "interactive": false, "interactive_mode": "6"}, "results":`, 1)
+	expected := testWithPlatformConfiguration(payload, testDefaultPlatformConfiguration)
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+
+	require.NoError(t, err)
+}
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsWhetherTheTransportProxiesTheAPI(t *testing.T) {
 	const apiURL = "https://api.snyk.io"
 	tests := map[string]struct {
@@ -255,7 +309,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsWhetherTheTransportPr
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			payload := testGetAnalyticsV2PayloadString()
-			expected := testWithPlatformConfiguration(payload, `{"extra_ca_certs": false, "fips": false, "insecure_https": false, "network_request_attempts": 1`+tc.proxy+`}`)
+			expected := testEnriched(payload, `{"extra_ca_certs": false, "fips": false, "insecure_https": false, "network_request_attempts": 1`+tc.proxy+`}`)
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
 			invocationCtx.GetConfiguration().Set(configuration.API_URL, apiURL)
 			var target string
@@ -292,7 +346,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsExtraCaCertsOnlyForAN
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			payload := testGetAnalyticsV2PayloadString()
-			expected := testWithPlatformConfiguration(payload,
+			expected := testEnriched(payload,
 				fmt.Sprintf(`{"extra_ca_certs": %t, "fips": false, "insecure_https": false, "network_request_attempts": 1, "proxy": false}`, tc.extraCaCerts))
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
 			invocationCtx.GetConfiguration().Set(configuration.ADD_TRUSTED_CA_FILE, tc.caFile)
@@ -310,7 +364,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsNumbersInExtensionAndRe
 		`"device_id": "unique-uuid"`,
 		`"device_id": "unique-uuid", "large": 9007199254740993, "larger": 12345678901234567890, "ratio": 1.50`, 1)
 	payload = strings.Replace(payload, `"count": 15,`, `"count": 9007199254740993,`, 1)
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testWithPlatformConfiguration(payload, testDefaultPlatformConfiguration)), nil)
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, testEnriched(payload, testDefaultPlatformConfiguration)), nil)
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
@@ -357,6 +411,9 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testi
 		"platform configuration is not object": testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `5`),
 		"proxy not boolean":                    testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"proxy": "yes"}`),
 		"network request attempts not integer": testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"network_request_attempts": 1.5}`),
+		"osname not string":                    strings.Replace(testGetAnalyticsV2PayloadString(), `"os":`, `"osname": 15, "os":`, 1),
+		"persona not object":                   strings.Replace(testGetAnalyticsV2PayloadString(), `"results":`, `"persona": "claude_code", "results":`, 1),
+		"persona interactive mode not string":  strings.Replace(testGetAnalyticsV2PayloadString(), `"results":`, `"persona": {"interactive_mode": 6}, "results":`, 1),
 	}
 	for name, payload := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -487,7 +544,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 	testStubProxy(t, testNoProxy)
-	mockClient := testGetMockHTTPClient(t, testWithPlatformConfiguration(expectedPayload, testDefaultPlatformConfiguration))
+	mockClient := testGetMockHTTPClient(t, testEnriched(expectedPayload, testDefaultPlatformConfiguration))
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -705,6 +762,21 @@ const (
 // testWithPlatformConfiguration returns the v2 payload with runtime.platform.configuration set, in the key order the workflow encodes it.
 func testWithPlatformConfiguration(payload string, platformConfiguration string) string {
 	return strings.Replace(payload, `"os":`, `"configuration": `+platformConfiguration+`, "os":`, 1)
+}
+
+// testEnriched returns the v2 payload as the workflow sends it: with the platform configuration and the detected operating system name.
+func testEnriched(payload string, platformConfiguration string) string {
+	return testWithOSName(testWithPlatformConfiguration(payload, platformConfiguration))
+}
+
+// testWithOSName returns the v2 payload with runtime.platform.osname set to the detected name, in the key order the workflow encodes it.
+func testWithOSName(payload string) string {
+	name := osname.Get()
+	if name == "" {
+		return payload
+	}
+	encoded, _ := json.Marshal(name) //nolint:errcheck // marshaling a string can't fail
+	return strings.Replace(payload, `"os": "`+runtime.GOOS+`"`, `"os": "`+runtime.GOOS+`", "osname": `+string(encoded), 1)
 }
 
 func testConfigureNetwork(config configuration.Configuration) {
