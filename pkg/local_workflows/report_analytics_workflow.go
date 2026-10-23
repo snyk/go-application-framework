@@ -16,10 +16,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
-	"golang.org/x/net/http/httpproxy"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/osname"
+	"github.com/snyk/go-application-framework/internal/proxy"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
@@ -35,6 +35,7 @@ var (
 	scanDoneSchemaLoader         gojsonschema.JSONLoader
 	analyticsV2SchemaLoader      gojsonschema.JSONLoader
 	reportAnalyticsWorkflowMutex sync.RWMutex = sync.RWMutex{}
+	proxyForRequest                           = proxy.FromEnvironment
 )
 
 const (
@@ -141,6 +142,8 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 
 		input = enrichV2Event(invocationCtx, input)
+		// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID in enrichV2Event and drop this call
+		input = withoutMachineID(input, logger)
 
 		logger.Printf("[%d] Data: %s", i, input.GetPayload())
 
@@ -168,7 +171,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	decoder.UseNumber()
 	if err := decoder.Decode(&body); err != nil {
 		logger.Printf("Sending the event without enrichment, failed to decode it: %v", err)
-		return withoutMachineID(input, payload, logger)
+		return input
 	}
 
 	if body.Data.Attributes.Runtime == nil {
@@ -176,19 +179,21 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	}
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
 	addOSName(body.Data.Attributes.Runtime.Platform, osname.Get())
-	// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID here and remove this line
-	body.Data.Attributes.Runtime.MachineId = nil
 
 	enriched, err := json.Marshal(body)
 	if err != nil {
 		logger.Printf("Sending the event without enrichment, failed to encode it: %v", err)
-		return withoutMachineID(input, payload, logger)
+		return input
 	}
 	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
 }
 
-// withoutMachineID removes runtime.machine_id from an event the request body type cannot represent.
-func withoutMachineID(input workflow.Data, payload []byte, logger *zerolog.Logger) workflow.Data {
+// withoutMachineID removes runtime.machine_id from a v2 event and returns an event without one unchanged.
+func withoutMachineID(input workflow.Data, logger *zerolog.Logger) workflow.Data {
+	payload, ok := input.GetPayload().([]byte)
+	if !ok {
+		return input
+	}
 	var body map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.UseNumber()
@@ -196,13 +201,11 @@ func withoutMachineID(input workflow.Data, payload []byte, logger *zerolog.Logge
 		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
 		return input
 	}
-	if data, ok := body["data"].(map[string]any); ok {
-		if attributes, ok := data["attributes"].(map[string]any); ok {
-			if rt, ok := attributes["runtime"].(map[string]any); ok {
-				delete(rt, "machine_id")
-			}
-		}
+	rt := runtimeOf(body)
+	if _, ok := rt["machine_id"]; !ok {
+		return input
 	}
+	delete(rt, "machine_id")
 
 	stripped, err := json.Marshal(body)
 	if err != nil {
@@ -210,6 +213,17 @@ func withoutMachineID(input workflow.Data, payload []byte, logger *zerolog.Logge
 		return input
 	}
 	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), stripped, workflow.WithLogger(logger))
+}
+
+func runtimeOf(body map[string]any) map[string]any {
+	if data, ok := body["data"].(map[string]any); ok {
+		if attributes, ok := data["attributes"].(map[string]any); ok {
+			if rt, ok := attributes["runtime"].(map[string]any); ok {
+				return rt
+			}
+		}
+	}
+	return nil
 }
 
 func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {
@@ -262,14 +276,13 @@ func addOSName(platform *api.Platform, name string) {
 	}
 }
 
-// isProxied reports whether the proxy environment variables, read when the event is sent, route apiURL through a proxy.
-// This can differ from the HTTP transport, which caches the environment for the process.
+// isProxied reports whether the proxy function of the HTTP transport routes apiURL through a proxy.
 func isProxied(apiURL string) (bool, error) {
 	target, err := url.Parse(apiURL)
 	if err != nil {
 		return false, err
 	}
-	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(target)
+	proxyURL, err := proxyForRequest(&http.Request{URL: target})
 	if err != nil {
 		return false, err
 	}
