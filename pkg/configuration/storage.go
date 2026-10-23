@@ -143,8 +143,24 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(s.path, configJson, fileperms.FILEPERM_666)
+	return writeConfigFile(s.path, configJson)
+}
 
+func writeConfigFile(path string, contents []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, fileperms.FILEPERM_600)
+	if err != nil {
+		return err
+	}
+	// Restrict existing files before truncating or writing credentials.
+	if err = file.Chmod(fileperms.FILEPERM_600); err == nil {
+		err = file.Truncate(0)
+	}
+	if err == nil {
+		_, err = file.Write(contents)
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
 	return err
 }
 

@@ -16,6 +16,8 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"github.com/snyk/go-application-framework/internal/fileperms"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
@@ -280,7 +282,7 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 	// read config files
 	//nolint:errcheck // breaking api change needed to fix this
-	_ = config.viper.ReadInConfig()
+	_ = config.ReloadConfig()
 }
 
 // Clone creates a copy of the current configuration.
@@ -847,6 +849,15 @@ func (ev *extendedViper) GetFiles() []string {
 }
 
 func (ev *extendedViper) ReloadConfig() error {
+	if storage, ok := ev.GetStorage().(*JsonStorage); ok {
+		info, err := os.Stat(storage.path)
+		if err == nil {
+			mode := info.Mode().Perm() & fileperms.FILEPERM_600
+			if mode != info.Mode().Perm() {
+				_ = os.Chmod(storage.path, mode) //nolint:errcheck // Permission repair is best effort when reading.
+			}
+		}
+	}
 	return ev.viper.ReadInConfig()
 }
 
