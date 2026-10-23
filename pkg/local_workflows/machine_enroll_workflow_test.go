@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -70,12 +71,16 @@ func openFileBackedConfig() configuration.Configuration {
 }
 
 func (e *enrollEnv) enroll(flags map[string]string) error {
+	_, err := e.enrollForData(flags)
+	return err
+}
+
+func (e *enrollEnv) enrollForData(flags map[string]string) ([]workflow.Data, error) {
 	invokeConfig := e.config.Clone()
 	for name, value := range flags {
 		invokeConfig.Set(name, value)
 	}
-	_, err := e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
-	return err
+	return e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
 }
 
 func requestToken(t *testing.T, server *enrollmenttest.Server, credential machinecredential.Credential) *http.Response {
@@ -125,6 +130,32 @@ func Test_machineEnroll_installerEnrollsWithDeviceToken(t *testing.T) {
 	assert.Equal(t, 1, env.server.ClientCount())
 }
 
+func Test_machineEnroll_installerGetsTheIdentifiersButNeverTheKey(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-1")
+
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)})
+
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	assert.Equal(t, content_type.MACHINE_ENROLLMENT, output[0].GetContentType())
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "the payload is JSON bytes")
+	var fields map[string]string
+	require.NoError(t, json.Unmarshal(payload, &fields))
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, credential.ClientID, fields["client_id"])
+	assert.Equal(t, machineID, fields["enrolled_machine_id"])
+	assert.NotEmpty(t, fields["key_id"])
+	assert.Len(t, fields, 3, "nothing but the identifiers")
+	keyPEM, err := machineenrollment.EncodeKeyPEM(credential.Key)
+	require.NoError(t, err)
+	assert.NotContains(t, string(payload), "PRIVATE KEY")
+	assert.NotContains(t, string(payload), "private_key")
+	assert.NotContains(t, string(payload), string(keyPEM))
+}
+
 func (e *enrollEnv) setMachine(machine runtimeinfo.Machine) {
 	e.config.Set(configuration.MACHINE_ID, machine)
 }
@@ -172,11 +203,12 @@ func Test_machineEnroll_rejectedDeviceTokenLeavesTheStoredCredentialUntouched(t 
 	first, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 
-	err = env.enroll(map[string]string{flagDeviceToken: deviceToken})
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
 
 	var enrollmentErr *machineenrollment.EnrollmentError
 	require.ErrorAs(t, err, &enrollmentErr, "the service rejection is reported")
 	assert.Equal(t, http.StatusUnauthorized, enrollmentErr.Status)
+	assert.Empty(t, output, "a rejected enrollment yields no identifiers")
 	after, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 	assert.Equal(t, first.ClientID, after.ClientID)
@@ -270,9 +302,10 @@ func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
 	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
 	env.failWritesAfterEnrolling(t)
 
-	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
 
 	require.Error(t, err)
+	assert.Empty(t, output, "the error already names the client")
 	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
 	assert.Contains(t, err.Error(), "ask an admin to revoke the client")
 	assert.NotContains(t, err.Error(), "PRIVATE KEY")
