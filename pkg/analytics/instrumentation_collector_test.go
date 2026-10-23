@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"sync"
 	"testing"
 	"time"
@@ -256,6 +257,34 @@ func Test_InstrumentationCollector(t *testing.T) {
 		require.Len(t, unscrubbedErrs, 1)
 		require.NotNil(t, unscrubbedErrs[0].Url)
 		assert.Equal(t, "/rest/orgs/acme-internal/projects", *unscrubbedErrs[0].Url)
+	})
+
+	t.Run("it should scrub interaction error urls with the default dictionary when WithConfiguration is omitted", func(t *testing.T) {
+		u, err := user.Current()
+		require.NoError(t, err)
+
+		ic := setupBaseCollector(t)
+		ic.AddError(snyk.NewBadRequestError("",
+			snyk_errors.WithMeta(constants.ERROR_META_KEY_REQUEST_PATH, "/rest/"+u.Username),
+		))
+
+		actual, err := GetV2InstrumentationObject(ic)
+		require.NoError(t, err)
+		errs := *actual.Data.Attributes.Interaction.Errors
+		require.Len(t, errs, 1)
+		require.NotNil(t, errs[0].Url)
+		assert.Equal(t, "/rest/***", *errs[0].Url)
+	})
+
+	t.Run("scrubErrorUrls should leave its input slice unchanged", func(t *testing.T) {
+		url := "/rest/token=abcdef123456"
+		input := []api.InteractionError{{Url: &url}}
+
+		scrubbed := scrubErrorUrls(input, logging.GetScrubDictFromConfig(configuration.NewWithOpts()))
+
+		assert.Equal(t, "/rest/token=***", *scrubbed[0].Url)
+		assert.Same(t, &url, input[0].Url)
+		assert.Equal(t, "/rest/token=abcdef123456", url)
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {

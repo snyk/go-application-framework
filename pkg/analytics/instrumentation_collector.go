@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os/user"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -175,8 +176,13 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
-	if options.cfg != nil && a.Interaction.Errors != nil {
-		scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(options.cfg))
+	if a.Interaction.Errors != nil && len(*a.Interaction.Errors) > 0 {
+		cfg := options.cfg
+		if cfg == nil {
+			cfg = configuration.NewWithOpts()
+		}
+		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(cfg))
+		a.Interaction.Errors = &scrubbed
 	}
 
 	d := api.AnalyticsData{
@@ -187,13 +193,15 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 	return ic.sanitizeExtensionData(options, d)
 }
 
-func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) {
-	for i, e := range errs {
+func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) []api.InteractionError {
+	scrubbed := slices.Clone(errs)
+	for i, e := range scrubbed {
 		if e.Url != nil {
-			scrubbed := string(logging.ScrubValue([]byte(*e.Url), dict))
-			errs[i].Url = &scrubbed
+			url := string(logging.ScrubValue([]byte(*e.Url), dict))
+			scrubbed[i].Url = &url
 		}
 	}
+	return scrubbed
 }
 
 // Since the `extension` attribute in the analytics payload is a value any

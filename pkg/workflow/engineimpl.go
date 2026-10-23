@@ -380,6 +380,7 @@ func (e *EngineImpl) Invoke(
 			localNetworkAccess := e.networkAccess.Clone()
 			localNetworkAccess.SetConfiguration(options.config)
 			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
+				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
 				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
 					return hostErrorHandler(withExtensionName(err, id.Host), ctx)
 				})
