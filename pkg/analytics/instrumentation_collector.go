@@ -67,7 +67,8 @@ type instrumentationCollectorImpl struct {
 	testSummary         json_schemas.TestSummary
 	targetId            string
 	instrumentationErr  []error
-	persona             *api.Persona
+	personaMu           sync.Mutex
+	persona             *Persona
 	extensionMu         sync.Mutex
 	extension           map[string]interface{}
 }
@@ -198,7 +199,7 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, dict)
 			d.Attributes.Interaction.Extension = &scrubbed
 		}
-		d.Attributes.Interaction.Persona = scrubPersona(d.Attributes.Interaction.Persona, dict)
+		scrubPersona(d.Attributes.Interaction.Persona, dict)
 	}
 
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
@@ -305,13 +306,17 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	extensionCopy := maps.Clone(ic.extension)
 	ic.extensionMu.Unlock()
 
+	ic.personaMu.Lock()
+	persona := toAPIPersona(ic.persona)
+	ic.personaMu.Unlock()
+
 	stage := toInteractionStage(ic.stage)
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),
 		Extension:   &extensionCopy,
 		Id:          ic.interactionId,
-		Persona:     ic.persona,
+		Persona:     persona,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       &stage,
 		Status:      string(ic.status),

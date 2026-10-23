@@ -20,38 +20,48 @@ type Persona struct {
 	InteractiveMode int
 }
 
-// SetPersona sets the persona sent as interaction.persona. It returns an error for a collector not created by NewInstrumentationCollector.
+// SetPersona sets the persona sent as interaction.persona. It returns an error, and leaves the persona unchanged,
+// for a collector not created by NewInstrumentationCollector or an InteractiveMode outside 0 to 7.
 func SetPersona(collector InstrumentationCollector, p Persona) error {
 	ic, ok := collector.(*instrumentationCollectorImpl)
 	if !ok {
-		return fmt.Errorf("failed to convert collector")
+		return fmt.Errorf("collector was not created by NewInstrumentationCollector")
+	}
+	if p.InteractiveMode < 0 || p.InteractiveMode > 7 {
+		return fmt.Errorf("interactive mode %d is outside 0 to 7", p.InteractiveMode)
 	}
 
-	persona := &api.Persona{
-		Interactive:     &p.Interactive,
-		InteractiveMode: new(strconv.Itoa(p.InteractiveMode)),
-	}
-	if p.Agent != "" {
-		persona.Agent = &p.Agent
-	}
-	if p.AgentVersion != "" {
-		persona.AgentVersion = &p.AgentVersion
-	}
-	ic.persona = persona
+	ic.personaMu.Lock()
+	defer ic.personaMu.Unlock()
+	ic.persona = &p
 	return nil
 }
 
-// scrubPersona returns a copy, so scrubbing never alters the persona the collector holds.
-func scrubPersona(p *api.Persona, dict logging.ScrubbingDict) *api.Persona {
+func toAPIPersona(p *Persona) *api.Persona {
 	if p == nil {
 		return nil
 	}
-	scrubbed := *p
+	persona := &api.Persona{
+		Interactive:     new(p.Interactive),
+		InteractiveMode: new(strconv.Itoa(p.InteractiveMode)),
+	}
+	if p.Agent != "" {
+		persona.Agent = new(p.Agent)
+	}
+	if p.AgentVersion != "" {
+		persona.AgentVersion = new(p.AgentVersion)
+	}
+	return persona
+}
+
+func scrubPersona(p *api.Persona, dict logging.ScrubbingDict) {
+	if p == nil {
+		return
+	}
 	if p.Agent != nil {
-		scrubbed.Agent = new(string(logging.ScrubValue([]byte(*p.Agent), dict)))
+		p.Agent = new(string(logging.ScrubValue([]byte(*p.Agent), dict)))
 	}
 	if p.AgentVersion != nil {
-		scrubbed.AgentVersion = new(string(logging.ScrubValue([]byte(*p.AgentVersion), dict)))
+		p.AgentVersion = new(string(logging.ScrubValue([]byte(*p.AgentVersion), dict)))
 	}
-	return &scrubbed
 }
