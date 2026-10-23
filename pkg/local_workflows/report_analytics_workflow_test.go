@@ -340,6 +340,15 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_removesMachineIdFromUndecoda
 	require.NoError(t, err)
 }
 
+func Test_ReportAnalytics_withoutMachineID_returnsAnEventWithoutOneUnchanged(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	payload := `{"data": {"type": "analytics", "attributes": {"runtime": {"application": {"name": "snyk-ls"}}}}}`
+
+	output := withoutMachineID(testPayload(payload), &logger)
+
+	require.Equal(t, []byte(payload), output.GetPayload())
+}
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testing.T) {
 	tests := map[string]string{
 		"empty object":                         `{}`,
