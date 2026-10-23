@@ -36,6 +36,11 @@ var _ Client = (*HTTPClient)(nil)
 
 // NewClient creates a new high-level file upload client.
 func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
+	return newHTTPClient(httpClient, cfg, opts...)
+}
+
+// newHTTPClient builds an HTTPClient with all defaults applied; shared by the client constructors.
+func newHTTPClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient {
 	client := &HTTPClient{
 		cfg: cfg,
 	}
