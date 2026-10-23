@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
+	"github.com/snyk/go-application-framework/internal/proxy"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
@@ -120,7 +121,7 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 		config:         config,
 		staticHeader:   http.Header{},
 		logger:         &logger,
-		proxy:          http.ProxyFromEnvironment,
+		proxy:          proxy.FromEnvironment,
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 	}
 

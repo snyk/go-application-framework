@@ -16,9 +16,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
-	"golang.org/x/net/http/httpproxy"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/proxy"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
@@ -34,6 +34,7 @@ var (
 	scanDoneSchemaLoader         gojsonschema.JSONLoader
 	analyticsV2SchemaLoader      gojsonschema.JSONLoader
 	reportAnalyticsWorkflowMutex sync.RWMutex = sync.RWMutex{}
+	proxyForRequest                           = proxy.FromEnvironment
 )
 
 const (
@@ -254,14 +255,13 @@ func addPlatformConfiguration(rt *api.Runtime, config configuration.Configuratio
 	}
 }
 
-// isProxied reports whether the proxy environment variables, read when the event is sent, route apiURL through a proxy.
-// This can differ from the HTTP transport, which caches the environment for the process.
+// isProxied reports whether the proxy function of the HTTP transport routes apiURL through a proxy.
 func isProxied(apiURL string) (bool, error) {
 	target, err := url.Parse(apiURL)
 	if err != nil {
 		return false, err
 	}
-	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(target)
+	proxyURL, err := proxyForRequest(&http.Request{URL: target})
 	if err != nil {
 		return false, err
 	}

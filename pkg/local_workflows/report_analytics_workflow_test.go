@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"runtime"
 	"strings"
@@ -45,6 +46,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
+	testStubProxy(t, testNoProxy)
 	requestPayload := testGetAnalyticsV2PayloadString()
 	mockClient := testGetMockHTTPClient(t, testWithPlatformConfiguration(requestPayload, testDefaultPlatformConfiguration))
 
@@ -178,10 +180,10 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t 
 	for name, payload := range tests {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			testSetProxyEnvironment(t, map[string]string{"HTTPS_PROXY": "http://proxy.example.com:8080"})
 			expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), testConfiguredPlatformConfiguration)
 			ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
+			testStubProxy(t, testProxy)
 			testConfigureNetwork(invocationCtx.GetConfiguration())
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
@@ -193,11 +195,11 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformConfiguration(t 
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsPlatformConfigurationOfTheProducer(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	testSetProxyEnvironment(t, map[string]string{"HTTPS_PROXY": "http://proxy.example.com:8080"})
 	payload := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(), `{"insecure_https": false}`)
 	expected := testWithPlatformConfiguration(testGetAnalyticsV2PayloadString(),
 		`{"extra_ca_certs": true, "fips": true, "insecure_https": false, "network_request_attempts": 3, "proxy": true}`)
 	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
+	testStubProxy(t, testProxy)
 	testConfigureNetwork(invocationCtx.GetConfiguration())
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
@@ -236,44 +238,46 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_addsPlatformWhenMissing(t *t
 	}
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsWhetherTheEnvironmentProxiesTheAPI(t *testing.T) {
-	const proxyURL = "http://proxy.example.com:8080"
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsWhetherTheTransportProxiesTheAPI(t *testing.T) {
+	const apiURL = "https://api.snyk.io"
 	tests := map[string]struct {
-		apiURL string
-		env    map[string]string
-		proxy  string
+		proxyFunc func(*http.Request) (*url.URL, error)
+		proxy     string
 	}{
-		"no proxy":              {env: nil, proxy: `, "proxy": false`},
-		"HTTPS_PROXY":           {env: map[string]string{"HTTPS_PROXY": proxyURL}, proxy: `, "proxy": true`},
-		"lowercase https_proxy": {env: map[string]string{"https_proxy": proxyURL}, proxy: `, "proxy": true`},
-		"HTTP_PROXY does not apply to an https API": {env: map[string]string{"HTTP_PROXY": proxyURL}, proxy: `, "proxy": false`},
-		"NO_PROXY lists the API host":               {env: map[string]string{"HTTPS_PROXY": proxyURL, "NO_PROXY": "api.snyk.io"}, proxy: `, "proxy": false`},
-		"NO_PROXY lists another host":               {env: map[string]string{"HTTPS_PROXY": proxyURL, "NO_PROXY": "example.com"}, proxy: `, "proxy": true`},
-		"unparsable proxy URL is not used":          {env: map[string]string{"HTTPS_PROXY": "http://%zz"}, proxy: `, "proxy": false`},
+		"not proxied": {proxyFunc: testNoProxy, proxy: `, "proxy": false`},
+		"proxied":     {proxyFunc: testProxy, proxy: `, "proxy": true`},
 		"undeterminable proxy is left out": {
-			apiURL: "http://api.snyk.io",
-			env:    map[string]string{"HTTP_PROXY": proxyURL, "REQUEST_METHOD": "GET"},
-			proxy:  ``,
+			proxyFunc: func(*http.Request) (*url.URL, error) { return nil, errors.New("invalid proxy") },
+			proxy:     ``,
 		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			testSetProxyEnvironment(t, tc.env)
-			apiURL := tc.apiURL
-			if apiURL == "" {
-				apiURL = "https://api.snyk.io"
-			}
 			payload := testGetAnalyticsV2PayloadString()
 			expected := testWithPlatformConfiguration(payload, `{"extra_ca_certs": false, "fips": false, "insecure_https": false, "network_request_attempts": 1`+tc.proxy+`}`)
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
 			invocationCtx.GetConfiguration().Set(configuration.API_URL, apiURL)
+			var target string
+			testStubProxy(t, func(req *http.Request) (*url.URL, error) {
+				target = req.URL.String()
+				return tc.proxyFunc(req)
+			})
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
 			require.NoError(t, err)
+			require.Equal(t, apiURL, target)
 		})
 	}
+}
+
+func Test_ReportAnalytics_isProxied_rejectsAnUnparsableAPIURL(t *testing.T) {
+	testStubProxy(t, testProxy)
+
+	_, err := isProxied("https://api.snyk.io/%zz")
+
+	require.Error(t, err)
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsExtraCaCertsOnlyForANonEmptyCaFile(t *testing.T) {
@@ -473,6 +477,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+	testStubProxy(t, testNoProxy)
 	mockClient := testGetMockHTTPClient(t, testWithPlatformConfiguration(expectedPayload, testDefaultPlatformConfiguration))
 
 	// invocation context mocks
@@ -660,6 +665,7 @@ func testGetMockHTTPClient(t *testing.T, requestPayload string) *http.Client {
 func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller, client *http.Client, ri runtimeinfo.RuntimeInfo) *mocks.MockInvocationContext {
 	t.Helper()
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+	testStubProxy(t, testNoProxy)
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
@@ -700,11 +706,14 @@ func testConfigureNetwork(config configuration.Configuration) {
 	config.Set(configuration.ADD_TRUSTED_CA_FILE, "/certs/extra-ca.pem")
 }
 
-// testSetProxyEnvironment clears every variable the proxy rules read, in both cases, before setting env.
-func testSetProxyEnvironment(t *testing.T, env map[string]string) {
+func testStubProxy(t *testing.T, proxyFunc func(*http.Request) (*url.URL, error)) {
 	t.Helper()
-	configtest.IsolateEnvironmentForTest(t, "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "REQUEST_METHOD")
-	for key, value := range env {
-		t.Setenv(key, value)
-	}
+	original := proxyForRequest
+	t.Cleanup(func() { proxyForRequest = original })
+	proxyForRequest = proxyFunc
 }
+
+var (
+	testNoProxy = http.ProxyURL(nil)
+	testProxy   = http.ProxyURL(&url.URL{Scheme: "http", Host: "proxy.example.com:8080"})
+)
