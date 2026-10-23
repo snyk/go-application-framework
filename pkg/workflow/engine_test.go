@@ -5,7 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -15,7 +19,9 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -1402,4 +1408,164 @@ func Test_Engine_GetConfigurationConcurrentWithSetConfigurationDoesNotRace(t *te
 		}
 	})
 	wg.Wait()
+}
+
+func setupErrorAttributionEngine(t *testing.T, callbacks map[string]Callback) Engine {
+	t.Helper()
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+	for name, callback := range callbacks {
+		_, err := engine.Register(NewWorkflowIdentifier(name), ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), callback)
+		require.NoError(t, err)
+	}
+	require.NoError(t, engine.Init())
+	return engine
+}
+
+func Test_Engine_Invoke_ErrorExtensionName(t *testing.T) {
+	t.Run("a bare catalog error returned from a workflow carries the workflow name", func(t *testing.T) {
+		engine := setupErrorAttributionEngine(t, map[string]Callback{
+			"code test": func(InvocationContext, []Data) ([]Data, error) {
+				return nil, cli.NewConnectionTimeoutError("")
+			},
+		})
+
+		_, err := engine.Invoke(NewWorkflowIdentifier("code test"))
+
+		var catalogErr snyk_errors.Error
+		require.ErrorAs(t, err, &catalogErr)
+		assert.Equal(t, "code.test", catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME])
+	})
+
+	t.Run("wrapped catalog errors and plain errors come back unchanged", func(t *testing.T) {
+		wrapped := fmt.Errorf("context: %w", cli.NewConnectionTimeoutError(""))
+		plain := errors.New("plain")
+		engine := setupErrorAttributionEngine(t, map[string]Callback{
+			"wrapped": func(InvocationContext, []Data) ([]Data, error) { return nil, wrapped },
+			"plain":   func(InvocationContext, []Data) ([]Data, error) { return nil, plain },
+		})
+
+		_, err := engine.Invoke(NewWorkflowIdentifier("wrapped"))
+		assert.Same(t, wrapped, err)
+		var catalogErr snyk_errors.Error
+		require.ErrorAs(t, err, &catalogErr)
+		assert.NotContains(t, catalogErr.Meta, constants.ERROR_META_KEY_EXTENSION_NAME)
+
+		_, err = engine.Invoke(NewWorkflowIdentifier("plain"))
+		assert.ErrorIs(t, err, plain)
+		assert.Same(t, plain, err)
+	})
+
+	t.Run("a nested invocation keeps the inner workflow name", func(t *testing.T) {
+		engine := setupErrorAttributionEngine(t, map[string]Callback{
+			"outer": func(invocation InvocationContext, _ []Data) ([]Data, error) {
+				return invocation.GetEngine().Invoke(NewWorkflowIdentifier("inner"))
+			},
+			"inner": func(InvocationContext, []Data) ([]Data, error) {
+				return nil, cli.NewConnectionTimeoutError("")
+			},
+		})
+
+		_, err := engine.Invoke(NewWorkflowIdentifier("outer"))
+
+		var catalogErr snyk_errors.Error
+		require.ErrorAs(t, err, &catalogErr)
+		assert.Equal(t, "inner", catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME])
+	})
+
+	t.Run("the workflow's own error is not modified", func(t *testing.T) {
+		original := cli.NewConnectionTimeoutError("", snyk_errors.WithMeta("key", "value"))
+		engine := setupErrorAttributionEngine(t, map[string]Callback{
+			"wf": func(InvocationContext, []Data) ([]Data, error) { return nil, original },
+		})
+
+		_, err := engine.Invoke(NewWorkflowIdentifier("wf"))
+
+		var catalogErr snyk_errors.Error
+		require.ErrorAs(t, err, &catalogErr)
+		assert.Equal(t, "wf", catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME])
+		assert.Equal(t, map[string]any{"key": "value"}, original.Meta)
+	})
+
+	t.Run("without a host error handler, the invocation has none and non-2xx responses are not errors", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+		}))
+		t.Cleanup(server.Close)
+
+		var handlerSeen bool
+		var requestErr error
+		engine := setupErrorAttributionEngine(t, map[string]Callback{
+			"wf": func(invocation InvocationContext, _ []Data) ([]Data, error) {
+				handlerSeen = invocation.GetNetworkAccess().GetErrorHandler() != nil
+				res, err := invocation.GetNetworkAccess().GetHttpClient().Get(server.URL + "/rest/some/path")
+				if res != nil {
+					_ = res.Body.Close()
+				}
+				requestErr = err
+				return nil, nil
+			},
+		})
+		engine.GetConfiguration().Set(configuration.API_URL, server.URL)
+
+		_, err := engine.Invoke(NewWorkflowIdentifier("wf"))
+
+		require.NoError(t, err)
+		assert.False(t, handlerSeen)
+		assert.NoError(t, requestErr)
+	})
+}
+
+func Test_Engine_Invoke_NetworkErrorAttribution_Integration(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	closedPortUrl := "http://" + listener.Addr().String() + "/rest/some/path?token=secret"
+	require.NoError(t, listener.Close())
+
+	var mu sync.Mutex
+	var collected []error
+	engine := setupErrorAttributionEngine(t, map[string]Callback{
+		"code test": func(invocation InvocationContext, _ []Data) ([]Data, error) {
+			res, requestErr := invocation.GetNetworkAccess().GetHttpClient().Get(closedPortUrl)
+			if res != nil {
+				_ = res.Body.Close()
+			}
+			return nil, requestErr
+		},
+	})
+	engine.GetNetworkAccess().AddErrorHandler(func(err error, _ context.Context) error {
+		mu.Lock()
+		defer mu.Unlock()
+		collected = append(collected, err)
+		return err
+	})
+
+	_, err = engine.Invoke(NewWorkflowIdentifier("code test"))
+	require.Error(t, err)
+
+	mu.Lock()
+	invocationErrs := slices.Clone(collected)
+	mu.Unlock()
+
+	untagged := engine.GetNetworkAccess().GetErrorHandler()(cli.NewConnectionTimeoutError(""), context.Background())
+	var untaggedErr snyk_errors.Error
+	require.ErrorAs(t, untagged, &untaggedErr)
+	assert.NotContains(t, untaggedErr.Meta, constants.ERROR_META_KEY_EXTENSION_NAME, "the engine-level handler must stay unwrapped")
+
+	require.Len(t, invocationErrs, 1)
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, invocationErrs[0], &catalogErr)
+	assert.Equal(t, "code.test", catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME])
+	assert.Equal(t, "/rest/some/path", catalogErr.Meta[constants.ERROR_META_KEY_REQUEST_PATH])
+
+	ic := analytics.NewInstrumentationCollector()
+	ic.AddError(invocationErrs[0])
+	obj, err := analytics.GetV2InstrumentationObject(ic, analytics.WithConfiguration(engine.GetConfiguration()))
+	require.NoError(t, err)
+
+	errs := *obj.Data.Attributes.Interaction.Errors
+	require.Len(t, errs, 1)
+	require.NotNil(t, errs[0].Url)
+	assert.Equal(t, "/rest/some/path", *errs[0].Url)
+	require.NotNil(t, errs[0].Extension)
+	assert.Equal(t, "code.test", *errs[0].Extension)
 }

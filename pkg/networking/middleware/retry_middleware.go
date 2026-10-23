@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -331,7 +330,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	finalResponse, finalError = backoff.Retry(reqCtx, op,
 		backoff.WithBackOff(backoffMethod),
 		backoff.WithNotify(func(err error, duration time.Duration) {
-			rm.notifyRetry(reqCtx, err, duration)
+			rm.notifyRetry(req, err, duration)
 		}),
 	)
 
@@ -387,7 +386,7 @@ func ensureGetBodyExists(req *http.Request) (io.ReadCloser, func() (io.ReadClose
 	return firstBody, newGetBody, nil, firstBodyErr
 }
 
-func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration time.Duration) {
+func (rm RetryMiddleware) notifyRetry(req *http.Request, err error, duration time.Duration) {
 	if rm.errorHandler == nil {
 		return
 	}
@@ -395,7 +394,8 @@ func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration t
 	if errors.As(err, &retryErr) {
 		retryErr.Duration = duration
 		if catalogErr, ok := retryAttemptNotification(retryErr); ok {
-			if handlerErr := rm.errorHandler(catalogErr, ctx); handlerErr != nil {
+			catalogErr = addRequestDataToErr(catalogErr, req)
+			if handlerErr := rm.errorHandler(catalogErr, req.Context()); handlerErr != nil {
 				rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
 			}
 		}

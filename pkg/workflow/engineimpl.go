@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"runtime/debug"
@@ -17,6 +18,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -377,6 +379,12 @@ func (e *EngineImpl) Invoke(
 			// prepare networkAccess
 			localNetworkAccess := e.networkAccess.Clone()
 			localNetworkAccess.SetConfiguration(options.config)
+			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
+				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
+				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
+					return hostErrorHandler(withExtensionName(err, id.Host), ctx)
+				})
+			}
 
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,
@@ -399,6 +407,7 @@ func (e *EngineImpl) Invoke(
 				}()
 				output, err = callback(invocationCtx, options.input)
 			}()
+			err = withExtensionName(err, id.Host)
 			localLogger.Printf("Workflow End")
 
 			if callbackPanic != nil {
@@ -423,6 +432,20 @@ func (e *EngineImpl) Invoke(
 	}
 
 	return output, err
+}
+
+// withExtensionName keeps an extension name that is already set, so a nested workflow's attribution survives the outer one.
+func withExtensionName(err error, extensionName string) error {
+	catalogErr, ok := err.(snyk_errors.Error) //nolint:errorlint // replacing a wrapped catalog error would drop the wrappers callers type-assert on
+	if !ok {
+		return err
+	}
+	if _, set := catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME]; set {
+		return err
+	}
+	catalogErr.Meta = maps.Clone(catalogErr.Meta)
+	snyk_errors.WithMeta(constants.ERROR_META_KEY_EXTENSION_NAME, extensionName)(&catalogErr)
+	return catalogErr
 }
 
 func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector, cfg configuration.Configuration) {

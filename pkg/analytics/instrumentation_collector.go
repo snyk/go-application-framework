@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os/user"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -176,12 +178,32 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
+	if a.Interaction.Errors != nil && len(*a.Interaction.Errors) > 0 {
+		cfg := options.cfg
+		if cfg == nil {
+			cfg = configuration.NewWithOpts()
+		}
+		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(cfg))
+		a.Interaction.Errors = &scrubbed
+	}
+
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: a,
 	}
 
 	return ic.sanitizeExtensionData(options, d)
+}
+
+func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) []api.InteractionError {
+	scrubbed := slices.Clone(errs)
+	for i, e := range scrubbed {
+		if e.Url != nil {
+			url := string(logging.ScrubValue([]byte(*e.Url), dict))
+			scrubbed[i].Url = &url
+		}
+	}
+	return scrubbed
 }
 
 // Since the `extension` attribute in the analytics payload is a value any
@@ -398,7 +420,16 @@ func toInteractionError(e error) *api.InteractionError {
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
 		interactionError.Id = errorCatalogError.ErrorCode
 		interactionError.Code = &interactionErrorCode
+		interactionError.Url = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_REQUEST_PATH)
+		interactionError.Extension = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_EXTENSION_NAME)
 	}
 
 	return interactionError
+}
+
+func nonEmptyStringMeta(meta map[string]any, key string) *string {
+	if v, ok := meta[key].(string); ok && v != "" {
+		return &v
+	}
+	return nil
 }

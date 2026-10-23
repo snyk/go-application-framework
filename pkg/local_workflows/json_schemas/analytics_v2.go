@@ -180,6 +180,14 @@ const AnalyticsV2EventSchema = `{
         "code": {
           "type": "string",
           "description": "The HTTP specific error code."
+        },
+        "url": {
+          "type": "string",
+          "description": "The URL or path that produced the error."
+        },
+        "extension": {
+          "type": "string",
+          "description": "The name of the extension that produced the error."
         }
       }
     },

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"sync"
 	"testing"
 	"time"
@@ -11,9 +12,12 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/logging"
@@ -182,6 +186,105 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should report the request path and extension name of an interaction error", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		ic.AddError(fmt.Errorf("wrapped: %w", snyk.NewBadRequestError("",
+			snyk_errors.WithMeta(constants.ERROR_META_KEY_REQUEST_PATH, "/rest/orgs/123/projects"),
+			snyk_errors.WithMeta(constants.ERROR_META_KEY_EXTENSION_NAME, "code.test"),
+		)))
+
+		actual, err := GetV2InstrumentationObject(ic)
+		require.NoError(t, err)
+
+		errs := *actual.Data.Attributes.Interaction.Errors
+		require.Len(t, errs, 1)
+		require.NotNil(t, errs[0].Url)
+		assert.Equal(t, "/rest/orgs/123/projects", *errs[0].Url)
+		require.NotNil(t, errs[0].Extension)
+		assert.Equal(t, "code.test", *errs[0].Extension)
+	})
+
+	t.Run("it should omit url and extension of an interaction error without usable meta", func(t *testing.T) {
+		metas := map[string]map[string]any{
+			"missing":    nil,
+			"empty":      {constants.ERROR_META_KEY_REQUEST_PATH: "", constants.ERROR_META_KEY_EXTENSION_NAME: ""},
+			"non-string": {constants.ERROR_META_KEY_REQUEST_PATH: 42, constants.ERROR_META_KEY_EXTENSION_NAME: true},
+		}
+		for name, meta := range metas {
+			t.Run(name, func(t *testing.T) {
+				ic := setupBaseCollector(t)
+				snykError := snyk.NewBadRequestError("")
+				snykError.Meta = meta
+				ic.AddError(snykError)
+
+				actual, err := GetV2InstrumentationObject(ic)
+				require.NoError(t, err)
+
+				errs := *actual.Data.Attributes.Interaction.Errors
+				require.Len(t, errs, 1)
+				assert.Nil(t, errs[0].Url)
+				assert.Nil(t, errs[0].Extension)
+
+				actualJson, err := json.Marshal(errs[0])
+				require.NoError(t, err)
+				assert.NotContains(t, string(actualJson), `"url"`)
+				assert.NotContains(t, string(actualJson), `"extension"`)
+			})
+		}
+	})
+
+	t.Run("it should scrub REDACTION_TERMS from interaction error urls when WithConfiguration is supplied", func(t *testing.T) {
+		cfg := configuration.NewInMemory()
+		cfg.Set(logging.REDACTION_TERMS, []string{"acme-internal"})
+
+		ic := setupBaseCollector(t)
+		ic.AddError(snyk.NewBadRequestError("",
+			snyk_errors.WithMeta(constants.ERROR_META_KEY_REQUEST_PATH, "/rest/orgs/acme-internal/projects"),
+		))
+
+		scrubbed, err := GetV2InstrumentationObject(ic, WithConfiguration(cfg))
+		require.NoError(t, err)
+		scrubbedErrs := *scrubbed.Data.Attributes.Interaction.Errors
+		require.Len(t, scrubbedErrs, 1)
+		require.NotNil(t, scrubbedErrs[0].Url)
+		assert.Equal(t, "/rest/orgs/***/projects", *scrubbedErrs[0].Url)
+
+		unscrubbed, err := GetV2InstrumentationObject(ic)
+		require.NoError(t, err)
+		unscrubbedErrs := *unscrubbed.Data.Attributes.Interaction.Errors
+		require.Len(t, unscrubbedErrs, 1)
+		require.NotNil(t, unscrubbedErrs[0].Url)
+		assert.Equal(t, "/rest/orgs/acme-internal/projects", *unscrubbedErrs[0].Url)
+	})
+
+	t.Run("it should scrub interaction error urls with the default dictionary when WithConfiguration is omitted", func(t *testing.T) {
+		u, err := user.Current()
+		require.NoError(t, err)
+
+		ic := setupBaseCollector(t)
+		ic.AddError(snyk.NewBadRequestError("",
+			snyk_errors.WithMeta(constants.ERROR_META_KEY_REQUEST_PATH, "/rest/"+u.Username),
+		))
+
+		actual, err := GetV2InstrumentationObject(ic)
+		require.NoError(t, err)
+		errs := *actual.Data.Attributes.Interaction.Errors
+		require.Len(t, errs, 1)
+		require.NotNil(t, errs[0].Url)
+		assert.Equal(t, "/rest/***", *errs[0].Url)
+	})
+
+	t.Run("scrubErrorUrls should leave its input slice unchanged", func(t *testing.T) {
+		url := "/rest/token=abcdef123456"
+		input := []api.InteractionError{{Url: &url}}
+
+		scrubbed := scrubErrorUrls(input, logging.GetScrubDictFromConfig(configuration.NewWithOpts()))
+
+		assert.Equal(t, "/rest/token=***", *scrubbed[0].Url)
+		assert.Same(t, &url, input[0].Url)
+		assert.Equal(t, "/rest/token=abcdef123456", url)
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {
