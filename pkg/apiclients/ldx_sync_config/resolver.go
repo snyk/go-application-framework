@@ -37,7 +37,7 @@ var (
 )
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20260507.ClientWithResponsesInterface, error) {
-	client := engine.GetNetworkAccess().GetHttpClient()
+	client := workflow.CreateNetworkAccessFromEngine(engine, config).GetHttpClient()
 	url, err := url2.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func newClientImpl(engine workflow.Engine, config configuration.Configuration) (
 }
 
 func newApiClientImpl(engine workflow.Engine, config configuration.Configuration) api.ApiClient {
-	client := engine.GetNetworkAccess().GetHttpClient()
+	client := workflow.CreateNetworkAccessFromEngine(engine, config).GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	return api.NewApi(url, client)
 }
