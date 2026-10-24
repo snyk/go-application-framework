@@ -109,6 +109,9 @@ type extendedViper struct {
 	supportedEnvVars []string
 
 	interkeyDependencies map[string][]string
+
+	// detachedEnvVars stores the env vars that were moved out of the process environment, see WithDetachedEnvVars.
+	detachedEnvVars map[string]bool
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -201,6 +204,41 @@ func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	}
 }
 
+// WithDetachedEnvVars reads the given env vars once, keeps their values in the configuration and removes them from
+// the process environment. Child processes, which inherit the process environment, then don't see them. Use it for
+// secrets that child processes must not receive.
+func WithDetachedEnvVars(envVars ...string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithDetachedEnvVars()")
+		}
+		ev.detachEnvVars(envVars)
+	}
+}
+
+func (ev *extendedViper) detachEnvVars(envVars []string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	for _, envVar := range envVars {
+		value, ok := os.LookupEnv(envVar)
+		if !ok {
+			continue
+		}
+
+		key := strings.ToLower(envVar)
+		if len(value) > 0 {
+			// viper.Set is used to bypass storage, the value must never be persisted
+			ev.viper.Set(key, value)
+		}
+		// marked even when empty, a set but empty env var must still be reported by GetAllKeysThatContainValues
+		ev.detachedEnvVars[key] = true
+		//nolint:errcheck // nothing we can do if this fails
+		_ = os.Unsetenv(envVar)
+	}
+}
+
 // NewWithOpts creates a new snyk configuration file with optional parameters
 func NewWithOpts(opts ...Opts) Configuration {
 	config := createViperDefaultConfig(opts...)
@@ -249,6 +287,7 @@ func createViperDefaultConfig(opts ...Opts) *extendedViper {
 		defaultValues:        make(map[string]DefaultValueFunction),
 		persistedKeys:        make(map[string]bool),
 		interkeyDependencies: make(map[string][]string),
+		detachedEnvVars:      make(map[string]bool),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
@@ -322,6 +361,12 @@ func (ev *extendedViper) Clone() Configuration {
 
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
+	}
+
+	if evClone, ok := clone.(*extendedViper); ok {
+		for k := range ev.detachedEnvVars {
+			evClone.detachedEnvVars[k] = true
+		}
 	}
 
 	for _, v := range ev.flagsets {
@@ -732,7 +777,7 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	foundKeys := []string{}
 	for _, ak := range alternativeKeys {
 		if ev.GetKeyType(ak) == EnvVarKeyType {
-			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
+			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok || ev.isDetachedEnvVar(ak) {
 				foundKeys = append(foundKeys, ak)
 			}
 		} else if slices.Contains(allKeys, ak) {
@@ -743,6 +788,12 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	}
 
 	return foundKeys
+}
+
+func (ev *extendedViper) isDetachedEnvVar(key string) bool {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return ev.detachedEnvVars[strings.ToLower(key)]
 }
 
 func (ev *extendedViper) GetKeyType(key string) KeyType {
