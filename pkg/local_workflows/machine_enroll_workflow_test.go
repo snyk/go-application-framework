@@ -13,12 +13,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -449,4 +453,127 @@ func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDevi
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "credential cannot be stored")
 	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+// cliErrorHandler records each error it gets and returns it unchanged, as the CLI's handler does.
+type cliErrorHandler struct {
+	mu   sync.Mutex
+	errs []error
+}
+
+func (h *cliErrorHandler) handle(err error, _ context.Context) error {
+	if err == nil {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.errs = append(h.errs, err)
+	return err
+}
+
+func (h *cliErrorHandler) handled() []error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.errs)
+}
+
+func (e *enrollEnv) installCLIErrorHandler() *cliErrorHandler {
+	handler := &cliErrorHandler{}
+	e.engine.GetNetworkAccess().AddErrorHandler(handler.handle)
+	return handler
+}
+
+func Test_machineEnroll_enrollmentErrorsSurviveTheHostErrorHandler(t *testing.T) {
+	rejections := map[string]struct {
+		status   int
+		detail   string
+		hint     string
+		sentinel error
+		enroll   func(t *testing.T, env *enrollEnv) error
+	}{
+		"spent device token": {
+			status: http.StatusUnauthorized,
+			detail: "The device token is not valid.",
+			enroll: func(t *testing.T, env *enrollEnv) error {
+				t.Helper()
+				deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+				require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+				return env.enroll(map[string]string{flagDeviceToken: deviceToken})
+			},
+		},
+		"fleet key for an enrolled machine": {
+			status:   http.StatusConflict,
+			detail:   "The machine is enrolled already. Ask an admin for a device token to enroll it again.",
+			hint:     "ask an admin for a device token",
+			sentinel: machineenrollment.ErrMachineEnrolled,
+			enroll: func(t *testing.T, env *enrollEnv) error {
+				t.Helper()
+				machineID := env.server.RegisterMachine("SERIAL-42")
+				fleetKeyFile, fleetKey := writeFleetKey(t)
+				env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+				env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+				require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+				return env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+			},
+		},
+	}
+	hostSetups := map[string]struct{ withHandler, errorTitles bool }{
+		"no error handler":                 {},
+		"no error handler, titled errors":  {errorTitles: true},
+		"CLI error handler":                {withHandler: true},
+		"CLI error handler, titled errors": {withHandler: true, errorTitles: true},
+	}
+	for setupName, setup := range hostSetups {
+		for name, rejection := range rejections {
+			t.Run(setupName+"/"+name, func(t *testing.T) {
+				env := newEnrollEnv(t)
+				env.server.SetErrorTitles(setup.errorTitles)
+				handler := &cliErrorHandler{}
+				if setup.withHandler {
+					handler = env.installCLIErrorHandler()
+				}
+
+				err := rejection.enroll(t, env)
+
+				var enrollmentErr *machineenrollment.EnrollmentError
+				require.ErrorAs(t, err, &enrollmentErr)
+				assert.Equal(t, rejection.status, enrollmentErr.Status)
+				if rejection.sentinel != nil {
+					assert.ErrorIs(t, err, rejection.sentinel)
+				}
+				assert.Contains(t, err.Error(), rejection.detail)
+				assert.Contains(t, err.Error(), rejection.hint)
+				assert.NotContains(t, err.Error(), "snyk auth")
+				var catalogErr snyk_errors.Error
+				assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+				assert.Empty(t, handler.handled(), "the host does not collect the enrollment rejection")
+			})
+		}
+	}
+}
+
+func Test_machineEnroll_keepsTheHostErrorHandlerOnTheInvocationNetworkAccess(t *testing.T) {
+	env := newEnrollEnv(t)
+	config := env.config.Clone()
+	config.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+	networkAccess := networking.NewNetworkAccess(config)
+	handler := &cliErrorHandler{}
+	networkAccess.AddErrorHandler(handler.handle)
+	invocationCtx := mocks.NewMockInvocationContext(gomock.NewController(t))
+	invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationCtx.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
+	invocationCtx.EXPECT().Context().Return(t.Context()).AnyTimes()
+	invocationCtx.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{}).AnyTimes()
+	invocationCtx.EXPECT().GetEngine().Return(env.engine).AnyTimes()
+
+	_, err := machineEnrollEntryPoint(invocationCtx, nil)
+	require.NoError(t, err)
+
+	res, err := networkAccess.GetUnauthorizedHttpClient().Post(env.server.URL+"/oauth2/token", "application/x-www-form-urlencoded", nil)
+	if res != nil {
+		_ = res.Body.Close()
+	}
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr, "the host still maps a later request in the same invocation")
+	assert.Len(t, handler.handled(), 1)
 }

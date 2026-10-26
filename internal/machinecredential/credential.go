@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"time"
 
@@ -136,6 +137,23 @@ func SecretTerms(config configuration.Configuration) []string {
 		}
 	}
 	return terms
+}
+
+// CheckStorage checks that the credential's storage can be locked and read. A missing file is usable: Clear creates it.
+func CheckStorage(ctx context.Context, config configuration.Configuration) error {
+	storage := config.GetStorage()
+	if storage == nil {
+		return nil
+	}
+	if err := storage.Lock(ctx, storageLockRetryDelay); err != nil {
+		return fmt.Errorf("failed locking the configuration storage: %w", err)
+	}
+	defer func() { _ = storage.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
+
+	if err := storage.Refresh(config, CONFIG_KEY_MACHINE_IDENTITY_STORAGE); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("failed reading the configuration storage: %w", err)
+	}
+	return nil
 }
 
 // Clear removes the stored credential. Like Save it writes through the storage under its lock, so a
