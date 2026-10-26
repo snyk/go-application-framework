@@ -34,6 +34,9 @@ const (
 	UnspecifiedKeyType KeyType = iota
 )
 
+// PROTECTED_ENV_VARS ([]string) returns the env vars that WithProtectedEnvVars snapshotted and the engine removes from the process environment
+const PROTECTED_ENV_VARS string = "internal_protected_env_vars"
+
 // Configuration is an interface for managing configuration values.
 type Configuration interface {
 	Clone() Configuration
@@ -198,6 +201,46 @@ func WithCachingEnabled(cacheDuration time.Duration) Opts {
 		ev.setCache(localCache)
 		ev.viper.SetDefault(CONFIG_CACHE_DISABLED, false)
 		ev.viper.SetDefault(CONFIG_CACHE_TTL, cacheDuration)
+	}
+}
+
+// WithProtectedEnvVars reads the given env vars once and keeps their values in the configuration.
+// Use it for secrets that child processes must not receive.
+func WithProtectedEnvVars(names ...string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithProtectedEnvVars()")
+		}
+		ev.protectEnvVars(names)
+	}
+}
+
+func (ev *extendedViper) protectEnvVars(names []string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	protected := ev.viper.GetStringSlice(PROTECTED_ENV_VARS)
+	for _, name := range names {
+		envVar := strings.ToUpper(name)
+		value, ok := os.LookupEnv(envVar)
+		if !ok {
+			continue
+		}
+
+		if len(value) > 0 {
+			// viper.Set is used to bypass storage, the value must never be persisted
+			ev.viper.Set(strings.ToLower(name), value)
+		}
+		// listed even when empty, a set but empty env var must still be reported by GetAllKeysThatContainValues
+		if !slices.Contains(protected, envVar) {
+			protected = append(protected, envVar)
+		}
+	}
+
+	if len(protected) > 0 {
+		// viper.Set is used to bypass storage, the list must never be persisted
+		ev.viper.Set(PROTECTED_ENV_VARS, protected)
 	}
 }
 
@@ -732,7 +775,7 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	foundKeys := []string{}
 	for _, ak := range alternativeKeys {
 		if ev.GetKeyType(ak) == EnvVarKeyType {
-			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
+			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok || ev.isProtectedEnvVar(ak) {
 				foundKeys = append(foundKeys, ak)
 			}
 		} else if slices.Contains(allKeys, ak) {
@@ -743,6 +786,14 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	}
 
 	return foundKeys
+}
+
+func (ev *extendedViper) isProtectedEnvVar(key string) bool {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return slices.ContainsFunc(ev.viper.GetStringSlice(PROTECTED_ENV_VARS), func(envVar string) bool {
+		return strings.EqualFold(envVar, key)
+	})
 }
 
 func (ev *extendedViper) GetKeyType(key string) KeyType {

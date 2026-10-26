@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -2177,4 +2178,48 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 		"the flag behind a locally set key must not be evaluated remotely")
 	assert.False(t, config.GetBool(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES),
 		"the local value must win over the remote one")
+}
+
+func TestHelperProcess_PrintEnv(t *testing.T) {
+	if os.Getenv("GAF_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+
+	for _, name := range []string{"SNYK_TOKEN", "SNYK_DISABLE_ANALYTICS"} {
+		_, ok := os.LookupEnv(name)
+		fmt.Printf("%s=%t\n", name, ok)
+	}
+}
+
+func Test_CreateAppEngineWithOptions_removesProtectedEnvVars(t *testing.T) {
+	t.Setenv("GAF_WANT_HELPER_PROCESS", "1")
+	t.Setenv("SNYK_TOKEN", "mytoken")
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
+
+	config := configuration.NewWithOpts(
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+		configuration.WithProtectedEnvVars("SNYK_TOKEN"),
+	)
+	// the option only snapshots, the engine removes
+	assert.Equal(t, "mytoken", os.Getenv("SNYK_TOKEN"))
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	_, tokenSet := os.LookupEnv("SNYK_TOKEN")
+	assert.False(t, tokenSet)
+	assert.Equal(t, "1", os.Getenv("SNYK_DISABLE_ANALYTICS"))
+	assert.Equal(t, "mytoken", engine.GetConfiguration().GetString("snyk_token"))
+
+	t.Run("child processes don't inherit them", func(t *testing.T) {
+		// Env is left nil, so the child gets the current process environment
+		testBinary, err := os.Executable()
+		require.NoError(t, err)
+		//nolint:gosec // re-runs the test binary
+		cmd := exec.Command(testBinary, "-test.run=^TestHelperProcess_PrintEnv$")
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(output))
+
+		assert.Contains(t, string(output), "SNYK_TOKEN=false")
+		assert.Contains(t, string(output), "SNYK_DISABLE_ANALYTICS=true")
+	})
 }
