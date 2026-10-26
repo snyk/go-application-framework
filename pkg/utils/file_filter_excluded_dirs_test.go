@@ -127,7 +127,7 @@ func TestFileFilter_UnreadableDirectoryDoesNotStopRuleCollection(t *testing.T) {
 	locked := filepath.Join(root, "a-locked")
 	require.NoError(t, os.Mkdir(locked, 0o755))
 	require.NoError(t, os.Chmod(locked, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(locked, 0o755)) })
 	createFileInPath(t, filepath.Join(root, "z", ".gitignore"), []byte("token.txt\n"))
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
