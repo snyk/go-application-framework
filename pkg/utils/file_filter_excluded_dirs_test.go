@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
-	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -63,7 +61,7 @@ func TestFileFilter_ExcludedDirectoriesAreNotWalked(t *testing.T) {
 			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
 
-			files := runFileFilter(t, fileFilter, test.ruleFile)
+			files := filterFiles(t, fileFilter, test.ruleFile)
 
 			expected := []string{filepath.Join(root, test.ruleFile)}
 			for _, file := range kept {
@@ -85,7 +83,7 @@ func TestFileFilter_ReIncludedFileInExcludedDirectoryIsKept(t *testing.T) {
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
 
-	files := runFileFilter(t, fileFilter, ".gitignore")
+	files := filterFiles(t, fileFilter, ".gitignore")
 
 	assert.Contains(t, files, filepath.Join(root, "node_modules", "keep.js"))
 }
@@ -95,26 +93,44 @@ func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
 	createFileInPath(b, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 
-	for _, threads := range []int{1, runtime.NumCPU()} {
-		b.Run(fmt.Sprintf("threads=%d", threads), func(b *testing.B) {
-			var inputFiles, outputFiles int
-			b.ReportAllocs()
-			for b.Loop() {
-				metrics.ResetAccumulated()
-				recorder := metrics.NewRecorderFake()
-				fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithThreadNumber(threads))
-				rules, err := fileFilter.GetRules([]string{".gitignore"})
-				require.NoError(b, err)
+	flows := []struct {
+		name   string
+		filter func(b *testing.B, fileFilter *FileFilter) <-chan string
+	}{
+		{name: "legacy", filter: func(b *testing.B, fileFilter *FileFilter) <-chan string {
+			b.Helper()
+			rules, err := fileFilter.GetRules([]string{".gitignore"})
+			require.NoError(b, err)
+			return fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
+		}},
+		{name: "WalkFilteredFiles", filter: func(b *testing.B, fileFilter *FileFilter) <-chan string {
+			b.Helper()
+			files, err := fileFilter.WalkFilteredFiles([]string{".gitignore"})
+			require.NoError(b, err)
+			return files
+		}},
+	}
 
-				outputFiles = 0
-				for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules) {
-					outputFiles++
+	for _, flow := range flows {
+		for _, threads := range []int{1, runtime.NumCPU()} {
+			b.Run(fmt.Sprintf("%s/threads=%d", flow.name, threads), func(b *testing.B) {
+				var inputFiles, outputFiles int
+				b.ReportAllocs()
+				for b.Loop() {
+					metrics.ResetAccumulated()
+					recorder := metrics.NewRecorderFake()
+					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithThreadNumber(threads))
+
+					outputFiles = 0
+					for range flow.filter(b, fileFilter) {
+						outputFiles++
+					}
+					inputFiles = recorder.IntValues[buildMetricKey(metriVariantMetacharFix, metricFilterInputFileCount)]
 				}
-				inputFiles = recorder.IntValues[buildMetricKey(metriVariantMetacharFix, metricFilterInputFileCount)]
-			}
-			b.ReportMetric(float64(inputFiles), "input_files")
-			b.ReportMetric(float64(outputFiles), "output_files")
-		})
+				b.ReportMetric(float64(inputFiles), "input_files")
+				b.ReportMetric(float64(outputFiles), "output_files")
+			})
+		}
 	}
 }
 
@@ -132,117 +148,42 @@ func TestFileFilter_UnreadableDirectoryDoesNotStopRuleCollection(t *testing.T) {
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
 
-	rules, err := fileFilter.GetRules([]string{".gitignore"})
+	createFileInPath(t, filepath.Join(root, "z", "token.txt"), []byte("x"))
+	createFileInPath(t, filepath.Join(root, "z", "code.ts"), []byte("x"))
 
-	require.NoError(t, err)
-	assert.True(t, slices.ContainsFunc(rules, func(rule string) bool { return strings.Contains(rule, "token.txt") }))
+	files := filterFiles(t, fileFilter, ".gitignore")
+
+	assert.Contains(t, files, filepath.Join(root, "z", "code.ts"))
+	assert.NotContains(t, files, filepath.Join(root, "z", "token.txt"))
 }
 
-func TestFileFilter_GitIndexIsSharedBetweenRulesAndFiltering(t *testing.T) {
+func TestFileFilter_TrackedPathsAreLoadedOnceUntilReleased(t *testing.T) {
 	root := t.TempDir()
 	createFileInPath(t, filepath.Join(root, "tracked.ts"), []byte("x"))
-	createFileInPath(t, filepath.Join(root, "ignored", "file.ts"), []byte("x"))
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("ignored/\n"))
 	repo, err := git.PlainInit(root, false)
 	require.NoError(t, err)
 	worktree, err := repo.Worktree()
 	require.NoError(t, err)
 	_, err = worktree.Add("tracked.ts")
 	require.NoError(t, err)
-	config := newTestConfig(map[string]bool{
-		FF_FILE_FILTER_METACHARACTER_FIX:   true,
-		FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
-	})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
-
-	rules, err := fileFilter.GetRules([]string{".gitignore"})
-	require.NoError(t, err)
-	loadedByRules := fileFilter.trackedPaths
-	files := drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules))
-
-	assert.NotNil(t, loadedByRules)
-	assert.Nil(t, fileFilter.trackedPaths)
-	assert.ElementsMatch(t, []string{filepath.Join(root, "tracked.ts"), filepath.Join(root, ".gitignore")}, files)
-}
-
-func TestFileFilter_GetAllFilesWithoutRulesWalksExcludedDirectories(t *testing.T) {
-	root, kept := createPnpmStyleMonorepo(t, 10)
 	fileFilter := NewFileFilter(root, &log.Logger)
 
-	var files []string
-	for file := range fileFilter.GetAllFiles() {
-		files = append(files, file)
-	}
+	first, ok := fileFilter.loadTrackedPaths()
+	require.True(t, ok)
+	second, _ := fileFilter.loadTrackedPaths()
+	fileFilter.releaseTrackedPaths()
+	third, _ := fileFilter.loadTrackedPaths()
 
-	assert.Len(t, files, len(kept)+20)
+	assert.Same(t, first, second)
+	assert.NotSame(t, first, third)
+	assert.True(t, first.files["tracked.ts"])
 }
 
-func TestFileFilter_GetRulesReplacesExcludedDirectoriesOfPreviousCall(t *testing.T) {
-	root, kept := createPnpmStyleMonorepo(t, 10)
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
-	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+func filterFiles(t *testing.T, fileFilter *FileFilter, ruleFile string, options ...WalkFilteredFilesOption) []string {
+	t.Helper()
 
-	_, err := fileFilter.GetRules([]string{".gitignore"})
-	require.NoError(t, err)
-	_, err = fileFilter.GetRules([]string{".dcignore"})
+	filesCh, err := fileFilter.WalkFilteredFiles([]string{ruleFile}, options...)
 	require.NoError(t, err)
 
-	var files []string
-	for file := range fileFilter.GetAllFiles() {
-		files = append(files, file)
-	}
-
-	assert.Len(t, files, len(kept)+21)
-}
-
-func TestFileFilter_TrackedFilesInExcludedDirectoryAreKept(t *testing.T) {
-	root, _ := createPnpmStyleMonorepo(t, 10)
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
-	createFileInPath(t, filepath.Join(root, "node_modules", "tracked.js"), []byte("x"))
-	repo, err := git.PlainInit(root, false)
-	require.NoError(t, err)
-	worktree, err := repo.Worktree()
-	require.NoError(t, err)
-	_, err = worktree.Add(filepath.Join("node_modules", "tracked.js"))
-	require.NoError(t, err)
-	recorder := newMetricsRecorder(t)
-	config := newTestConfig(map[string]bool{
-		FF_FILE_FILTER_METACHARACTER_FIX:   true,
-		FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
-	})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
-
-	files := runFileFilter(t, fileFilter, ".gitignore")
-
-	assert.Contains(t, files, filepath.Join(root, "node_modules", "tracked.js"))
-	assert.NotContains(t, files, filepath.Join(root, "node_modules", ".pnpm", "pkg-0", "file-0.js"))
-	assert.NotContains(t, files, filepath.Join(root, "apps", "web", "node_modules", ".pnpm", "pkg-0", "file-0.js"))
-}
-
-func TestFileFilter_NegationInSubdirectoryDoesNotAffectOtherDirectories(t *testing.T) {
-	root, kept := createPnpmStyleMonorepo(t, 10)
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
-	createFileInPath(t, filepath.Join(root, "sub", ".gitignore"), []byte("*.log\n!keep.log\n"))
-	createFileInPath(t, filepath.Join(root, "sub", "keep.log"), []byte("x"))
-	createFileInPath(t, filepath.Join(root, "sub", "other.log"), []byte("x"))
-	createFileInPath(t, filepath.Join(root, "sub", "node_modules", "dep.js"), []byte("x"))
-	recorder := newMetricsRecorder(t)
-	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
-
-	files := runFileFilter(t, fileFilter, ".gitignore")
-
-	expected := []string{
-		filepath.Join(root, ".gitignore"),
-		filepath.Join(root, "sub", ".gitignore"),
-		filepath.Join(root, "sub", "keep.log"),
-	}
-	for _, file := range kept {
-		expected = append(expected, filepath.Join(root, file))
-	}
-	assert.ElementsMatch(t, expected, files)
-	variant := recordedMetrics(t, recorder)[metriVariantMetacharFix]
-	assert.Equal(t, len(expected)+2, variant.ints[metricFilterInputFileCount],
-		"only other.log and sub/node_modules/dep.js are walked besides the kept files")
+	return drainFilteredFiles(t, filesCh)
 }

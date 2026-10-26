@@ -43,8 +43,6 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
-	excludedDirsMu  sync.RWMutex
-	excludedDirs    map[string]struct{}
 	trackedPathsMu  sync.Mutex
 	trackedPaths    *trackedPaths
 }
@@ -221,12 +219,13 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+//
+// Deprecated: use WalkFilteredFiles, which skips folders the ignore rules exclude instead of walking them.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
 
-		excludedDirs := fw.getExcludedDirs()
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -234,14 +233,9 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 			if !d.IsDir() {
 				filesCh <- path
-				return nil
 			}
 
-			if _, excluded := excludedDirs[path]; excluded {
-				return filepath.SkipDir
-			}
-
-			return nil
+			return err
 		})
 		if err != nil {
 			fw.logger.Error().Msgf("walk dir failed: %v", err)
@@ -259,12 +253,24 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return int(time.Since(start).Milliseconds())
 	})
 
-	walker := newRuleWalker(fw, ruleFiles)
-	globs, err := walker.collectGlobs()
+	files := fw.GetAllFiles()
+
+	// iterate filesToFilter channel and find ignore filesToFilter
+	var ignoreFiles = make([]string, 0)
+	for file := range files {
+		fileName := filepath.Base(file)
+		for _, ruleFile := range ruleFiles {
+			if fileName == ruleFile {
+				ignoreFiles = append(ignoreFiles, file)
+			}
+		}
+	}
+
+	// iterate ignore filesToFilter and extract glob patterns
+	globs, err := fw.buildGlobs(ignoreFiles)
 	if err != nil {
 		return nil, err
 	}
-	fw.setExcludedDirs(walker.excludedDirs)
 
 	rules := append(fw.defaultRules, globs...)
 
@@ -472,18 +478,6 @@ func (fw *FileFilter) readTrackedPaths() *trackedPaths {
 	}
 
 	return &trackedPaths{repoRoot: repoRoot, files: files}
-}
-
-func (fw *FileFilter) getExcludedDirs() map[string]struct{} {
-	fw.excludedDirsMu.RLock()
-	defer fw.excludedDirsMu.RUnlock()
-	return fw.excludedDirs
-}
-
-func (fw *FileFilter) setExcludedDirs(excludedDirs map[string]struct{}) {
-	fw.excludedDirsMu.Lock()
-	defer fw.excludedDirsMu.Unlock()
-	fw.excludedDirs = excludedDirs
 }
 
 func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
