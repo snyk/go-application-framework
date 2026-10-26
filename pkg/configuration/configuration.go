@@ -280,7 +280,7 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 	// read config files
 	//nolint:errcheck // breaking api change needed to fix this
-	_ = config.ReloadConfig()
+	_ = config.viper.ReadInConfig()
 }
 
 // Clone creates a copy of the current configuration.
