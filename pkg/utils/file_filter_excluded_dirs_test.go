@@ -17,8 +17,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/metrics"
 )
 
-// createPnpmStyleMonorepo creates source files plus large excluded node_modules folders at the root and
-// in a nested package. It returns the root and the relative paths of the files that must survive.
 func createPnpmStyleMonorepo(tb testing.TB, nodeModulesFiles int) (string, []string) {
 	tb.Helper()
 
@@ -92,12 +90,6 @@ func TestFileFilter_ReIncludedFileInExcludedDirectoryIsKept(t *testing.T) {
 	assert.Contains(t, files, filepath.Join(root, "node_modules", "keep.js"))
 }
 
-// BenchmarkFileFilter_PnpmMonorepo runs the complete file-filter flow on a synthetic tree with large excluded
-// folders. input_files shows how many paths reached the filter and output_files how many survived.
-//
-// Run with:
-//
-//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_PnpmMonorepo$' -benchmem -count=5
 func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
 	root, _ := createPnpmStyleMonorepo(b, 20000)
 	createFileInPath(b, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
