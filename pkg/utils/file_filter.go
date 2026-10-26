@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,6 +43,8 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
+	excludedDirsMu  sync.RWMutex
+	excludedDirs    map[string]struct{}
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -221,6 +224,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	go func() {
 		defer close(filesCh)
 
+		excludedDirs := fw.getExcludedDirs()
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -228,9 +232,14 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 			if !d.IsDir() {
 				filesCh <- path
+				return nil
 			}
 
-			return err
+			if _, excluded := excludedDirs[path]; excluded {
+				return filepath.SkipDir
+			}
+
+			return nil
 		})
 		if err != nil {
 			fw.logger.Error().Msgf("walk dir failed: %v", err)
@@ -248,24 +257,12 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		return int(time.Since(start).Milliseconds())
 	})
 
-	files := fw.GetAllFiles()
-
-	// iterate filesToFilter channel and find ignore filesToFilter
-	var ignoreFiles = make([]string, 0)
-	for file := range files {
-		fileName := filepath.Base(file)
-		for _, ruleFile := range ruleFiles {
-			if fileName == ruleFile {
-				ignoreFiles = append(ignoreFiles, file)
-			}
-		}
-	}
-
-	// iterate ignore filesToFilter and extract glob patterns
-	globs, err := fw.buildGlobs(ignoreFiles)
+	walker := newRuleWalker(fw, ruleFiles)
+	globs, err := walker.collectGlobs()
 	if err != nil {
 		return nil, err
 	}
+	fw.setExcludedDirs(walker.excludedDirs)
 
 	rules := append(fw.defaultRules, globs...)
 
@@ -398,50 +395,76 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		return defaultPredicate
 	}
 
-	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+	tracked, ok := fw.loadTrackedPaths()
+	if !ok {
 		return defaultPredicate
-	}
-
-	worktree, err := repo.Worktree()
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
-		return defaultPredicate
-	}
-
-	gitIndex, err := repo.Storer.Index()
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to get git index: %v", err)
-		return defaultPredicate
-	}
-
-	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
-		return defaultPredicate
-	}
-
-	trackedFiles := make(map[string]bool, len(gitIndex.Entries))
-	for _, entry := range gitIndex.Entries {
-		trackedFiles[entry.Name] = true
 	}
 
 	return func(file string) bool {
 		normalizedPath := filepath.ToSlash(file)
-		relativePath, err := filepath.Rel(repoRoot, file)
+		relativePath, err := filepath.Rel(tracked.repoRoot, file)
 		if err != nil {
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if trackedFiles[filepath.ToSlash(relativePath)] {
+		if tracked.files[filepath.ToSlash(relativePath)] {
 			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
 		return allMatcher.MatchesPath(normalizedPath)
 	}
+}
+
+type trackedPaths struct {
+	repoRoot string
+	files    map[string]bool
+}
+
+func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
+	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+		return nil, false
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
+		return nil, false
+	}
+
+	gitIndex, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get git index: %v", err)
+		return nil, false
+	}
+
+	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
+		return nil, false
+	}
+
+	files := make(map[string]bool, len(gitIndex.Entries))
+	for _, entry := range gitIndex.Entries {
+		files[entry.Name] = true
+	}
+
+	return &trackedPaths{repoRoot: repoRoot, files: files}, true
+}
+
+func (fw *FileFilter) getExcludedDirs() map[string]struct{} {
+	fw.excludedDirsMu.RLock()
+	defer fw.excludedDirsMu.RUnlock()
+	return fw.excludedDirs
+}
+
+func (fw *FileFilter) setExcludedDirs(excludedDirs map[string]struct{}) {
+	fw.excludedDirsMu.Lock()
+	defer fw.excludedDirsMu.Unlock()
+	fw.excludedDirs = excludedDirs
 }
 
 func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
