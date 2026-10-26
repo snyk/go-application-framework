@@ -35,6 +35,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/snyk/error-catalog-golang-public v0.0.0-20261020103931-0013eaae3b01
+	github.com/snyk/go-ripgrep-gitignore/v2 v2.0.2
 	github.com/subosito/gotenv v1.6.0
 	github.com/yusufpapurcu/wmi v1.2.4
 	golang.org/x/mod v0.38.0
@@ -109,6 +110,7 @@ require (
 	github.com/speakeasy-api/openapi-overlay v0.10.1 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
+	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tidwall/gjson v1.17.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

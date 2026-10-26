@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
@@ -292,15 +291,20 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
 		} else {
-			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
-			isFileExcluded = func(filePath string) bool {
-				return globPatternMatcher.MatchesPath(filePath)
-			}
+			isFileExcluded = fw.exclusionPredicate(globs)
 		}
+		useRipgrep := fw.config.GetBool(fileFilterRipgrepEnabled)
 
 		// iterate the filesToFilter channel
 		for file := range filesCh {
 			candidateFileCount++
+			if useRipgrep {
+				if !isFileExcluded(file) {
+					filteredFilesCh <- file
+					resolvedFileCount.Add(1)
+				}
+				continue
+			}
 			err := availableThreads.Acquire(ctx, 1)
 			if err != nil {
 				fw.logger.Err(err).Msg("failed to limit threads")
@@ -387,11 +391,11 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		allGlobs = append(allGlobs, glob)
 	}
 
-	otherMatcher := gitignore.CompileIgnoreLines(globs...)
+	otherMatcher := fw.exclusionPredicate(globs)
 
-	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
+	allMatcher := fw.exclusionPredicate(allGlobs)
 	defaultPredicate := func(file string) bool {
-		return allMatcher.MatchesPath(filepath.ToSlash(file))
+		return allMatcher(filepath.ToSlash(file))
 	}
 
 	if !hasGitignoreGlobs {
@@ -433,14 +437,14 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		normalizedPath := filepath.ToSlash(file)
 		relativePath, err := filepath.Rel(repoRoot, file)
 		if err != nil {
-			return allMatcher.MatchesPath(normalizedPath)
+			return allMatcher(normalizedPath)
 		}
 
 		if trackedFiles[filepath.ToSlash(relativePath)] {
-			return otherMatcher.MatchesPath(normalizedPath)
+			return otherMatcher(normalizedPath)
 		}
 
-		return allMatcher.MatchesPath(normalizedPath)
+		return allMatcher(normalizedPath)
 	}
 }
 
