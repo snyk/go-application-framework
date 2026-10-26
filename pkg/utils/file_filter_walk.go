@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"os"
 	"path"
 	"path/filepath"
@@ -10,18 +9,6 @@ import (
 
 	gitignore "github.com/sabhiram/go-gitignore"
 )
-
-type unreadableDirError struct {
-	err error
-}
-
-func (e unreadableDirError) Error() string {
-	return e.err.Error()
-}
-
-func (e unreadableDirError) Unwrap() error {
-	return e.err
-}
 
 type directoryMatchers struct {
 	nonGitignore *gitignore.GitIgnore
@@ -54,20 +41,14 @@ func newRuleWalker(filter *FileFilter, ruleFiles []string) *ruleWalker {
 
 func (w *ruleWalker) collectGlobs() ([]string, error) {
 	err := w.walk(w.filter.path)
-
-	var unreadable unreadableDirError
-	if errors.As(err, &unreadable) {
-		w.filter.logger.Error().Msgf("walk dir failed: %v", err)
-		return w.globs, nil
-	}
-
 	return w.globs, err
 }
 
 func (w *ruleWalker) walk(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return unreadableDirError{err: err}
+		w.filter.logger.Error().Msgf("walk dir failed: %v", err)
+		return nil
 	}
 
 	defer w.restoreScope(len(w.matchers), w.hasNegation)

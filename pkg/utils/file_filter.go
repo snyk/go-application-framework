@@ -45,6 +45,8 @@ type FileFilter struct {
 	metrics         *metrics.Accumulator
 	excludedDirsMu  sync.RWMutex
 	excludedDirs    map[string]struct{}
+	trackedPathsMu  sync.Mutex
+	trackedPaths    *trackedPaths
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -396,6 +398,7 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 	}
 
 	tracked, ok := fw.loadTrackedPaths()
+	fw.releaseTrackedPaths()
 	if !ok {
 		return defaultPredicate
 	}
@@ -421,30 +424,46 @@ type trackedPaths struct {
 }
 
 func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
+	fw.trackedPathsMu.Lock()
+	defer fw.trackedPathsMu.Unlock()
+
+	if fw.trackedPaths == nil {
+		fw.trackedPaths = fw.readTrackedPaths()
+	}
+	return fw.trackedPaths, fw.trackedPaths != nil
+}
+
+func (fw *FileFilter) releaseTrackedPaths() {
+	fw.trackedPathsMu.Lock()
+	defer fw.trackedPathsMu.Unlock()
+	fw.trackedPaths = nil
+}
+
+func (fw *FileFilter) readTrackedPaths() *trackedPaths {
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
-		return nil, false
+		return nil
 	}
 
 	worktree, err := repo.Worktree()
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
-		return nil, false
+		return nil
 	}
 
 	gitIndex, err := repo.Storer.Index()
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to get git index: %v", err)
-		return nil, false
+		return nil
 	}
 
 	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
-		return nil, false
+		return nil
 	}
 
 	files := make(map[string]bool, len(gitIndex.Entries))
@@ -452,7 +471,7 @@ func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
 		files[entry.Name] = true
 	}
 
-	return &trackedPaths{repoRoot: repoRoot, files: files}, true
+	return &trackedPaths{repoRoot: repoRoot, files: files}
 }
 
 func (fw *FileFilter) getExcludedDirs() map[string]struct{} {
