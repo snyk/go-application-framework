@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -34,15 +33,13 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet(machineEnrollWorkflowName, pflag.ExitOnError)
 	flags.String(flagDeviceToken, "", "single-use device token issued for this machine")
 	flags.String(flagFleetKeyFile, "", "path to the PEM file of a fleet key registered for this machine")
+	flags.Bool(jsonFlag, false, "output the client id, enrolled machine id and key id in json format")
 
 	_, err := engine.Register(WORKFLOWID_MACHINE_ENROLL, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(flags)), machineEnrollEntryPoint)
 	return err
 }
 
-// machineEnrollEntryPoint enrolls this machine and stores its credential. It returns the identifiers of
-// the enrollment (client, machine and key) as content_type.MACHINE_ENROLLMENT JSON, so a host can log
-// them; hosts that render workflow output, such as the CLI, print them. The private key is a secret and
-// is never part of the output.
+// machineEnrollEntryPoint enrolls this machine and stores its credential; the private key never reaches the output.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
@@ -85,19 +82,25 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 			return nil, err
 		}
 	}
-	return enrollmentData(enrollment)
+	return enrollmentData(enrollment, config.GetBool(jsonFlag))
 }
 
-func enrollmentData(enrollment machineenrollment.Enrollment) ([]workflow.Data, error) {
-	payload, err := json.Marshal(struct {
-		ClientID  string `json:"client_id"`
-		MachineID string `json:"enrolled_machine_id"`
-		KeyID     string `json:"key_id"`
-	}{ClientID: enrollment.ClientID, MachineID: enrollment.MachineID, KeyID: enrollment.KeyID})
-	if err != nil {
-		return nil, err
+func enrollmentData(enrollment machineenrollment.Enrollment, asJSON bool) ([]workflow.Data, error) {
+	contentType := "text/plain"
+	payload := fmt.Appendf(nil, "Enrolled machine %s as client %s with key %s", enrollment.MachineID, enrollment.ClientID, enrollment.KeyID)
+	if asJSON {
+		var err error
+		contentType = "application/json"
+		payload, err = json.Marshal(struct {
+			ClientID  string `json:"client_id"`
+			MachineID string `json:"enrolled_machine_id"`
+			KeyID     string `json:"key_id"`
+		}{ClientID: enrollment.ClientID, MachineID: enrollment.MachineID, KeyID: enrollment.KeyID})
+		if err != nil {
+			return nil, err
+		}
 	}
-	return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_MACHINE_ENROLL, machineEnrollWorkflowName), content_type.MACHINE_ENROLLMENT, payload)}, nil
+	return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_MACHINE_ENROLL, machineEnrollWorkflowName), contentType, payload)}, nil
 }
 
 func isEmptyStorage(storage configuration.Storage) bool {

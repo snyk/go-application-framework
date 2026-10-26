@@ -264,20 +264,6 @@ func Test_HandleContentTypeOther(t *testing.T) {
 		assert.Contains(t, out.buffer.String(), `<!doctype html>`)
 		assert.Empty(t, remaining)
 	})
-
-	t.Run("machine enrollment identifiers are written unchanged to the default writer", func(t *testing.T) {
-		ctx := newMockContext(t)
-
-		out := &stubOutputDestination{}
-		writers := GetWritersFromConfiguration(configuration.NewWithOpts(), out)
-
-		payload := `{"client_id":"client-1","enrolled_machine_id":"machine-1","key_id":"key-1"}`
-		data := workflow.NewData(workflowID, content_type.MACHINE_ENROLLMENT, []byte(payload))
-		remaining, err := HandleContentTypeOther([]workflow.Data{data}, ctx, writers)
-		assert.NoError(t, err)
-		assert.Equal(t, payload+"\n", out.buffer.String())
-		assert.Empty(t, remaining)
-	})
 }
 
 func Test_DefaultOutputIsStructured(t *testing.T) {

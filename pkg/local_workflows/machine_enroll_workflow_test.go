@@ -3,14 +3,20 @@ package localworkflows
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,7 +38,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -137,29 +142,68 @@ func Test_machineEnroll_installerEnrollsWithDeviceToken(t *testing.T) {
 }
 
 func Test_machineEnroll_installerGetsTheIdentifiersButNeverTheKey(t *testing.T) {
-	env := newEnrollEnv(t)
-	machineID := env.server.RegisterMachine("SERIAL-1")
+	tests := []struct {
+		name        string
+		flags       map[string]string
+		contentType string
+	}{
+		{name: "a summary by default", contentType: "text/plain"},
+		{name: "JSON with --json", flags: map[string]string{jsonFlag: "true"}, contentType: "application/json"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			machineID := env.server.RegisterMachine("SERIAL-1")
+			flags := map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}
+			maps.Copy(flags, tt.flags)
 
-	output, err := env.enrollForData(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)})
+			output, err := env.enrollForData(flags)
 
+			require.NoError(t, err)
+			require.Len(t, output, 1)
+			assert.Equal(t, tt.contentType, output[0].GetContentType())
+			payload, ok := output[0].GetPayload().([]byte)
+			require.True(t, ok, "the payload is bytes")
+			credential, err := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, err)
+			identifiers := map[string]any{
+				"client_id":           credential.ClientID,
+				"enrolled_machine_id": machineID,
+				"key_id":              rfc7638Thumbprint(t, credential.Key),
+			}
+			if tt.contentType == "application/json" {
+				var fields map[string]any
+				require.NoError(t, json.Unmarshal(payload, &fields))
+				assert.Equal(t, identifiers, fields, "exactly the identifiers")
+			} else {
+				for _, identifier := range identifiers {
+					assert.Contains(t, string(payload), identifier)
+				}
+			}
+			keyPEM, err := machineenrollment.EncodeKeyPEM(credential.Key)
+			require.NoError(t, err)
+			for line := range strings.Lines(string(keyPEM)) {
+				if line = strings.TrimSpace(line); line != "" {
+					assert.NotContains(t, string(payload), line)
+				}
+			}
+		})
+	}
+}
+
+// rfc7638Thumbprint is computed from the canonical JWK, independently of the enrollment code.
+func rfc7638Thumbprint(t *testing.T, key crypto.Signer) string {
+	t.Helper()
+	pub, ok := key.Public().(*rsa.PublicKey)
+	require.True(t, ok, "the client key is RSA")
+	canonical, err := json.Marshal(map[string]string{
+		"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes()),
+		"kty": "RSA",
+		"n":   base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
+	})
 	require.NoError(t, err)
-	require.Len(t, output, 1)
-	assert.Equal(t, content_type.MACHINE_ENROLLMENT, output[0].GetContentType())
-	payload, ok := output[0].GetPayload().([]byte)
-	require.True(t, ok, "the payload is JSON bytes")
-	var fields map[string]string
-	require.NoError(t, json.Unmarshal(payload, &fields))
-	credential, err := machinecredential.Load(openFileBackedConfig())
-	require.NoError(t, err)
-	assert.Equal(t, credential.ClientID, fields["client_id"])
-	assert.Equal(t, machineID, fields["enrolled_machine_id"])
-	assert.NotEmpty(t, fields["key_id"])
-	assert.Len(t, fields, 3, "nothing but the identifiers")
-	keyPEM, err := machineenrollment.EncodeKeyPEM(credential.Key)
-	require.NoError(t, err)
-	assert.NotContains(t, string(payload), "PRIVATE KEY")
-	assert.NotContains(t, string(payload), "private_key")
-	assert.NotContains(t, string(payload), string(keyPEM))
+	sum := sha256.Sum256(canonical)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 func (e *enrollEnv) setMachine(machine runtimeinfo.Machine) {
@@ -214,7 +258,7 @@ func Test_machineEnroll_rejectedDeviceTokenLeavesTheStoredCredentialUntouched(t 
 	var enrollmentErr *machineenrollment.EnrollmentError
 	require.ErrorAs(t, err, &enrollmentErr, "the service rejection is reported")
 	assert.Equal(t, http.StatusUnauthorized, enrollmentErr.Status)
-	assert.Empty(t, output, "a rejected enrollment yields no identifiers")
+	assert.Nil(t, output, "a rejected enrollment yields no identifiers")
 	after, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 	assert.Equal(t, first.ClientID, after.ClientID)
@@ -311,7 +355,7 @@ func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
 	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
 
 	require.Error(t, err)
-	assert.Empty(t, output, "the error already names the client")
+	assert.Nil(t, output, "the error already names the client")
 	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
 	assert.Contains(t, err.Error(), "ask an admin to revoke the client")
 	assert.NotContains(t, err.Error(), "PRIVATE KEY")
