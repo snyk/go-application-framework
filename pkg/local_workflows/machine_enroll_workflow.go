@@ -54,7 +54,11 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		return nil, fmt.Errorf("enrolling needs exactly one of --%s or --%s", flagDeviceToken, flagFleetKeyFile)
 	}
 
-	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
+	// The host's error handler would replace the service's error response, which carries the
+	// enrollment error code, with an error catalog error.
+	networkAccess := invocationCtx.GetNetworkAccess().Clone()
+	networkAccess.AddErrorHandler(nil)
+	httpClient := networkAccess.GetUnauthorizedHttpClient()
 	apiURL := config.GetString(configuration.API_URL)
 
 	var enrollment machineenrollment.Enrollment

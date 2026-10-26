@@ -69,7 +69,7 @@ func newOAuth2AuthenticatorForStoredCredential(config configuration.Configuratio
 	case err == nil:
 		opts = append(opts, WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
 	case !errors.Is(err, machinecredential.ErrNotEnrolled):
-		return nil, fmt.Errorf("machine authentication failed, the stored machine credential cannot be used: %w", err)
+		return nil, &machinecredential.AuthenticationError{Err: fmt.Errorf("machine authentication failed, the stored machine credential cannot be used: %w", err)}
 	}
 	return NewOAuth2AuthenticatorWithOpts(config, opts...), nil
 }

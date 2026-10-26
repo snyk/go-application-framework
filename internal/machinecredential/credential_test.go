@@ -148,6 +148,22 @@ func TestClear_WithoutStorageClearsTheInMemoryView(t *testing.T) {
 	assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
 }
 
+func TestCheckStorage_AcceptsAMissingConfigFile(t *testing.T) {
+	config := fileBackedConfig(t)()
+
+	require.NoError(t, machinecredential.CheckStorage(t.Context(), config))
+	assert.NoError(t, machinecredential.Clear(t.Context(), config))
+}
+
+func TestCheckStorage_ReportsACorruptConfigFile(t *testing.T) {
+	open := fileBackedConfig(t)
+	config := open()
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	require.NoError(t, os.WriteFile(configFilePath(t), []byte("{not json"), 0o600))
+
+	assert.Error(t, machinecredential.CheckStorage(t.Context(), config))
+}
+
 func TestSave_WritesOneValueUnderTheStorageLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	storage := mocks.NewMockStorage(ctrl)

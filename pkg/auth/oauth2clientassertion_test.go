@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -23,12 +28,16 @@ type fakeAssertionProvider struct {
 	clientID string
 	tokenURL string
 	calls    int
+	err      error
 }
 
 func (f *fakeAssertionProvider) ClientAssertion(_ context.Context, clientID, tokenURL string) (string, string, error) {
 	f.calls++
 	f.clientID = clientID
 	f.tokenURL = tokenURL
+	if f.err != nil {
+		return "", "", f.err
+	}
 	return "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", "fake-assertion", nil
 }
 
@@ -206,4 +215,139 @@ func Test_AddAuthenticationHeader_TokenOnly_ConfigFileDoesNotExistStillFails(t *
 	require.NoError(t, err)
 
 	assert.ErrorIs(t, oauthAuthenticator.AddAuthenticationHeader(req), fs.ErrNotExist)
+}
+
+func tokenEndpointRespondingWith(t *testing.T, status int) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, err := w.Write([]byte(`{"error":"invalid_client"}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// hostErrorHandlerClient behaves like an unauthorized client whose host installed a network error
+// handler: a rejected request comes back as an error catalog error and the response is dropped.
+func hostErrorHandlerClient() *http.Client {
+	return &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		res, err := http.DefaultTransport.RoundTrip(req)
+		if err != nil {
+			return nil, err
+		}
+		_ = res.Body.Close()
+		switch res.StatusCode {
+		case http.StatusUnauthorized:
+			return res, snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+		case http.StatusBadRequest:
+			return res, snyk.NewBadRequestError("The request cannot be processed.")
+		}
+		return res, nil
+	})}
+}
+
+func addMachineAuthenticationHeader(t *testing.T, apiURL string, client *http.Client) error {
+	t.Helper()
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, apiURL)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(client), WithClientAssertionProvider("machine-client-1", &fakeAssertionProvider{}))
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+	err = authenticator.AddAuthenticationHeader(req)
+	assert.Empty(t, req.Header.Values("Authorization"))
+	return err
+}
+
+func Test_AddAuthenticationHeader_ClientAssertionGrant_TokenEndpointRejectsTheMachine(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnauthorized} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			srv := tokenEndpointRespondingWith(t, status)
+
+			for name, test := range map[string]struct {
+				client *http.Client
+				cause  func(t *testing.T, err error)
+			}{
+				"without a host error handler": {
+					client: http.DefaultClient,
+					cause: func(t *testing.T, err error) {
+						t.Helper()
+						var retrieveErr *oauth2.RetrieveError
+						assert.ErrorAs(t, err, &retrieveErr)
+					},
+				},
+				"with a host error handler": {
+					client: hostErrorHandlerClient(),
+					cause: func(t *testing.T, err error) {
+						t.Helper()
+						var catalogErr snyk_errors.Error
+						assert.False(t, errors.As(err, &catalogErr), "a catalog error would make hosts show its detail instead: %v", err)
+					},
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					err := addMachineAuthenticationHeader(t, srv.URL, test.client)
+
+					var machineErr *machinecredential.AuthenticationError
+					require.ErrorAs(t, err, &machineErr)
+					assert.ErrorContains(t, err, "machine authentication failed")
+					assert.ErrorContains(t, err, srv.URL+"/oauth2/token")
+					assert.ErrorContains(t, err, "machine-client-1")
+					assert.ErrorContains(t, err, "enrolled in another region or its client was revoked")
+					assert.ErrorContains(t, err, "`snyk config environment`")
+					assert.ErrorContains(t, err, "enroll this machine again")
+					assert.NotContains(t, err.Error(), "snyk auth")
+					test.cause(t, err)
+				})
+			}
+		})
+	}
+}
+
+func Test_AddAuthenticationHeader_ClientAssertionGrant_TokenEndpointFailsOtherwise(t *testing.T) {
+	srv := tokenEndpointRespondingWith(t, http.StatusInternalServerError)
+
+	err := addMachineAuthenticationHeader(t, srv.URL, http.DefaultClient)
+
+	var machineErr *machinecredential.AuthenticationError
+	require.ErrorAs(t, err, &machineErr)
+	assert.ErrorContains(t, err, srv.URL+"/oauth2/token")
+	assert.ErrorContains(t, err, "machine-client-1")
+	assert.NotContains(t, err.Error(), "another region")
+}
+
+func Test_AddAuthenticationHeader_HumanOAuthRefreshRejected_IsNotAMachineAuthenticationError(t *testing.T) {
+	srv := tokenEndpointRespondingWith(t, http.StatusBadRequest)
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, srv.URL)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
+	oauthAuthenticator, ok := authenticator.(*oAuth2Authenticator)
+	require.True(t, ok)
+	oauthAuthenticator.token = &oauth2.Token{AccessToken: "expired", RefreshToken: "refresh", Expiry: time.Now().Add(-time.Hour)}
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+
+	err = oauthAuthenticator.AddAuthenticationHeader(req)
+
+	require.Error(t, err)
+	var machineErr *machinecredential.AuthenticationError
+	assert.False(t, errors.As(err, &machineErr))
+}
+
+func Test_AddAuthenticationHeader_ClientAssertionGrant_SigningFails(t *testing.T) {
+	errSigning := errors.New("signing failed")
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.example.invalid")
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient), WithClientAssertionProvider("machine-client-1", &fakeAssertionProvider{err: errSigning}))
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	require.NoError(t, err)
+
+	err = authenticator.AddAuthenticationHeader(req)
+
+	var machineErr *machinecredential.AuthenticationError
+	require.ErrorAs(t, err, &machineErr)
+	assert.ErrorIs(t, err, errSigning)
+	assert.ErrorContains(t, err, "machine-client-1")
+	assert.Empty(t, req.Header.Values("Authorization"))
 }

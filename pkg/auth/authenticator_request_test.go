@@ -211,3 +211,13 @@ func Test_CreateAuthenticator_CorruptStoredMachineCredential_AddAuthenticationHe
 	assert.Empty(t, req.Header.Values("Authorization"))
 	assert.Empty(t, req.Header.Values("Session-Token"))
 }
+
+func Test_CreateAuthenticator_CorruptStoredMachineCredential_IsAMachineAuthenticationError(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+
+	err := CreateAuthenticator(config, http.DefaultClient).AddAuthenticationHeader(newRequestForHeaders(t))
+
+	var machineErr *machinecredential.AuthenticationError
+	assert.ErrorAs(t, err, &machineErr)
+}

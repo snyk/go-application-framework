@@ -14,12 +14,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,6 +73,7 @@ type Server struct {
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
 	credentialHeaders []string
+	bearerTokens      []string
 	enrollAttempts    int
 	machines          []*machine
 	deviceTokens      map[string]*deviceToken
@@ -80,6 +83,7 @@ type Server struct {
 	jtis              map[string]bool
 	tokens            map[string]string // access token -> client id
 	next              int
+	errorTitles       atomic.Bool
 }
 
 type fleetKey struct {
@@ -118,6 +122,9 @@ func (s *Server) recordCredentialHeaders(r *http.Request) {
 			s.credentialHeaders = append(s.credentialHeaders, name)
 		}
 	}
+	if bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); found {
+		s.bearerTokens = append(s.bearerTokens, bearer)
+	}
 }
 
 // CredentialHeaders returns the names of the credential headers (Authorization, Session-Token)
@@ -128,11 +135,33 @@ func (s *Server) CredentialHeaders() []string {
 	return slices.Clone(s.credentialHeaders)
 }
 
+// BearerTokens returns the bearer tokens that requests carried in their Authorization header, in
+// the order they arrived.
+func (s *Server) BearerTokens() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.bearerTokens)
+}
+
+// SetErrorTitles sets whether enrollment error responses carry a JSON:API title.
+func (s *Server) SetErrorTitles(on bool) {
+	s.errorTitles.Store(on)
+}
+
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
 func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = key
+}
+
+// RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
+// it, as an admin revoking the client does.
+func (s *Server) RevokeClient(clientID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.clients, clientID)
+	maps.DeleteFunc(s.tokens, func(_, owner string) bool { return owner == clientID })
 }
 
 // RegisterMachine registers a machine with serial numbers, as an admin does, and returns its id.
@@ -216,28 +245,28 @@ func (s *Server) machineByID(id string) *machine {
 
 // parseRequest checks the request against the spec and returns its attributes, or writes the error
 // response and returns false.
-func parseRequest(w http.ResponseWriter, r *http.Request) (attrs requestAttributes, ok bool) {
+func (s *Server) parseRequest(w http.ResponseWriter, r *http.Request) (attrs requestAttributes, ok bool) {
 	if r.URL.Query().Get("version") != "2024-10-15" {
-		writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
 		return attrs, false
 	}
 	if ct := r.Header.Get("Content-Type"); ct != "application/vnd.api+json" {
-		writeError(w, http.StatusBadRequest, "", "content type must be application/vnd.api+json, not "+ct)
+		s.writeError(w, http.StatusBadRequest, "", "content type must be application/vnd.api+json, not "+ct)
 		return attrs, false
 	}
 	var raw json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-		writeError(w, http.StatusBadRequest, "", "malformed request")
+		s.writeError(w, http.StatusBadRequest, "", "malformed request")
 		return attrs, false
 	}
 	result, err := gojsonschema.Validate(gojsonschema.NewStringLoader(requestSchema), gojsonschema.NewBytesLoader(raw))
 	if err != nil || !result.Valid() {
-		writeError(w, http.StatusBadRequest, "", "request does not conform to the spec: "+fmt.Sprint(result.Errors()))
+		s.writeError(w, http.StatusBadRequest, "", "request does not conform to the spec: "+fmt.Sprint(result.Errors()))
 		return attrs, false
 	}
 	var req enrollmentRequest
 	if err = json.Unmarshal(raw, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "", "malformed request")
+		s.writeError(w, http.StatusBadRequest, "", "malformed request")
 		return attrs, false
 	}
 	return req.Data.Attributes, true
@@ -260,7 +289,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 	s.enrollAttempts++
 	s.mu.Unlock()
 
-	attrs, ok := parseRequest(w, r)
+	attrs, ok := s.parseRequest(w, r)
 	if !ok {
 		return
 	}
@@ -271,7 +300,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 	audience := s.URL + r.URL.Path
 	key, jkt, err := s.verifyAssertion(attrs.Assertion, audience)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "", "invalid client key assertion: "+err.Error())
+		s.writeError(w, http.StatusBadRequest, "", "invalid client key assertion: "+err.Error())
 		return
 	}
 
@@ -281,7 +310,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 	case "device_token":
 		dt = s.deviceTokens[attrs.Authorization]
 		if dt == nil || dt.used || dt.revoked || dt.machine.deprovisioned {
-			writeError(w, http.StatusUnauthorized, "", "The device token is not valid.")
+			s.writeError(w, http.StatusUnauthorized, "", "The device token is not valid.")
 			return
 		}
 		m = dt.machine
@@ -292,7 +321,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if s.enrolledKeys[jkt] {
-		writeError(w, http.StatusConflict, "", "The client key has enrolled before.")
+		s.writeError(w, http.StatusConflict, "", "The client key has enrolled before.")
 		return
 	}
 
@@ -322,23 +351,23 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 func (s *Server) authorizeFleetKey(w http.ResponseWriter, authorization, audience, clientJKT string) (*machine, bool) {
 	header, claims, err := decodeJWT(authorization)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: "+err.Error())
+		s.writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: "+err.Error())
 		return nil, false
 	}
 	if header["alg"] != "ES256" || header["typ"] != fleetAuthTyp {
-		writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: alg must be ES256 and typ "+fleetAuthTyp)
+		s.writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: alg must be ES256 and typ "+fleetAuthTyp)
 		return nil, false
 	}
 	// The signature is verified before the claims are checked or any machine is looked up.
 	fk, ok := s.fleetKeys[fmt.Sprint(header["kid"])]
 	if !ok || VerifyJWT(authorization, fk.pub) != nil {
-		writeError(w, http.StatusUnauthorized, "", "The fleet key is not valid.")
+		s.writeError(w, http.StatusUnauthorized, "", "The fleet key is not valid.")
 		return nil, false
 	}
 
 	identifiers, err := checkFleetClaims(claims, audience, clientJKT)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: "+err.Error())
+		s.writeError(w, http.StatusBadRequest, "", "invalid fleet key authorization: "+err.Error())
 		return nil, false
 	}
 
@@ -354,15 +383,15 @@ func (s *Server) authorizeFleetKey(w http.ResponseWriter, authorization, audienc
 		for _, v := range identifiers {
 			looked = append(looked, map[string]string{"type": "serial_number", "value": v})
 		}
-		writeErrorMeta(w, http.StatusForbidden, machineenrollment.CodeMachineNotRegistered,
+		s.writeErrorMeta(w, http.StatusForbidden, machineenrollment.CodeMachineNotRegistered,
 			"No machine this fleet key allows has any of these identifiers. Ask an admin to register the machine and allow the key for it.",
 			map[string]any{"identifiers": looked})
 	case len(found) > 1:
-		writeError(w, http.StatusForbidden, machineenrollment.CodeIdentifiersAmbiguous, "The identifiers name more than one machine this fleet key allows.")
+		s.writeError(w, http.StatusForbidden, machineenrollment.CodeIdentifiersAmbiguous, "The identifiers name more than one machine this fleet key allows.")
 	case found[0].deprovisioned:
-		writeError(w, http.StatusForbidden, machineenrollment.CodeMachineDeprovisioned, "The machine is deprovisioned.")
+		s.writeError(w, http.StatusForbidden, machineenrollment.CodeMachineDeprovisioned, "The machine is deprovisioned.")
 	case found[0].clientID != "":
-		writeError(w, http.StatusConflict, machineenrollment.CodeMachineEnrolled, "The machine is enrolled already. Ask an admin for a device token to enroll it again.")
+		s.writeError(w, http.StatusConflict, machineenrollment.CodeMachineEnrolled, "The machine is enrolled already. Ask an admin for a device token to enroll it again.")
 	default:
 		return found[0], true
 	}
@@ -494,7 +523,7 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	_, issued := s.tokens[bearer]
 	s.mu.Unlock()
 	if !found || !issued {
-		writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
@@ -579,12 +608,15 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body) //nolint:errcheck // test server
 }
 
-func writeError(w http.ResponseWriter, status int, code, detail string) {
-	writeErrorMeta(w, status, code, detail, nil)
+func (s *Server) writeError(w http.ResponseWriter, status int, code, detail string) {
+	s.writeErrorMeta(w, status, code, detail, nil)
 }
 
-func writeErrorMeta(w http.ResponseWriter, status int, code, detail string, meta map[string]any) {
+func (s *Server) writeErrorMeta(w http.ResponseWriter, status int, code, detail string, meta map[string]any) {
 	e := map[string]any{"status": fmt.Sprint(status), "detail": detail}
+	if s.errorTitles.Load() {
+		e["title"] = http.StatusText(status)
+	}
 	if code != "" {
 		e["code"] = code
 	}
