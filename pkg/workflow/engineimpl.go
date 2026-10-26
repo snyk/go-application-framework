@@ -376,9 +376,8 @@ func (e *EngineImpl) Invoke(
 				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
 			}
 
-			// prepare networkAccess
-			localNetworkAccess := e.networkAccess.Clone()
-			localNetworkAccess.SetConfiguration(options.config)
+			// prepare networkAccess; always a clone, the invocation mutates it
+			localNetworkAccess := CreateNetworkAccess(e.networkAccess, options.config)
 			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
 				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
 				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {

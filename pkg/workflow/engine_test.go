@@ -1569,3 +1569,21 @@ func Test_Engine_Invoke_NetworkErrorAttribution_Integration(t *testing.T) {
 	require.NotNil(t, errs[0].Extension)
 	assert.Equal(t, "code.test", *errs[0].Extension)
 }
+
+func Test_EngineImpl_InvokeWithEngineConfig_DoesNotLeakErrorHandlerIntoEngineNetworkAccess(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("errhandlerleak")
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("cfg", pflag.ContinueOnError)), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		invocation.GetNetworkAccess().AddErrorHandler(func(err error, _ context.Context) error { return err })
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	_, err = engine.Invoke(wfId, WithConfig(engine.GetConfiguration()))
+	require.NoError(t, err)
+
+	assert.Nil(t, engine.GetNetworkAccess().GetErrorHandler())
+}

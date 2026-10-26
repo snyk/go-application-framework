@@ -1154,6 +1154,103 @@ func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
 	)
 }
 
+func Test_defaultFuncOrganization_UsesClonedNetworkAccess(t *testing.T) {
+	orgId := "00000000-0000-0000-0000-000000000001"
+	token := "00000000-0000-4000-8000-000000000002"
+
+	authHeaders := make(chan string, 1)
+	// the engine's host must not be used for a clone with its own host
+	engineServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer engineServer.Close()
+	cloneServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeaders <- r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer cloneServer.Close()
+
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return(orgId, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, engineServer.URL)
+	engine := workflow.NewWorkFlowEngine(config)
+
+	// Track API client creations with their URLs and send a request with the client handed over
+	var apiCalls []string
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		apiCalls = append(apiCalls, url)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		require.NoError(t, err)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.API_URL, cloneServer.URL)
+	clonedConfig.Set(configuration.AUTHENTICATION_TOKEN, token)
+
+	assert.Equal(t, orgId, clonedConfig.GetString(configuration.ORGANIZATION))
+	assert.Equal(t, []string{cloneServer.URL}, apiCalls, "the organization lookup should use the cloned config's API URL")
+	select {
+	case authHeader := <-authHeaders:
+		assert.Equal(t, "token "+token, authHeader, "the organization lookup should use the cloned config's token")
+	case <-time.After(5 * time.Second):
+		assert.Fail(t, "the cloned config's host was not called")
+	}
+}
+
+func Test_defaultFuncOrganization_CloneWithoutAccessFailsInsteadOfUsingEngineCredentials(t *testing.T) {
+	engineOrgId := "00000000-0000-0000-0000-000000000009"
+	token := "00000000-0000-4000-8000-000000000001"
+	// the engine's server accepts only the engine's token and answers with the engine's default org
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "token "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"data":{"attributes":{"default_org_context":%q}}}`, engineOrgId)
+	}))
+	defer server.Close()
+	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	unreachableURL := unreachable.URL
+	unreachable.Close()
+
+	tests := map[string]func(c configuration.Configuration){
+		"blank token":     func(c configuration.Configuration) { c.Set(configuration.AUTHENTICATION_TOKEN, "") },
+		"unreachable URL": func(c configuration.Configuration) { c.Set(configuration.API_URL, unreachableURL) },
+		"invalid URL":     func(c configuration.Configuration) { c.Set(configuration.API_URL, "://invalid") },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			config.Set(configuration.API_URL, server.URL)
+			config.Set(configuration.AUTHENTICATION_TOKEN, token)
+			engine := workflow.NewWorkFlowEngine(config)
+			logger := zlog.Logger
+			initConfiguration(engine, config, &logger, nil)
+			require.Equal(t, engineOrgId, config.GetString(configuration.ORGANIZATION))
+
+			clonedConfig := config.Clone()
+			mutate(clonedConfig)
+
+			// observed behavior: the lookup fails with an error and yields an empty organization
+			org, err := clonedConfig.GetWithError(configuration.ORGANIZATION)
+			require.Error(t, err)
+			assert.Empty(t, org)
+			assert.Empty(t, clonedConfig.GetString(configuration.ORGANIZATION))
+		})
+	}
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	config := configuration.NewWithOpts()
@@ -2177,4 +2274,41 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 		"the flag behind a locally set key must not be evaluated remotely")
 	assert.False(t, config.GetBool(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES),
 		"the local value must win over the remote one")
+}
+
+func Test_defaultFuncOrganization_CachedClonesReResolveWithTheirOwnToken(t *testing.T) {
+	orgA := "00000000-0000-0000-0000-00000000000a"
+	orgB := "00000000-0000-0000-0000-00000000000b"
+	tokenA := "00000000-0000-4000-8000-00000000000a"
+	tokenB := "00000000-0000-4000-8000-00000000000b"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var orgId string
+		switch r.Header.Get("Authorization") {
+		case "token " + tokenA:
+			orgId = orgA
+		case "Bearer " + tokenB:
+			orgId = orgB
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"data":{"attributes":{"default_org_context":%q}}}`, orgId)
+	}))
+	defer server.Close()
+
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(time.Hour))
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, tokenA)
+	engine := workflow.NewWorkFlowEngine(config)
+	logger := zlog.Logger
+	initConfiguration(engine, config, &logger, nil)
+	require.Equal(t, orgA, config.GetString(configuration.ORGANIZATION))
+
+	// the clone only changes the bearer token, which no other key depends on, so the parent's cached organization must not be reused
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.AUTHENTICATION_BEARER_TOKEN, tokenB)
+
+	assert.Equal(t, orgB, clonedConfig.GetString(configuration.ORGANIZATION))
 }

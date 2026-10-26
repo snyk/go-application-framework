@@ -19,7 +19,7 @@ const (
 var newClient = newClientImpl
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
-	client := engine.GetNetworkAccess().GetHttpClient()
+	client := workflow.CreateNetworkAccessFromEngine(engine, config).GetHttpClient()
 	baseUrl, err := url.JoinPath(config.GetString(configuration.API_URL), "hidden")
 	if err != nil {
 		return nil, err
