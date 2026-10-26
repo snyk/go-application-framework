@@ -847,9 +847,6 @@ func (ev *extendedViper) GetFiles() []string {
 }
 
 func (ev *extendedViper) ReloadConfig() error {
-	if repairer, ok := ev.GetStorage().(permissionRepairer); ok {
-		repairer.ensureFilePermissions()
-	}
 	return ev.viper.ReadInConfig()
 }
 

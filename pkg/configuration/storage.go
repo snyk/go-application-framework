@@ -146,11 +146,6 @@ func (s *JsonStorage) Set(key string, value any) error {
 	return writeConfigFile(s.path, configJson)
 }
 
-// permissionRepairer is implemented by storages whose backing file must stay owner-only.
-type permissionRepairer interface {
-	ensureFilePermissions()
-}
-
 // ensureFilePermissions removes non-owner permissions without failing reads if repair fails.
 func (s *JsonStorage) ensureFilePermissions() {
 	info, err := os.Stat(s.path)
