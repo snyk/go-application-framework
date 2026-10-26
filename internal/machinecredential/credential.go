@@ -36,6 +36,15 @@ var ErrNotEnrolled = errors.New("this machine is not enrolled")
 
 var errNoStorage = errors.New("the configuration has no storage to persist the machine credential in")
 
+// AuthenticationError means an enrolled machine cannot authenticate as itself, so no authenticated request may be sent.
+type AuthenticationError struct {
+	Err error
+}
+
+func (e *AuthenticationError) Error() string { return e.Err.Error() }
+
+func (e *AuthenticationError) Unwrap() error { return e.Err }
+
 // Credential is what an enrolled machine authenticates with.
 type Credential struct {
 	ClientID string

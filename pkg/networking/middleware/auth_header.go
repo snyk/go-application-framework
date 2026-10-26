@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -53,6 +54,14 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
 	newRequest := request.Clone(request.Context())
 	requiresAuth, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
+	var machineErr *machinecredential.AuthenticationError
+	if requiresAuth && errors.As(err, &machineErr) {
+		if n.logger != nil {
+			n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("machine authentication failed, blocking the request")
+		}
+		// Not nil: given a nil response, the CLI's legacy proxy relays the original request itself.
+		return unauthorizedResponse(newRequest), err
+	}
 	if err != nil {
 		if n.logger != nil {
 			n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("could not determine if request requires auth, allowing through")
@@ -67,16 +76,20 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 		if n.logger != nil {
 			n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
 		}
-		return &http.Response{
-			StatusCode: http.StatusUnauthorized,
-			Status:     "401 Unauthorized",
-			Header:     make(http.Header),
-			Body:       io.NopCloser(http.NoBody),
-			Request:    newRequest,
-		}, errFromStatusCode(http.StatusUnauthorized)
+		return unauthorizedResponse(newRequest), errFromStatusCode(http.StatusUnauthorized)
 	}
 
 	return n.next.RoundTrip(newRequest)
+}
+
+func unauthorizedResponse(request *http.Request) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusUnauthorized,
+		Status:     "401 Unauthorized",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(http.NoBody),
+		Request:    request,
+	}
 }
 
 func ShouldRequireAuthentication(
