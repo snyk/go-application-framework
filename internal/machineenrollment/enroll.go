@@ -14,7 +14,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,6 +49,12 @@ var ErrRetiredJoinKey = errors.New("join keys (" + retiredJoinKeyPrefix + "...) 
 
 // ErrNoIdentifiers is returned when a fleet key enrollment has no valid identifier to name the machine with.
 var ErrNoIdentifiers = errors.New("a fleet key enrollment needs between 1 and 32 machine identifiers, each of 1 to 256 characters")
+
+// ErrOutcomeUnknown is returned when the enrollment request may have reached the service but its
+// outcome could not be read: no response arrived, the response was a 2xx or 5xx whose body could not
+// be read or used, or a 5xx that may follow an accepted enrollment. The service may have enrolled
+// the machine.
+var ErrOutcomeUnknown = errors.New("the outcome of the enrollment is unknown: the service may have enrolled the machine, a single-use device token (if one was used) may be spent, and an admin can check the machine's client and revoke it")
 
 // Enrollment is the result of enrolling this device.
 type Enrollment struct {
@@ -101,6 +109,9 @@ func EnrollWithFleetKey(ctx context.Context, httpClient *http.Client, apiURL str
 // returns the enrollment method and the authorization it carries, given the client key and the
 // audience of the request.
 func enroll(ctx context.Context, httpClient *http.Client, apiURL string, now time.Time, authorize func(clientKey crypto.Signer, audience string) (method, authorization string, err error)) (Enrollment, error) {
+	if httpClient == nil {
+		return Enrollment{}, errors.New("enrolling needs an http client")
+	}
 	key, err := GenerateKey()
 	if err != nil {
 		return Enrollment{}, err
@@ -163,9 +174,15 @@ func postEnrollment(ctx context.Context, httpClient *http.Client, url string, at
 		return enrollmentResult{}, fmt.Errorf("failed enrolling machine: %w", err)
 	}
 	if res.Data.Attributes.ClientID == "" {
-		return enrollmentResult{}, errors.New("enrollment response is missing the client_id")
+		return enrollmentResult{}, fmt.Errorf("%w: enrollment response is missing the client_id", ErrOutcomeUnknown)
 	}
 	return res.Data.Attributes, nil
+}
+
+// mayHaveEnrolled reports whether a status leaves the outcome unknown: any 2xx is an acceptance, and
+// a 5xx, such as a gateway timeout, may follow one. Every other status is a definite rejection.
+func mayHaveEnrolled(status int) bool {
+	return status/100 == 2 || status >= http.StatusInternalServerError
 }
 
 // doJSONAPI sends a JSON:API request and decodes the response into out, or returns the
@@ -175,6 +192,14 @@ func doJSONAPI(ctx context.Context, httpClient *http.Client, method, url, body s
 	if body != "" {
 		reqBody = strings.NewReader(body)
 	}
+	// WroteRequest fires when the request has been handed to the connection, which may be before
+	// the final flush, so it tells that the request may have reached the service, not that it did.
+	var mayHaveReached atomic.Bool
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{WroteRequest: func(info httptrace.WroteRequestInfo) {
+		if info.Err == nil {
+			mayHaveReached.Store(true)
+		}
+	}})
 	req, err := http.NewRequestWithContext(ctx, method, url+"?version="+apiVersion, reqBody)
 	if err != nil {
 		return fmt.Errorf("failed building request: %w", err)
@@ -186,19 +211,29 @@ func doJSONAPI(ctx context.Context, httpClient *http.Client, method, url, body s
 
 	res, err := httpClient.Do(req)
 	if err != nil {
+		if mayHaveReached.Load() {
+			return fmt.Errorf("%w: %w", ErrOutcomeUnknown, err)
+		}
 		return err
 	}
 	defer func() { _ = res.Body.Close() }()
 
 	data, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBodySize))
 	if err != nil {
-		return fmt.Errorf("failed reading response: %w", err)
+		if mayHaveEnrolled(res.StatusCode) {
+			return fmt.Errorf("%w: failed reading the %d response: %w", ErrOutcomeUnknown, res.StatusCode, err)
+		}
+		return fmt.Errorf("%s %s returned %d but reading its response failed: %w", method, req.URL.Path, res.StatusCode, err)
 	}
 	if res.StatusCode != want {
-		return newEnrollmentError(method, req.URL.Path, res.StatusCode, data)
+		unexpected := newEnrollmentError(method, req.URL.Path, res.StatusCode, data)
+		if mayHaveEnrolled(res.StatusCode) {
+			return fmt.Errorf("%w: %w", ErrOutcomeUnknown, unexpected)
+		}
+		return unexpected
 	}
 	if err = json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("failed decoding response: %w", err)
+		return fmt.Errorf("%w: failed decoding response: %w", ErrOutcomeUnknown, err)
 	}
 	return nil
 }

@@ -18,12 +18,16 @@ import (
 	"maps"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,6 +45,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -212,12 +217,18 @@ func (e *enrollEnv) setMachine(machine runtimeinfo.Machine) {
 
 func writeFleetKey(t *testing.T) (string, *ecdsa.PrivateKey) {
 	t.Helper()
+	return writeFleetKeyWithMode(t, 0o600)
+}
+
+func writeFleetKeyWithMode(t *testing.T, mode os.FileMode) (string, *ecdsa.PrivateKey) {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "fleet.pem")
-	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600))
+	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), mode))
+	require.NoError(t, os.Chmod(path, mode))
 	return path, key
 }
 
@@ -435,7 +446,8 @@ func Test_machineEnroll_fleetKeyRejectsNoMachineIDEvenWithASerialNumber(t *testi
 	runtimeInfo := mocks.NewMockRuntimeInfo(ctrl)
 	runtimeInfo.EXPECT().GetMachineID().Return(runtimeinfo.Machine{SerialNumber: "S1"}, runtimeinfo.ErrNoMachineID)
 
-	_, err := enrollWithFleetKeyFile(t.Context(), runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", fleetKeyFile)
+	logger := zerolog.Nop()
+	_, err := enrollWithFleetKeyFile(t.Context(), &logger, runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", fleetKeyFile)
 
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 }
@@ -759,7 +771,6 @@ func Test_machineEnroll_enrollmentErrorsSurviveTheHostErrorHandler(t *testing.T)
 	rejections := map[string]struct {
 		status   int
 		detail   string
-		hint     string
 		sentinel error
 		enroll   func(t *testing.T, env *enrollEnv) error
 	}{
@@ -776,7 +787,6 @@ func Test_machineEnroll_enrollmentErrorsSurviveTheHostErrorHandler(t *testing.T)
 		"fleet key for an enrolled machine": {
 			status:   http.StatusConflict,
 			detail:   "The machine is enrolled already. Ask an admin for a device token to enroll it again.",
-			hint:     "ask an admin for a device token",
 			sentinel: machineenrollment.ErrMachineEnrolled,
 			enroll: func(t *testing.T, env *enrollEnv) error {
 				t.Helper()
@@ -814,7 +824,6 @@ func Test_machineEnroll_enrollmentErrorsSurviveTheHostErrorHandler(t *testing.T)
 					assert.ErrorIs(t, err, rejection.sentinel)
 				}
 				assert.Contains(t, err.Error(), rejection.detail)
-				assert.Contains(t, err.Error(), rejection.hint)
 				assert.NotContains(t, err.Error(), "snyk auth")
 				var catalogErr snyk_errors.Error
 				assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
@@ -972,6 +981,75 @@ func Test_machineEnroll_otherRegionNamesItsTokenEndpointAndKeepsTheCredential(t 
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, res.StatusCode)
 			assert.Equal(t, 1, env.server.EnrollmentRequests(), "authenticating again needed no new enrollment")
+		})
+	}
+}
+
+func Test_machineEnroll_neverRetriesTheEnrollmentRequest(t *testing.T) {
+	retryConfigs := map[string]func(config configuration.Configuration){
+		"attempts configured": func(config configuration.Configuration) {
+			config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+		},
+		"retries opted in for the path": func(config configuration.Configuration) {
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+			config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"hidden/machines/enrollments"})
+		},
+	}
+	for name, configure := range retryConfigs {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			var requests atomic.Int32
+			badGateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusBadGateway)
+			}))
+			t.Cleanup(badGateway.Close)
+			env.config.Set(configuration.API_URL, badGateway.URL)
+			env.config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+			configure(env.config)
+
+			err := env.enroll(map[string]string{flagDeviceToken: "sdt_single-use"})
+
+			var enrollmentErr *machineenrollment.EnrollmentError
+			require.ErrorAs(t, err, &enrollmentErr)
+			assert.Equal(t, http.StatusBadGateway, enrollmentErr.Status)
+			assert.Equal(t, int32(1), requests.Load(), "the single-use device token must not be replayed")
+		})
+	}
+}
+
+func Test_machineEnroll_fleetKeyReadableByOthersIsWarnedAboutAndStillEnrolls(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not restrict access on Windows")
+	}
+	for name, tt := range map[string]struct {
+		mode     os.FileMode
+		wantWarn bool
+	}{
+		"owner only":        {mode: 0o600, wantWarn: false},
+		"readable by group": {mode: 0o640, wantWarn: true},
+		"readable by all":   {mode: 0o644, wantWarn: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			logs := &bytes.Buffer{}
+			logger := zerolog.New(zerolog.ConsoleWriter{Out: logs, NoColor: true})
+			env.engine.SetLogger(&logger)
+			machineID := env.server.RegisterMachine("SERIAL-42")
+			fleetKeyFile, fleetKey := writeFleetKeyWithMode(t, tt.mode)
+			env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+			env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+
+			require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+
+			warned := strings.Contains(logs.String(), "readable by other users")
+			assert.Equal(t, tt.wantWarn, warned, logs.String())
+			if tt.wantWarn {
+				assert.Equal(t, 1, strings.Count(logs.String(), "readable by other users"))
+				assert.Contains(t, logs.String(), "chmod 600 "+strconv.Quote(fleetKeyFile))
+				assert.Contains(t, logs.String(), "defaultMode 0400")
+			}
 		})
 	}
 }

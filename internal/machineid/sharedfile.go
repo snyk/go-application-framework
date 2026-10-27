@@ -154,9 +154,9 @@ func schemaReplaceable(raw json.RawMessage) bool {
 }
 
 // writeSharedFileID returns the id actually stored, which is an existing valid id when there is one.
-// It never creates the machine-wide directory; any failure there falls back to the per-user path, except errNewerSchema, which is returned at once so a newer-schema file is not shadowed.
+// It never creates the machine-wide directory; any failure there falls back to the per-user path.
 func writeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, error) {
-	id, failures := storeSharedFileID(paths, candidateID, source, writer, logger)
+	id, failures := storeSharedFileID(paths, candidateID, source, writer, false, logger)
 	errs := make([]error, 0, len(failures))
 	for _, f := range failures {
 		errs = append(errs, f.err)
@@ -164,8 +164,10 @@ func writeSharedFileID(paths pathPair, candidateID, source, writer string, logge
 	return id, errors.Join(errs...)
 }
 
-// storeSharedFileID is writeSharedFileID reporting each location's failure with its own path.
-func storeSharedFileID(paths pathPair, candidateID, source, writer string, logger *zerolog.Logger) (string, []replaceFailure) {
+// storeSharedFileID is writeSharedFileID reporting each location's failure with its own path. With
+// stopOnNewerSchema set, a machine-wide file written by a newer schema ends the store before the per-user
+// write, so a hardware serial never shadows that file.
+func storeSharedFileID(paths pathPair, candidateID, source, writer string, stopOnNewerSchema bool, logger *zerolog.Logger) (string, []replaceFailure) {
 	logger = effectiveLogger(logger)
 	var failures []replaceFailure
 	if paths.machineWide != "" {
@@ -174,7 +176,7 @@ func storeSharedFileID(paths pathPair, candidateID, source, writer string, logge
 			return id, nil
 		}
 		failures = append(failures, replaceFailure{paths.machineWide, err})
-		if errors.Is(err, errNewerSchema) {
+		if stopOnNewerSchema && errors.Is(err, errNewerSchema) {
 			return "", failures
 		}
 		logger.Debug().Err(err).Str("path", paths.machineWide).Msg("machine id: machine-wide write failed, falling back to per-user")
