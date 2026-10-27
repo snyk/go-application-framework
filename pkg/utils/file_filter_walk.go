@@ -28,81 +28,6 @@ type ruleWalker struct {
 	excludedDirs        map[string]struct{}
 }
 
-type WalkFilteredFilesOption func(*walkConfig)
-
-type walkConfig struct {
-	extraRules []string
-}
-
-func WithExtraRules(rules []string) WalkFilteredFilesOption {
-	return func(config *walkConfig) {
-		config.extraRules = rules
-	}
-}
-
-func (fw *FileFilter) WalkFilteredFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, error) {
-	files, rules, err := fw.discoverFiles(ruleFiles, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	return fw.GetFilteredFiles(files, rules), nil
-}
-
-func (fw *FileFilter) discoverFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, []string, error) {
-	var config walkConfig
-	for _, option := range options {
-		option(&config)
-	}
-
-	walker := newRuleWalker(fw, ruleFiles, config.extraRules)
-	foundRules, excludedDirs, err := walker.collect()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	files := make(chan string)
-	go func() {
-		defer close(files)
-		fw.sendFilesSkipping(excludedDirs, files)
-	}()
-
-	return files, slices.Concat(config.extraRules, fw.defaultRules, foundRules), nil
-}
-
-func (fw *FileFilter) sendFilesSkipping(excludedDirs map[string]struct{}, files chan<- string) {
-	if !isDirectory(fw.path) {
-		files <- fw.path
-		return
-	}
-	fw.sendDirFilesSkipping(fw.path, excludedDirs, files)
-}
-
-func (fw *FileFilter) sendDirFilesSkipping(dir string, excludedDirs map[string]struct{}, files chan<- string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		fw.logger.Error().Msgf("walk dir failed: %v", err)
-		return
-	}
-
-	for _, entry := range entries {
-		path := filepath.Join(dir, entry.Name())
-		if !entry.IsDir() {
-			files <- path
-			continue
-		}
-
-		if _, excluded := excludedDirs[path]; !excluded {
-			fw.sendDirFilesSkipping(path, excludedDirs, files)
-		}
-	}
-}
-
-func isDirectory(path string) bool {
-	info, err := os.Lstat(path)
-	return err == nil && info.IsDir()
-}
-
 func newRuleWalker(filter *FileFilter, ruleFiles []string, extraRules []string) *ruleWalker {
 	w := &ruleWalker{
 		filter:              filter,
@@ -187,10 +112,6 @@ func (w *ruleWalker) addRulesOf(dir string, entries []os.DirEntry) error {
 	return nil
 }
 
-func isNegation(glob string) bool {
-	return strings.HasPrefix(strings.TrimPrefix(glob, gitIgnoreGlobPrefix), "!")
-}
-
 func (w *ruleWalker) isExcluded(dir string) bool {
 	if w.hasNegation {
 		return false
@@ -262,4 +183,83 @@ func (w *ruleWalker) loadTrackedDirs() {
 			w.trackedDirs[dir] = struct{}{}
 		}
 	}
+}
+
+type WalkFilteredFilesOption func(*walkConfig)
+
+type walkConfig struct {
+	extraRules []string
+}
+
+func WithExtraRules(rules []string) WalkFilteredFilesOption {
+	return func(config *walkConfig) {
+		config.extraRules = rules
+	}
+}
+
+func (fw *FileFilter) WalkFilteredFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, error) {
+	files, rules, err := fw.discoverFiles(ruleFiles, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	return fw.GetFilteredFiles(files, rules), nil
+}
+
+func (fw *FileFilter) discoverFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, []string, error) {
+	var config walkConfig
+	for _, option := range options {
+		option(&config)
+	}
+
+	walker := newRuleWalker(fw, ruleFiles, config.extraRules)
+	foundRules, excludedDirs, err := walker.collect()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	files := make(chan string)
+	go func() {
+		defer close(files)
+		fw.sendFilesSkipping(excludedDirs, files)
+	}()
+
+	return files, slices.Concat(config.extraRules, fw.defaultRules, foundRules), nil
+}
+
+func (fw *FileFilter) sendFilesSkipping(excludedDirs map[string]struct{}, files chan<- string) {
+	if !isDirectory(fw.path) {
+		files <- fw.path
+		return
+	}
+	fw.sendDirFilesSkipping(fw.path, excludedDirs, files)
+}
+
+func (fw *FileFilter) sendDirFilesSkipping(dir string, excludedDirs map[string]struct{}, files chan<- string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fw.logger.Error().Msgf("walk dir failed: %v", err)
+		return
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if !entry.IsDir() {
+			files <- path
+			continue
+		}
+
+		if _, excluded := excludedDirs[path]; !excluded {
+			fw.sendDirFilesSkipping(path, excludedDirs, files)
+		}
+	}
+}
+
+func isNegation(glob string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(glob, gitIgnoreGlobPrefix), "!")
+}
+
+func isDirectory(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.IsDir()
 }
