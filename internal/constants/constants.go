@@ -20,3 +20,10 @@ const SNYK_DEFAULT_ALLOWED_HOST_REGEXP = `^(https?://)?api(\.(.+))?\.(snyk|snykg
 // SNYK_DEFAULT_ALLOWED_HOST_DOMAINS is the default allowlist of registrable
 // domains that an OAuth callback instance host is permitted to belong to.
 var SNYK_DEFAULT_ALLOWED_HOST_DOMAINS = []string{"snyk.io", "snykgov.io"}
+
+// Keys in snyk_errors.Error.Meta that GAF writes and analytics reads.
+// ERROR_META_KEY_EXTENSION_NAME avoids generic names because server-sent JSON:API meta is copied into Meta too.
+const (
+	ERROR_META_KEY_REQUEST_PATH   = "request-path"
+	ERROR_META_KEY_EXTENSION_NAME = "extension-name"
+)
