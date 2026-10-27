@@ -171,6 +171,9 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			logger.Debug().Str("reason", reason).Msg("machine id: hardware serial number failed validation, ignoring")
 		} else {
 			machine.ID = hw.serial
+			// Read both scopes first. Nil means neither the machine-wide nor the per-user
+			// file holds a valid id, so the serial may be stored. A file that already
+			// holds an id is left as it is.
 			sf, sharedReadErr := readSharedFile(paths, logger)
 			if sf == nil {
 				if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
@@ -181,9 +184,6 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 		}
 	}
 
-	// Read both scopes first. Nil means neither the machine-wide nor the per-user
-	// file holds a valid id, so the serial may be stored. A file that already
-	// holds an id is left as it is.
 	sf, sharedReadErr := readSharedFile(paths, logger)
 	if sf != nil {
 		logger.Debug().Msg("machine id: adopting value from shared file")
