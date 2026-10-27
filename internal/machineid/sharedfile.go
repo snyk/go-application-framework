@@ -35,9 +35,10 @@ const (
 // lockTimeout bounds the wait for each shared file location's lock.
 var lockTimeout = 1 * time.Second
 
-// sharedFile holds the fields GAF reads or writes. Installer-only fields are never carried over:
-// GAF rewrites a file holding a different valid id only when its schema is replaceable, and then
-// keeps just first_seen_at.
+// sharedFile holds the fields GAF reads or writes. A rewrite marshals exactly these fields (keeping
+// first_seen_at), so any field another product added is dropped. Only GAF takes the lock next to the
+// file, so another product's writer can race the rewrite. schema_version is the only guard: a writer
+// that adds fields must bump it past sharedSchemaVersion, which makes GAF leave the file unchanged.
 type sharedFile struct {
 	MachineID        string `json:"machine_id"`
 	IdentifierSource string `json:"identifier_source"`

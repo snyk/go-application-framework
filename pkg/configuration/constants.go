@@ -63,7 +63,12 @@ const (
 	// machine identification
 	// ---------
 
-	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID stores a runtimeinfo.Machine, so GetString returns "" for it. Read it with RuntimeInfo.GetMachineID() or type-assert the value to runtimeinfo.Machine; a read can return a usable Machine together with an error, which GetString hides, and an empty Machine.ID means no usable identifier. A string set on this key is used as Machine.ID (trailing whitespace trimmed); otherwise the ID is resolved on first read and kept for the engine's lifetime.
+	// MACHINE_ID holds a runtimeinfo.Machine. Read it with RuntimeInfo.GetMachineID() or type-assert the value to runtimeinfo.Machine.
+	// An empty Machine.ID means no usable identifier. A resolved id is kept for the engine's lifetime.
+	// A string is how an environment variable, flag, or config file supplies Machine.ID; trailing whitespace is trimmed.
+	// A JSON object string is parsed into runtimeinfo.Machine (fields ID, Hostname, SerialNumber, StudioID).
+	// A runtimeinfo.Machine or *runtimeinfo.Machine with a valid ID is kept. A blank or invalid ID is resolved from disk.
+	MACHINE_ID string = "internal_snyk_machine_id"
 
 	// ---------
 	// general workflow configuration
