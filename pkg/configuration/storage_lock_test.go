@@ -95,3 +95,14 @@ func Test_JsonStorage_Lock_HonorsContextTimeoutWhileWaitingInProcess(t *testing.
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Less(t, elapsed, 5*time.Second, "Lock must return once ctx expires, not hang waiting on the in-process gate")
 }
+
+func Test_JsonStorage_Lock_CreatesMissingConfigDirectory(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "not", "yet", "created", "test.json")
+	storage := configuration.NewJsonStorage(path)
+
+	err := storage.Lock(context.Background(), time.Millisecond)
+
+	require.NoError(t, err)
+	require.NoError(t, storage.Unlock())
+}

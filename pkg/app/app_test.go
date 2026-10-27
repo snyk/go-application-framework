@@ -267,42 +267,49 @@ func skipIfExists(t *testing.T, machineWideDirs ...string) {
 }
 
 func Test_CreateAppEngine_providesMachineId(t *testing.T) {
-	sharedFilePath := isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
+	for name, serial := range map[string]string{"with serial": "TEST-SERIAL-123", "without serial": ""} {
+		t.Run(name, func(t *testing.T) {
+			sharedFilePath := isolateMachineIDStorage(t)
+			engine := newAppEngineWithHost(t, hostOpts(serial))
 
-	machineID := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+			machineID := machineIDOf(t, engine.GetConfiguration())
 
-	content, err := os.ReadFile(sharedFilePath)
-	require.NoError(t, err)
-	assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
-	assert.Equal(t, machineID, CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts())).GetConfiguration().GetString(configuration.MACHINE_ID),
-		"a second engine on the same machine must resolve the same machine id")
+			content, err := os.ReadFile(sharedFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(content), `"machine_id":"`+machineID+`"`, "the machine id must be the one stored in the shared file")
+			assert.Equal(t, machineID, machineIDOf(t, newAppEngineWithHost(t, hostOpts(serial)).GetConfiguration()),
+				"a second engine on the same machine must resolve the same machine id")
+		})
+	}
 }
 
 func Test_CreateAppEngine_suppliedMachineIdAfterAFirstLookupIsUsed(t *testing.T) {
-	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(WithConfiguration(configuration.NewWithOpts()))
-	resolved := engine.GetConfiguration().GetString(configuration.MACHINE_ID)
+	for name, serial := range map[string]string{"with serial": "TEST-SERIAL-123", "without serial": ""} {
+		t.Run(name, func(t *testing.T) {
+			isolateMachineIDStorage(t)
+			engine := newAppEngineWithHost(t, hostOpts(serial))
+			resolved := machineIDOf(t, engine.GetConfiguration())
 
-	engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
+			engine.GetConfiguration().Set(configuration.MACHINE_ID, "supplied-machine-id")
 
-	assert.NotEqual(t, "supplied-machine-id", resolved)
-	assert.Equal(t, "supplied-machine-id", engine.GetConfiguration().GetString(configuration.MACHINE_ID))
+			assert.NotEqual(t, "supplied-machine-id", resolved)
+			assert.Equal(t, "supplied-machine-id", machineIDOf(t, engine.GetConfiguration()))
+		})
+	}
 }
 
 func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(t *testing.T) {
 	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(
-		WithConfiguration(configuration.NewWithOpts()),
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
 	)
 	wfId := workflow.NewWorkflowIdentifier("machine-id-app-test")
 	_, err := engine.Register(wfId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		machineID, machineIDErr := invocation.GetRuntimeInfo().GetMachineID()
+		machine, machineIDErr := invocation.GetRuntimeInfo().GetMachineID()
 		if machineIDErr != nil {
 			return nil, machineIDErr
 		}
-		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machineID)}, nil
+		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(wfId, "machine-id"), "text/plain", machine.ID)}, nil
 	})
 	require.NoError(t, err)
 	require.NoError(t, engine.Init())
@@ -311,20 +318,19 @@ func Test_CreateAppEngine_workflowsReceiveTheMachineIdOfTheEngineViaRuntimeInfo(
 
 	require.NoError(t, err)
 	require.Len(t, output, 1)
-	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), output[0].GetPayload())
+	assert.Equal(t, machineIDOf(t, engine.GetConfiguration()), output[0].GetPayload())
 }
 
 func Test_CreateAppEngine_hostsReadTheMachineIdFromTheRuntimeInfoOfTheEngine(t *testing.T) {
 	isolateMachineIDStorage(t)
-	engine := CreateAppEngineWithOptions(
-		WithConfiguration(configuration.NewWithOpts()),
+	engine := newAppEngineWithHost(t, hostOpts("TEST-SERIAL-123"),
 		WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))),
 	)
 
-	machineID, err := engine.GetRuntimeInfo().GetMachineID()
+	machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 	require.NoError(t, err)
-	assert.Equal(t, engine.GetConfiguration().GetString(configuration.MACHINE_ID), machineID)
+	assert.Equal(t, machineIDOf(t, engine.GetConfiguration()), machine.ID)
 }
 
 func Test_CreateAppEngine_reportAnalyticsSendsTheRuntimeFieldsOfTheEngine(t *testing.T) {

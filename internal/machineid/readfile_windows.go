@@ -7,7 +7,8 @@ import (
 	"syscall"
 )
 
-// openIDFile shares delete so other processes can still rename or delete the file while it is open.
+// openIDFile shares delete as well as read and write. Replacing the file renames over it, and that
+// rename fails with a sharing violation while a reader holds a handle without FILE_SHARE_DELETE.
 // FILE_FLAG_BACKUP_SEMANTICS keeps a directory openable so it is rejected as not a regular file.
 func openIDFile(path string) (*os.File, error) {
 	name, err := syscall.UTF16PtrFromString(path)

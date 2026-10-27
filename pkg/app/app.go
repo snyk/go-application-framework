@@ -335,12 +335,13 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 	return callback
 }
 
-func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	return machineid.Resolve(machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo))
+func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger, extraOpts []machineid.ResolveOption) configuration.DefaultValueFunction {
+	opts := []machineid.ResolveOption{machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo)}
+	return machineid.Resolve(append(opts, extraOpts...)...)
 }
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
+func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient, machineIDOpts ...machineid.ResolveOption) {
 	if logger == nil {
 		logger = &zlog.Logger
 	}
@@ -362,7 +363,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
-	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger, machineIDOpts))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see
@@ -472,6 +473,10 @@ func CreateAppEngine() workflow.Engine {
 }
 
 func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
+	return createAppEngine(nil, opts...)
+}
+
+func createAppEngine(machineIDOpts []machineid.ResolveOption, opts ...Opts) workflow.Engine {
 	engine := workflow.NewDefaultWorkFlowEngine()
 
 	for _, opt := range opts {
@@ -480,7 +485,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	config := engine.GetConfiguration()
 	if config != nil {
-		initConfiguration(engine, config, engine.GetLogger(), nil)
+		initConfiguration(engine, config, engine.GetLogger(), nil, machineIDOpts...)
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)

@@ -587,20 +587,23 @@ type engineRuntimeInfo struct {
 
 // GetMachineID reads through GetWithError rather than GetStringWithError, which drops the value
 // whenever there is an error, because resolution can return a usable id together with an error.
-func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
+func (ri *engineRuntimeInfo) GetMachineID() (runtimeinfo.Machine, error) {
 	value, err := ri.engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
-	id, _ := value.(string) //nolint:errcheck // a non-string value counts as no machine id
+	var machine runtimeinfo.Machine
+	if m, isMachine := value.(runtimeinfo.Machine); isMachine {
+		machine = m
+	}
 	var details snyk_errors.Error
 	if errors.Is(err, runtimeinfo.ErrNoMachineID) && errors.As(err, &details) {
-		return "", err
+		return runtimeinfo.Machine{}, err
 	}
-	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
-		return "", runtimeinfo.ErrNoMachineID
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && machine.ID == "") {
+		return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 	}
-	if err != nil && id == "" {
-		return "", fmt.Errorf("failed to read machine id: %w", err)
+	if err != nil && machine.ID == "" {
+		return runtimeinfo.Machine{}, fmt.Errorf("failed to read machine id: %w", err)
 	}
-	return id, err
+	return machine, err
 }
 
 // GetGlobalConfiguration returns the global configuration options.
