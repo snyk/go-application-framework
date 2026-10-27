@@ -398,6 +398,9 @@ func TestNewInMemory(t *testing.T) {
 }
 
 func TestNewFromFiles(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	config := NewFromFiles(filepath.Join(t.TempDir(), t.Name()))
 	ev, ok := config.(*extendedViper)
 	assert.True(t, ok)
