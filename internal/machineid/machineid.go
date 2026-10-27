@@ -5,6 +5,7 @@ package machineid
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"strings"
 	"sync"
 	"unicode"
@@ -55,8 +56,10 @@ func writerIdentity(o resolveOptions) string {
 // Resolve returns a configuration.DefaultValueFunction for configuration.MACHINE_ID. A valid value
 // supplied on MACHINE_ID itself (trailing whitespace trimmed) is returned. Otherwise the first
 // lookup takes the first of: the hardware serial, the shared file, the Snyk Studio device-id file,
-// or a newly generated id. A different id already in the shared file is not replaced yet, so the
-// serial wins only for this process. Later lookups through the same resolver return that id,
+// or a newly generated id. A valid serial replaces a different id in the machine-wide shared file and in an existing per-user
+// shared file, best effort. An existing install's machine id therefore changes once, on upgrade: the serial replaces the
+// id stored in both shared files, and other products read the new id from there. A file written by a newer or unknown schema is left unchanged, and storing a hardware serial
+// logs a warning about it. Later lookups through the same resolver return that id,
 // together with an error for each file that exists but could not be read. If no id was found, it
 // returns runtimeinfo.ErrNoMachineID joined with those errors and an error describing why a
 // generated id could not be stored; the configuration caching does not hold it, so the next lookup
@@ -165,6 +168,30 @@ type resolver struct {
 	warnedUnstored bool
 }
 
+// logSerialStoreFailure logs a permission failure, or a missing machine-wide location, at Debug, as both are expected
+// and repeat on every run, and any other failure at Warn.
+func logSerialStoreFailure(logger *zerolog.Logger, err error, path, msg string, machineWide bool) {
+	switch {
+	case err == nil:
+	case errors.Is(err, errNewerSchema):
+		logger.Warn().Err(err).Str("path", path).Msg("machine id: shared file was written by a newer or unknown schema, left unchanged")
+	case errors.Is(err, fs.ErrPermission), machineWide && errors.Is(err, fs.ErrNotExist):
+		logger.Debug().Err(err).Str("path", path).Msg(msg)
+	default:
+		logger.Warn().Err(err).Str("path", path).Msg(msg)
+	}
+}
+
+func logReplaceFailures(logger *zerolog.Logger, paths pathPair, failures []replaceFailure) {
+	for _, f := range failures {
+		logReplaceFailure(logger, paths, f)
+	}
+}
+
+func logReplaceFailure(logger *zerolog.Logger, paths pathPair, f replaceFailure) {
+	logSerialStoreFailure(logger, f.err, f.path, "machine id: shared file holds a different machine id that could not be replaced by the hardware serial, left unchanged", f.path == paths.machineWide)
+}
+
 func (r *resolver) hardware() hardwareIdentity {
 	r.hwOnce.Do(func() {
 		if hostname, err := r.opts.hostname(); err == nil {
@@ -244,13 +271,24 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			logger.Debug().Str("reason", reason).Msg("machine id: hardware serial number failed validation, ignoring")
 		} else {
 			machine.ID = hw.serial
-			// Read both scopes first. Nil means neither the machine-wide nor the per-user
-			// file holds a valid id, so the serial may be stored. A file that already
-			// holds an id is left as it is.
-			sf, sharedReadErr := readSharedFile(paths, logger)
-			if sf == nil {
-				if _, err := writeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger); err != nil {
-					logger.Debug().Err(err).Msg("machine id: serial number could not be stored in the shared file, using it directly")
+			// Both scopes are read before anything is written so an id already on disk decides
+			// what happens: nil means no file holds a valid id and the serial is stored, a
+			// different id is replaced by the serial, the same id only refreshes the per-user copy.
+			existing, sharedReadErr := readSharedFile(paths, logger)
+			if existing == nil {
+				_, failures := storeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger)
+				for _, f := range failures {
+					logSerialStoreFailure(logger, f.err, f.path, "machine id: serial number could not be stored in the shared file, using it directly", f.path == paths.machineWide)
+				}
+			} else if existing.MachineID != hw.serial {
+				logReplaceFailures(logger, paths, replaceSharedFileID(paths, hw.serial, string(sourceSerial), writer))
+			} else if failures := replacePerUserID(paths, hw.serial, string(sourceSerial), writer); len(failures) > 0 {
+				for _, f := range failures {
+					if errors.Is(f.err, errNewerSchema) {
+						logger.Debug().Err(f.err).Str("path", f.path).Msg("machine id: per-user shared file written by a newer or unknown schema is not read while the machine-wide file holds the serial, left unchanged")
+						continue
+					}
+					logReplaceFailure(logger, paths, f)
 				}
 			}
 			return machine, sharedReadErr
