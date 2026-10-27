@@ -426,6 +426,7 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 	}
 
 	tracked, ok := fw.loadTrackedFiles()
+	// Release so a filter reused across scans, as the IDE language server does, does not serve a stale git index.
 	fw.releaseTrackedFiles()
 	if !ok {
 		return defaultPredicate
