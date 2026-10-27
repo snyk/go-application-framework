@@ -425,7 +425,7 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		return defaultPredicate
 	}
 
-	tracked, ok := fw.loadTrackedFiles()
+	trackedFiles, ok := fw.loadTrackedFiles()
 	// Release so a filter reused across scans, as the IDE language server does, does not serve a stale git index.
 	fw.releaseTrackedFiles()
 	if !ok {
@@ -434,12 +434,12 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 
 	return func(file string) bool {
 		normalizedPath := filepath.ToSlash(file)
-		relativePath, err := filepath.Rel(tracked.repoRoot, file)
+		relativePath, err := filepath.Rel(trackedFiles.repoRoot, file)
 		if err != nil {
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if tracked.paths[filepath.ToSlash(relativePath)] {
+		if trackedFiles.paths[filepath.ToSlash(relativePath)] {
 			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
