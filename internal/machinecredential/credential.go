@@ -148,7 +148,9 @@ func SecretTerms(config configuration.Configuration) []string {
 	return terms
 }
 
-// CheckStorage checks that the credential's storage can be locked and read. A missing file is usable: Clear creates it.
+// CheckStorage checks that the credential's storage can be locked, read and written, by writing the
+// stored credential back unchanged. A missing file is usable: the write creates it. The write-back
+// rewrites the file (sorted keys, mode 0600, new mtime) even when nothing changed.
 func CheckStorage(ctx context.Context, config configuration.Configuration) error {
 	storage := config.GetStorage()
 	if storage == nil {
@@ -159,8 +161,19 @@ func CheckStorage(ctx context.Context, config configuration.Configuration) error
 	}
 	defer func() { _ = storage.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
 
-	if err := storage.Refresh(config, CONFIG_KEY_MACHINE_IDENTITY_STORAGE); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	// Refreshing into a scratch configuration tells a stored credential apart from one only held in
+	// memory, which must not be written.
+	stored := configuration.NewWithOpts()
+	if err := storage.Refresh(stored, CONFIG_KEY_MACHINE_IDENTITY_STORAGE); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("failed reading the configuration storage: %w", err)
+	}
+	var value any = struct{}{}
+	if stored.IsSet(CONFIG_KEY_MACHINE_IDENTITY_STORAGE) {
+		value = stored.Get(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
+		config.Set(CONFIG_KEY_MACHINE_IDENTITY_STORAGE, value)
+	}
+	if err := storage.Set(CONFIG_KEY_MACHINE_IDENTITY_STORAGE, value); err != nil {
+		return fmt.Errorf("failed writing the configuration storage: %w", err)
 	}
 	return nil
 }

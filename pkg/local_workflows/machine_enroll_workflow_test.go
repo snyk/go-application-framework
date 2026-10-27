@@ -354,7 +354,9 @@ func (e *enrollEnv) failWritesAfterEnrolling(t *testing.T) {
 	storage := mocks.NewMockStorage(gomock.NewController(t))
 	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	storage.EXPECT().Unlock().Return(nil).AnyTimes()
-	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(errDiskFull).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storageCheck := storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil)
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(errDiskFull).AnyTimes().After(storageCheck)
 	e.config.SetStorage(storage)
 }
 
@@ -546,6 +548,139 @@ func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDevi
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "credential cannot be stored")
 	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+func (e *enrollEnv) configDir() string {
+	return filepath.Join(e.home, ".config", "configstore")
+}
+
+func Test_machineEnroll_unwritableStorageFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	tests := map[string]struct {
+		breakStorage  func(t *testing.T, env *enrollEnv)
+		repairStorage func(t *testing.T, env *enrollEnv)
+	}{
+		"read-only configuration directory": {
+			breakStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(env.configDir(), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(env.configDir(), "snyk.json.lock"), nil, 0o600))
+				require.NoError(t, os.Chmod(env.configDir(), 0o555))
+				t.Cleanup(func() { assert.NoError(t, os.Chmod(env.configDir(), 0o755)) })
+				if f, err := os.Create(filepath.Join(env.configDir(), "probe")); err == nil {
+					_ = f.Close()
+					t.Skip("directory permissions are not enforced here (running as a privileged user)")
+				}
+			},
+			repairStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.Chmod(env.configDir(), 0o755))
+			},
+		},
+		"configuration path is a directory": {
+			breakStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(env.configDir(), "snyk.json"), 0o755))
+			},
+			repairStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.Remove(filepath.Join(env.configDir(), "snyk.json")))
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+			tt.breakStorage(t, env)
+
+			err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "credential cannot be stored")
+			assert.Equal(t, 0, env.server.EnrollmentRequests(), "no request reached the enrollment service")
+			tt.repairStorage(t, env)
+			require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}), "the single-use device token is still unused")
+			_, err = machinecredential.Load(openFileBackedConfig())
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func (e *enrollEnv) storeUserToken(t *testing.T) string {
+	t.Helper()
+	token, err := json.Marshal(map[string]any{"access_token": "user-access-token", "token_type": "bearer", "expiry": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
+	require.NoError(t, err)
+	e.config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	e.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(token))
+	require.Equal(t, string(token), openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the user token is stored")
+	return string(token)
+}
+
+func (e *enrollEnv) storedValues(t *testing.T) map[string]any {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(e.configDir(), "snyk.json"))
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(content, &values))
+	return values
+}
+
+func Test_machineEnroll_removesTheStoredUserToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	env.storeUserToken(t)
+	invokeConfig := env.config.Clone()
+	// As NewOAuth2AuthenticatorWithOpts does for any configuration it is given.
+	invokeConfig.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	invokeConfig.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+
+	_, err := env.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
+
+	require.NoError(t, err)
+	assert.NotContains(t, env.storedValues(t), auth.CONFIG_KEY_OAUTH_TOKEN, "the machine credential is the only stored identity")
+	assert.Empty(t, invokeConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+	assert.Empty(t, env.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the engine's own configuration no longer holds it")
+	_, err = machinecredential.Load(openFileBackedConfig())
+	assert.NoError(t, err)
+}
+
+func Test_machineEnroll_rejectedEnrollmentKeepsTheStoredUserToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	userToken := env.storeUserToken(t)
+
+	err := env.enroll(map[string]string{flagDeviceToken: "sdt_unknown"})
+
+	require.Error(t, err)
+	assert.Equal(t, userToken, openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+}
+
+func Test_machineEnroll_failedUserTokenRemovalNamesTheClient(t *testing.T) {
+	env := newEnrollEnv(t)
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(nil).Times(2)
+	gomock.InOrder(
+		storage.EXPECT().Set(auth.CONFIG_KEY_OAUTH_TOKEN, "").Return(nil),
+		storage.EXPECT().Set(auth.CONFIG_KEY_OAUTH_TOKEN, gomock.Any()).DoAndReturn(func(_ string, value any) error {
+			assert.True(t, configuration.IsKeyDeleted(value), "the deletion marker is written last")
+			return errDiskFull
+		}),
+	)
+	env.config.SetStorage(storage)
+	invokeConfig := env.config.Clone()
+	invokeConfig.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	invokeConfig.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+
+	output, err := env.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
+
+	require.ErrorIs(t, err, errDiskFull)
+	assert.Nil(t, output)
+	assert.Contains(t, err.Error(), "enrolled as client client-1, but the token stored by `snyk auth` could not be removed")
+	assert.Contains(t, err.Error(), "instead of enrolling again")
+	assert.NotContains(t, err.Error(), "private_key_pem")
+	_, err = machinecredential.Load(env.engine.GetConfiguration())
+	assert.NoError(t, err, "the saved credential is still published to the engine")
 }
 
 func (e *enrollEnv) expireStoredAccessToken(t *testing.T) {

@@ -425,7 +425,8 @@ func Test_AuthEntryPointDI_FailedDeleteAfterTheLoginReportsTheCredentialIsStillS
 	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	storage.EXPECT().Unlock().Return(nil).AnyTimes()
 	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(deleteErr).AnyTimes()
+	storageCheck := storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(nil)
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(deleteErr).AnyTimes().After(storageCheck)
 	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	localConfig := configuration.NewWithOpts()

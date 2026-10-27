@@ -15,6 +15,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -28,7 +29,10 @@ const (
 	flagFleetKeyFile          = "fleet-key-file"
 )
 
-const storeTimeout = 30 * time.Second
+const (
+	storeTimeout          = 30 * time.Second
+	storageLockRetryDelay = 100 * time.Millisecond
+)
 
 var WORKFLOWID_MACHINE_ENROLL workflow.Identifier = workflow.NewWorkflowIdentifier(machineEnrollWorkflowName)
 
@@ -53,6 +57,9 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 	fleetKeyFile := config.GetString(flagFleetKeyFile)
 	if (deviceToken == "") == (fleetKeyFile == "") {
 		return nil, fmt.Errorf("enrolling needs exactly one of --%s or --%s", flagDeviceToken, flagFleetKeyFile)
+	}
+	if err := checkCredentialStorage(invocationCtx.Context(), storeTimeout, config); err != nil {
+		return nil, err
 	}
 
 	// The host's error handler would replace the service's error response, which carries the
@@ -84,10 +91,14 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 	logReplacement()
 	// Workflows run on a clone, so the engine's own configuration would not see the credential
 	// until the next start.
-	if engineConfig := invocationCtx.GetEngine().GetConfiguration(); engineConfig != config {
+	engineConfig := invocationCtx.GetEngine().GetConfiguration()
+	if engineConfig != config {
 		if err = machinecredential.Publish(engineConfig, credential); err != nil {
 			return nil, err
 		}
+	}
+	if err = forgetUserToken(invocationCtx.Context(), storeTimeout, invocationCtx.GetEnhancedLogger(), config, engineConfig); err != nil {
+		return nil, fmt.Errorf("enrolled as client %s, but the token stored by `snyk auth` could not be removed and will be used instead of the machine credential; remove the stored token instead of enrolling again: %w", credential.ClientID, err)
 	}
 	return enrollmentData(enrollment, config.GetBool(jsonFlag))
 }
@@ -115,6 +126,16 @@ func isEmptyStorage(storage configuration.Storage) bool {
 	return ok
 }
 
+// checkCredentialStorage proves the credential can be stored before the single-use device token is spent on enrolling.
+func checkCredentialStorage(ctx context.Context, timeout time.Duration, config configuration.Configuration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := machinecredential.CheckStorage(ctx, config); err != nil {
+		return fmt.Errorf("enrolling is refused because the credential cannot be stored: %w", err)
+	}
+	return nil
+}
+
 func storeEnrollment(ctx context.Context, timeout time.Duration, config configuration.Configuration, credential machinecredential.Credential, usedDeviceToken bool) error {
 	// The client exists already: an interrupted invocation must not orphan it, and another process's
 	// lock must not hold this one forever. WithoutCancel only helps if the host does not exit on SIGINT.
@@ -124,6 +145,29 @@ func storeEnrollment(ctx context.Context, timeout time.Duration, config configur
 	if err != nil {
 		return storeFailure(credential.ClientID, usedDeviceToken, err)
 	}
+	return nil
+}
+
+// forgetUserToken removes the token a person logged in with from the storage and from both in-memory
+// views, so the enrolled machine authenticates as itself from now on. Like machinecredential.Clear it
+// writes through the storage under its lock. Authenticators constructed before this keep their token
+// object until they refresh it.
+func forgetUserToken(ctx context.Context, timeout time.Duration, logger *zerolog.Logger, config, engineConfig configuration.Configuration) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+	storage := config.GetStorage()
+	if err := storage.Lock(ctx, storageLockRetryDelay); err != nil {
+		return fmt.Errorf("failed locking the configuration storage: %w", err)
+	}
+	defer func() { _ = storage.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
+
+	// The key is usually persisted, so these Sets may write an empty value; the deletion must come last.
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	engineConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	if err := storage.Set(auth.CONFIG_KEY_OAUTH_TOKEN, struct{}{}); err != nil {
+		return err
+	}
+	logger.Debug().Msg("removed the user token stored by `snyk auth`, if there was one")
 	return nil
 }
 

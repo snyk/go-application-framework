@@ -164,6 +164,51 @@ func TestCheckStorage_ReportsACorruptConfigFile(t *testing.T) {
 	assert.Error(t, machinecredential.CheckStorage(t.Context(), config))
 }
 
+func TestCheckStorage_ReportsAnUnwritableStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(ctrl)
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+	writeErr := errors.New("read-only file system")
+	gomock.InOrder(
+		storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil),
+		storage.EXPECT().Refresh(gomock.Any(), machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE).Return(nil),
+		storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(writeErr),
+		storage.EXPECT().Unlock().Return(nil),
+	)
+
+	err := machinecredential.CheckStorage(t.Context(), config)
+
+	require.ErrorIs(t, err, writeErr)
+}
+
+func TestCheckStorage_WritesTheStoredCredentialBackUnchanged(t *testing.T) {
+	open := fileBackedConfig(t)
+	config := open()
+	config.PersistInStorage(configuration.API_URL)
+	config.Set(configuration.API_URL, "https://api.example.test")
+	require.NoError(t, machinecredential.Save(t.Context(), config, newCredential(t)))
+	before, err := os.ReadFile(configFilePath(t))
+	require.NoError(t, err)
+
+	require.NoError(t, machinecredential.CheckStorage(t.Context(), open()))
+
+	after, err := os.ReadFile(configFilePath(t))
+	require.NoError(t, err)
+	assert.Equal(t, string(before), string(after))
+}
+
+func TestCheckStorage_DoesNotPersistACredentialOnlyHeldInMemory(t *testing.T) {
+	open := fileBackedConfig(t)
+	config := open()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"c"}`)
+
+	require.NoError(t, machinecredential.CheckStorage(t.Context(), config))
+
+	_, err := machinecredential.Load(open())
+	assert.ErrorIs(t, err, machinecredential.ErrNotEnrolled)
+}
+
 func TestSave_WritesOneValueUnderTheStorageLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	storage := mocks.NewMockStorage(ctrl)
@@ -235,13 +280,16 @@ func TestSave_ReportsACorruptConfigFile(t *testing.T) {
 	assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE), "the in-memory view does not claim an unsaved value")
 }
 
-func TestSave_ReportsAnUnwritableConfigFile(t *testing.T) {
+func TestSave_ReportsAnUnwritableConfigDirectory(t *testing.T) {
 	open := fileBackedConfig(t)
-	require.NoError(t, os.MkdirAll(filepath.Dir(configFilePath(t)), 0o755))
-	require.NoError(t, os.WriteFile(configFilePath(t), []byte("{}"), 0o444))
-	if f, openErr := os.OpenFile(configFilePath(t), os.O_WRONLY, 0); openErr == nil {
+	dir := filepath.Dir(configFilePath(t))
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(configFilePath(t)+".lock", nil, 0o600))
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(dir, 0o755)) })
+	if f, createErr := os.Create(filepath.Join(dir, "probe")); createErr == nil {
 		_ = f.Close()
-		t.Skip("file permissions are not enforced here (running as a privileged user)")
+		t.Skip("directory permissions are not enforced here (running as a privileged user)")
 	}
 
 	err := machinecredential.Save(t.Context(), open(), newCredential(t))
