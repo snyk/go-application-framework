@@ -2,19 +2,16 @@ package localworkflows
 
 import (
 	"bytes"
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -275,101 +272,15 @@ func Test_autodetectAuth(t *testing.T) {
 	})
 }
 
-// Test_auth_clientPrivateKeyFile exercises the real authEntryPoint (not the DI'd one), end to end,
-// to verify that setting --client-private-key-file makes it authenticate with a private_key_jwt
-// client assertion instead of a client secret.
-func Test_auth_clientPrivateKeyFile(t *testing.T) {
-	key, err := machineenrollment.GenerateKey()
-	require.NoError(t, err)
-	keyFile := filepath.Join(t.TempDir(), "key.pem")
-	require.NoError(t, machineenrollment.WriteKeyFile(keyFile, key))
+func Test_InitAuth_NoLongerOffersAClientPrivateKeyFile(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	require.NoError(t, InitAuth(engine))
 
-	var gotForm url.Values
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, r.ParseForm())
-		gotForm = r.Form
-
-		newToken := &oauth2.Token{
-			AccessToken: "a",
-			TokenType:   "bearer",
-			Expiry:      time.Now().Add(60 * time.Second).UTC(),
-		}
-		data, marshalErr := json.Marshal(newToken)
-		require.NoError(t, marshalErr)
-		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-		_, writeErr := w.Write(data)
-		require.NoError(t, writeErr)
-	})
-
-	mockCtl := gomock.NewController(t)
-	logContent := &bytes.Buffer{}
-	logger := zerolog.New(logContent)
-	a := analytics.New()
-	engine := mocks.NewMockEngine(mockCtl)
-	networkAccess := mocks.NewMockNetworkAccess(mockCtl)
-
-	config := configuration.NewWithOpts()
-	config.Set(configuration.API_URL, srv.URL)
-	config.Set(auth.PARAMETER_CLIENT_ID, "machine-client-1")
-	config.Set(ClientPrivateKeyFileParameter, keyFile)
-
-	engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	networkAccess.EXPECT().GetUnauthorizedHttpClient().Return(http.DefaultClient).AnyTimes()
-
-	mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
-	mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-	mockInvocationContext.EXPECT().GetEngine().Return(engine).AnyTimes()
-	mockInvocationContext.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
-	mockInvocationContext.EXPECT().GetAnalytics().Return(a).AnyTimes()
-
-	_, err = authEntryPoint(mockInvocationContext, nil)
-	require.NoError(t, err)
-
-	assert.Equal(t, "machine-client-1", gotForm.Get("client_id"))
-	assert.Equal(t, machineenrollment.ClientAssertionType, gotForm.Get("client_assertion_type"))
-	assert.NotEmpty(t, gotForm.Get("client_assertion"))
-	assert.Empty(t, gotForm.Get("client_secret"))
-	assert.NotEmpty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
-}
-
-func Test_auth_clientPrivateKeyFile_errors(t *testing.T) {
-	newCtx := func(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
-		t.Helper()
-		mockCtl := gomock.NewController(t)
-		logger := zerolog.New(&bytes.Buffer{})
-		networkAccess := mocks.NewMockNetworkAccess(mockCtl)
-		networkAccess.EXPECT().GetUnauthorizedHttpClient().Return(http.DefaultClient).AnyTimes()
-		engine := mocks.NewMockEngine(mockCtl)
-		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
-		ictx := mocks.NewMockInvocationContext(mockCtl)
-		ictx.EXPECT().GetConfiguration().Return(config).AnyTimes()
-		ictx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-		ictx.EXPECT().GetEngine().Return(engine).AnyTimes()
-		ictx.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
-		ictx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
-		return ictx
-	}
-
-	t.Run("missing client id", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(ClientPrivateKeyFileParameter, "/some/key.pem")
-		_, err := authEntryPoint(newCtx(t, config), nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "--client-id")
-	})
-
-	t.Run("missing key file", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(auth.PARAMETER_CLIENT_ID, "c")
-		config.Set(ClientPrivateKeyFileParameter, filepath.Join(t.TempDir(), "nope.pem"))
-		_, err := authEntryPoint(newCtx(t, config), nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "nope.pem")
-	})
+	entry, ok := engine.GetWorkflow(WORKFLOWID_AUTH)
+	require.True(t, ok)
+	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	assert.Nil(t, flags.Lookup("client-private-key-file"))
+	assert.NotNil(t, flags.Lookup(auth.PARAMETER_CLIENT_ID))
 }
 
 func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T) {
@@ -382,6 +293,7 @@ func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T
 		for name, config := range map[string]configuration.Configuration{"local": localConfig, "global": globalConfig} {
 			assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "%s config oauth token", name)
 			assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN), "%s config authentication token", name)
+			assert.Empty(t, config.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE), "%s config machine credential", name)
 		}
 	}
 
@@ -445,6 +357,7 @@ func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T
 			for _, config := range []configuration.Configuration{localConfig, globalConfig} {
 				config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
 				config.Set(configuration.AUTHENTICATION_TOKEN, "existing-auth-token")
+				config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"c","private_key_pem":"k"}`)
 			}
 			localConfig.Set(AuthTypeParameter, tc.authType)
 			if tc.authType == auth.AUTH_TYPE_PAT {
@@ -498,4 +411,259 @@ func Test_AuthEntryPointDI_OAuthFlow_CopiesNewOAuthTokenFromLocalToGlobalConfig(
 	require.NoError(t, err)
 
 	assert.Equal(t, newToken, globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+}
+
+func Test_AuthEntryPointDI_FailedDeleteAfterTheLoginReportsTheCredentialIsStillStored(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs)
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	deleteErr := errors.New("disk full")
+	storage := mocks.NewMockStorage(mockCtl)
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(deleteErr).AnyTimes()
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	localConfig.SetStorage(storage)
+	globalConfig.SetStorage(storage)
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+	secret := `{"client_id":"c","private_key_pem":"super-secret-key-material"}`
+	localConfig.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, secret)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	invocationCtx := mocks.NewMockInvocationContext(mockCtl)
+	invocationCtx.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	invocationCtx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().Return(nil).Times(1)
+	engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	err := AuthEntryPointDI(invocationCtx, &logger, engine, authenticator)
+
+	require.ErrorIs(t, err, deleteErr)
+	assert.ErrorContains(t, err, "login succeeded")
+	assert.ErrorContains(t, err, "machine credential is still stored")
+	assert.Equal(t, secret, localConfig.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE), "the credential that will be used stays visible")
+	assert.NotContains(t, err.Error(), "super-secret-key-material")
+	assert.NotContains(t, logs.String(), "super-secret-key-material")
+}
+
+func Test_AuthEntryPointDI_NothingStoredLeavesTheStorageUntouched(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	logger := zerolog.New(&bytes.Buffer{})
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	storage := mocks.NewMockStorage(mockCtl)
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, _ any) error {
+		assert.NotEqual(t, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, key, "nothing stored, so nothing to clear")
+		return nil
+	}).AnyTimes()
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Times(0)
+	localConfig := configuration.NewWithOpts()
+	globalConfig := configuration.NewWithOpts()
+	localConfig.SetStorage(storage)
+	globalConfig.SetStorage(storage)
+	localConfig.Set(AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+
+	engine.EXPECT().GetConfiguration().Return(globalConfig).AnyTimes()
+	invocationCtx := mocks.NewMockInvocationContext(mockCtl)
+	invocationCtx.EXPECT().GetConfiguration().Return(localConfig).AnyTimes()
+	invocationCtx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	authenticator.EXPECT().Authenticate().Return(nil).Times(1)
+
+	require.NoError(t, AuthEntryPointDI(invocationCtx, &logger, engine, authenticator))
+}
+
+type enrolledAuthEnv struct {
+	localConfig, globalConfig   configuration.Configuration
+	localStorage, globalStorage configuration.Storage
+	engine                      *mocks.MockEngine
+	authenticator               *mocks.MockAuthenticator
+	invocationCtx               *mocks.MockInvocationContext
+	logger                      zerolog.Logger
+}
+
+// The local configuration is file-backed, so its clones re-read the file.
+func newEnrolledAuthEnv(t *testing.T, authType string) *enrolledAuthEnv {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	mockCtl := gomock.NewController(t)
+	env := &enrolledAuthEnv{
+		localConfig:   openFileBackedConfig(),
+		globalConfig:  configuration.NewWithOpts(),
+		globalStorage: configuration.NewJsonStorage(filepath.Join(t.TempDir(), "snyk.json")),
+		engine:        mocks.NewMockEngine(mockCtl),
+		authenticator: mocks.NewMockAuthenticator(mockCtl),
+		invocationCtx: mocks.NewMockInvocationContext(mockCtl),
+		logger:        zerolog.New(&bytes.Buffer{}),
+	}
+	env.localStorage = env.localConfig.GetStorage()
+	env.globalConfig.SetStorage(env.globalStorage)
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	for _, config := range []configuration.Configuration{env.localConfig, env.globalConfig} {
+		require.NoError(t, machinecredential.Save(t.Context(), config, machinecredential.Credential{ClientID: "client-1", Key: key}))
+	}
+	env.localConfig.Set(AuthTypeParameter, authType)
+	if authType == auth.AUTH_TYPE_PAT {
+		env.localConfig.Set(ConfigurationNewAuthenticationToken, "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456")
+	}
+
+	env.engine.EXPECT().GetConfiguration().Return(env.globalConfig).AnyTimes()
+	env.invocationCtx.EXPECT().GetConfiguration().Return(env.localConfig).AnyTimes()
+	env.invocationCtx.EXPECT().GetEnhancedLogger().Return(&env.logger).AnyTimes()
+	env.invocationCtx.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
+	return env
+}
+
+func (e *enrolledAuthEnv) run() error {
+	return AuthEntryPointDI(e.invocationCtx, &e.logger, e.engine, e.authenticator)
+}
+
+// loadStoredCredential reads the machine credential from storage alone, ignoring any in-memory view.
+func loadStoredCredential(t *testing.T, storage configuration.Storage) error {
+	t.Helper()
+	fresh := configuration.NewWithOpts()
+	require.NoError(t, storage.Refresh(fresh, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
+	_, err := machinecredential.Load(fresh)
+	return err
+}
+
+func (e *enrolledAuthEnv) assertCredentialKept(t *testing.T) {
+	t.Helper()
+	assert.NoError(t, loadStoredCredential(t, e.localStorage), "local storage")
+	assert.NoError(t, loadStoredCredential(t, e.globalStorage), "global storage")
+	for name, config := range map[string]configuration.Configuration{"local": e.localConfig, "global": e.globalConfig} {
+		_, err := machinecredential.Load(config)
+		assert.NoError(t, err, "%s configuration still authenticates as the machine", name)
+	}
+}
+
+func Test_AuthEntryPointDI_FailedPATValidationKeepsTheMachineCredential(t *testing.T) {
+	env := newEnrolledAuthEnv(t, auth.AUTH_TYPE_PAT)
+	validationErr := errors.New("invalid pat")
+	env.engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, validationConfig configuration.Configuration) ([]workflow.Data, error) {
+			_, loadErr := machinecredential.Load(validationConfig)
+			assert.ErrorIs(t, loadErr, machinecredential.ErrNotEnrolled, "the PAT is validated without the machine credential")
+			return nil, validationErr
+		})
+
+	err := env.run()
+
+	require.ErrorIs(t, err, validationErr)
+	env.assertCredentialKept(t)
+}
+
+func Test_AuthEntryPointDI_FailedOAuthLoginKeepsTheMachineCredential(t *testing.T) {
+	for name, loginErr := range map[string]error{
+		"failed":   errors.New("oauth failure"),
+		"canceled": context.Canceled,
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrolledAuthEnv(t, auth.AUTH_TYPE_OAUTH)
+			env.authenticator.EXPECT().Authenticate().Return(loginErr)
+
+			err := env.run()
+
+			require.ErrorIs(t, err, loginErr)
+			env.assertCredentialKept(t)
+		})
+	}
+}
+
+func Test_AuthEntryPointDI_PanickingLoginKeepsTheMachineCredential(t *testing.T) {
+	testCases := map[string]func(env *enrolledAuthEnv){
+		auth.AUTH_TYPE_OAUTH: func(env *enrolledAuthEnv) {
+			env.authenticator.EXPECT().Authenticate().DoAndReturn(func() error { panic("login crashed") })
+		},
+		auth.AUTH_TYPE_PAT: func(env *enrolledAuthEnv) {
+			env.engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), gomock.Any()).
+				DoAndReturn(func(workflow.Identifier, configuration.Configuration) ([]workflow.Data, error) {
+					panic("validation crashed")
+				})
+		},
+	}
+	for authType, makeLoginPanic := range testCases {
+		t.Run(authType, func(t *testing.T) {
+			env := newEnrolledAuthEnv(t, authType)
+			makeLoginPanic(env)
+
+			assert.Panics(t, func() { _ = env.run() }) //nolint:errcheck // the login panics before an error exists
+
+			env.assertCredentialKept(t)
+		})
+	}
+}
+
+func Test_AuthEntryPointDI_SuccessfulLoginDeletesTheMachineCredential(t *testing.T) {
+	for _, authType := range []string{auth.AUTH_TYPE_OAUTH, auth.AUTH_TYPE_PAT, auth.AUTH_TYPE_TOKEN} {
+		t.Run(authType, func(t *testing.T) {
+			env := newEnrolledAuthEnv(t, authType)
+			env.authenticator.EXPECT().Authenticate().Return(nil).AnyTimes()
+			env.engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			require.NoError(t, env.run())
+
+			assert.ErrorIs(t, loadStoredCredential(t, env.localStorage), machinecredential.ErrNotEnrolled, "local storage")
+			assert.ErrorIs(t, loadStoredCredential(t, env.globalStorage), machinecredential.ErrNotEnrolled, "global storage")
+		})
+	}
+}
+
+func Test_AuthEntryPointDI_UnusableCredentialStorageStopsBeforeTheLogin(t *testing.T) {
+	cause := errors.New("storage failure")
+	testCases := []struct {
+		name         string
+		configName   string
+		breakStorage func(storage *mocks.MockStorage)
+	}{
+		{
+			name:       "local storage cannot be locked",
+			configName: "local",
+			breakStorage: func(storage *mocks.MockStorage) {
+				storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(cause).AnyTimes()
+			},
+		},
+		{
+			name:       "global storage cannot be read",
+			configName: "global",
+			breakStorage: func(storage *mocks.MockStorage) {
+				storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				storage.EXPECT().Unlock().Return(nil).AnyTimes()
+				storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(cause).AnyTimes()
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		for _, authType := range []string{auth.AUTH_TYPE_OAUTH, auth.AUTH_TYPE_PAT} {
+			t.Run(tc.name+" "+authType, func(t *testing.T) {
+				env := newEnrolledAuthEnv(t, authType)
+				brokenConfig, healthyStorage := env.localConfig, env.globalStorage
+				if tc.configName == "global" {
+					brokenConfig, healthyStorage = env.globalConfig, env.localStorage
+				}
+				brokenStorage := mocks.NewMockStorage(gomock.NewController(t))
+				tc.breakStorage(brokenStorage)
+				brokenConfig.SetStorage(brokenStorage)
+				env.authenticator.EXPECT().Authenticate().Times(0)
+				env.engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Times(0)
+
+				err := env.run()
+
+				require.ErrorIs(t, err, cause)
+				assert.ErrorContains(t, err, tc.configName+" configuration")
+				assert.NoError(t, loadStoredCredential(t, healthyStorage), "the other storage keeps the credential")
+			})
+		}
+	}
 }

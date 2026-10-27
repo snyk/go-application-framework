@@ -127,6 +127,9 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
+	if config == nil { // the file holds the JSON literal null
+		config = make(map[string]any)
+	}
 
 	if tmpKey := s.getNonEnvVarKey(key); len(tmpKey) > 0 {
 		key = tmpKey
@@ -197,7 +200,11 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 		return err
 	}
 
-	_, err := s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
+	// The lock file lives next to the config file, whose directory may not exist yet.
+	err := os.MkdirAll(filepath.Dir(s.path), fileperms.FILEPERM_755)
+	if err == nil {
+		_, err = s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
+	}
 	if err != nil {
 		s.fileInProcessLock.Release(1)
 		return err

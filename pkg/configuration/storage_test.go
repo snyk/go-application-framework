@@ -145,6 +145,18 @@ func Test_JsonStorage_Set_EmptyFile_SetsValidEmptyJson(t *testing.T) {
 	assertConfigContainsKey(t, storedConfig, key, expectedValue)
 }
 
+func Test_JsonStorage_Set_FileHoldingNull_SetsTheKey(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	assert.NoError(t, os.WriteFile(configFile, []byte("null"), 0666))
+	storage := configuration.NewJsonStorage(configFile)
+
+	err := storage.Set(key, expectedValue)
+
+	assert.NoError(t, err)
+	assertConfigContainsKey(t, readStoredConfigFile(t, configFile), key, expectedValue)
+}
+
 func storageWithTempConfigFile(t *testing.T, jsonBytes []byte) *configuration.JsonStorage {
 	t.Helper()
 	configFile := filepath.Join(t.TempDir(), "test.json")

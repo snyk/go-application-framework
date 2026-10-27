@@ -79,7 +79,7 @@ func EnrollWithDeviceToken(ctx context.Context, httpClient *http.Client, apiURL,
 
 // EnrollWithFleetKey enrolls this machine with a fleet key, the P-256 key an admin registered and
 // allowed for the machines of a fleet. The machine names itself by identifiers, which must be the
-// ones an admin registered it with (see SerialNumbers), and signs them with the fleet key. Like
+// ones an admin registered it with, and signs them with the fleet key. Like
 // EnrollWithDeviceToken, it exchanges them for an OAuth client bound to a newly generated machine
 // client key, but it enrolls only a machine that has no active client. httpClient must not add
 // authentication.

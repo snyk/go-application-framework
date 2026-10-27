@@ -31,6 +31,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -152,6 +153,10 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
 	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
+	addStaticTermToDict(config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN), dict)
+	for _, term := range machinecredential.SecretTerms(config) {
+		addStaticTermToDict(term, dict)
+	}
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
