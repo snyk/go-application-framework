@@ -10,6 +10,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -19,6 +20,10 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	AuthTypeParameter = "auth-type"
+	// ClientPrivateKeyFileParameter names the flag/config key holding the path to a machine
+	// client's private key file, used together with auth.PARAMETER_CLIENT_ID to authenticate the
+	// client credentials grant with a private_key_jwt assertion instead of a static client secret.
+	ClientPrivateKeyFileParameter = "client-private-key-file"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
@@ -43,6 +48,7 @@ func InitAuth(engine workflow.Engine) error {
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
+	config.String(ClientPrivateKeyFileParameter, "", "Client Credential Grant, path to a private key file to authenticate with instead of a client secret")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
 	return err
@@ -68,13 +74,25 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	defer globalConfig.ClearCache()
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-		config,
+	authenticatorOpts := []auth.OAuth2AuthenticatorOption{
 		auth.WithHttpClient(httpClient),
 		auth.WithOpenBrowserFunc(OpenBrowser),
 		auth.WithShutdownServerFunc(auth.ShutdownServer),
 		auth.WithLogger(logger),
-	)
+	}
+
+	if keyFile := config.GetString(ClientPrivateKeyFileParameter); keyFile != "" {
+		clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
+		if clientID == "" {
+			return nil, fmt.Errorf("--%s requires --client-id (the OAuth client id of the enrolled machine)", ClientPrivateKeyFileParameter)
+		}
+		if _, statErr := os.Stat(keyFile); statErr != nil {
+			return nil, fmt.Errorf("cannot use --%s %q: %w", ClientPrivateKeyFileParameter, keyFile, statErr)
+		}
+		authenticatorOpts = append(authenticatorOpts, auth.WithClientAssertionProvider(clientID, machineenrollment.NewAssertionProvider(keyFile)))
+	}
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
