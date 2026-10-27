@@ -157,7 +157,7 @@ func TestFileFilter_UnreadableDirectoryDoesNotStopRuleCollection(t *testing.T) {
 	assert.NotContains(t, files, filepath.Join(root, "z", "token.txt"))
 }
 
-func TestFileFilter_TrackedPathsAreLoadedOnceUntilReleased(t *testing.T) {
+func TestFileFilter_trackedFilesAreLoadedOnceUntilReleased(t *testing.T) {
 	root := t.TempDir()
 	createFileInPath(t, filepath.Join(root, "tracked.ts"), []byte("x"))
 	repo, err := git.PlainInit(root, false)
@@ -168,15 +168,15 @@ func TestFileFilter_TrackedPathsAreLoadedOnceUntilReleased(t *testing.T) {
 	require.NoError(t, err)
 	fileFilter := NewFileFilter(root, &log.Logger)
 
-	first, ok := fileFilter.loadTrackedPaths()
+	first, ok := fileFilter.loadTrackedFiles()
 	require.True(t, ok)
-	second, _ := fileFilter.loadTrackedPaths()
-	fileFilter.releaseTrackedPaths()
-	third, _ := fileFilter.loadTrackedPaths()
+	second, _ := fileFilter.loadTrackedFiles()
+	fileFilter.releaseTrackedFiles()
+	third, _ := fileFilter.loadTrackedFiles()
 
 	assert.Same(t, first, second)
 	assert.NotSame(t, first, third)
-	assert.True(t, first.files["tracked.ts"])
+	assert.True(t, first.paths["tracked.ts"])
 }
 
 func filterFiles(t *testing.T, fileFilter *FileFilter, ruleFile string, options ...WalkFilteredFilesOption) []string {
