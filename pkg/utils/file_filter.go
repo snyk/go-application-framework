@@ -373,6 +373,28 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	return globs, nil
 }
 
+type trackedPaths struct {
+	repoRoot string
+	files    map[string]bool
+}
+
+// Shared with the folder walker so the git index is read once per run instead of twice.
+func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
+	fw.trackedPathsMu.Lock()
+	defer fw.trackedPathsMu.Unlock()
+
+	if fw.trackedPaths == nil {
+		fw.trackedPaths = fw.readTrackedPaths()
+	}
+	return fw.trackedPaths, fw.trackedPaths != nil
+}
+
+func (fw *FileFilter) releaseTrackedPaths() {
+	fw.trackedPathsMu.Lock()
+	defer fw.trackedPathsMu.Unlock()
+	fw.trackedPaths = nil
+}
+
 // trackedFileExclusionPredicate builds the exclusion predicate used when
 // FF_GITIGNORE_RESPECT_TRACKED_FILES is enabled. keptCount is incremented for every file that a
 // .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
@@ -422,27 +444,6 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 
 		return allMatcher.MatchesPath(normalizedPath)
 	}
-}
-
-type trackedPaths struct {
-	repoRoot string
-	files    map[string]bool
-}
-
-func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
-	fw.trackedPathsMu.Lock()
-	defer fw.trackedPathsMu.Unlock()
-
-	if fw.trackedPaths == nil {
-		fw.trackedPaths = fw.readTrackedPaths()
-	}
-	return fw.trackedPaths, fw.trackedPaths != nil
-}
-
-func (fw *FileFilter) releaseTrackedPaths() {
-	fw.trackedPathsMu.Lock()
-	defer fw.trackedPathsMu.Unlock()
-	fw.trackedPaths = nil
 }
 
 func (fw *FileFilter) readTrackedPaths() *trackedPaths {
