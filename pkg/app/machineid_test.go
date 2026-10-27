@@ -55,10 +55,51 @@ func TestAcceptance_ViaAppEngineSuppliedMachineIDIsReturnedButNotStored(t *testi
 			sharedFilePath := isolateMachineIDStorage(t)
 			engine := newEngine(t)
 
-			id, err := engine.GetRuntimeInfo().GetMachineID()
+			machine, err := engine.GetRuntimeInfo().GetMachineID()
 
 			require.NoError(t, err)
-			require.Equal(t, "app-wiring-test-machine-id", id)
+			require.Equal(t, "app-wiring-test-machine-id", machine.ID)
+			require.NoFileExists(t, sharedFilePath)
+		})
+	}
+}
+
+func TestAcceptance_ViaAppEngineSuppliedMachineValueIsReturnedButNotStored(t *testing.T) {
+	opt := WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0")))
+	for name, newEngine := range map[string]func(t *testing.T) workflow.Engine{
+		"runtimeinfo.Machine": func(t *testing.T) workflow.Engine {
+			t.Helper()
+			engine := newAppEngine(t, opt)
+			engine.GetConfiguration().Set(configuration.MACHINE_ID, runtimeinfo.Machine{
+				ID:       "app-wiring-test-machine-id",
+				Hostname: "box",
+			})
+			return engine
+		},
+		"*runtimeinfo.Machine": func(t *testing.T) workflow.Engine {
+			t.Helper()
+			engine := newAppEngine(t, opt)
+			engine.GetConfiguration().Set(configuration.MACHINE_ID, &runtimeinfo.Machine{
+				ID:       "app-wiring-test-machine-id",
+				Hostname: "box",
+			})
+			return engine
+		},
+		"JSON in environment variable": func(t *testing.T) workflow.Engine {
+			t.Helper()
+			t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"ID":"app-wiring-test-machine-id","Hostname":"box"}`)
+			return newAppEngine(t, opt)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sharedFilePath := isolateMachineIDStorage(t)
+			engine := newEngine(t)
+
+			machine, err := engine.GetRuntimeInfo().GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "app-wiring-test-machine-id", machine.ID)
+			require.Equal(t, "box", machine.Hostname)
 			require.NoFileExists(t, sharedFilePath)
 		})
 	}
@@ -150,9 +191,9 @@ func TestAcceptance_ViaAppEngineUnreadableSharedFileIsReportedWithTheMachineIDFo
 	require.NoError(t, os.WriteFile(studioFile, []byte("studio-device-id"), 0o600))
 	engine := newAppEngine(t, WithRuntimeInfo(runtimeinfo.New(runtimeinfo.WithName("x"), runtimeinfo.WithVersion("1.0.0"))))
 
-	id, err := engine.GetRuntimeInfo().GetMachineID()
+	machine, err := engine.GetRuntimeInfo().GetMachineID()
 
-	require.Equal(t, "studio-device-id", id)
+	require.Equal(t, "studio-device-id", machine.ID)
 	var catalogErr snyk_errors.Error
 	require.True(t, errors.As(err, &catalogErr), "want an error catalog error, got %v", err)
 	require.Equal(t, "SNYK-CLI-0030", catalogErr.ErrorCode)

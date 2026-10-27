@@ -230,11 +230,12 @@ func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.L
 	if ri == nil || rt.MachineId != nil {
 		return
 	}
-	id, err := ri.GetMachineID()
+	machine, err := ri.GetMachineID()
 	if err != nil && !errors.Is(err, runtimeinfo.ErrNoMachineID) {
 		logger.Printf("Failed to read the machine id: %v", err)
 	}
-	if id != "" {
+	if machine.ID != "" {
+		id := machine.ID
 		rt.MachineId = &id
 	}
 }

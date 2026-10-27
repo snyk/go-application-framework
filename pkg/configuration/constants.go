@@ -63,7 +63,12 @@ const (
 	// machine identification
 	// ---------
 
-	MACHINE_ID string = "internal_snyk_machine_id" // MACHINE_ID (string) the identifier of the machine the application is running on. A valid value supplied on this key (trailing whitespace trimmed) is returned on every read. Otherwise the id is resolved on first read from the shared machine id file, the Snyk Studio device-id file or a newly generated id, and kept for the life of the engine (the configuration passed to app.CreateAppEngineWithOptions and its clones). If a machine id file exists but cannot be read, reading this key returns the id together with an error describing that file (GetString then returns an empty value). If no id was found, reading this key returns runtimeinfo.ErrNoMachineID joined with an error describing why a generated id could not be stored, and the next read tries the files again. Workflows and other consumers use RuntimeInfo.GetMachineID(), which returns the id even when it comes with an error, and runtimeinfo.ErrNoMachineID when no stable identifier is available; host applications reading this key directly must treat an empty value as no usable machine identifier
+	// MACHINE_ID holds a runtimeinfo.Machine. Read it with RuntimeInfo.GetMachineID() or type-assert the value to runtimeinfo.Machine.
+	// An empty Machine.ID means no usable identifier. A resolved id is kept for the engine's lifetime.
+	// A string is how an environment variable, flag, or config file supplies Machine.ID; trailing whitespace is trimmed.
+	// A JSON object string is parsed into runtimeinfo.Machine (fields ID, Hostname, SerialNumber, StudioID).
+	// A runtimeinfo.Machine or *runtimeinfo.Machine with a valid ID is kept. A blank or invalid ID is resolved from disk.
+	MACHINE_ID string = "internal_snyk_machine_id"
 
 	// ---------
 	// general workflow configuration

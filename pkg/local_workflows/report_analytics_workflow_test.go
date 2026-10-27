@@ -76,7 +76,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testin
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
+			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
 			expected := testEnriched(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
 
@@ -100,7 +100,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNoMachineKeysInRuntime(
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
+			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
 			var sent []byte
 			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
 				body, err := io.ReadAll(req.Body)
@@ -133,7 +133,7 @@ func Test_ReportAnalytics_addMachineID(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 	machineIDSource := func(id string, err error) runtimeinfo.RuntimeInfo {
 		ri := mocks.NewMockRuntimeInfo(ctrl)
-		ri.EXPECT().GetMachineID().Return(id, err).AnyTimes()
+		ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: id}, err).AnyTimes()
 		return ri
 	}
 	tests := map[string]struct {
@@ -163,7 +163,7 @@ func Test_ReportAnalytics_addMachineID_encodesAFlatMachineId(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	logger := zerolog.New(io.Discard)
 	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil)
+	ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil)
 	rt := &api.Runtime{}
 
 	addMachineID(rt, ri, &logger)
@@ -374,7 +374,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsNumbersInExtensionAndRe
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsUndecodableInputUnchanged(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ri := mocks.NewMockRuntimeInfo(ctrl)
-	ri.EXPECT().GetMachineID().Return("test-machine-id", nil).Times(0)
+	ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
 	payload := testGetUndecodableAnalyticsV2PayloadString()
 	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), ri)
 

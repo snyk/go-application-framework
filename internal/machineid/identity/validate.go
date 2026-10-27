@@ -18,6 +18,14 @@ var knownPlaceholderSerials = map[string]struct{}{
 	"n/a":                    {},
 }
 
+// serialFromBIOS maps a nullable WMI string to a serial; a VT_NULL property is nil.
+func serialFromBIOS(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+	return *raw
+}
+
 // NormalizeSerial returns the trimmed serial, or "" when raw is empty or a known placeholder.
 func NormalizeSerial(raw string) string {
 	serial := strings.TrimSpace(raw)

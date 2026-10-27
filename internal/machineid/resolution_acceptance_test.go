@@ -56,13 +56,15 @@ func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultVal
 // machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
 func machineID(t *testing.T, config configuration.Configuration) string {
 	t.Helper()
-	value, err := config.GetStringWithError(configuration.MACHINE_ID)
-	if value == "" {
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+	if machine.ID == "" {
 		require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 	} else {
 		require.NoError(t, err)
 	}
-	return value
+	return machine.ID
 }
 
 // snykJSON returns the contents of the configuration file newIsolatedMachine creates.
@@ -446,4 +448,146 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 	machineID(t, m.newRun())
 
 	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
+}
+
+func TestAcceptance_DirectMachineValueSetBeforeFirstReadIsReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	config := m.newRun()
+	config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{
+		ID:           "supplied-id",
+		Hostname:     "box",
+		SerialNumber: "SN1",
+		StudioID:     "studio-1",
+	})
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_PointerToMachineValueSetBeforeFirstReadIsReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	config := m.newRun()
+	machinePtr := &runtimeinfo.Machine{
+		ID:           "supplied-id",
+		Hostname:     "box",
+		SerialNumber: "SN1",
+		StudioID:     "studio-1",
+	}
+	config.Set(configuration.MACHINE_ID, machinePtr)
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_NilPointerToMachineIsNotSupplied(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seededID := "from-shared-file"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": seededID})
+	config := m.newRun()
+	var machinePtr *runtimeinfo.Machine
+	config.Set(configuration.MACHINE_ID, machinePtr)
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, seededID, machine.ID)
+}
+
+func TestAcceptance_MachineWithEmptyIDIsNotSupplied(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seededID := "from-shared-file"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": seededID})
+	config := m.newRun()
+	config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{
+		Hostname: "box",
+	})
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, seededID, machine.ID)
+}
+
+func TestAcceptance_JSONEnvironmentVariableWithMachineObjectWinsOverSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"ID":"supplied-id","Hostname":"box","SerialNumber":"SN1","StudioID":"studio-1"}
+`)
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_JSONEnvironmentVariableWithInvalidIDIsIgnored(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"ID":"not valid","Hostname":"box"}`)
+
+	id := machineID(t, m.newRun())
+
+	require.True(t, valid(id), "invalid supplied ID must be ignored, so a generated id is used")
+	require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
+}
+
+func TestAcceptance_EnvironmentVariableNullWinsOverSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "null")
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "null", machine.ID)
+}
+
+func TestAcceptance_JSONObjectWithLeadingWhitespaceWinsOverTheSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "\n{\"ID\":\"supplied-id\",\"Hostname\":\"box\"}")
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+}
+
+func TestAcceptance_JSONObjectWithoutAnIDUsesTheSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"Hostname":"box"}`)
+
+	config := m.newRun(WithLogger(&logger))
+	id := machineID(t, config)
+
+	require.Equal(t, "from-shared-file", id)
+	require.Contains(t, logs.String(), "no usable id")
 }

@@ -3,6 +3,7 @@
 package machineid
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -64,28 +65,64 @@ func Resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
 	o.logger = effectiveLogger(o.logger)
 	r := &resolver{opts: o}
 	return func(_ configuration.Configuration, existingValue any) (any, error) {
-		if id, ok := supplied(existingValue, o.logger); ok {
-			return id, nil
+		if machine, ok := supplied(existingValue, o.logger); ok {
+			return machine, nil
 		}
 		return r.resolve()
 	}
 }
 
-// supplied returns a valid id supplied on MACHINE_ID (set directly, through its environment variable,
-// a bound flag or a config file). Trailing whitespace is trimmed, like the Snyk Studio file, so a
-// trailing newline from an environment variable is not fatal.
-func supplied(value any, logger *zerolog.Logger) (string, bool) {
-	raw, _ := value.(string) //nolint:errcheck // a non-string value counts as not supplied
+// supplied returns a machine set on MACHINE_ID. Strings (env vars, flags, config files) are Machine.ID;
+// a JSON object string is the whole machine. runtimeinfo.Machine or *runtimeinfo.Machine is kept.
+func supplied(value any, logger *zerolog.Logger) (runtimeinfo.Machine, bool) {
+	switch v := value.(type) {
+	case runtimeinfo.Machine:
+		return suppliedMachine(v, logger)
+	case *runtimeinfo.Machine:
+		if v == nil {
+			return runtimeinfo.Machine{}, false
+		}
+		return suppliedMachine(*v, logger)
+	case string:
+		return suppliedString(v, logger)
+	default:
+		return runtimeinfo.Machine{}, false
+	}
+}
+
+// Debug, not Warn: this runs on every read, so a bad value would otherwise warn on each one.
+func ignoreSupplied(logger *zerolog.Logger, reason string) (runtimeinfo.Machine, bool) {
+	logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
+	return runtimeinfo.Machine{}, false
+}
+
+func suppliedMachine(m runtimeinfo.Machine, logger *zerolog.Logger) (runtimeinfo.Machine, bool) {
+	m.ID = strings.TrimRightFunc(m.ID, unicode.IsSpace)
+	if blank(m.ID) {
+		return ignoreSupplied(logger, "no usable id")
+	}
+	if reason, ok := validate(m.ID); !ok {
+		return ignoreSupplied(logger, reason)
+	}
+	return m, true
+}
+
+func suppliedString(raw string, logger *zerolog.Logger) (runtimeinfo.Machine, bool) {
 	raw = strings.TrimRightFunc(raw, unicode.IsSpace)
 	if blank(raw) {
-		return "", false
+		return runtimeinfo.Machine{}, false
 	}
-	if reason, ok := validate(raw); !ok {
-		// Debug, not Warn: this runs on every read, so a bad value would otherwise warn on each one.
-		logger.Debug().Str("reason", reason).Msg("machine id: supplied value failed validation, ignoring")
-		return "", false
+
+	candidate := strings.TrimLeftFunc(raw, unicode.IsSpace)
+	if strings.HasPrefix(candidate, "{") {
+		var m runtimeinfo.Machine
+		if err := json.Unmarshal([]byte(candidate), &m); err != nil {
+			return ignoreSupplied(logger, "not valid JSON")
+		}
+		return suppliedMachine(m, logger)
 	}
-	return raw, true
+
+	return suppliedMachine(runtimeinfo.Machine{ID: raw}, logger)
 }
 
 type resolver struct {
@@ -102,19 +139,19 @@ type resolver struct {
 // resolve returns the id from disk, keeping a found id for the life of the resolver. An empty result
 // is not kept, so the next lookup goes back to disk once the cause (a held lock, a missing
 // permission) has cleared.
-func (r *resolver) resolve() (string, error) {
+func (r *resolver) resolve() (runtimeinfo.Machine, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.id == "" {
 		r.id, r.readErr = r.resolveFromDisk()
 	}
 	if r.id == "" && r.readErr != nil {
-		return "", errors.Join(runtimeinfo.ErrNoMachineID, r.readErr)
+		return runtimeinfo.Machine{}, errors.Join(runtimeinfo.ErrNoMachineID, r.readErr)
 	}
 	if r.id == "" {
-		return "", runtimeinfo.ErrNoMachineID
+		return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 	}
-	return r.id, r.readErr
+	return runtimeinfo.Machine{ID: r.id}, r.readErr
 }
 
 func (r *resolver) resolveFromDisk() (string, error) {
