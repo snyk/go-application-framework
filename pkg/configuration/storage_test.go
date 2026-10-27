@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -351,7 +352,7 @@ func Test_JsonStorage_Set_ResolvesARelativeTargetAgainstTheLinksPhysicalDirector
 	assert.NoDirExists(t, filepath.Join(base, "home", "shared"))
 }
 
-func Test_JsonStorage_Set_ResolvesASymlinkedDirectoryInsideTheTargetBeforeDotDot(t *testing.T) {
+func Test_JsonStorage_Set_AppliesDotDotInsideATargetTheWayTheOSDoes(t *testing.T) {
 	t.Parallel()
 	base := t.TempDir()
 	for _, dir := range []string{"other/inner", "dir"} {
@@ -366,6 +367,11 @@ func Test_JsonStorage_Set_ResolvesASymlinkedDirectoryInsideTheTargetBeforeDotDot
 
 	assertSymlink(t, link)
 	assert.Equal(t, expectedValue, readStoredConfigFile(t, link)[key], "the value is where a read of the link finds it")
-	assert.FileExists(t, filepath.Join(base, "other", "f.json"))
-	assert.NoFileExists(t, filepath.Join(base, "dir", "f.json"))
+	// Windows collapses ".." before following "sub"; the other systems follow "sub" first.
+	followed, collapsed := filepath.Join(base, "other", "f.json"), filepath.Join(base, "dir", "f.json")
+	if runtime.GOOS == "windows" {
+		followed, collapsed = collapsed, followed
+	}
+	assert.FileExists(t, followed)
+	assert.NoFileExists(t, collapsed)
 }

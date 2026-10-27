@@ -227,7 +227,7 @@ func resolveConfigPath(path string) (string, error) {
 		}
 		if !filepath.IsAbs(target) {
 			linkDir, _ := filepath.Split(resolved)
-			target = linkDir + target
+			target = linkDir + osResolveTarget(target)
 		}
 		if resolved, err = physicalPath(target); err != nil {
 			return "", err
