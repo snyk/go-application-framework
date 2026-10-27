@@ -12,6 +12,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -199,8 +200,8 @@ func addRequestDataToErr(err error, req *http.Request) error {
 	reqPath := req.URL.Path
 
 	return utils.AddMetaDataToErr(err, map[string]any{
-		"request-id":   reqId,
-		"request-path": reqPath,
+		"request-id":                          reqId,
+		constants.ERROR_META_KEY_REQUEST_PATH: reqPath,
 	})
 }
 
