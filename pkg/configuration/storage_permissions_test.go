@@ -150,3 +150,39 @@ func Test_Configuration_PermissionFailure_PreservesFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, contents, string(actual))
 }
+
+func Test_JsonStorage_Set_UnreadableFileIsNotOverwritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions")
+	}
+	file := filepath.Join(t.TempDir(), "config.json")
+	const contents = `{"existing":"value"}`
+	require.NoError(t, os.WriteFile(file, []byte(contents), 0600))
+	require.NoError(t, os.Chmod(file, 0))
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(file, 0600)) })
+
+	err := configuration.NewJsonStorage(file).Set(key, expectedValue)
+
+	require.ErrorIs(t, err, os.ErrPermission)
+	require.NoError(t, os.Chmod(file, 0600))
+	actual, err := os.ReadFile(file)
+	require.NoError(t, err)
+	assert.Equal(t, contents, string(actual))
+}
+
+func Test_JsonStorage_Set_WritesAnExistingFileInAReadOnlyDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, "config.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{"existing":"value"}`), 0600))
+	require.NoError(t, os.Chmod(dir, 0555))
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(dir, 0755)) })
+
+	require.NoError(t, configuration.NewJsonStorage(file).Set(key, expectedValue))
+
+	stored := readStoredConfigFile(t, file)
+	assert.Equal(t, expectedValue, stored[key])
+	assert.Equal(t, "value", stored["existing"])
+}
