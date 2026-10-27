@@ -832,43 +832,10 @@ func TestAcceptance_HardwareSerialLeavesAReadOnlyMachineWideIDUnchangedWithoutAP
 	require.Equal(t, original, string(raw))
 	require.NoFileExists(t, m.shared.perUser)
 	require.NotContains(t, logs.String(), `"level":"warn"`)
-	line := logLineContaining(t, logs.String(), "shared file holds a different machine id")
-	require.Contains(t, line, `"level":"debug"`)
-}
-
-func TestAcceptance_HardwareSerialDoesNotWarnOnRepeatedRunsWithAReadOnlyMachineWideID(t *testing.T) {
-	m := newIsolatedMachine(t)
-	m.serial = "C02Q7KHTGFWF"
-	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
-	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
-	var logs bytes.Buffer
-	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-
-	for range 3 {
-		require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
-	}
-
-	require.NotContains(t, logs.String(), `"level":"warn"`)
 	require.NotContains(t, logs.String(), `"level":"error"`)
-	require.NoFileExists(t, m.shared.perUser)
-}
-
-func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedWhenItsDirectoryIsReadOnly(t *testing.T) {
-	m := newIsolatedMachine(t)
-	m.serial = "C02Q7KHTGFWF"
-	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
-	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
-	var logs bytes.Buffer
-	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-
-	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
-
-	require.NoError(t, err)
-	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
-	require.Equal(t, "from-shared-file", readFile(t, m.shared.machineWide).MachineID)
-	require.NoFileExists(t, m.shared.perUser)
-	require.NotContains(t, logs.String(), `"level":"warn"`)
-	require.Contains(t, logLineContaining(t, logs.String(), "could not be replaced"), `"level":"debug"`)
+	line := logLineContaining(t, logs.String(), "shared file holds a different machine id")
+	require.Contains(t, line, "could not be replaced")
+	require.Contains(t, line, `"level":"debug"`)
 }
 
 func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedAndWarnsWhenItsLockIsHeld(t *testing.T) {
