@@ -103,6 +103,13 @@ type extendedViper struct {
 	// pinnedFile is the file given to WithPinnedFile. When it is set, configFiles are not used.
 	pinnedFile string
 
+	// envBlocked are the keys, and the alternative keys of these keys, that never read the process environment
+	// although the rest of the configuration does. They are the keys that belong to one configuration, such as
+	// credentials, host and organization. lazyEnv makes every other key read the environment as well, which is
+	// what an automatic environment does for the configuration a derived one was derived from.
+	envBlocked []string
+	lazyEnv    bool
+
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
 	persistedKeys map[string]bool
@@ -386,6 +393,22 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	_ = config.viper.ReadInConfig()
 }
 
+// WithEnvironmentBlockedFor lists keys that must not read the process environment, and neither must their
+// alternative keys. A derived configuration reads the environment like the configuration it was derived from, except
+// for these keys: they belong to one configuration, for example credentials, host and organization, and an
+// environment variable for them is meant for the configuration it was set for.
+func WithEnvironmentBlockedFor(keys ...string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithEnvironmentBlockedFor()")
+		}
+		ev.mutex.Lock()
+		defer ev.mutex.Unlock()
+		ev.envBlocked = append(ev.envBlocked, keys...)
+	}
+}
+
 // Derive returns a configuration with the registrations of base, but none of its values, cache contents or storage.
 // base must be a configuration created by this package, such as one from NewWithOpts or Clone, because the registrations
 // are read from its internal state. Any other implementation, including a wrapper that embeds a Configuration, gives an
@@ -432,9 +455,7 @@ func (ev *extendedViper) copyRegistrationsTo(dst *extendedViper) (bool, time.Dur
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
-	if ev.automaticEnvEnabled {
-		dst.AutomaticEnv()
-	}
+	dst.lazyEnv = ev.automaticEnvEnabled
 	for k, v := range ev.defaultValues {
 		if _, ok := dst.defaultValues[k]; !ok {
 			dst.defaultValues[k] = v
@@ -511,6 +532,10 @@ func (ev *extendedViper) Clone() Configuration {
 
 	if ev.automaticEnvEnabled {
 		clone.AutomaticEnv()
+	}
+	if cloneViper, ok := clone.(*extendedViper); ok {
+		cloneViper.envBlocked = slices.Clone(ev.envBlocked)
+		cloneViper.lazyEnv = ev.lazyEnv
 	}
 	clone.SetSupportedEnvVars(ev.supportedEnvVars...)
 	clone.SetSupportedEnvVarPrefixes(ev.supportedEnvVarPrefixes...)
@@ -591,7 +616,10 @@ func (ev *extendedViper) get(key string) (result interface{}, err error) {
 // Short-circuits before calling AllKeys() when the key cannot be an env var, avoiding
 // Viper's expensive internal map rebuild on every lookup.
 func (ev *extendedViper) bindEnv(key string) error {
-	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType {
+	if ev.automaticEnvEnabled || (!ev.lazyEnv && ev.getKeyType(key) != EnvVarKeyType) {
+		return nil
+	}
+	if ev.isEnvBlocked(key) {
 		return nil
 	}
 
@@ -601,6 +629,27 @@ func (ev *extendedViper) bindEnv(key string) error {
 	}
 
 	return ev.viper.BindEnv(key)
+}
+
+// isEnvBlocked reports whether the key must not read the process environment. The caller holds the mutex.
+func (ev *extendedViper) isEnvBlocked(key string) bool {
+	if len(ev.envBlocked) == 0 {
+		return false
+	}
+	matches := func(candidate string) bool {
+		return slices.ContainsFunc(ev.envBlocked, func(blocked string) bool { return strings.EqualFold(blocked, candidate) })
+	}
+	if matches(key) {
+		return true
+	}
+	for _, blocked := range ev.envBlocked {
+		for owner, alternatives := range ev.alternativeKeys {
+			if strings.EqualFold(owner, blocked) && slices.ContainsFunc(alternatives, func(a string) bool { return strings.EqualFold(a, key) }) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // IsSet returns true if a value for the given key was explicitly set
@@ -928,6 +977,12 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	foundKeys := []string{}
 	for _, ak := range alternativeKeys {
 		if ev.GetKeyType(ak) == EnvVarKeyType {
+			ev.mutex.RLock()
+			envReadable := !ev.isEnvBlocked(ak)
+			ev.mutex.RUnlock()
+			if !envReadable {
+				continue
+			}
 			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
 				foundKeys = append(foundKeys, ak)
 			}
