@@ -181,6 +181,9 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 		}
 	}
 
+	// Read both scopes first. Nil means neither the machine-wide nor the per-user
+	// file holds a valid id, so the serial may be stored. A file that already
+	// holds an id is left as it is.
 	sf, sharedReadErr := readSharedFile(paths, logger)
 	if sf != nil {
 		logger.Debug().Msg("machine id: adopting value from shared file")
@@ -199,6 +202,7 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			logger.Debug().Err(err).Msg("machine id: Snyk Studio value could not be stored in the shared file, using it directly")
 			return machine, readErr
 		}
+		// A racing write can win, so this is the id actually in the file, not the one just attempted.
 		machine.ID = stored
 		return machine, readErr
 	}
