@@ -48,7 +48,7 @@ func Test_bearerTokenScoperImpl_GetToken(t *testing.T) {
 
 	config := newStoredTokenConfig(server.URL)
 
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"tenant.supplychain.registry.read", "org.read"}, time.Hour)
 
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func Test_bearerTokenScoperImpl_GetToken_WithoutTTL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, 0)
 
 	require.NoError(t, err)
@@ -80,11 +80,24 @@ func Test_bearerTokenScoperImpl_GetToken_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Error(t, err)
 	assert.Empty(t, token)
+}
+
+type fakeNetworkClients struct {
+	authenticated *http.Client
+	unauthorized  *http.Client
+}
+
+func (f fakeNetworkClients) GetHttpClient() *http.Client { return f.authenticated }
+
+func (f fakeNetworkClients) GetUnauthorizedHttpClient() *http.Client { return f.unauthorized }
+
+func singleClient(client *http.Client) fakeNetworkClients {
+	return fakeNetworkClients{authenticated: client, unauthorized: client}
 }
 
 func newStoredTokenConfig(apiURL string) configuration.Configuration {
@@ -118,7 +131,7 @@ func Test_bearerTokenScoperImpl_GetToken_NetworkFailureKeepsCause(t *testing.T) 
 		return nil, sentinel
 	})}
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), httpClient)
+	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), singleClient(httpClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -164,13 +177,13 @@ func Test_bearerTokenScoperImpl_GetToken_ErrorBodyKeepsOnlyOAuthErrorFields(t *t
 			config.Set(configuration.API_URL, server.URL)
 			tt.configure(config)
 
-			scoper := NewBearerTokenScoper(config, server.Client())
+			scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 			token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 			require.Empty(t, token)
 			catalogErr := catalogErrorOf(t, err)
-			assert.Equal(t, "invalid_request", catalogErr.Meta[metaKeyOAuthError])
-			assert.Equal(t, "token rejected", catalogErr.Meta[metaKeyOAuthErrorDescription])
+			assert.Contains(t, catalogErr.Detail, "invalid_request")
+			assert.Contains(t, catalogErr.Detail, "token rejected")
 			assert.NotContains(t, catalogErr.Meta, "body")
 			assert.NotContains(t, catalogErr.Meta, "echo")
 			requireNoSecretLeak(t, err, tt.secret)
@@ -195,7 +208,7 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 			}))
 			defer server.Close()
 
-			scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+			scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 			token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 			require.Empty(t, token)
@@ -216,7 +229,7 @@ func Test_bearerTokenScoperImpl_GetToken_ServerErrorWithUnreadableBodyKeepsCause
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -233,7 +246,7 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedBodyStoresNothing(t *testing.T
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -251,15 +264,15 @@ func Test_bearerTokenScoperImpl_GetToken_PlainClientNon200ReturnsScoperErrorWith
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Empty(t, token)
 	catalogErr := catalogErrorOf(t, err)
 	require.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
 	assert.Contains(t, catalogErr.Detail, "401")
-	assert.Equal(t, "invalid_client", catalogErr.Meta[metaKeyOAuthError])
-	assert.Equal(t, "bad subject", catalogErr.Meta[metaKeyOAuthErrorDescription])
+	assert.Contains(t, catalogErr.Detail, "invalid_client")
+	assert.Contains(t, catalogErr.Detail, "bad subject")
 	requireNoSecretLeak(t, err, testSubjectToken)
 }
 
@@ -269,7 +282,7 @@ func Test_bearerTokenScoperImpl_GetToken_TransportCatalogErrorIsWrappedWithCause
 		return nil, middlewareErr
 	})}
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), httpClient)
+	scoper := NewBearerTokenScoper(newStoredTokenConfig("https://api.example.invalid"), singleClient(httpClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -283,7 +296,7 @@ func Test_bearerTokenScoperImpl_GetToken_NoUserAuthentication(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.example.invalid")
 
-	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	scoper := NewBearerTokenScoper(config, singleClient(http.DefaultClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -299,7 +312,7 @@ func Test_bearerTokenScoperImpl_GetToken_MissingAccessToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.Empty(t, token)
@@ -316,7 +329,7 @@ func Test_bearerTokenScoperImpl_GetToken_DecodeFailureKeepsCause(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -334,7 +347,7 @@ func Test_bearerTokenScoperImpl_GetToken_TruncatedErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), server.Client())
+	scoper := NewBearerTokenScoper(newStoredTokenConfig(server.URL), singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, cli.NewTokenScoperError("").ErrorCode)
@@ -357,7 +370,7 @@ func Test_bearerTokenScoperImpl_GetToken_FallsBackToStoredOAuthToken(t *testing.
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer"}`)
 
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.NoError(t, err)
@@ -388,7 +401,7 @@ func Test_bearerTokenScoperImpl_GetToken_RefreshesExpiredStoredOAuthToken(t *tes
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
 
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.NoError(t, err)
@@ -420,11 +433,123 @@ func Test_bearerTokenScoperImpl_GetToken_RefreshesStoredOAuthTokenWithEmptyAcces
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
 
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	require.NoError(t, err)
 	assert.Equal(t, "scoped-token", token)
+}
+
+const expiredOAuthToken = `{"access_token":"stored-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`
+
+func newExpiredTokenConfig(apiURL string) configuration.Configuration {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, apiURL)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, expiredOAuthToken)
+	return config
+}
+
+func jsonResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": {"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func refreshOrExchangeResponse(grantType string) string {
+	if grantType == "refresh_token" {
+		return `{"access_token":"refreshed-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expires_in":3600}`
+	}
+	return `{"access_token":"scoped-token","token_type":"bearer","expires_in":2874}`
+}
+
+func newRefreshAndExchangeServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(refreshOrExchangeResponse(r.PostForm.Get("grant_type"))))
+		assert.NoError(t, err)
+	}))
+}
+
+func Test_bearerTokenScoperImpl_GetToken_RefreshAndExchangeUseTheirOwnClients(t *testing.T) {
+	var refreshGrants, exchangeGrants []string
+	newRecordingClient := func(grants *[]string) *http.Client {
+		return &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			grantType := r.PostForm.Get("grant_type")
+			*grants = append(*grants, grantType)
+			return jsonResponse(refreshOrExchangeResponse(grantType)), nil
+		})}
+	}
+	clients := fakeNetworkClients{
+		authenticated: newRecordingClient(&exchangeGrants),
+		unauthorized:  newRecordingClient(&refreshGrants),
+	}
+
+	scoper := NewBearerTokenScoper(newExpiredTokenConfig("https://api.example.invalid"), clients)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+	assert.Equal(t, []string{"refresh_token"}, refreshGrants)
+	assert.Equal(t, []string{grantTypeTokenExchange}, exchangeGrants)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_NilNetworkClientsFallsBackToDefaultClient(t *testing.T) {
+	server := newRefreshAndExchangeServer(t)
+	defer server.Close()
+
+	scoper := NewBearerTokenScoper(newExpiredTokenConfig(server.URL), nil)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_NilUnauthorizedClientFallsBackToDefaultClient(t *testing.T) {
+	server := newRefreshAndExchangeServer(t)
+	defer server.Close()
+
+	clients := fakeNetworkClients{authenticated: server.Client(), unauthorized: nil}
+	scoper := NewBearerTokenScoper(newExpiredTokenConfig(server.URL), clients)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_NilAuthenticatedClientFallsBackToDefaultClient(t *testing.T) {
+	server := newRefreshAndExchangeServer(t)
+	defer server.Close()
+
+	clients := fakeNetworkClients{authenticated: nil, unauthorized: server.Client()}
+	scoper := NewBearerTokenScoper(newExpiredTokenConfig(server.URL), clients)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scoped-token", token)
+}
+
+func Test_bearerTokenScoperImpl_GetToken_BearerTokenOnlyIsNotUserAuthentication(t *testing.T) {
+	unexpectedClient := &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("no HTTP request is expected without a stored user token")
+		return nil, errors.New("unexpected request")
+	})}
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.example.invalid")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "bearer-token")
+
+	scoper := NewBearerTokenScoper(config, singleClient(unexpectedClient))
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
+	assert.Equal(t, "no user authentication is available", catalogErrorOf(t, err).Detail)
+	assert.Empty(t, token)
 }
 
 func Test_bearerTokenScoperImpl_GetToken_FailedRefreshOfExpiredStoredOAuthToken(t *testing.T) {
@@ -442,7 +567,7 @@ func Test_bearerTokenScoperImpl_GetToken_FailedRefreshOfExpiredStoredOAuthToken(
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
 
-	scoper := NewBearerTokenScoper(config, server.Client())
+	scoper := NewBearerTokenScoper(config, singleClient(server.Client()))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -458,7 +583,7 @@ func Test_bearerTokenScoperImpl_GetToken_InvalidStoredOAuthToken(t *testing.T) {
 	config.Set(configuration.API_URL, "https://api.example.invalid")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `not-json`)
 
-	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	scoper := NewBearerTokenScoper(config, singleClient(http.DefaultClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -473,7 +598,7 @@ func Test_bearerTokenScoperImpl_GetToken_EmptyStoredAccessAndRefreshTokenReturns
 	config.Set(configuration.API_URL, "https://api.example.invalid")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"token_type":"Bearer"}`)
 
-	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	scoper := NewBearerTokenScoper(config, singleClient(http.DefaultClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -486,7 +611,7 @@ func Test_bearerTokenScoperImpl_GetToken_MalformedAuthorizationHeaderReturnsCata
 	config.Set(configuration.API_URL, "https://api.example.invalid")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"a b","token_type":"Bearer"}`)
 
-	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	scoper := NewBearerTokenScoper(config, singleClient(http.DefaultClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -499,7 +624,7 @@ func Test_bearerTokenScoperImpl_GetToken_CorruptStoredOAuthTokenLeaksNoSecret(t 
 	config.Set(configuration.API_URL, "https://api.example.invalid")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"stored-access-token","refresh_token":"stored-refresh-token",`)
 
-	scoper := NewBearerTokenScoper(config, http.DefaultClient)
+	scoper := NewBearerTokenScoper(config, singleClient(http.DefaultClient))
 	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
 
 	requireCatalogError(t, err, snyk.NewUnauthorisedError("").ErrorCode)
@@ -509,7 +634,7 @@ func Test_bearerTokenScoperImpl_GetToken_CorruptStoredOAuthTokenLeaksNoSecret(t 
 }
 
 func Test_bearerTokenScoperImpl_RevokeToken_NotImplemented(t *testing.T) {
-	scoper := NewBearerTokenScoper(configuration.NewWithOpts(), http.DefaultClient)
+	scoper := NewBearerTokenScoper(configuration.NewWithOpts(), singleClient(http.DefaultClient))
 
 	err := scoper.RevokeToken(context.Background(), "scoped-token")
 
