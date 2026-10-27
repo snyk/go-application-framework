@@ -41,7 +41,7 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 // the credential is a secret.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
-	if config.GetStorage() == nil {
+	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
 		return nil, errors.New("enrolling is refused because the credential cannot be stored: the configuration has no storage")
 	}
 	deviceToken := config.GetString(flagDeviceToken)
@@ -68,11 +68,12 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		return nil, err
 	}
 
-	logReplacedCredential(invocationCtx, config)
+	logReplacement := replacedCredentialLogger(invocationCtx, config)
 	credential := machinecredential.Credential{ClientID: enrollment.ClientID, Key: enrollment.Key}
 	if err = storeEnrollment(invocationCtx.Context(), storeTimeout, config, credential, deviceToken != ""); err != nil {
 		return nil, err
 	}
+	logReplacement()
 	// Workflows run on a clone, so the engine's own configuration would not see the credential
 	// until the next start.
 	if engineConfig := invocationCtx.GetEngine().GetConfiguration(); engineConfig != config {
@@ -81,6 +82,11 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		}
 	}
 	return nil, nil
+}
+
+func isEmptyStorage(storage configuration.Storage) bool {
+	_, ok := storage.(*configuration.EmptyStorage)
+	return ok
 }
 
 func storeEnrollment(ctx context.Context, timeout time.Duration, config configuration.Configuration, credential machinecredential.Credential, usedDeviceToken bool) error {
@@ -102,16 +108,19 @@ func storeFailure(clientID string, usedDeviceToken bool, cause error) error {
 	return fmt.Errorf("enrolled as client %s but the credential could not be stored; the enrollment service created a client for this machine, which an admin may want to revoke: %w", clientID, cause)
 }
 
-// logReplacedCredential never blocks enrolling: a stored credential that can't be read is replaced too.
-func logReplacedCredential(invocationCtx workflow.InvocationContext, config configuration.Configuration) {
+// replacedCredentialLogger reads the stored credential now, as storing overwrites it, and returns the
+// function that logs its replacement. It never blocks enrolling: a stored credential that can't be
+// read is replaced too.
+func replacedCredentialLogger(invocationCtx workflow.InvocationContext, config configuration.Configuration) func() {
 	logger := invocationCtx.GetEnhancedLogger()
 	previous, err := machinecredential.Load(config)
 	switch {
 	case err == nil:
-		logger.Warn().Msgf("replacing the credential of client %s", previous.ClientID)
+		return func() { logger.Warn().Msgf("replaced the credential of client %s", previous.ClientID) }
 	case !errors.Is(err, machinecredential.ErrNotEnrolled):
-		logger.Warn().Err(err).Msg("replacing a stored machine credential that could not be read")
+		return func() { logger.Warn().Err(err).Msg("replaced a stored machine credential that could not be read") }
 	}
+	return func() {}
 }
 
 func enrollWithFleetKeyFile(ctx context.Context, runtimeInfo runtimeinfo.RuntimeInfo, httpClient *http.Client, apiURL, fleetKeyFile string) (machineenrollment.Enrollment, error) {
