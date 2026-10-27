@@ -116,6 +116,26 @@ func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
 	require.Equal(t, first, machineID(t, m.newRun()))
 }
 
+func TestAcceptance_GeneratedIDIsStoredPerUserWhenTheMachineWideFileHasANewerSchemaAndNoValidID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	newer := `{"machine_id":"","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.True(t, valid(machine.ID))
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, machine.ID, content.MachineID)
+	require.Equal(t, "generated", content.IdentifierSource)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
 func TestAcceptance_SuppliedIDWinsOverTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
@@ -390,6 +410,27 @@ func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t 
 	studio, err := os.ReadFile(m.studio.perUser)
 	require.NoError(t, err)
 	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
+}
+
+func TestAcceptance_StudioDeviceIDIsStoredPerUserWhenTheMachineWideFileHasANewerSchemaAndNoValidID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	newer := `{"machine_id":"","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "studio-device-id", machine.ID)
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "studio-device-id", content.MachineID)
+	require.Equal(t, "persisted", content.IdentifierSource)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NotContains(t, logs.String(), `"level":"warn"`)
 }
 
 func TestAcceptance_AdoptedStudioDeviceIDIsReturnedAgainAfterTheStudioFileChanges(t *testing.T) {
