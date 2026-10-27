@@ -43,8 +43,8 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
-	trackedPathsMu  sync.Mutex
-	trackedPaths    *trackedPaths
+	trackedFilesMu  sync.Mutex
+	trackedFiles    *trackedFiles
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -373,26 +373,26 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	return globs, nil
 }
 
-type trackedPaths struct {
+type trackedFiles struct {
 	repoRoot string
-	files    map[string]bool
+	paths    map[string]bool
 }
 
 // Shared with the folder walker so the git index is read once per run instead of twice.
-func (fw *FileFilter) loadTrackedPaths() (*trackedPaths, bool) {
-	fw.trackedPathsMu.Lock()
-	defer fw.trackedPathsMu.Unlock()
+func (fw *FileFilter) loadTrackedFiles() (*trackedFiles, bool) {
+	fw.trackedFilesMu.Lock()
+	defer fw.trackedFilesMu.Unlock()
 
-	if fw.trackedPaths == nil {
-		fw.trackedPaths = fw.readTrackedPaths()
+	if fw.trackedFiles == nil {
+		fw.trackedFiles = fw.readTrackedFiles()
 	}
-	return fw.trackedPaths, fw.trackedPaths != nil
+	return fw.trackedFiles, fw.trackedFiles != nil
 }
 
-func (fw *FileFilter) releaseTrackedPaths() {
-	fw.trackedPathsMu.Lock()
-	defer fw.trackedPathsMu.Unlock()
-	fw.trackedPaths = nil
+func (fw *FileFilter) releaseTrackedFiles() {
+	fw.trackedFilesMu.Lock()
+	defer fw.trackedFilesMu.Unlock()
+	fw.trackedFiles = nil
 }
 
 // trackedFileExclusionPredicate builds the exclusion predicate used when
@@ -425,8 +425,8 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		return defaultPredicate
 	}
 
-	tracked, ok := fw.loadTrackedPaths()
-	fw.releaseTrackedPaths()
+	tracked, ok := fw.loadTrackedFiles()
+	fw.releaseTrackedFiles()
 	if !ok {
 		return defaultPredicate
 	}
@@ -438,7 +438,7 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if tracked.files[filepath.ToSlash(relativePath)] {
+		if tracked.paths[filepath.ToSlash(relativePath)] {
 			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
@@ -446,7 +446,7 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 	}
 }
 
-func (fw *FileFilter) readTrackedPaths() *trackedPaths {
+func (fw *FileFilter) readTrackedFiles() *trackedFiles {
 	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
@@ -473,12 +473,12 @@ func (fw *FileFilter) readTrackedPaths() *trackedPaths {
 		return nil
 	}
 
-	files := make(map[string]bool, len(gitIndex.Entries))
+	paths := make(map[string]bool, len(gitIndex.Entries))
 	for _, entry := range gitIndex.Entries {
-		files[entry.Name] = true
+		paths[entry.Name] = true
 	}
 
-	return &trackedPaths{repoRoot: repoRoot, files: files}
+	return &trackedFiles{repoRoot: repoRoot, paths: paths}
 }
 
 func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
