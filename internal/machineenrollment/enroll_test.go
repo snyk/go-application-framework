@@ -9,8 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -352,7 +355,7 @@ func TestEnrollWithFleetKeyNotRegisteredListsIdentifiers(t *testing.T) {
 	require.ErrorAs(t, err, &enrollErr)
 	assert.Equal(t, machineenrollment.CodeMachineNotRegistered, enrollErr.Code)
 	assert.Equal(t, serials("C02XK1JHJG5J"), enrollErr.Identifiers)
-	assert.Contains(t, err.Error(), "ask an admin to register the machine")
+	assert.Contains(t, err.Error(), "Ask an admin to register the machine")
 }
 
 func TestEnrollWithFleetKeyRejectsBadInput(t *testing.T) {
@@ -392,4 +395,130 @@ func TestEnrollRejectsRequestsThatDontConformToTheSpec(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, post(`{"data":{"type":"machine_enrollment","attributes":{"method":"bogus","assertion":"a","authorization":"b"}}}`))
 	assert.Equal(t, http.StatusBadRequest, post(`{"data":{"type":"machine_enrollment","attributes":{"method":"device_token","assertion":"a","authorization":"b","machine_id":"m"}}}`))
 	assert.Equal(t, http.StatusBadRequest, post(`{"data":{"type":"machine_enrollment","attributes":{"method":"device_token","assertion":"a","authorization":"b"}}}`), "an assertion that isn't a JWT")
+}
+
+func TestEnrollRejectsANilHTTPClientBeforeSendingAnything(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	fleetKey := newFleetKey(t)
+	srv.AllowFleetKey(&fleetKey.PublicKey, srv.RegisterMachine("A"))
+	token := srv.IssueDeviceToken(srv.RegisterMachine())
+
+	_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), nil, srv.URL, token, time.Now())
+	assert.Error(t, err)
+	_, err = machineenrollment.EnrollWithFleetKey(context.Background(), nil, srv.URL, fleetKey, serials("A"), time.Now())
+	assert.Error(t, err)
+
+	assert.Zero(t, srv.EnrollmentRequests())
+}
+
+func TestEnrollReportsAnUnknownOutcomeWhenTheResponseNeverArrives(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		panic(http.ErrAbortHandler)
+	}))
+	defer srv.Close()
+
+	_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), srv.Client(), srv.URL, "sdt_abc", time.Now())
+
+	require.ErrorIs(t, err, machineenrollment.ErrOutcomeUnknown)
+	assert.Contains(t, err.Error(), "unknown")
+	assert.Contains(t, err.Error(), "device token")
+	assert.Contains(t, err.Error(), "revoke")
+}
+
+func TestEnrollDoesNotReportAnUnknownOutcomeWhenNothingWasSent(t *testing.T) {
+	_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), http.DefaultClient, "http://127.0.0.1:1", "sdt_abc", time.Now())
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, machineenrollment.ErrOutcomeUnknown)
+}
+
+func TestEnrollReportsAnUnknownOutcomeOnlyWhenTheRequestWasWritten(t *testing.T) {
+	for name, tt := range map[string]struct {
+		writeErr    error
+		wantUnknown bool
+	}{
+		"write succeeded": {writeErr: nil, wantUnknown: true},
+		"write failed":    {writeErr: errors.New("write: broken pipe"), wantUnknown: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				httptrace.ContextClientTrace(r.Context()).WroteRequest(httptrace.WroteRequestInfo{Err: tt.writeErr})
+				return nil, errors.New("connection lost")
+			})}
+
+			_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), client, "http://api.example.com", "sdt_abc", time.Now())
+
+			require.Error(t, err)
+			assert.Equal(t, tt.wantUnknown, errors.Is(err, machineenrollment.ErrOutcomeUnknown))
+		})
+	}
+}
+
+func TestEnrollOutcomeAfterAResponseThatCannotBeUsed(t *testing.T) {
+	const truncated = "truncated"
+	for name, tt := range map[string]struct {
+		status        int
+		body          string
+		wantUnknown   bool
+		wantRejection int // the status of the EnrollmentError, or 0 for none
+	}{
+		"401 body read fails": {status: http.StatusUnauthorized, body: truncated, wantUnknown: false},
+		"201 body read fails": {status: http.StatusCreated, body: truncated, wantUnknown: true},
+		"502 body read fails": {status: http.StatusBadGateway, body: truncated, wantUnknown: true},
+		"200 body read fails": {status: http.StatusOK, body: truncated, wantUnknown: true},
+		"201 not json":        {status: http.StatusCreated, body: "<html>", wantUnknown: true},
+		"201 no client_id":    {status: http.StatusCreated, body: `{"data":{"type":"machine_enrollment","attributes":{"machine_id":"m"}}}`, wantUnknown: true},
+		"502 with a body":     {status: http.StatusBadGateway, body: `{"errors":[{"detail":"upstream timed out"}]}`, wantUnknown: true, wantRejection: http.StatusBadGateway},
+		"504 with a body":     {status: http.StatusGatewayTimeout, body: "", wantUnknown: true, wantRejection: http.StatusGatewayTimeout},
+		"200 with a body":     {status: http.StatusOK, body: `{}`, wantUnknown: true, wantRejection: http.StatusOK},
+		"302 with a body":     {status: http.StatusFound, body: `{}`, wantUnknown: false, wantRejection: http.StatusFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.body == truncated {
+					w.Header().Set("Content-Length", "1000")
+				}
+				w.WriteHeader(tt.status)
+				_, werr := w.Write([]byte(tt.body))
+				assert.NoError(t, werr)
+			}))
+			defer srv.Close()
+
+			_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), srv.Client(), srv.URL, "sdt_abc", time.Now())
+
+			require.Error(t, err)
+			assert.Equal(t, tt.wantUnknown, errors.Is(err, machineenrollment.ErrOutcomeUnknown), err.Error())
+			var enrollErr *machineenrollment.EnrollmentError
+			if tt.wantRejection != 0 || !tt.wantUnknown {
+				assert.Contains(t, err.Error(), strconv.Itoa(tt.status))
+			}
+			if tt.wantRejection != 0 {
+				require.ErrorAs(t, err, &enrollErr, err.Error())
+				assert.Equal(t, tt.wantRejection, enrollErr.Status)
+			} else {
+				assert.False(t, errors.As(err, &enrollErr), err.Error())
+			}
+		})
+	}
+}
+
+// writeFailingConn is a connection whose writes fail while its reads block, as a connection the
+// peer has stopped reading from does.
+type writeFailingConn struct{ net.Conn }
+
+func (writeFailingConn) Write([]byte) (int, error) { return 0, errors.New("write: broken pipe") }
+
+func TestEnrollReportsAnUnknownOutcomeWhenTheSocketWriteFails(t *testing.T) {
+	// The request is buffered before the socket write, so the service may or may not have got it.
+	client := &http.Client{Transport: &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) {
+		conn, peer := net.Pipe()
+		t.Cleanup(func() { _ = peer.Close() })
+		return writeFailingConn{conn}, nil
+	}}}
+
+	_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), client, "http://api.example.com", "sdt_abc", time.Now())
+
+	require.ErrorIs(t, err, machineenrollment.ErrOutcomeUnknown)
 }

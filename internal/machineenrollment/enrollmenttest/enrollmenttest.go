@@ -79,7 +79,7 @@ type Server struct {
 	deviceTokens      map[string]*deviceToken
 	fleetKeys         map[string]fleetKey // by thumbprint
 	enrolledKeys      map[string]bool     // client key thumbprints
-	clients           map[string]*rsa.PublicKey
+	clients           map[string]client
 	jtis              map[string]bool
 	tokens            map[string]string // access token -> client id
 	next              int
@@ -91,6 +91,16 @@ type fleetKey struct {
 	machines []*machine
 }
 
+type client struct {
+	key *rsa.PublicKey
+	kid string // the RFC 7638 thumbprint of key
+}
+
+// signs reports whether a JWS with header can be the client's: RS256, by the key kid names.
+func (c client) signs(header map[string]any) bool {
+	return c.key != nil && header["alg"] == "RS256" && header["kid"] == c.kid
+}
+
 // NewServer starts a fake API implementing the enrollment and token endpoints.
 func NewServer(t *testing.T) *Server {
 	t.Helper()
@@ -98,7 +108,7 @@ func NewServer(t *testing.T) *Server {
 		deviceTokens: map[string]*deviceToken{},
 		fleetKeys:    map[string]fleetKey{},
 		enrolledKeys: map[string]bool{},
-		clients:      map[string]*rsa.PublicKey{},
+		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
 	}
@@ -152,7 +162,7 @@ func (s *Server) SetErrorTitles(on bool) {
 func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clients[clientID] = key
+	s.clients[clientID] = client{key: key, kid: thumbprintRSA(key)}
 }
 
 // RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
@@ -217,7 +227,7 @@ func (s *Server) AllowFleetKey(pub *ecdsa.PublicKey, machineIDs ...string) {
 func (s *Server) ClientKey(clientID string) *rsa.PublicKey {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.clients[clientID]
+	return s.clients[clientID].key
 }
 
 // ClientCount returns how many clients are registered, whether active or not.
@@ -334,7 +344,7 @@ func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
 	s.next++
 	clientID := fmt.Sprintf("client-%d", s.next)
 	m.clientID = clientID
-	s.clients[clientID] = key
+	s.clients[clientID] = client{key: key, kid: jkt}
 	w.Header().Set("Location", "/rest/machines/self?version=2024-10-15")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"jsonapi": map[string]any{"version": "1.0"},
@@ -491,7 +501,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	assertion := r.PostForm.Get("client_assertion")
-	_, claims, err := decodeJWT(assertion)
+	header, claims, err := decodeJWT(assertion)
 	if err != nil {
 		writeOAuthError(w, "invalid_client")
 		return
@@ -500,10 +510,10 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clientID, _ := claims["sub"].(string) //nolint:errcheck // an unknown client is rejected below
-	key := s.clients[clientID]
+	c := s.clients[clientID]
 	jti, _ := claims["jti"].(string)  //nolint:errcheck // checked below
 	exp, _ := claims["exp"].(float64) //nolint:errcheck // checked below
-	if key == nil || VerifyJWT(assertion, key) != nil ||
+	if !c.signs(header) || VerifyJWT(assertion, c.key) != nil ||
 		claims["iss"] != clientID || r.PostForm.Get("client_id") != clientID ||
 		claims["aud"] != s.URL+"/oauth2/token" ||
 		jti == "" || s.jtis[jti] || time.Unix(int64(exp), 0).Before(time.Now()) {
@@ -624,6 +634,14 @@ func (s *Server) writeErrorMeta(w http.ResponseWriter, status int, code, detail 
 		e["meta"] = meta
 	}
 	writeJSON(w, status, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "errors": []map[string]any{e}})
+}
+
+// thumbprintRSA returns the RFC 7638 thumbprint of an RSA key.
+func thumbprintRSA(pub *rsa.PublicKey) string {
+	n := base64.RawURLEncoding.EncodeToString(pub.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes())
+	sum := sha256.Sum256(fmt.Appendf(nil, `{"e":%q,"kty":"RSA","n":%q}`, e, n))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // thumbprintEC returns the RFC 7638 thumbprint of a P-256 key.
