@@ -1,10 +1,11 @@
-package machineenrollment
+package machineidentity
 
 import (
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 )
 
@@ -24,13 +25,13 @@ func NewAssertionProvider(keyFile string) auth.ClientAssertionProvider {
 
 // ClientAssertion implements auth.ClientAssertionProvider.
 func (p *assertionProvider) ClientAssertion(_ context.Context, clientID, tokenURL string) (string, string, error) {
-	key, err := ReadKeyFile(p.keyFile)
+	key, err := machineenrollment.ReadKeyFile(p.keyFile)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read machine client key: %w", err)
 	}
-	assertion, err := ClientAssertion(key, clientID, tokenURL, time.Now())
+	assertion, err := machineenrollment.ClientAssertion(key, clientID, tokenURL, time.Now())
 	if err != nil {
 		return "", "", err
 	}
-	return ClientAssertionType, assertion, nil
+	return machineenrollment.ClientAssertionType, assertion, nil
 }
