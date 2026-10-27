@@ -6,14 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -57,13 +61,16 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 	networkAccess.AddErrorHandler(nil)
 	httpClient := networkAccess.GetUnauthorizedHttpClient()
 	apiURL := config.GetString(configuration.API_URL)
+	// The device token is single-use and the client key enrolls once: a replay after the server
+	// consumed them fails and orphans the client it created.
+	ctx := middleware.WithoutRetry(invocationCtx.Context())
 
 	var enrollment machineenrollment.Enrollment
 	var err error
 	if deviceToken != "" {
-		enrollment, err = machineenrollment.EnrollWithDeviceToken(invocationCtx.Context(), httpClient, apiURL, deviceToken, time.Now())
+		enrollment, err = machineenrollment.EnrollWithDeviceToken(ctx, httpClient, apiURL, deviceToken, time.Now())
 	} else {
-		enrollment, err = enrollWithFleetKeyFile(invocationCtx.Context(), invocationCtx.GetRuntimeInfo(), httpClient, apiURL, fleetKeyFile)
+		enrollment, err = enrollWithFleetKeyFile(ctx, invocationCtx.GetEnhancedLogger(), invocationCtx.GetRuntimeInfo(), httpClient, apiURL, fleetKeyFile)
 	}
 	if err != nil {
 		return nil, err
@@ -142,7 +149,7 @@ func replacedCredentialLogger(invocationCtx workflow.InvocationContext, config c
 	return func() {}
 }
 
-func enrollWithFleetKeyFile(ctx context.Context, runtimeInfo runtimeinfo.RuntimeInfo, httpClient *http.Client, apiURL, fleetKeyFile string) (machineenrollment.Enrollment, error) {
+func enrollWithFleetKeyFile(ctx context.Context, logger *zerolog.Logger, runtimeInfo runtimeinfo.RuntimeInfo, httpClient *http.Client, apiURL, fleetKeyFile string) (machineenrollment.Enrollment, error) {
 	if runtimeInfo == nil {
 		return machineenrollment.Enrollment{}, errors.New("failed finding the identifiers of this machine: the application provides no runtime information")
 	}
@@ -156,10 +163,25 @@ func enrollWithFleetKeyFile(ctx context.Context, runtimeInfo runtimeinfo.Runtime
 	if machine.SerialNumber == "" {
 		return machineenrollment.Enrollment{}, errors.New("failed finding the identifiers of this machine: no serial number is known")
 	}
+	warnIfReadableByOthers(logger, fleetKeyFile)
 	fleetKey, err := machineenrollment.ReadFleetKeyFile(fleetKeyFile)
 	if err != nil {
 		return machineenrollment.Enrollment{}, err
 	}
 	identifiers := []machineenrollment.Identifier{{Type: machineenrollment.IdentifierTypeSerialNumber, Value: machine.SerialNumber}}
 	return machineenrollment.EnrollWithFleetKey(ctx, httpClient, apiURL, fleetKey, identifiers, time.Now())
+}
+
+// warnIfReadableByOthers logs when other users of this system can read the fleet key. It does not
+// refuse the key: a container secret mount can't be chmod'ed, and ReadFleetKeyFile reports a file
+// that can't be read at all.
+func warnIfReadableByOthers(logger *zerolog.Logger, path string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 == 0 {
+		return
+	}
+	logger.Warn().Msgf("the fleet key file is readable by other users: run chmod 600 %q, or mount a container secret with defaultMode 0400", path)
 }

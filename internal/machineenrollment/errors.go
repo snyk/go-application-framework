@@ -3,8 +3,16 @@ package machineenrollment
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+// maxTextBytes bounds the server-supplied code and detail in error messages.
+const maxTextBytes = 512
+
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 // Codes the enrollment service sets on an enrollment error, for those a machine needs to tell
 // apart from others with the same status.
@@ -64,7 +72,7 @@ func (e *EnrollmentError) Error() string {
 	if e.Detail != "" {
 		b.WriteString(": " + e.Detail)
 	}
-	if hint := hints[e.Code]; hint != "" {
+	if hint := hints[e.Code]; hint != "" && e.Detail == "" {
 		b.WriteString(" (" + hint + ")")
 	}
 	return b.String()
@@ -95,7 +103,7 @@ func newEnrollmentError(method, path string, status int, body []byte) *Enrollmen
 	var details []string
 	for _, item := range res.Errors {
 		if e.Code == "" {
-			e.Code = item.Code
+			e.Code = sanitizeText(item.Code)
 		}
 		if e.Identifiers == nil {
 			e.Identifiers = item.Meta.Identifiers
@@ -104,6 +112,31 @@ func newEnrollmentError(method, path string, status int, body []byte) *Enrollmen
 			details = append(details, item.Detail)
 		}
 	}
-	e.Detail = strings.Join(details, "; ")
+	e.Detail = sanitizeText(strings.Join(details, "; "))
 	return e
+}
+
+// sanitizeText makes server-supplied text safe to print: it strips ANSI escape sequences, control
+// characters and bidirectional overrides, collapses whitespace, and cuts the text to maxTextBytes
+// on a rune boundary.
+func sanitizeText(text string) string {
+	text = ansiEscape.ReplaceAllString(text, "")
+	text = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			return ' '
+		case unicode.Is(unicode.Cc, r) || r == '\u2028' || r == '\u2029' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069'):
+			return -1
+		}
+		return r
+	}, text)
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) <= maxTextBytes {
+		return text
+	}
+	cut := maxTextBytes
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }

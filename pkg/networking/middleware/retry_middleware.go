@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -132,6 +133,15 @@ func isSuccessResponse(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
+type noRetryKey struct{}
+
+// WithoutRetry marks the requests made with the returned context as not to be retried, whatever
+// the configuration says. Use it for a request the server accepts only once, such as one that
+// spends a single-use token: a retry after the server consumed the token can't succeed.
+func WithoutRetry(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noRetryKey{}, true)
+}
+
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -186,6 +196,10 @@ func handleSuccessfulJSONResponse(response *http.Response) error {
 }
 
 func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) { //nolint:gocyclo // complexity from sequential retry logic with per-status-code overrides
+	if req.Context().Value(noRetryKey{}) != nil {
+		return rm.nextRoundtripper.RoundTrip(req)
+	}
+
 	var finalResponse *http.Response
 	var finalError error
 	var maxAttempts = defaultMaxAttemptsCount
