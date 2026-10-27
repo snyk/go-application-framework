@@ -648,6 +648,33 @@ func TestAcceptance_HardwareSerialIsReadOnceForASuppliedMachine(t *testing.T) {
 	require.Equal(t, 1, reads)
 }
 
+func TestAcceptance_SuppliedIDStillReturnsHostnameAndSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	serialReads := 0
+	hostnameReads := 0
+	countSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) {
+			serialReads++
+			return "C02Q7KHTGFWF", nil
+		}
+	}
+	countHostname := func(o *resolveOptions) {
+		o.hostname = func() (string, error) {
+			hostnameReads++
+			return "host.example", nil
+		}
+	}
+	config := m.newRun(countSerial, countHostname)
+
+	machine, err := runtimeInfoOf(config).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, runtimeinfo.Machine{ID: "supplied-id", Hostname: "host.example", SerialNumber: "C02Q7KHTGFWF"}, machine)
+	require.Equal(t, 1, serialReads)
+	require.Equal(t, 1, hostnameReads)
+}
+
 func TestAcceptance_InvalidHardwareSerialReasonIsLoggedAtDebug(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.serial = "C02/Q7KHTGFWF"
