@@ -7,8 +7,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,6 +30,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -57,6 +60,7 @@ func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv 
 	server := enrollmenttest.NewServer(t)
 	config := openFileBackedConfig()
 	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	engine := workflow.NewWorkFlowEngine(config)
 	if withRuntimeInfo {
@@ -455,6 +459,62 @@ func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDevi
 	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
 }
 
+func (e *enrollEnv) expireStoredAccessToken(t *testing.T) {
+	t.Helper()
+	var path string
+	for _, file := range filesUnder(t, e.home) {
+		if filepath.Base(file) == "snyk.json" {
+			path = file
+		}
+	}
+	require.NotEmpty(t, path, "the configuration file")
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(content, &values))
+	var token map[string]any
+	tokenJSON, ok := values[auth.CONFIG_KEY_OAUTH_TOKEN].(string)
+	require.True(t, ok, "stored oauth token is not a string")
+	require.NoError(t, json.Unmarshal([]byte(tokenJSON), &token))
+	token["expiry"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	expired, err := json.Marshal(token)
+	require.NoError(t, err)
+	values[auth.CONFIG_KEY_OAUTH_TOKEN] = string(expired)
+	content, err = json.Marshal(values)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+}
+
+func (e *enrollEnv) whoamiInNewProcess(t *testing.T) int {
+	t.Helper()
+	config := openFileBackedConfig()
+	config.Set(configuration.API_URL, e.server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	engine := workflow.NewWorkFlowEngine(config)
+	require.NoError(t, engine.Init())
+	res, err := engine.GetNetworkAccess().GetHttpClient().Get(e.server.URL + "/rest/whoami")
+	require.NoError(t, err)
+	_ = res.Body.Close()
+	return res.StatusCode
+}
+
+func Test_machineEnroll_enrolledMachineKeepsAuthenticatingAfterItsAccessTokenExpires(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	require.Equal(t, 1, env.server.TokenRequests)
+	env.expireStoredAccessToken(t)
+
+	assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+
+	assert.Equal(t, 2, env.server.TokenRequests, "a second token was minted")
+	assert.Equal(t, 1, env.server.EnrollmentRequests(), "the enrollment endpoint was not called again")
+	bearerTokens := env.server.BearerTokens()
+	require.Len(t, bearerTokens, 2)
+	assert.NotEqual(t, bearerTokens[0], bearerTokens[1], "the request after expiry carries the newly minted token")
+}
+
 // cliErrorHandler records each error it gets and returns it unchanged, as the CLI's handler does.
 type cliErrorHandler struct {
 	mu   sync.Mutex
@@ -576,4 +636,130 @@ func Test_machineEnroll_keepsTheHostErrorHandlerOnTheInvocationNetworkAccess(t *
 	var catalogErr snyk_errors.Error
 	require.ErrorAs(t, err, &catalogErr, "the host still maps a later request in the same invocation")
 	assert.Len(t, handler.handled(), 1)
+}
+
+func (e *enrollEnv) enrollMachine(t *testing.T) machinecredential.Credential {
+	t.Helper()
+	require.NoError(t, e.enroll(map[string]string{flagDeviceToken: e.server.IssueDeviceToken(e.server.RegisterMachine("SERIAL-1"))}))
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	return credential
+}
+
+func (e *enrollEnv) whoami(t *testing.T, authorization string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, e.config.GetString(configuration.API_URL)+"/rest/whoami", http.NoBody)
+	require.NoError(t, err)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	res, err := e.engine.GetNetworkAccess().GetHttpClient().Do(req)
+	if res != nil {
+		_ = res.Body.Close()
+	}
+	return res, err
+}
+
+// switchEnvironment changes the API URL and drops the cached access token, as `snyk config environment` does.
+func (e *enrollEnv) switchEnvironment(apiURL string) {
+	e.config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	e.config.PersistInStorage(configuration.API_URL)
+	e.config.Set(configuration.API_URL, apiURL)
+}
+
+func Test_machineEnroll_machineThatCannotAuthenticateSendsNoCredentials(t *testing.T) {
+	failures := map[string]struct {
+		breakAuthentication     func(t *testing.T, env *enrollEnv, credential machinecredential.Credential)
+		rejectedByTokenEndpoint bool
+	}{
+		"unreadable stored credential": {breakAuthentication: func(t *testing.T, env *enrollEnv, _ machinecredential.Credential) {
+			t.Helper()
+			env.config.PersistInStorage(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
+			env.config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+			_, err := machinecredential.Load(openFileBackedConfig())
+			require.Error(t, err, "the stored credential is unreadable")
+			require.NotErrorIs(t, err, machinecredential.ErrNotEnrolled)
+		}},
+		"revoked client": {rejectedByTokenEndpoint: true, breakAuthentication: func(t *testing.T, env *enrollEnv, credential machinecredential.Credential) {
+			t.Helper()
+			env.server.RevokeClient(credential.ClientID)
+		}},
+	}
+	for _, withHandler := range []bool{false, true} {
+		for name, failure := range failures {
+			t.Run(fmt.Sprintf("%s, CLI error handler %t", name, withHandler), func(t *testing.T) {
+				env := newEnrollEnv(t)
+				if withHandler {
+					env.installCLIErrorHandler()
+				}
+				credential := env.enrollMachine(t)
+				failure.breakAuthentication(t, env, credential)
+
+				_, err := env.whoami(t, "token 00000000-0000-0000-0000-000000000000")
+
+				var machineErr *machinecredential.AuthenticationError
+				require.ErrorAs(t, err, &machineErr)
+				assert.ErrorContains(t, err, "machine authentication failed")
+				if failure.rejectedByTokenEndpoint {
+					assert.ErrorContains(t, err, env.server.URL+"/oauth2/token")
+					assert.ErrorContains(t, err, credential.ClientID)
+					assert.ErrorContains(t, err, "enrolled in another region or its client was revoked")
+				}
+				assert.NotContains(t, err.Error(), "snyk auth")
+				var catalogErr snyk_errors.Error
+				assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+				assert.Empty(t, env.server.CredentialHeaders(), "no request carried credentials")
+			})
+		}
+	}
+}
+
+func Test_machineEnroll_withoutMachineCredentialACallerSetHeaderStillGoesOut(t *testing.T) {
+	env := newEnrollEnv(t)
+
+	res, err := env.whoami(t, "token 00000000-0000-0000-0000-000000000000")
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "the fake does not know the caller's token")
+	assert.Equal(t, []string{"Authorization"}, env.server.CredentialHeaders())
+}
+
+func Test_machineEnroll_otherRegionNamesItsTokenEndpointAndKeepsTheCredential(t *testing.T) {
+	for _, withHandler := range []bool{false, true} {
+		t.Run(fmt.Sprintf("CLI error handler %t", withHandler), func(t *testing.T) {
+			env := newEnrollEnv(t)
+			if withHandler {
+				env.installCLIErrorHandler()
+			}
+			credential := env.enrollMachine(t)
+			res, err := env.whoami(t, "")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, res.StatusCode)
+			otherRegion := enrollmenttest.NewServer(t)
+
+			env.switchEnvironment(otherRegion.URL)
+			_, err = env.whoami(t, "")
+
+			var machineErr *machinecredential.AuthenticationError
+			require.ErrorAs(t, err, &machineErr)
+			assert.ErrorContains(t, err, otherRegion.URL+"/oauth2/token")
+			assert.ErrorContains(t, err, credential.ClientID)
+			assert.ErrorContains(t, err, "enrolled in another region or its client was revoked")
+			assert.ErrorContains(t, err, "`snyk config environment`")
+			assert.NotContains(t, err.Error(), "snyk auth")
+			var catalogErr snyk_errors.Error
+			assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+			assert.Empty(t, otherRegion.CredentialHeaders())
+			stored, err := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, err)
+			assert.Equal(t, credential.ClientID, stored.ClientID, "the credential is still stored")
+
+			env.switchEnvironment(env.server.URL)
+			res, err = env.whoami(t, "")
+
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, res.StatusCode)
+			assert.Equal(t, 1, env.server.EnrollmentRequests(), "authenticating again needed no new enrollment")
+		})
+	}
 }

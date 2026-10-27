@@ -21,9 +21,11 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -578,6 +580,44 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
+	err := o.addAuthenticationHeader(request)
+	if err != nil && o.assertionProvider != nil {
+		return o.machineAuthenticationError(err)
+	}
+	return err
+}
+
+func (o *oAuth2Authenticator) machineAuthenticationError(err error) error {
+	tokenURL := o.oauthConfig.Endpoint.TokenURL
+	status := tokenEndpointStatus(err)
+	if errors.As(err, new(snyk_errors.Error)) {
+		// Hosts show a catalog error's detail, such as "Use `snyk auth`", in place of this message.
+		err = errors.New(err.Error())
+	}
+	if status == http.StatusBadRequest || status == http.StatusUnauthorized {
+		err = fmt.Errorf("machine authentication failed: the token endpoint %s rejected client %s: %w. "+
+			"This machine is enrolled in another region or its client was revoked. "+
+			"Switch back to its region with `snyk config environment`, or enroll this machine again", tokenURL, o.assertionClientID, err)
+	} else {
+		err = fmt.Errorf("machine authentication failed for client %s (token endpoint %s): %w", o.assertionClientID, tokenURL, err)
+	}
+	return &machinecredential.AuthenticationError{Err: err}
+}
+
+// tokenEndpointStatus also reads the catalog error that a host's error handler returns in place of oauth2's.
+func tokenEndpointStatus(err error) int {
+	var retrieveErr *oauth2.RetrieveError
+	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
+		return retrieveErr.Response.StatusCode
+	}
+	var catalogErr snyk_errors.Error
+	if errors.As(err, &catalogErr) {
+		return catalogErr.StatusCode
+	}
+	return 0
+}
+
+func (o *oAuth2Authenticator) addAuthenticationHeader(request *http.Request) error {
 	if request == nil {
 		return fmt.Errorf("request must not be nil")
 	}

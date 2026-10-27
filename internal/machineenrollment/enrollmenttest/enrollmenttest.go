@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -72,6 +73,7 @@ type Server struct {
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
 	credentialHeaders []string
+	bearerTokens      []string
 	enrollAttempts    int
 	machines          []*machine
 	deviceTokens      map[string]*deviceToken
@@ -120,6 +122,9 @@ func (s *Server) recordCredentialHeaders(r *http.Request) {
 			s.credentialHeaders = append(s.credentialHeaders, name)
 		}
 	}
+	if bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); found {
+		s.bearerTokens = append(s.bearerTokens, bearer)
+	}
 }
 
 // CredentialHeaders returns the names of the credential headers (Authorization, Session-Token)
@@ -128,6 +133,14 @@ func (s *Server) CredentialHeaders() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.credentialHeaders)
+}
+
+// BearerTokens returns the bearer tokens that requests carried in their Authorization header, in
+// the order they arrived.
+func (s *Server) BearerTokens() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.bearerTokens)
 }
 
 // SetErrorTitles sets whether enrollment error responses carry a JSON:API title.
@@ -140,6 +153,15 @@ func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = key
+}
+
+// RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
+// it, as an admin revoking the client does.
+func (s *Server) RevokeClient(clientID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.clients, clientID)
+	maps.DeleteFunc(s.tokens, func(_, owner string) bool { return owner == clientID })
 }
 
 // RegisterMachine registers a machine with serial numbers, as an admin does, and returns its id.
