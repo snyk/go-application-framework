@@ -3,14 +3,20 @@ package localworkflows
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -76,12 +82,16 @@ func openFileBackedConfig() configuration.Configuration {
 }
 
 func (e *enrollEnv) enroll(flags map[string]string) error {
+	_, err := e.enrollForData(flags)
+	return err
+}
+
+func (e *enrollEnv) enrollForData(flags map[string]string) ([]workflow.Data, error) {
 	invokeConfig := e.config.Clone()
 	for name, value := range flags {
 		invokeConfig.Set(name, value)
 	}
-	_, err := e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
-	return err
+	return e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
 }
 
 func requestToken(t *testing.T, server *enrollmenttest.Server, credential machinecredential.Credential) *http.Response {
@@ -131,6 +141,71 @@ func Test_machineEnroll_installerEnrollsWithDeviceToken(t *testing.T) {
 	assert.Equal(t, 1, env.server.ClientCount())
 }
 
+func Test_machineEnroll_installerGetsTheIdentifiersButNeverTheKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		flags       map[string]string
+		contentType string
+	}{
+		{name: "a summary by default", contentType: "text/plain"},
+		{name: "JSON with --json", flags: map[string]string{jsonFlag: "true"}, contentType: "application/json"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			machineID := env.server.RegisterMachine("SERIAL-1")
+			flags := map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}
+			maps.Copy(flags, tt.flags)
+
+			output, err := env.enrollForData(flags)
+
+			require.NoError(t, err)
+			require.Len(t, output, 1)
+			assert.Equal(t, tt.contentType, output[0].GetContentType())
+			payload, ok := output[0].GetPayload().([]byte)
+			require.True(t, ok, "the payload is bytes")
+			credential, err := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, err)
+			identifiers := map[string]any{
+				"client_id":           credential.ClientID,
+				"enrolled_machine_id": machineID,
+				"key_id":              rfc7638Thumbprint(t, credential.Key),
+			}
+			if tt.contentType == "application/json" {
+				var fields map[string]any
+				require.NoError(t, json.Unmarshal(payload, &fields))
+				assert.Equal(t, identifiers, fields, "exactly the identifiers")
+			} else {
+				for _, identifier := range identifiers {
+					assert.Contains(t, string(payload), identifier)
+				}
+			}
+			keyPEM, err := machineenrollment.EncodeKeyPEM(credential.Key)
+			require.NoError(t, err)
+			for line := range strings.Lines(string(keyPEM)) {
+				if line = strings.TrimSpace(line); line != "" {
+					assert.NotContains(t, string(payload), line)
+				}
+			}
+		})
+	}
+}
+
+// rfc7638Thumbprint is computed from the canonical JWK, independently of the enrollment code.
+func rfc7638Thumbprint(t *testing.T, key crypto.Signer) string {
+	t.Helper()
+	pub, ok := key.Public().(*rsa.PublicKey)
+	require.True(t, ok, "the client key is RSA")
+	canonical, err := json.Marshal(map[string]string{
+		"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes()),
+		"kty": "RSA",
+		"n":   base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
+	})
+	require.NoError(t, err)
+	sum := sha256.Sum256(canonical)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
 func (e *enrollEnv) setMachine(machine runtimeinfo.Machine) {
 	e.config.Set(configuration.MACHINE_ID, machine)
 }
@@ -178,11 +253,12 @@ func Test_machineEnroll_rejectedDeviceTokenLeavesTheStoredCredentialUntouched(t 
 	first, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 
-	err = env.enroll(map[string]string{flagDeviceToken: deviceToken})
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
 
 	var enrollmentErr *machineenrollment.EnrollmentError
 	require.ErrorAs(t, err, &enrollmentErr, "the service rejection is reported")
 	assert.Equal(t, http.StatusUnauthorized, enrollmentErr.Status)
+	assert.Nil(t, output, "a rejected enrollment yields no identifiers")
 	after, err := machinecredential.Load(openFileBackedConfig())
 	require.NoError(t, err)
 	assert.Equal(t, first.ClientID, after.ClientID)
@@ -276,9 +352,10 @@ func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
 	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
 	env.failWritesAfterEnrolling(t)
 
-	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
 
 	require.Error(t, err)
+	assert.Nil(t, output, "the error already names the client")
 	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
 	assert.Contains(t, err.Error(), "ask an admin to revoke the client")
 	assert.NotContains(t, err.Error(), "PRIVATE KEY")

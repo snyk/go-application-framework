@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,13 +33,13 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet(machineEnrollWorkflowName, pflag.ExitOnError)
 	flags.String(flagDeviceToken, "", "single-use device token issued for this machine")
 	flags.String(flagFleetKeyFile, "", "path to the PEM file of a fleet key registered for this machine")
+	flags.Bool(jsonFlag, false, "output the client id, enrolled machine id and key id in json format")
 
 	_, err := engine.Register(WORKFLOWID_MACHINE_ENROLL, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(flags)), machineEnrollEntryPoint)
 	return err
 }
 
-// machineEnrollEntryPoint enrolls this machine and stores its credential. It returns no data, as
-// the credential is a secret.
+// machineEnrollEntryPoint enrolls this machine and stores its credential; the private key never reaches the output.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
@@ -81,7 +82,25 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 			return nil, err
 		}
 	}
-	return nil, nil
+	return enrollmentData(enrollment, config.GetBool(jsonFlag))
+}
+
+func enrollmentData(enrollment machineenrollment.Enrollment, asJSON bool) ([]workflow.Data, error) {
+	contentType := "text/plain"
+	payload := fmt.Appendf(nil, "Enrolled machine %s as client %s with key %s", enrollment.MachineID, enrollment.ClientID, enrollment.KeyID)
+	if asJSON {
+		var err error
+		contentType = "application/json"
+		payload, err = json.Marshal(struct {
+			ClientID  string `json:"client_id"`
+			MachineID string `json:"enrolled_machine_id"`
+			KeyID     string `json:"key_id"`
+		}{ClientID: enrollment.ClientID, MachineID: enrollment.MachineID, KeyID: enrollment.KeyID})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_MACHINE_ENROLL, machineEnrollWorkflowName), contentType, payload)}, nil
 }
 
 func isEmptyStorage(storage configuration.Storage) bool {
