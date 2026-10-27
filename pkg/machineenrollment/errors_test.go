@@ -33,6 +33,27 @@ func TestNewEnrollmentErrorToleratesOtherBodies(t *testing.T) {
 	}
 }
 
+func TestKeyNotSavedErrorIdentifiesTheEnrolledClient(t *testing.T) {
+	cause := errors.New("failed replacing machine client key file: permission denied")
+	err := &KeyNotSavedError{
+		ClientID:  "client-9",
+		MachineID: "machine-9",
+		KeyPath:   "/tmp/key.pem.123.tmp",
+		DestPath:  "/tmp/key.pem",
+		Err:       cause,
+	}
+
+	assert.ErrorIs(t, err, ErrKeyNotSaved)
+	assert.ErrorIs(t, err, cause)
+	msg := err.Error()
+	assert.Contains(t, msg, "client_id client-9")
+	assert.Contains(t, msg, "machine-9")
+	assert.Contains(t, msg, "/tmp/key.pem.123.tmp")
+	assert.Contains(t, msg, CONFIG_KEY_CLIENT_ID+" to client-9")
+	assert.Contains(t, msg, CONFIG_KEY_MACHINE_ID+" to machine-9")
+	assert.Contains(t, msg, "do not enroll again")
+}
+
 func TestEnrollmentErrorWithoutACodeMatchesNoSentinel(t *testing.T) {
 	err := error(&EnrollmentError{Status: 401})
 	for _, target := range []error{ErrMachineNotRegistered, ErrIdentifiersAmbiguous, ErrMachineDeprovisioned, ErrMachineEnrolled} {

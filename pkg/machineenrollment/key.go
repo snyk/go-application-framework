@@ -44,19 +44,34 @@ func GenerateKey() (*rsa.PrivateKey, error) {
 
 // WriteKeyFile atomically replaces the key file at path with key, readable only by its owner.
 func WriteKeyFile(path string, key crypto.Signer) error {
+	tmp, err := stageKeyFile(path, key)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp) }()
+	return replaceKeyFile(tmp, path)
+}
+
+// stageKeyFile writes key to a new 0600 file in the same directory as path and returns that path.
+// The caller renames it onto path or removes it; this function does not.
+func stageKeyFile(path string, key crypto.Signer) (string, error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, keyDirMode); err != nil {
+		return "", fmt.Errorf("failed creating machine client key directory: %w", err)
+	}
+	return writeKeyTemp(dir, filepath.Base(path), key)
+}
+
+func writeKeyTemp(dir, base string, key crypto.Signer) (string, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("failed encoding machine client key: %w", err)
+		return "", fmt.Errorf("failed encoding machine client key: %w", err)
 	}
-	if err = os.MkdirAll(filepath.Dir(path), keyDirMode); err != nil {
-		return fmt.Errorf("failed creating machine client key directory: %w", err)
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	tmp, err := os.CreateTemp(dir, base+".*.tmp")
 	if err != nil {
-		return fmt.Errorf("failed creating machine client key file: %w", err)
+		return "", fmt.Errorf("failed creating machine client key file: %w", err)
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
+	tmpName := tmp.Name()
 
 	if err = tmp.Chmod(keyFileMode); err == nil {
 		err = pem.Encode(tmp, &pem.Block{Type: pemType, Bytes: der})
@@ -68,9 +83,14 @@ func WriteKeyFile(path string, key crypto.Signer) error {
 		err = closeErr
 	}
 	if err != nil {
-		return fmt.Errorf("failed writing machine client key file: %w", err)
+		_ = os.Remove(tmpName)
+		return "", fmt.Errorf("failed writing machine client key file: %w", err)
 	}
-	if err = os.Rename(tmp.Name(), path); err != nil {
+	return tmpName, nil
+}
+
+func replaceKeyFile(tmp, path string) error {
+	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("failed replacing machine client key file: %w", err)
 	}
 	return nil

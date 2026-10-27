@@ -2,12 +2,15 @@ package machineenrollment_test
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,6 +109,143 @@ func TestEnrollMachineReportsIdentifierSourceFailures(t *testing.T) {
 		machineenrollment.WithFleetKeyFile(fleetKeyFile), machineenrollment.WithIdentifierSource(source))
 
 	assert.ErrorIs(t, err, machineenrollment.ErrUnsupportedPlatform)
+}
+
+func TestEnrollMachineDoesNotCallServerWhenKeyCannotBeWritten(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	token := srv.IssueDeviceToken(srv.RegisterMachine())
+	parent := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o600))
+
+	var calls int
+	base := srv.Client().Transport
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return base.RoundTrip(r)
+	})}
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(parent, "key.pem"))
+
+	_, err := machineenrollment.EnrollMachine(context.Background(), config,
+		machineenrollment.WithDeviceToken(token), machineenrollment.WithHttpClient(client))
+
+	require.Error(t, err)
+	assert.Zero(t, calls, "a key that cannot be stored must not be sent to the enrollment service")
+	assert.Zero(t, srv.ClientCount())
+	assert.Empty(t, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+
+	enrolled, err := machineenrollment.EnrollWithDeviceToken(context.Background(), srv.Client(), srv.URL, token, time.Now())
+	require.NoError(t, err, "the device token is still unused")
+	assert.NotEmpty(t, enrolled.ClientID)
+}
+
+func TestEnrollMachineDoesNotStageKeyWhenJoinMaterialIsInvalid(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "nested", "key.pem")
+	config := configuration.NewInMemory()
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
+
+	_, err := machineenrollment.EnrollMachine(context.Background(), config, machineenrollment.WithDeviceToken("nope"))
+
+	assert.ErrorIs(t, err, machineenrollment.ErrMalformedDeviceToken)
+	_, statErr := os.Stat(filepath.Dir(keyFile))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func TestEnrollMachineRemovesStagedKeyWhenEnrollmentFails(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "key.pem")
+	existing := []byte("existing-key")
+	require.NoError(t, os.WriteFile(keyFile, existing, 0o600))
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
+
+	_, err := machineenrollment.EnrollMachine(context.Background(), config, machineenrollment.WithDeviceToken("sdt_not-issued"))
+
+	require.Error(t, err)
+	var enrollErr *machineenrollment.EnrollmentError
+	require.ErrorAs(t, err, &enrollErr)
+	assert.Zero(t, srv.ClientCount())
+	assert.Empty(t, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+	got, readErr := os.ReadFile(keyFile)
+	require.NoError(t, readErr)
+	assert.Equal(t, existing, got)
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Len(t, entries, 1)
+}
+
+func TestEnrollMachineRemovesStagedKeyWhenFleetKeyEnrollIsRejected(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	machineID := srv.RegisterMachine("SERIAL-1")
+	_, err := machineenrollment.EnrollWithDeviceToken(context.Background(), srv.Client(), srv.URL, srv.IssueDeviceToken(machineID), time.Now())
+	require.NoError(t, err)
+
+	fleetKey := newFleetKey(t)
+	srv.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	der, err := x509.MarshalPKCS8PrivateKey(fleetKey)
+	require.NoError(t, err)
+	fleetKeyFile := filepath.Join(t.TempDir(), "fleet.pem")
+	require.NoError(t, os.WriteFile(fleetKeyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600))
+
+	dir := t.TempDir()
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, filepath.Join(dir, "key.pem"))
+	source := func(context.Context) ([]machineenrollment.Identifier, error) { return serials("SERIAL-1"), nil }
+
+	_, err = machineenrollment.EnrollMachine(context.Background(), config,
+		machineenrollment.WithFleetKeyFile(fleetKeyFile), machineenrollment.WithIdentifierSource(source))
+
+	assert.ErrorIs(t, err, machineenrollment.ErrMachineEnrolled)
+	assert.Equal(t, 1, srv.ClientCount(), "the rejected enroll must not bind another client")
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries)
+	assert.Empty(t, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+}
+
+func TestEnrollMachineReportsWhereTheKeyIsWhenItCannotBeMoved(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+	token := srv.IssueDeviceToken(srv.RegisterMachine())
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "key.pem")
+	require.NoError(t, os.Mkdir(keyFile, 0o700))
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, srv.URL)
+	config.Set(machineenrollment.CONFIG_KEY_CLIENT_KEY_FILE, keyFile)
+
+	_, err := machineenrollment.EnrollMachine(context.Background(), config, machineenrollment.WithDeviceToken(token))
+
+	var saved *machineenrollment.KeyNotSavedError
+	require.ErrorAs(t, err, &saved)
+	assert.ErrorIs(t, err, machineenrollment.ErrKeyNotSaved)
+	assert.Equal(t, 1, srv.ClientCount())
+	assert.Equal(t, "client-1", saved.ClientID)
+	assert.Contains(t, err.Error(), saved.ClientID)
+	assert.Contains(t, err.Error(), "do not enroll again")
+	assert.Equal(t, keyFile, saved.DestPath)
+	info, statErr := os.Stat(keyFile)
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir(), "the blocked destination is left untouched")
+
+	stored, readErr := machineenrollment.ReadKeyFile(saved.KeyPath)
+	require.NoError(t, readErr)
+	pub, ok := stored.Public().(*rsa.PublicKey)
+	require.True(t, ok)
+	assert.True(t, pub.Equal(srv.ClientKey(saved.ClientID)))
+	assert.Empty(t, config.GetString(machineenrollment.CONFIG_KEY_CLIENT_ID))
+	if runtime.GOOS != "windows" {
+		staged, statErr := os.Stat(saved.KeyPath)
+		require.NoError(t, statErr)
+		assert.Equal(t, os.FileMode(0o600), staged.Mode().Perm())
+	}
 }
 
 func TestEnrollMachineNeedsExactlyOneJoinMaterial(t *testing.T) {

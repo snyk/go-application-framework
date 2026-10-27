@@ -60,18 +60,25 @@ type Enrollment struct {
 // device identity, so it works on any platform, and it enrolls the machine even if it is enrolled
 // already. httpClient must not add authentication.
 func EnrollWithDeviceToken(ctx context.Context, httpClient *http.Client, apiURL, deviceToken string, now time.Time) (Enrollment, error) {
+	authorize, err := deviceTokenAuthorizer(deviceToken)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	return enroll(ctx, httpClient, apiURL, now, authorize)
+}
+
+// deviceTokenAuthorizer checks deviceToken locally. The token is a bearer secret that TLS and
+// single use protect, so it is sent as is instead of being signed into the assertion.
+func deviceTokenAuthorizer(deviceToken string) (enrollmentAuthorizer, error) {
 	if strings.HasPrefix(deviceToken, retiredJoinKeyPrefix) {
-		return Enrollment{}, ErrRetiredJoinKey
+		return nil, ErrRetiredJoinKey
 	}
 	if !strings.HasPrefix(deviceToken, DeviceTokenPrefix) || len(deviceToken) == len(DeviceTokenPrefix) {
-		return Enrollment{}, ErrMalformedDeviceToken
+		return nil, ErrMalformedDeviceToken
 	}
-
-	// The device token is a bearer secret that TLS and single use protect, so it is sent as is
-	// instead of being signed into the assertion.
-	return enroll(ctx, httpClient, apiURL, now, func(_ crypto.Signer, _ string) (string, string, error) {
+	return func(crypto.Signer, string) (string, string, error) {
 		return methodDeviceToken, deviceToken, nil
-	})
+	}, nil
 }
 
 // EnrollWithFleetKey enrolls this machine with a fleet key, the P-256 key an admin registered and
@@ -81,28 +88,42 @@ func EnrollWithDeviceToken(ctx context.Context, httpClient *http.Client, apiURL,
 // client key, but it enrolls only a machine that has no active client. httpClient must not add
 // authentication.
 func EnrollWithFleetKey(ctx context.Context, httpClient *http.Client, apiURL string, fleetKey *ecdsa.PrivateKey, identifiers []Identifier, now time.Time) (Enrollment, error) {
-	if err := validateIdentifiers(identifiers); err != nil {
+	authorize, err := fleetKeyAuthorizer(fleetKey, identifiers, now)
+	if err != nil {
 		return Enrollment{}, err
 	}
-	if fleetKey == nil || fleetKey.Curve != elliptic.P256() {
-		return Enrollment{}, errors.New("the fleet key must be a P-256 key")
-	}
-
-	return enroll(ctx, httpClient, apiURL, now, func(clientKey crypto.Signer, audience string) (string, string, error) {
-		authorization, err := fleetKeyAuthorization(fleetKey, clientKey, audience, identifiers, now)
-		return methodFleetKey, authorization, err
-	})
+	return enroll(ctx, httpClient, apiURL, now, authorize)
 }
 
-// enroll generates a client key and sends the enrollment that authorize makes for it. authorize
-// returns the enrollment method and the authorization it carries, given the client key and the
-// audience of the request.
-func enroll(ctx context.Context, httpClient *http.Client, apiURL string, now time.Time, authorize func(clientKey crypto.Signer, audience string) (method, authorization string, err error)) (Enrollment, error) {
+func fleetKeyAuthorizer(fleetKey *ecdsa.PrivateKey, identifiers []Identifier, now time.Time) (enrollmentAuthorizer, error) {
+	if err := validateIdentifiers(identifiers); err != nil {
+		return nil, err
+	}
+	if fleetKey == nil || fleetKey.Curve != elliptic.P256() {
+		return nil, errors.New("the fleet key must be a P-256 key")
+	}
+	return func(clientKey crypto.Signer, audience string) (string, string, error) {
+		authorization, err := fleetKeyAuthorization(fleetKey, clientKey, audience, identifiers, now)
+		return methodFleetKey, authorization, err
+	}, nil
+}
+
+// enrollmentAuthorizer returns the enrollment method and the authorization it carries, given the
+// client key and the audience of the request.
+type enrollmentAuthorizer func(clientKey crypto.Signer, audience string) (method, authorization string, err error)
+
+// enroll generates a client key and sends the enrollment that authorize makes for it.
+func enroll(ctx context.Context, httpClient *http.Client, apiURL string, now time.Time, authorize enrollmentAuthorizer) (Enrollment, error) {
 	key, err := GenerateKey()
 	if err != nil {
 		return Enrollment{}, err
 	}
+	return enrollWithClientKey(ctx, httpClient, apiURL, key, now, authorize)
+}
 
+// enrollWithClientKey sends the enrollment for an existing client key. The caller owns key and is
+// responsible for having stored it before this call when a failed save must not reach the server.
+func enrollWithClientKey(ctx context.Context, httpClient *http.Client, apiURL string, key *rsa.PrivateKey, now time.Time, authorize enrollmentAuthorizer) (Enrollment, error) {
 	url := apiURL + enrollmentsPath
 	assertion, err := keyAssertion(key, url, now)
 	if err != nil {

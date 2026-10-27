@@ -2,6 +2,7 @@ package machineenrollment
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -35,6 +36,40 @@ var hints = map[string]string{
 	CodeMachineDeprovisioned: "the machine is retired and can't enroll again",
 	CodeMachineEnrolled:      "the machine is enrolled already: ask an admin for a device token to enroll it again",
 }
+
+// ErrKeyNotSaved matches KeyNotSavedError with errors.Is.
+var ErrKeyNotSaved = errors.New("machine was enrolled but the client key could not be saved")
+
+// KeyNotSavedError means the enrollment service has already bound a client to this machine's key,
+// but the key could not be moved to DestPath. The private key is still on disk at KeyPath.
+// Move that file to DestPath and set the machine client configuration from ClientID and MachineID.
+// Do not enroll again: a device token is already spent, and a fleet key enroll fails with
+// ErrMachineEnrolled.
+type KeyNotSavedError struct {
+	ClientID  string
+	MachineID string
+	// KeyPath is where the private key was written.
+	KeyPath string
+	// DestPath is the configured path the key was meant to occupy.
+	DestPath string
+	Err      error
+}
+
+// Error names the enrolled client and where to find the key.
+func (e *KeyNotSavedError) Error() string {
+	return fmt.Sprintf(
+		"machine %s was enrolled (client_id %s) but the client key could not be saved to %s: %v; "+
+			"the key is at %s: move it to %s, set %s to %s, %s to that path and %s to %s, and do not enroll again",
+		e.MachineID, e.ClientID, e.DestPath, e.Err, e.KeyPath, e.DestPath,
+		CONFIG_KEY_CLIENT_ID, e.ClientID, CONFIG_KEY_CLIENT_KEY_FILE, CONFIG_KEY_MACHINE_ID, e.MachineID,
+	)
+}
+
+// Unwrap returns the error from moving the key into place.
+func (e *KeyNotSavedError) Unwrap() error { return e.Err }
+
+// Is reports a match for ErrKeyNotSaved.
+func (e *KeyNotSavedError) Is(target error) bool { return target == ErrKeyNotSaved }
 
 // EnrollmentError is an error response of the enrollment service. Match one of the typed
 // errors, such as ErrMachineEnrolled, with errors.Is, or read the status and code with errors.As.
