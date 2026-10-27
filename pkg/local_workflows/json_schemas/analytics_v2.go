@@ -107,6 +107,27 @@ const AnalyticsV2EventSchema = `{
           "type": "object",
           "description": "Optional additional extension.\n\nOnly strings, integers, and boolean values are allowed.\n",
           "additionalProperties": true
+        },
+        "persona": {
+          "$ref": "#/schemas/Persona"
+        }
+      }
+    },
+    "Persona": {
+      "type": "object",
+      "description": "The agent context under which the interaction ran.",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "agent_version": {
+          "type": "string"
+        },
+        "interactive": {
+          "type": "boolean"
+        },
+        "interactive_mode": {
+          "type": "string"
         }
       }
     },
@@ -127,6 +148,9 @@ const AnalyticsV2EventSchema = `{
         },
         "performance": {
           "$ref": "#/schemas/Performance"
+        },
+        "machine_id": {
+          "type": "string"
         }
       }
     },
@@ -156,6 +180,14 @@ const AnalyticsV2EventSchema = `{
         "code": {
           "type": "string",
           "description": "The HTTP specific error code."
+        },
+        "url": {
+          "type": "string",
+          "description": "The URL or path that produced the error."
+        },
+        "extension": {
+          "type": "string",
+          "description": "The name of the extension that produced the error."
         }
       }
     },
@@ -220,6 +252,34 @@ const AnalyticsV2EventSchema = `{
         },
         "arch": {
           "type": "string"
+        },
+        "configuration": {
+          "$ref": "#/schemas/PlatformConfiguration"
+        },
+        "osname": {
+          "type": "string",
+          "description": "The operating system name and version."
+        }
+      }
+    },
+    "PlatformConfiguration": {
+      "type": "object",
+      "description": "Client network and security configuration values.",
+      "properties": {
+        "extra_ca_certs": {
+          "type": "boolean"
+        },
+        "fips": {
+          "type": "boolean"
+        },
+        "insecure_https": {
+          "type": "boolean"
+        },
+        "network_request_attempts": {
+          "type": "integer"
+        },
+        "proxy": {
+          "type": "boolean"
         }
       }
     },

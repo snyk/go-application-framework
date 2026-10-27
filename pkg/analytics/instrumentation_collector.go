@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os/user"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
-	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-03-07"
+	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -67,6 +69,8 @@ type instrumentationCollectorImpl struct {
 	testSummary         json_schemas.TestSummary
 	targetId            string
 	instrumentationErr  []error
+	personaMu           sync.Mutex
+	persona             *Persona
 	extensionMu         sync.Mutex
 	extension           map[string]interface{}
 }
@@ -174,12 +178,32 @@ func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...seria
 func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *serializeOptions) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
+	if a.Interaction.Errors != nil && len(*a.Interaction.Errors) > 0 {
+		cfg := options.cfg
+		if cfg == nil {
+			cfg = configuration.NewWithOpts()
+		}
+		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(cfg))
+		a.Interaction.Errors = &scrubbed
+	}
+
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: a,
 	}
 
 	return ic.sanitizeExtensionData(options, d)
+}
+
+func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) []api.InteractionError {
+	scrubbed := slices.Clone(errs)
+	for i, e := range scrubbed {
+		if e.Url != nil {
+			url := string(logging.ScrubValue([]byte(*e.Url), dict))
+			scrubbed[i].Url = &url
+		}
+	}
+	return scrubbed
 }
 
 // Since the `extension` attribute in the analytics payload is a value any
@@ -191,9 +215,13 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
 	// does whole-string literal replacement, so running it over raw JSON would let a redacted
 	// value collide with an unrelated field that happens to contain the same substring.
-	if options.cfg != nil && d.Attributes.Interaction.Extension != nil {
-		scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, logging.GetScrubDictFromConfig(options.cfg))
-		d.Attributes.Interaction.Extension = &scrubbed
+	if options.cfg != nil {
+		dict := logging.GetScrubDictFromConfig(options.cfg)
+		if d.Attributes.Interaction.Extension != nil {
+			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, dict)
+			d.Attributes.Interaction.Extension = &scrubbed
+		}
+		scrubPersona(d.Attributes.Interaction.Persona, dict)
 	}
 
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
@@ -300,12 +328,17 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	extensionCopy := maps.Clone(ic.extension)
 	ic.extensionMu.Unlock()
 
+	ic.personaMu.Lock()
+	persona := toAPIPersona(ic.persona)
+	ic.personaMu.Unlock()
+
 	stage := toInteractionStage(ic.stage)
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),
 		Extension:   &extensionCopy,
 		Id:          ic.interactionId,
+		Persona:     persona,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       &stage,
 		Status:      string(ic.status),
@@ -387,7 +420,16 @@ func toInteractionError(e error) *api.InteractionError {
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
 		interactionError.Id = errorCatalogError.ErrorCode
 		interactionError.Code = &interactionErrorCode
+		interactionError.Url = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_REQUEST_PATH)
+		interactionError.Extension = nonEmptyStringMeta(errorCatalogError.Meta, constants.ERROR_META_KEY_EXTENSION_NAME)
 	}
 
 	return interactionError
+}
+
+func nonEmptyStringMeta(meta map[string]any, key string) *string {
+	if v, ok := meta[key].(string); ok && v != "" {
+		return &v
+	}
+	return nil
 }

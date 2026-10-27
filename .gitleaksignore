@@ -44,3 +44,5 @@ internal/presenters/testdata/with-ignores-with-status-underReview.json:generic-a
 internal/presenters/testdata/with-ignores-with-status-underReview.json:generic-api-key:224
 internal/presenters/testdata/with-ignores-with-status-underReview.json:generic-api-key:474
 internal/presenters/testdata/with-ignores-with-status-underReview.json:generic-api-key:539
+pkg/analytics/instrumentation_collector_test.go:generic-api-key:280
+pkg/analytics/instrumentation_collector_test.go:generic-api-key:287
