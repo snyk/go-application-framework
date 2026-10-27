@@ -247,14 +247,14 @@ func (w *ruleWalker) containsTrackedFiles(dir string) bool {
 func (w *ruleWalker) loadTrackedDirs() {
 	w.trackedDirsLoaded = true
 
-	tracked, ok := w.filter.loadTrackedPaths()
+	trackedFiles, ok := w.filter.loadTrackedFiles()
 	if !ok {
 		return
 	}
 
-	w.trackedRepoRoot = tracked.repoRoot
+	w.trackedRepoRoot = trackedFiles.repoRoot
 	w.trackedDirs = map[string]struct{}{}
-	for file := range tracked.files {
+	for file := range trackedFiles.paths {
 		for dir := path.Dir(file); dir != "." && dir != "/"; dir = path.Dir(dir) {
 			if _, known := w.trackedDirs[dir]; known {
 				break
