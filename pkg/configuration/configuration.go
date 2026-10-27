@@ -146,6 +146,11 @@ func determineBasePath() string {
 	return result
 }
 
+// DefaultStorageDir returns the directory that holds the default configuration file.
+func DefaultStorageDir() string {
+	return determineBasePath()
+}
+
 // CreateConfigurationFile creates a configuration file with the given name.
 func CreateConfigurationFile(filename string) (string, error) {
 	configPath := determineBasePath()
