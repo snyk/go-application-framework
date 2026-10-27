@@ -82,10 +82,8 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
-		localNetworkStack := engine.GetNetworkAccess().Clone()
-		localNetworkStack.SetConfiguration(c)
 		url := c.GetString(configuration.API_URL)
-		client := localNetworkStack.GetHttpClient()
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		apiClient := apiClientFactory(url, client)
 		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
@@ -105,13 +103,21 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	if err != nil {
 		logger.Print("Failed to add dependency for ORGANIZATION:", err)
 	}
+	// the organization is looked up with these credentials, so a clone changing them must not reuse a cached value
+	for _, credentialKey := range []string{configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN} {
+		err = config.AddKeyDependency(configuration.ORGANIZATION, credentialKey)
+		if err != nil {
+			logger.Print("Failed to add dependency for ORGANIZATION:", err)
+		}
+	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
-		client := engine.GetNetworkAccess().GetHttpClient()
+	callback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// network access and API url follow the configuration the value is resolved on, so that a clone's
+		// own credentials and host are used.
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		instrumentation := newInstrumentationRecorder(engine, logger)
 		instrumentation.addExtension(orgLookupSourceKey, orgLookupDefault)
-		url := config.GetString(configuration.API_URL)
+		url := c.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
 		if existingValue != nil && ok && len(existingString) > 0 {
@@ -228,9 +234,8 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -249,7 +254,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 			return existingValue, nil
 		}
 
-		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
+		tmpDir := pkg_utils.GetTemporaryDirectory(c.GetString(configuration.CACHE_PATH), version)
 		err := pkg_utils.CreateAllDirectories(tmpDir, version)
 		if err != nil {
 			logger.Err(err)
@@ -368,7 +373,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
+	err = config.AddKeyDependency(configuration.TEMP_DIR_PATH, configuration.CACHE_PATH)
+	if err != nil {
+		logger.Print("Failed to add dependency for TEMP_DIR_PATH:", err)
+	}
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, logger))
 
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 
@@ -403,10 +412,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
 	}
 
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
-			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
+			return api.IsFedramp(c.GetString(configuration.API_URL)), nil
 		} else {
 			return existingValue, nil
 		}
@@ -414,7 +422,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
-	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
+	err = config.AddKeyDependency(configuration.CUSTOM_CONFIG_FILES, "configfile")
+	if err != nil {
+		logger.Print("Failed to add dependency for CUSTOM_CONFIG_FILES:", err)
+	}
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles())
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
 	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
@@ -425,9 +437,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 }
 
-func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+func customConfigFiles() configuration.DefaultValueFunction {
+	return func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:
@@ -440,7 +451,7 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 		files = append(files, ".snyk.env."+runtime.GOOS)
 		files = append(files, ".envrc."+runtime.GOOS)
 
-		configFile := config.GetString("configfile")
+		configFile := c.GetString("configfile")
 		if configFile != "" {
 			files = append(files, configFile)
 		}
