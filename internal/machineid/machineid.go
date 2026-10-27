@@ -276,7 +276,7 @@ func (r *resolver) resolveFromDisk() (runtimeinfo.Machine, error) {
 			// different id is replaced by the serial, the same id only refreshes the per-user copy.
 			existing, sharedReadErr := readSharedFile(paths, logger)
 			if existing == nil {
-				_, failures := storeSharedFileID(paths, hw.serial, string(sourceSerial), writer, logger)
+				_, failures := storeSharedFileID(paths, hw.serial, string(sourceSerial), writer, true, logger)
 				for _, f := range failures {
 					logSerialStoreFailure(logger, f.err, f.path, "machine id: serial number could not be stored in the shared file, using it directly", f.path == paths.machineWide)
 				}
