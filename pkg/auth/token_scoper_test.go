@@ -190,7 +190,14 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte(tt.body))
+				// The client closes the connection once it has read maxErrorResponseBytes,
+				// so this write may fail partway. By then at least that many bytes were sent.
+				n, err := w.Write([]byte(tt.body))
+				if err != nil {
+					assert.GreaterOrEqual(t, n, maxErrorResponseBytes, "write error: %v", err)
+				} else {
+					assert.Equal(t, len(tt.body), n)
+				}
 			}))
 			defer server.Close()
 
@@ -201,6 +208,7 @@ func Test_bearerTokenScoperImpl_GetToken_UnparseableErrorBodyStoresNothing(t *te
 			catalogErr := catalogErrorOf(t, err)
 			assert.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
 			assert.Empty(t, catalogErr.Meta)
+			assert.NoError(t, catalogErr.Cause)
 			requireNoSecretLeak(t, err, testSubjectToken)
 		})
 	}
