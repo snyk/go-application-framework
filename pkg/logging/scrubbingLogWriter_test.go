@@ -1399,3 +1399,50 @@ func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t 
 
 	assert.Equal(t, "a banana", scrubbed)
 }
+
+func TestScrubbingWriter_JSONRedactionBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		name, input, expected, secret, term, pattern string
+	}{
+		{name: "newline escape", input: `{"message":"hello\nworld","after":"keepme"}`, term: "nworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "repeated escapes", input: `{"message":"\nworld \nworld","after":"keepme"}`, term: "nworld", expected: `{"message":"*** ***","after":"keepme"}`},
+		{name: "adjacent backslash secrets", input: `{"message":"\\","after":"keepme"}`, secret: `\`, expected: `{"message":"******","after":"keepme"}`},
+		{name: "tab escape", input: `{"message":"hello\tworld","after":"keepme"}`, term: "tworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "static term at escape", input: `{"message":"hello\nworld","after":"keepme"}`, secret: "nworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "escaped sensitive value", input: `{"token":"abc\"example","after":"keepme"}`, expected: `{"token":"***","after":"keepme"}`},
+		{name: "object sensitive value", input: `{"u":{"p":["secret123"]},"after":"keepme"}`, expected: `{"u":"***","after":"keepme"}`},
+		{name: "array sensitive value", input: `{"p":["secret123",2],"after":"keepme"}`, expected: `{"p":"***","after":"keepme"}`},
+		{name: "structured capture never shrinks", input: `{"data":[1],"ordinary":"hunter2"}`, pattern: `(\[1\],"ordinary":"hunter2")`, expected: `{"data":"***"}`},
+		{name: "contextual custom regex", input: `{"credential":"secret123","after":"secret123"}`, pattern: `"credential":"([^"]+)"`, expected: `{"credential":"***","after":"secret123"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, level := range []bool{false, true} {
+				t.Run(fmt.Sprintf("WriteLevel=%v", level), func(t *testing.T) {
+					config := configuration.NewInMemory()
+					config.Set(configuration.AUTHENTICATION_TOKEN, test.secret)
+					var output bytes.Buffer
+					writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+					if test.term != "" {
+						writer.(ScrubbingLogWriter).AddTermsToReplace([]string{test.term})
+					}
+					if test.pattern != "" {
+						writer.(ScrubbingLogWriter).AddTerm(test.pattern, 1)
+					}
+					var n int
+					var err error
+					if level {
+						n, err = writer.WriteLevel(zerolog.DebugLevel, []byte(test.input))
+					} else {
+						n, err = writer.Write([]byte(test.input))
+					}
+					require.NoError(t, err)
+					require.Equal(t, len(test.input), n)
+					require.Equal(t, test.expected, output.String())
+					var console bytes.Buffer
+					_, err = (zerolog.ConsoleWriter{Out: &console}).Write(output.Bytes())
+					require.NoError(t, err)
+				})
+			}
+		})
+	}
+}

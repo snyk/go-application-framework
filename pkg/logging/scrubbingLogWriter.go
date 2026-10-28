@@ -314,7 +314,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 
 	// JSON-formatted data, in general
 	kws := strings.Join(SENSITIVE_FIELD_NAMES, "|")
-	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>[^"]*)"`, kws)
+	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>(?:[^"\\]|\\.)*)"`, kws)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -495,7 +495,11 @@ func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 		}
 		qs = qs.advance(s[end:start])
 		quoted := qs.inQuotes
-		builder.WriteString(s[end:start])
+		prefixEnd := start
+		if quoted && qs.escaping && prefixEnd > end && !isJSONObjectKey(s, matchEnd) {
+			prefixEnd-- // Redact the whole escape instead of leaving a dangling backslash.
+		}
+		builder.WriteString(s[end:prefixEnd])
 		switch {
 		case quoted && isJSONObjectKey(s, matchEnd):
 			// Keep keys; redact values.
@@ -666,17 +670,28 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) strin
 		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
 			continue
 		}
-		qs = qs.advance(s[end:match[lo]])
-		builder.WriteString(s[end:match[lo]])
+		start, matchEnd := match[lo], match[hi]
+		if start < end {
+			continue // A prior structured capture already redacted this match.
+		}
+		qs = qs.advance(s[end:start])
+		builder.WriteString(s[end:start])
 		replacement := SANITIZE_REPLACEMENT_STRING
-		if !qs.inQuotes && !isFusedToAdjacentBareTokenChar(s, match[lo], match[hi]) &&
-			isBareJSONValueSpan(s, match[lo], match[hi]) &&
-			!strings.ContainsAny(s[match[lo]:match[hi]], " \t\n\r\"',") {
+		if !qs.inQuotes && (s[start] == '{' || s[start] == '[') && json.Valid([]byte(s)) {
+			decoder := json.NewDecoder(strings.NewReader(s[start:]))
+			var value json.RawMessage
+			if err := decoder.Decode(&value); err == nil {
+				matchEnd = max(matchEnd, start+int(decoder.InputOffset()))
+				replacement = `"` + replacement + `"`
+			}
+		} else if !qs.inQuotes && !isFusedToAdjacentBareTokenChar(s, start, matchEnd) &&
+			isBareJSONValueSpan(s, start, matchEnd) &&
+			!strings.ContainsAny(s[start:matchEnd], " \t\n\r\"',") {
 			replacement = `"` + replacement + `"`
 		}
 		builder.WriteString(replacement)
-		qs = qs.advance(s[match[lo]:match[hi]])
-		end = match[hi]
+		qs = qs.advance(s[start:matchEnd])
+		end = matchEnd
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
