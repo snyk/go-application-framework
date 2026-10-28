@@ -1,0 +1,1055 @@
+package localworkflows
+
+import (
+	"bytes"
+	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"maps"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
+
+type enrollEnv struct {
+	home   string
+	server *enrollmenttest.Server
+	engine workflow.Engine
+	config configuration.Configuration
+}
+
+func newEnrollEnv(t *testing.T) *enrollEnv {
+	t.Helper()
+	return newEnrollEnvWithRuntimeInfo(t, true)
+}
+
+func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	server := enrollmenttest.NewServer(t)
+	config := openFileBackedConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	engine := workflow.NewWorkFlowEngine(config)
+	if withRuntimeInfo {
+		engine.SetRuntimeInfo(runtimeinfo.New())
+	}
+	require.NoError(t, InitMachineEnrollWorkflow(engine))
+	require.NoError(t, engine.Init())
+	return &enrollEnv{home: home, server: server, engine: engine, config: config}
+}
+
+func openFileBackedConfig() configuration.Configuration {
+	return configuration.NewWithOpts(configuration.WithFiles("snyk"))
+}
+
+func (e *enrollEnv) enroll(flags map[string]string) error {
+	_, err := e.enrollForData(flags)
+	return err
+}
+
+func (e *enrollEnv) enrollForData(flags map[string]string) ([]workflow.Data, error) {
+	invokeConfig := e.config.Clone()
+	for name, value := range flags {
+		invokeConfig.Set(name, value)
+	}
+	return e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
+}
+
+func requestToken(t *testing.T, server *enrollmenttest.Server, credential machinecredential.Credential) *http.Response {
+	t.Helper()
+	tokenURL := server.URL + "/oauth2/token"
+	assertionType, assertion, err := machinecredential.NewSigner(credential.Key).ClientAssertion(t.Context(), credential.ClientID, tokenURL)
+	require.NoError(t, err)
+
+	res, err := server.Client().PostForm(tokenURL, url.Values{
+		"grant_type":            {"client_credentials"},
+		"client_id":             {credential.ClientID},
+		"client_assertion_type": {assertionType},
+		"client_assertion":      {assertion},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = res.Body.Close() })
+	return res
+}
+
+func filesUnder(t *testing.T, dir string) []string {
+	t.Helper()
+	var files []string
+	require.NoError(t, filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() {
+			files = append(files, path)
+		}
+		return err
+	}))
+	return files
+}
+
+func Test_machineEnroll_installerEnrollsWithDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+
+	reopened := openFileBackedConfig()
+	credential, err := machinecredential.Load(reopened)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, requestToken(t, env.server, credential).StatusCode, "the fake service accepts an assertion signed with the stored key")
+
+	for _, file := range filesUnder(t, env.home) {
+		assert.False(t, strings.HasSuffix(file, ".pem"), "unexpected key file %s", file)
+	}
+	assert.NoDirExists(t, filepath.Join(env.home, ".snyk"))
+	assert.Equal(t, 1, env.server.ClientCount())
+}
+
+func Test_machineEnroll_installerGetsTheIdentifiersButNeverTheKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		flags       map[string]string
+		contentType string
+	}{
+		{name: "a summary by default", contentType: "text/plain"},
+		{name: "JSON with --json", flags: map[string]string{jsonFlag: "true"}, contentType: "application/json"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			machineID := env.server.RegisterMachine("SERIAL-1")
+			flags := map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}
+			maps.Copy(flags, tt.flags)
+
+			output, err := env.enrollForData(flags)
+
+			require.NoError(t, err)
+			require.Len(t, output, 1)
+			assert.Equal(t, tt.contentType, output[0].GetContentType())
+			payload, ok := output[0].GetPayload().([]byte)
+			require.True(t, ok, "the payload is bytes")
+			credential, err := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, err)
+			identifiers := map[string]any{
+				"client_id":           credential.ClientID,
+				"enrolled_machine_id": machineID,
+				"key_id":              rfc7638Thumbprint(t, credential.Key),
+			}
+			if tt.contentType == "application/json" {
+				var fields map[string]any
+				require.NoError(t, json.Unmarshal(payload, &fields))
+				assert.Equal(t, identifiers, fields, "exactly the identifiers")
+			} else {
+				for _, identifier := range identifiers {
+					assert.Contains(t, string(payload), identifier)
+				}
+			}
+			keyPEM, err := machineenrollment.EncodeKeyPEM(credential.Key)
+			require.NoError(t, err)
+			for line := range strings.Lines(string(keyPEM)) {
+				if line = strings.TrimSpace(line); line != "" {
+					assert.NotContains(t, string(payload), line)
+				}
+			}
+		})
+	}
+}
+
+// rfc7638Thumbprint is computed from the canonical JWK, independently of the enrollment code.
+func rfc7638Thumbprint(t *testing.T, key crypto.Signer) string {
+	t.Helper()
+	pub, ok := key.Public().(*rsa.PublicKey)
+	require.True(t, ok, "the client key is RSA")
+	canonical, err := json.Marshal(map[string]string{
+		"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes()),
+		"kty": "RSA",
+		"n":   base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
+	})
+	require.NoError(t, err)
+	sum := sha256.Sum256(canonical)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (e *enrollEnv) setMachine(machine runtimeinfo.Machine) {
+	e.config.Set(configuration.MACHINE_ID, machine)
+}
+
+func writeFleetKey(t *testing.T) (string, *ecdsa.PrivateKey) {
+	t.Helper()
+	return writeFleetKeyWithMode(t, 0o600)
+}
+
+func writeFleetKeyWithMode(t *testing.T, mode os.FileMode) (string, *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "fleet.pem")
+	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), mode))
+	require.NoError(t, os.Chmod(path, mode))
+	return path, key
+}
+
+func Test_machineEnroll_fleetKeyNamesTheMachineBySerialNumber(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-42")
+	fleetKeyFile, fleetKey := writeFleetKey(t)
+	env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+
+	require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, requestToken(t, env.server, credential).StatusCode)
+}
+
+func assertNothingStored(t *testing.T, home string) {
+	t.Helper()
+	_, err := machinecredential.Load(openFileBackedConfig())
+	assert.ErrorIs(t, err, machinecredential.ErrNotEnrolled)
+	for _, file := range filesUnder(t, home) {
+		content, readErr := os.ReadFile(file)
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(content), "private_key_pem", file)
+	}
+}
+
+func Test_machineEnroll_rejectedDeviceTokenLeavesTheStoredCredentialUntouched(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+	first, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
+
+	var enrollmentErr *machineenrollment.EnrollmentError
+	require.ErrorAs(t, err, &enrollmentErr, "the service rejection is reported")
+	assert.Equal(t, http.StatusUnauthorized, enrollmentErr.Status)
+	assert.Nil(t, output, "a rejected enrollment yields no identifiers")
+	after, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, first.ClientID, after.ClientID)
+	assert.Equal(t, http.StatusOK, requestToken(t, env.server, after).StatusCode, "the stored key is still the enrolled one")
+}
+
+func Test_machineEnroll_needsExactlyOneCredentialFlag(t *testing.T) {
+	fleetKeyFile, _ := writeFleetKey(t)
+	for name, flags := range map[string]map[string]string{
+		"neither": {},
+		"both":    {flagDeviceToken: "sdt_x", flagFleetKeyFile: fleetKeyFile},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+
+			err := env.enroll(flags)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "--"+flagDeviceToken)
+			assert.Contains(t, err.Error(), "--"+flagFleetKeyFile)
+			assertNothingStored(t, env.home)
+		})
+	}
+}
+
+func Test_machineEnroll_fleetKeyWithoutKnownSerialNumberStoresNothing(t *testing.T) {
+	fleetKeyFile, _ := writeFleetKey(t)
+	for name, machine := range map[string]*runtimeinfo.Machine{
+		"empty serial number": {ID: "stable-id"},
+		"no machine id":       nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			if machine != nil {
+				env.setMachine(*machine)
+			}
+
+			err := env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "identifiers of this machine")
+			assertNothingStored(t, env.home)
+		})
+	}
+}
+
+func Test_machineEnroll_fleetKeyWithoutRuntimeInfoStoresNothing(t *testing.T) {
+	fleetKeyFile, _ := writeFleetKey(t)
+	env := newEnrollEnvWithRuntimeInfo(t, false)
+
+	err := env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+
+	require.Error(t, err)
+	assertNothingStored(t, env.home)
+}
+
+func Test_machineEnroll_sendsNoCredentialsToTheEnrollmentService(t *testing.T) {
+	env := newEnrollEnv(t)
+	env.config.Set(configuration.AUTHENTICATION_TOKEN, "00000000-0000-0000-0000-000000000000")
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+
+	assert.Empty(t, env.server.CredentialHeaders())
+}
+
+func Test_machineEnroll_controlAuthenticatedClientSendsCredentials(t *testing.T) {
+	env := newEnrollEnv(t)
+	env.config.Set(configuration.AUTHENTICATION_TOKEN, "00000000-0000-0000-0000-000000000000")
+
+	res, err := env.engine.GetNetworkAccess().GetHttpClient().Post(env.server.URL+"/oauth2/token", "application/x-www-form-urlencoded", nil)
+	require.NoError(t, err)
+	_ = res.Body.Close()
+
+	assert.NotEmpty(t, env.server.CredentialHeaders(), "the control: this engine's authenticated client sends credentials")
+}
+
+var errDiskFull = errors.New("disk full")
+
+func (e *enrollEnv) failWritesAfterEnrolling(t *testing.T) {
+	t.Helper()
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storageCheck := storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil)
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).Return(errDiskFull).AnyTimes().After(storageCheck)
+	e.config.SetStorage(storage)
+}
+
+func Test_machineEnroll_failedSaveNamesTheClientAndNeverTheKey(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	env.failWritesAfterEnrolling(t)
+
+	output, err := env.enrollForData(map[string]string{flagDeviceToken: deviceToken})
+
+	require.Error(t, err)
+	assert.Nil(t, output, "the error already names the client")
+	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
+	assert.Contains(t, err.Error(), "ask an admin to revoke the client")
+	assert.NotContains(t, err.Error(), "PRIVATE KEY")
+	assert.NotContains(t, err.Error(), "private_key_pem")
+	assert.ErrorIs(t, err, errDiskFull, "the underlying error is wrapped")
+}
+
+func Test_machineEnroll_secondEnrollmentReplacesAndLogsTheOldClient(t *testing.T) {
+	env := newEnrollEnv(t)
+	logs := &bytes.Buffer{}
+	machineID := env.server.RegisterMachine("SERIAL-1")
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	first, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	env.config = openFileBackedConfig()
+	env.config.Set(configuration.API_URL, env.server.URL)
+	logger := zerolog.New(logging.NewScrubbingWriter(zerolog.MultiLevelWriter(logs), logging.GetScrubDictFromConfig(env.config)))
+	env.engine.SetLogger(&logger)
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+
+	second, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.NotEqual(t, first.ClientID, second.ClientID)
+	assert.Contains(t, logs.String(), "replaced the credential of client "+first.ClientID)
+	assert.NotContains(t, logs.String(), "PRIVATE KEY")
+}
+
+func Test_machineEnroll_failedSaveDoesNotLogAReplacement(t *testing.T) {
+	env := newEnrollEnv(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs)
+	env.engine.SetLogger(&logger)
+	machineID := env.server.RegisterMachine("SERIAL-1")
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	first, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	env.failWritesAfterEnrolling(t)
+
+	err = env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)})
+
+	require.ErrorIs(t, err, errDiskFull, "the second enrollment reached the store and failed there")
+	assert.NotContains(t, logs.String(), "credential of client "+first.ClientID)
+}
+
+func Test_machineEnroll_corruptStoredCredentialDoesNotBlockEnrollment(t *testing.T) {
+	env := newEnrollEnv(t)
+	env.config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+
+	_, err := machinecredential.Load(openFileBackedConfig())
+	assert.NoError(t, err)
+}
+
+func Test_machineEnroll_fleetKeyAcceptsAMachineThatComesWithAnError(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("S1")
+	fleetKeyFile, fleetKey := writeFleetKey(t)
+	env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	env.config.AddDefaultValue(configuration.MACHINE_ID, func(configuration.Configuration, any) (any, error) {
+		return runtimeinfo.Machine{ID: "stable-id", SerialNumber: "S1"}, errors.New("read problem")
+	})
+
+	require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+
+	_, err := machinecredential.Load(openFileBackedConfig())
+	assert.NoError(t, err)
+}
+
+func Test_machineEnroll_fleetKeyRejectsNoMachineIDEvenWithASerialNumber(t *testing.T) {
+	fleetKeyFile, _ := writeFleetKey(t)
+	ctrl := gomock.NewController(t)
+	runtimeInfo := mocks.NewMockRuntimeInfo(ctrl)
+	runtimeInfo.EXPECT().GetMachineID().Return(runtimeinfo.Machine{SerialNumber: "S1"}, runtimeinfo.ErrNoMachineID)
+
+	logger := zerolog.Nop()
+	_, err := enrollWithFleetKeyFile(t.Context(), &logger, runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", fleetKeyFile)
+
+	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
+}
+
+func Test_machineEnroll_failedSaveAfterFleetKeyEnrollmentDoesNotMentionTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-42")
+	fleetKeyFile, fleetKey := writeFleetKey(t)
+	env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+	env.failWritesAfterEnrolling(t)
+
+	err := env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "enrolled as client client-1 but the credential could not be stored")
+	assert.Contains(t, err.Error(), "created a client for this machine")
+	assert.NotContains(t, err.Error(), "before enrolling again")
+	assert.NotContains(t, err.Error(), "device token")
+	assert.NotContains(t, err.Error(), "PRIVATE KEY")
+	assert.NotContains(t, err.Error(), "private_key_pem")
+	assert.ErrorIs(t, err, errDiskFull, "the underlying error is wrapped")
+}
+
+func newTestEnrollment(t *testing.T) machinecredential.Credential {
+	t.Helper()
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	return machinecredential.Credential{ClientID: "client-9", Key: key}
+}
+
+func Test_storeEnrollment_persistsEvenWhenTheInvocationIsAlreadyCancelled(t *testing.T) {
+	_ = newEnrollEnv(t)
+	config := openFileBackedConfig()
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := storeEnrollment(canceled, time.Minute, config, newTestEnrollment(t), true)
+
+	require.NoError(t, err)
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, "client-9", credential.ClientID)
+}
+
+func Test_storeEnrollment_givesUpWhenAnotherHolderKeepsTheLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(ctrl)
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ time.Duration) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	config := configuration.NewWithOpts()
+	config.SetStorage(storage)
+
+	start := time.Now()
+	err := storeEnrollment(t.Context(), 50*time.Millisecond, config, newTestEnrollment(t), false)
+
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second)
+	assert.Contains(t, err.Error(), "enrolled as client client-9 but the credential could not be stored")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func Test_machineEnroll_theEnginesOwnConfigurationSeesTheCredential(t *testing.T) {
+	env := newEnrollEnv(t)
+	machineID := env.server.RegisterMachine("SERIAL-1")
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	first, err := machinecredential.Load(env.engine.GetConfiguration())
+	require.NoError(t, err, "a host that authenticates in the same process sees the credential")
+
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))
+	second, err := machinecredential.Load(env.engine.GetConfiguration())
+	require.NoError(t, err)
+	assert.NotEqual(t, first.ClientID, second.ClientID, "re-enrolling replaces it")
+}
+
+func Test_machineEnroll_withoutStorageFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	env.config.SetStorage(nil)
+
+	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "credential cannot be stored")
+	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+func Test_machineEnroll_withStorageThatPersistsNothingFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	env.config.SetStorage(&configuration.EmptyStorage{})
+
+	err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "credential cannot be stored")
+	assert.Equal(t, 0, env.server.ClientCount(), "the single-use device token is not spent")
+}
+
+func (e *enrollEnv) configDir() string {
+	return filepath.Join(e.home, ".config", "configstore")
+}
+
+func Test_machineEnroll_unwritableStorageFailsBeforeSpendingTheDeviceToken(t *testing.T) {
+	tests := map[string]struct {
+		breakStorage  func(t *testing.T, env *enrollEnv)
+		repairStorage func(t *testing.T, env *enrollEnv)
+	}{
+		"read-only configuration directory": {
+			breakStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(env.configDir(), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(env.configDir(), "snyk.json.lock"), nil, 0o600))
+				require.NoError(t, os.Chmod(env.configDir(), 0o555))
+				t.Cleanup(func() { assert.NoError(t, os.Chmod(env.configDir(), 0o755)) })
+				if f, err := os.Create(filepath.Join(env.configDir(), "probe")); err == nil {
+					_ = f.Close()
+					t.Skip("directory permissions are not enforced here (running as a privileged user)")
+				}
+			},
+			repairStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.Chmod(env.configDir(), 0o755))
+			},
+		},
+		"configuration path is a directory": {
+			breakStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(env.configDir(), "snyk.json"), 0o755))
+			},
+			repairStorage: func(t *testing.T, env *enrollEnv) {
+				t.Helper()
+				require.NoError(t, os.Remove(filepath.Join(env.configDir(), "snyk.json")))
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+			tt.breakStorage(t, env)
+
+			err := env.enroll(map[string]string{flagDeviceToken: deviceToken})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "credential cannot be stored")
+			assert.Equal(t, 0, env.server.EnrollmentRequests(), "no request reached the enrollment service")
+			tt.repairStorage(t, env)
+			require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}), "the single-use device token is still unused")
+			_, err = machinecredential.Load(openFileBackedConfig())
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func (e *enrollEnv) storeUserToken(t *testing.T) string {
+	t.Helper()
+	token, err := json.Marshal(map[string]any{"access_token": "user-access-token", "token_type": "bearer", "expiry": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
+	require.NoError(t, err)
+	e.config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	e.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(token))
+	require.Equal(t, string(token), openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the user token is stored")
+	return string(token)
+}
+
+func (e *enrollEnv) storedValues(t *testing.T) map[string]any {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(e.configDir(), "snyk.json"))
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(content, &values))
+	return values
+}
+
+func Test_machineEnroll_removesTheStoredUserToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	env.storeUserToken(t)
+	invokeConfig := env.config.Clone()
+	// As NewOAuth2AuthenticatorWithOpts does for any configuration it is given.
+	invokeConfig.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	invokeConfig.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+
+	_, err := env.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
+
+	require.NoError(t, err)
+	assert.NotContains(t, env.storedValues(t), auth.CONFIG_KEY_OAUTH_TOKEN, "the machine credential is the only stored identity")
+	assert.Empty(t, invokeConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+	assert.Empty(t, env.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the engine's own configuration no longer holds it")
+	_, err = machinecredential.Load(openFileBackedConfig())
+	assert.NoError(t, err)
+}
+
+func Test_machineEnroll_rejectedEnrollmentKeepsTheStoredUserToken(t *testing.T) {
+	env := newEnrollEnv(t)
+	userToken := env.storeUserToken(t)
+
+	err := env.enroll(map[string]string{flagDeviceToken: "sdt_unknown"})
+
+	require.Error(t, err)
+	assert.Equal(t, userToken, openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+}
+
+func Test_machineEnroll_failedUserTokenRemovalNamesTheClient(t *testing.T) {
+	env := newEnrollEnv(t)
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, gomock.Any()).Return(nil).Times(2)
+	gomock.InOrder(
+		storage.EXPECT().Set(auth.CONFIG_KEY_OAUTH_TOKEN, "").Return(nil),
+		storage.EXPECT().Set(auth.CONFIG_KEY_OAUTH_TOKEN, gomock.Any()).DoAndReturn(func(_ string, value any) error {
+			assert.True(t, configuration.IsKeyDeleted(value), "the deletion marker is written last")
+			return errDiskFull
+		}),
+	)
+	env.config.SetStorage(storage)
+	invokeConfig := env.config.Clone()
+	invokeConfig.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	invokeConfig.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+
+	output, err := env.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
+
+	require.ErrorIs(t, err, errDiskFull)
+	assert.Nil(t, output)
+	assert.Contains(t, err.Error(), "enrolled as client client-1, but the token stored by `snyk auth` could not be removed")
+	assert.Contains(t, err.Error(), "instead of enrolling again")
+	assert.NotContains(t, err.Error(), "private_key_pem")
+	_, err = machinecredential.Load(env.engine.GetConfiguration())
+	assert.NoError(t, err, "the saved credential is still published to the engine")
+}
+
+func (e *enrollEnv) expireStoredAccessToken(t *testing.T) {
+	t.Helper()
+	var path string
+	for _, file := range filesUnder(t, e.home) {
+		if filepath.Base(file) == "snyk.json" {
+			path = file
+		}
+	}
+	require.NotEmpty(t, path, "the configuration file")
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(content, &values))
+	var token map[string]any
+	tokenJSON, ok := values[auth.CONFIG_KEY_OAUTH_TOKEN].(string)
+	require.True(t, ok, "stored oauth token is not a string")
+	require.NoError(t, json.Unmarshal([]byte(tokenJSON), &token))
+	token["expiry"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	expired, err := json.Marshal(token)
+	require.NoError(t, err)
+	values[auth.CONFIG_KEY_OAUTH_TOKEN] = string(expired)
+	content, err = json.Marshal(values)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+}
+
+func (e *enrollEnv) whoamiInNewProcess(t *testing.T) int {
+	t.Helper()
+	config := openFileBackedConfig()
+	config.Set(configuration.API_URL, e.server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	engine := workflow.NewWorkFlowEngine(config)
+	require.NoError(t, engine.Init())
+	res, err := engine.GetNetworkAccess().GetHttpClient().Get(e.server.URL + "/rest/whoami")
+	require.NoError(t, err)
+	_ = res.Body.Close()
+	return res.StatusCode
+}
+
+func Test_machineEnroll_enrolledMachineKeepsAuthenticatingAfterItsAccessTokenExpires(t *testing.T) {
+	env := newEnrollEnv(t)
+	deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	require.Equal(t, 1, env.server.TokenRequests)
+	env.expireStoredAccessToken(t)
+
+	assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+
+	assert.Equal(t, 2, env.server.TokenRequests, "a second token was minted")
+	assert.Equal(t, 1, env.server.EnrollmentRequests(), "the enrollment endpoint was not called again")
+	bearerTokens := env.server.BearerTokens()
+	require.Len(t, bearerTokens, 2)
+	assert.NotEqual(t, bearerTokens[0], bearerTokens[1], "the request after expiry carries the newly minted token")
+}
+
+// cliErrorHandler records each error it gets and returns it unchanged, as the CLI's handler does.
+type cliErrorHandler struct {
+	mu   sync.Mutex
+	errs []error
+}
+
+func (h *cliErrorHandler) handle(err error, _ context.Context) error {
+	if err == nil {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.errs = append(h.errs, err)
+	return err
+}
+
+func (h *cliErrorHandler) handled() []error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.errs)
+}
+
+func (e *enrollEnv) installCLIErrorHandler() *cliErrorHandler {
+	handler := &cliErrorHandler{}
+	e.engine.GetNetworkAccess().AddErrorHandler(handler.handle)
+	return handler
+}
+
+func Test_machineEnroll_enrollmentErrorsSurviveTheHostErrorHandler(t *testing.T) {
+	rejections := map[string]struct {
+		status   int
+		detail   string
+		sentinel error
+		enroll   func(t *testing.T, env *enrollEnv) error
+	}{
+		"spent device token": {
+			status: http.StatusUnauthorized,
+			detail: "The device token is not valid.",
+			enroll: func(t *testing.T, env *enrollEnv) error {
+				t.Helper()
+				deviceToken := env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1"))
+				require.NoError(t, env.enroll(map[string]string{flagDeviceToken: deviceToken}))
+				return env.enroll(map[string]string{flagDeviceToken: deviceToken})
+			},
+		},
+		"fleet key for an enrolled machine": {
+			status:   http.StatusConflict,
+			detail:   "The machine is enrolled already. Ask an admin for a device token to enroll it again.",
+			sentinel: machineenrollment.ErrMachineEnrolled,
+			enroll: func(t *testing.T, env *enrollEnv) error {
+				t.Helper()
+				machineID := env.server.RegisterMachine("SERIAL-42")
+				fleetKeyFile, fleetKey := writeFleetKey(t)
+				env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+				env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+				require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+				return env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+			},
+		},
+	}
+	hostSetups := map[string]struct{ withHandler, errorTitles bool }{
+		"no error handler":                 {},
+		"no error handler, titled errors":  {errorTitles: true},
+		"CLI error handler":                {withHandler: true},
+		"CLI error handler, titled errors": {withHandler: true, errorTitles: true},
+	}
+	for setupName, setup := range hostSetups {
+		for name, rejection := range rejections {
+			t.Run(setupName+"/"+name, func(t *testing.T) {
+				env := newEnrollEnv(t)
+				env.server.SetErrorTitles(setup.errorTitles)
+				handler := &cliErrorHandler{}
+				if setup.withHandler {
+					handler = env.installCLIErrorHandler()
+				}
+
+				err := rejection.enroll(t, env)
+
+				var enrollmentErr *machineenrollment.EnrollmentError
+				require.ErrorAs(t, err, &enrollmentErr)
+				assert.Equal(t, rejection.status, enrollmentErr.Status)
+				if rejection.sentinel != nil {
+					assert.ErrorIs(t, err, rejection.sentinel)
+				}
+				assert.Contains(t, err.Error(), rejection.detail)
+				assert.NotContains(t, err.Error(), "snyk auth")
+				var catalogErr snyk_errors.Error
+				assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+				assert.Empty(t, handler.handled(), "the host does not collect the enrollment rejection")
+			})
+		}
+	}
+}
+
+func Test_machineEnroll_keepsTheHostErrorHandlerOnTheInvocationNetworkAccess(t *testing.T) {
+	env := newEnrollEnv(t)
+	config := env.config.Clone()
+	config.Set(flagDeviceToken, env.server.IssueDeviceToken(env.server.RegisterMachine("SERIAL-1")))
+	networkAccess := networking.NewNetworkAccess(config)
+	handler := &cliErrorHandler{}
+	networkAccess.AddErrorHandler(handler.handle)
+	invocationCtx := mocks.NewMockInvocationContext(gomock.NewController(t))
+	invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationCtx.EXPECT().GetNetworkAccess().Return(networkAccess).AnyTimes()
+	invocationCtx.EXPECT().Context().Return(t.Context()).AnyTimes()
+	invocationCtx.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{}).AnyTimes()
+	invocationCtx.EXPECT().GetEngine().Return(env.engine).AnyTimes()
+
+	_, err := machineEnrollEntryPoint(invocationCtx, nil)
+	require.NoError(t, err)
+
+	res, err := networkAccess.GetUnauthorizedHttpClient().Post(env.server.URL+"/oauth2/token", "application/x-www-form-urlencoded", nil)
+	if res != nil {
+		_ = res.Body.Close()
+	}
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr, "the host still maps a later request in the same invocation")
+	assert.Len(t, handler.handled(), 1)
+}
+
+func (e *enrollEnv) enrollMachine(t *testing.T) machinecredential.Credential {
+	t.Helper()
+	require.NoError(t, e.enroll(map[string]string{flagDeviceToken: e.server.IssueDeviceToken(e.server.RegisterMachine("SERIAL-1"))}))
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	return credential
+}
+
+func (e *enrollEnv) whoami(t *testing.T, authorization string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, e.config.GetString(configuration.API_URL)+"/rest/whoami", http.NoBody)
+	require.NoError(t, err)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	res, err := e.engine.GetNetworkAccess().GetHttpClient().Do(req)
+	if res != nil {
+		_ = res.Body.Close()
+	}
+	return res, err
+}
+
+// switchEnvironment changes the API URL and drops the cached access token, as `snyk config environment` does.
+func (e *enrollEnv) switchEnvironment(apiURL string) {
+	e.config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	e.config.PersistInStorage(configuration.API_URL)
+	e.config.Set(configuration.API_URL, apiURL)
+}
+
+func Test_machineEnroll_machineThatCannotAuthenticateSendsNoCredentials(t *testing.T) {
+	failures := map[string]struct {
+		breakAuthentication     func(t *testing.T, env *enrollEnv, credential machinecredential.Credential)
+		rejectedByTokenEndpoint bool
+	}{
+		"unreadable stored credential": {breakAuthentication: func(t *testing.T, env *enrollEnv, _ machinecredential.Credential) {
+			t.Helper()
+			env.config.PersistInStorage(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
+			env.config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+			_, err := machinecredential.Load(openFileBackedConfig())
+			require.Error(t, err, "the stored credential is unreadable")
+			require.NotErrorIs(t, err, machinecredential.ErrNotEnrolled)
+		}},
+		"revoked client": {rejectedByTokenEndpoint: true, breakAuthentication: func(t *testing.T, env *enrollEnv, credential machinecredential.Credential) {
+			t.Helper()
+			env.server.RevokeClient(credential.ClientID)
+		}},
+	}
+	for _, withHandler := range []bool{false, true} {
+		for name, failure := range failures {
+			t.Run(fmt.Sprintf("%s, CLI error handler %t", name, withHandler), func(t *testing.T) {
+				env := newEnrollEnv(t)
+				if withHandler {
+					env.installCLIErrorHandler()
+				}
+				credential := env.enrollMachine(t)
+				failure.breakAuthentication(t, env, credential)
+
+				_, err := env.whoami(t, "token 00000000-0000-0000-0000-000000000000")
+
+				var machineErr *machinecredential.AuthenticationError
+				require.ErrorAs(t, err, &machineErr)
+				assert.ErrorContains(t, err, "machine authentication failed")
+				if failure.rejectedByTokenEndpoint {
+					assert.ErrorContains(t, err, env.server.URL+"/oauth2/token")
+					assert.ErrorContains(t, err, credential.ClientID)
+					assert.ErrorContains(t, err, "enrolled in another region or its client was revoked")
+				}
+				assert.NotContains(t, err.Error(), "snyk auth")
+				var catalogErr snyk_errors.Error
+				assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+				assert.Empty(t, env.server.CredentialHeaders(), "no request carried credentials")
+			})
+		}
+	}
+}
+
+func Test_machineEnroll_withoutMachineCredentialACallerSetHeaderStillGoesOut(t *testing.T) {
+	env := newEnrollEnv(t)
+
+	res, err := env.whoami(t, "token 00000000-0000-0000-0000-000000000000")
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "the fake does not know the caller's token")
+	assert.Equal(t, []string{"Authorization"}, env.server.CredentialHeaders())
+}
+
+func Test_machineEnroll_otherRegionNamesItsTokenEndpointAndKeepsTheCredential(t *testing.T) {
+	for _, withHandler := range []bool{false, true} {
+		t.Run(fmt.Sprintf("CLI error handler %t", withHandler), func(t *testing.T) {
+			env := newEnrollEnv(t)
+			if withHandler {
+				env.installCLIErrorHandler()
+			}
+			credential := env.enrollMachine(t)
+			res, err := env.whoami(t, "")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, res.StatusCode)
+			otherRegion := enrollmenttest.NewServer(t)
+
+			env.switchEnvironment(otherRegion.URL)
+			_, err = env.whoami(t, "")
+
+			var machineErr *machinecredential.AuthenticationError
+			require.ErrorAs(t, err, &machineErr)
+			assert.ErrorContains(t, err, otherRegion.URL+"/oauth2/token")
+			assert.ErrorContains(t, err, credential.ClientID)
+			assert.ErrorContains(t, err, "enrolled in another region or its client was revoked")
+			assert.ErrorContains(t, err, "`snyk config environment`")
+			assert.NotContains(t, err.Error(), "snyk auth")
+			var catalogErr snyk_errors.Error
+			assert.False(t, errors.As(err, &catalogErr), "not an error catalog error: %v", err)
+			assert.Empty(t, otherRegion.CredentialHeaders())
+			stored, err := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, err)
+			assert.Equal(t, credential.ClientID, stored.ClientID, "the credential is still stored")
+
+			env.switchEnvironment(env.server.URL)
+			res, err = env.whoami(t, "")
+
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, res.StatusCode)
+			assert.Equal(t, 1, env.server.EnrollmentRequests(), "authenticating again needed no new enrollment")
+		})
+	}
+}
+
+func Test_machineEnroll_neverRetriesTheEnrollmentRequest(t *testing.T) {
+	retryConfigs := map[string]func(config configuration.Configuration){
+		"attempts configured": func(config configuration.Configuration) {
+			config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+		},
+		"retries opted in for the path": func(config configuration.Configuration) {
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(middleware.ConfigurationKeyRequestAttempts, 3)
+			config.Set(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, []string{"hidden/machines/enrollments"})
+		},
+	}
+	for name, configure := range retryConfigs {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			var requests atomic.Int32
+			badGateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusBadGateway)
+			}))
+			t.Cleanup(badGateway.Close)
+			env.config.Set(configuration.API_URL, badGateway.URL)
+			env.config.Set(middleware.ConfigurationKeyRetryAfter, 1)
+			configure(env.config)
+
+			err := env.enroll(map[string]string{flagDeviceToken: "sdt_single-use"})
+
+			var enrollmentErr *machineenrollment.EnrollmentError
+			require.ErrorAs(t, err, &enrollmentErr)
+			assert.Equal(t, http.StatusBadGateway, enrollmentErr.Status)
+			assert.Equal(t, int32(1), requests.Load(), "the single-use device token must not be replayed")
+		})
+	}
+}
+
+func Test_machineEnroll_fleetKeyReadableByOthersIsWarnedAboutAndStillEnrolls(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not restrict access on Windows")
+	}
+	for name, tt := range map[string]struct {
+		mode     os.FileMode
+		wantWarn bool
+	}{
+		"owner only":        {mode: 0o600, wantWarn: false},
+		"readable by group": {mode: 0o640, wantWarn: true},
+		"readable by all":   {mode: 0o644, wantWarn: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			logs := &bytes.Buffer{}
+			logger := zerolog.New(zerolog.ConsoleWriter{Out: logs, NoColor: true})
+			env.engine.SetLogger(&logger)
+			machineID := env.server.RegisterMachine("SERIAL-42")
+			fleetKeyFile, fleetKey := writeFleetKeyWithMode(t, tt.mode)
+			env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+			env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+
+			require.NoError(t, env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile}))
+
+			warned := strings.Contains(logs.String(), "readable by other users")
+			assert.Equal(t, tt.wantWarn, warned, logs.String())
+			if tt.wantWarn {
+				assert.Equal(t, 1, strings.Count(logs.String(), "readable by other users"))
+				assert.Contains(t, logs.String(), "chmod 600 "+strconv.Quote(fleetKeyFile))
+				assert.Contains(t, logs.String(), "defaultMode 0400")
+			}
+		})
+	}
+}

@@ -28,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -1252,4 +1254,57 @@ func TestScrub_LongerRedactionTermTakesPrecedenceOverPrefixTerm(t *testing.T) {
 	actual := Scrub([]byte("credential: secret-token"), dict)
 
 	assert.Equal(t, "credential: ***", string(actual))
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_MachineCredential(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	config := configuration.NewInMemory()
+	storedJSON, err := json.Marshal(map[string]string{"client_id": "machine-client-id", "private_key_pem": string(keyPEM)})
+	require.NoError(t, err)
+	stored := string(storedJSON)
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, stored)
+	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+
+	for name, line := range map[string]string{
+		"pem as is":        "key: " + string(keyPEM),
+		"stored value":     "value: " + stored,
+		"one pem line":     "line: " + pemBody,
+		"escaped newlines": "value: " + strings.ReplaceAll(string(keyPEM), "\n", `\n`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			scrubbed := string(Scrub([]byte(line), GetScrubDictFromConfig(config)))
+
+			assert.NotContains(t, scrubbed, pemBody)
+		})
+	}
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_MachineClientIDStaysReadable(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"machine-client-id","private_key_pem":""}`)
+
+	scrubbed := string(Scrub([]byte("client: machine-client-id"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "client: machine-client-id", scrubbed)
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_DeviceToken(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "sdt_example-device-token-value")
+
+	scrubbed := string(Scrub([]byte("enrolling with sdt_example-device-token-value now"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "enrolling with *** now", scrubbed)
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "a")
+
+	scrubbed := string(Scrub([]byte("a banana"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "a banana", scrubbed)
 }

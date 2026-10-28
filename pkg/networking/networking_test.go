@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -38,6 +40,131 @@ func getConfig() configuration.Configuration {
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	return config
+}
+
+func Test_BearerTokenScoper_ThroughNetworkClient_RefreshesExpiredTokenThroughConfiguredCA(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.PostForm.Get("grant_type") {
+		case "refresh_token":
+			assert.Equal(t, "stored-refresh-token", r.PostForm.Get("refresh_token"))
+			_, err := w.Write([]byte(`{"access_token":"refreshed-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expires_in":3600}`))
+			assert.NoError(t, err)
+		case "urn:ietf:params:oauth:grant-type:token-exchange":
+			assert.Equal(t, "refreshed-access-token", r.PostForm.Get("subject_token"))
+			_, err := w.Write([]byte(`{"access_token":"scoped-token","token_type":"bearer","expires_in":2874}`))
+			assert.NoError(t, err)
+		default:
+			assert.Fail(t, "unexpected grant type", r.PostForm.Get("grant_type"))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	caPath := filepath.Join(t.TempDir(), "server-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600))
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"expired-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
+	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+	net := NewNetworkAccess(config)
+	require.NoError(t, net.AddRootCAs(caPath))
+
+	scoper := auth.NewBearerTokenScoper(config, net)
+	type result struct {
+		token string
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+		done <- result{token, err}
+	}()
+
+	select {
+	case res := <-done:
+		require.NoError(t, res.err)
+		assert.Equal(t, "scoped-token", res.token)
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetToken did not return; the token refresh is likely deadlocked")
+	}
+}
+
+func Test_BearerTokenScoper_ThroughNetworkClient_RefreshFailureReturnsUnauthorised(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		assert.Equal(t, "refresh_token", r.PostForm.Get("grant_type"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"error":"invalid_grant"}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"expired-access-token","token_type":"Bearer","refresh_token":"stored-refresh-token","expiry":"2001-01-01T00:00:00Z"}`)
+	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+	net := NewNetworkAccess(config)
+	net.AddErrorHandler(func(err error, _ context.Context) error { return err })
+
+	scoper := auth.NewBearerTokenScoper(config, net)
+	type result struct {
+		token string
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+		done <- result{token, err}
+	}()
+
+	select {
+	case res := <-done:
+		require.Empty(t, res.token)
+		var catalogErr snyk_errors.Error
+		require.ErrorAs(t, res.err, &catalogErr)
+		assert.Equal(t, snyk.NewUnauthorisedError("").ErrorCode, catalogErr.ErrorCode)
+
+		var responseErr snyk_errors.Error
+		t.Logf("errors.As snyk_errors.Error in cause: %v", errors.As(catalogErr.Cause, &responseErr))
+		var retrieveErr *oauth2.RetrieveError
+		t.Logf("errors.As *oauth2.RetrieveError in cause: %v", errors.As(catalogErr.Cause, &retrieveErr))
+		t.Logf("cause: %#v", catalogErr.Cause)
+		t.Logf("error: %v", res.err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetToken did not return; the token refresh is likely deadlocked")
+	}
+}
+
+func Test_BearerTokenScoper_ThroughNetworkClient_WrapsMiddlewareCatalogErrorWithCause(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, err := w.Write([]byte(`{"error":"invalid_client"}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"subject-token","token_type":"Bearer"}`)
+	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+	net := NewNetworkAccess(config)
+	net.AddErrorHandler(func(err error, _ context.Context) error { return err })
+
+	scoper := auth.NewBearerTokenScoper(config, net)
+	token, err := scoper.GetToken(context.Background(), []string{"org.read"}, time.Hour)
+
+	require.Empty(t, token)
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, cli.NewTokenScoperError("").ErrorCode, catalogErr.ErrorCode)
+	var causeErr snyk_errors.Error
+	require.ErrorAs(t, catalogErr.Cause, &causeErr)
+	assert.Equal(t, snyk.NewUnauthorisedError("").ErrorCode, causeErr.ErrorCode)
 }
 
 func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
@@ -551,7 +678,9 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 
 func TestNetworkImpl_GetUnauthorizedHttpClient_NetworkStackErrorHandlerMiddleware(t *testing.T) {
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	network := NewNetworkAccess(config)
+	network, ok := NewNetworkAccess(config).(*networkImpl)
+	require.True(t, ok)
+	network.proxy = http.ProxyURL(nil)
 	count := 0
 
 	// Add error handler to capture and verify the processed error
@@ -645,3 +774,55 @@ func Test_AddMiddleware_SurvivesClone(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func Test_GetHttpClient_StoredOAuthTokenAndFlagOn_ServerReceivesBearerAccessToken(t *testing.T) {
+	tokenJSON, err := json.Marshal(&oauth2.Token{
+		AccessToken:  "stored-access-token",
+		TokenType:    "bearer",
+		RefreshToken: "stored-refresh-token",
+		Expiry:       time.Now().Add(20 * time.Minute).UTC(),
+	})
+	require.NoError(t, err)
+
+	received := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Clone()
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenJSON))
+	config.Set(configuration.AUTHENTICATION_TOKEN, "ignored-legacy-token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+
+	rsp, err := NewNetworkAccess(config).GetHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+
+	headers := <-received
+	assert.Equal(t, []string{"Bearer stored-access-token"}, headers.Values("Authorization"))
+	assert.Equal(t, []string{"Bearer stored-access-token"}, headers.Values("Session-Token"))
+}
+
+func Test_GetHttpClient_StoredLegacyTokenAndOAuthFlagOff_ServerReceivesTokenScheme(t *testing.T) {
+	received := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Clone()
+	}))
+	t.Cleanup(server.Close)
+
+	config := getConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(configuration.AUTHENTICATION_TOKEN, "legacy-api-token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+
+	rsp, err := NewNetworkAccess(config).GetHttpClient().Get(server.URL)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+
+	headers := <-received
+	assert.Equal(t, []string{"token legacy-api-token"}, headers.Values("Authorization"))
+	assert.Equal(t, []string{"token legacy-api-token"}, headers.Values("Session-Token"))
+}

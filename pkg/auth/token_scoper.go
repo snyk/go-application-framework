@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=token_scoper.go -destination ../mocks/token_scoper.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
@@ -37,15 +41,17 @@ type BearerTokenScoper interface {
 var _ BearerTokenScoper = bearerTokenScoperImpl{}
 
 type bearerTokenScoperImpl struct {
-	config     configuration.Configuration
-	httpClient *http.Client
+	config  configuration.Configuration
+	clients networktypes.NetworkClients
 }
 
 // GetToken implements [BearerTokenScoper].
 // It exchanges the configured access token for a token limited to the given scopes (RFC 8693).
 // A positive ttl is passed to the server as the "ttl" query parameter in seconds.
 func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, ttl time.Duration) (string, error) {
-	subjectToken, err := b.getSubjectToken(ctx)
+	refreshClient, httpClient := b.refreshClient(), b.exchangeClient()
+
+	subjectToken, err := refreshedAccessToken(ctx, b.config, refreshClient)
 	if err != nil {
 		return "", err
 	}
@@ -72,81 +78,123 @@ func (b bearerTokenScoperImpl) GetToken(ctx context.Context, scopes []string, tt
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	httpClient := b.httpClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	defer func(Body io.ReadCloser) { _ = Body.Close() }(req.Body)
+
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("token exchange request failed: %w", err)
+		return "", cli.NewTokenScoperError("token exchange request failed", snyk_errors.WithCause(err))
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(io.LimitReader(res.Body, maxErrorResponseBytes))
-		if readErr != nil {
-			return "", fmt.Errorf("token exchange failed with status %d: %w", res.StatusCode, readErr)
-		}
-		return "", fmt.Errorf("token exchange failed with status %d: %s", res.StatusCode, body)
+		return "", exchangeResponseError(res.StatusCode, body, readErr)
 	}
 
 	var tokenResponse struct {
 		AccessToken string `json:"access_token"`
 	}
 	if err = json.NewDecoder(res.Body).Decode(&tokenResponse); err != nil {
-		return "", fmt.Errorf("failed to decode token exchange response: %w", err)
+		return "", cli.NewTokenScoperError("failed to decode token exchange response", snyk_errors.WithCause(err))
 	}
 	if tokenResponse.AccessToken == "" {
-		return "", fmt.Errorf("token exchange response did not contain an access token")
+		return "", cli.NewTokenScoperError("token exchange response did not contain an access token")
 	}
 
 	return tokenResponse.AccessToken, nil
 }
 
-// getSubjectToken returns the access token to exchange: the configured bearer token, or else the
-// access token stored by the OAuth login flow, refreshed if it has expired.
-func (b bearerTokenScoperImpl) getSubjectToken(ctx context.Context) (string, error) {
-	if bearerToken := b.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN); bearerToken != "" {
-		return bearerToken, nil
+func exchangeResponseError(status int, body []byte, readErr error) error {
+	var oauthErrorDetail []string
+	var option []snyk_errors.Option
+	if readErr != nil {
+		oauthErrorDetail = append(oauthErrorDetail, readErr.Error())
+		option = append(option, snyk_errors.WithCause(readErr))
+	} else {
+		oauthErrorDetail = oauthErrorOptions(body)
 	}
+	detail := fmt.Sprintf("token exchange failed with status %d, detail: %v", status, strings.Join(oauthErrorDetail, ": "))
 
-	oauthToken, err := GetOAuthToken(b.config)
-	if err != nil {
-		return "", fmt.Errorf("failed to read stored oauth token: %w", err)
-	}
-	if oauthToken == nil || oauthToken.AccessToken == "" {
-		return "", fmt.Errorf("no user authentication available to exchange a scoped token")
-	}
-	if oauthToken.Valid() {
-		return oauthToken.AccessToken, nil
-	}
+	return cli.NewTokenScoperError(detail, option...)
+}
 
-	return refreshedAccessToken(ctx, b.config, b.httpClient)
+// oauthErrorOptions keeps only the RFC 6749 error fields from a failed exchange body. The
+// body is never stored as a whole because the server may echo the submitted tokens back.
+func oauthErrorOptions(body []byte) []string {
+	var oauthErr struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &oauthErr); err != nil {
+		return nil
+	}
+	var options []string
+	if oauthErr.Error != "" {
+		options = append(options, oauthErr.Error)
+	}
+	if oauthErr.ErrorDescription != "" {
+		options = append(options, oauthErr.ErrorDescription)
+	}
+	return options
 }
 
 // refreshedAccessToken goes through the authenticator so that an expired token is refreshed and
 // persisted exactly as it is for regular requests.
-func refreshedAccessToken(ctx context.Context, config configuration.Configuration, httpClient *http.Client) (string, error) {
-	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "", nil)
+func refreshedAccessToken(ctx context.Context, config configuration.Configuration, refreshClient *http.Client) (string, error) {
+	storedToken, err := GetOAuthToken(config)
+	if err != nil {
+		return "", snyk.NewUnauthorisedError("stored oauth token is corrupt", snyk_errors.WithCause(err))
+	}
+	if storedToken == nil || (storedToken.AccessToken == "" && storedToken.RefreshToken == "") {
+		return "", snyk.NewUnauthorisedError("no user authentication is available")
+	}
+	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(refreshClient))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GetString(configuration.API_URL), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request for oauth token refresh: %w", err)
 	}
 	if err = authenticator.AddAuthenticationHeader(req); err != nil {
-		return "", fmt.Errorf("failed to refresh stored oauth token: %w", err)
+		return "", snyk.NewUnauthorisedError("failed to refresh stored oauth token", snyk_errors.WithCause(err))
 	}
-	return strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer "), nil
+	authHeader := req.Header.Get("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 {
+		return "", snyk.NewUnauthorisedError("authorization header has an unexpected format")
+	}
+	return strings.Trim(parts[1], " "), nil
+}
+
+func (b bearerTokenScoperImpl) refreshClient() *http.Client {
+	if b.clients == nil {
+		return http.DefaultClient
+	}
+	return orDefaultClient(b.clients.GetUnauthorizedHttpClient())
+}
+
+func (b bearerTokenScoperImpl) exchangeClient() *http.Client {
+	if b.clients == nil {
+		return http.DefaultClient
+	}
+	return orDefaultClient(b.clients.GetHttpClient())
+}
+
+func orDefaultClient(client *http.Client) *http.Client {
+	if client == nil {
+		return http.DefaultClient
+	}
+	return client
 }
 
 // RevokeToken implements [BearerTokenScoper].
 // Revocation is not supported yet, so it always returns an error rather than reporting success.
 func (b bearerTokenScoperImpl) RevokeToken(ctx context.Context, token string) error {
-	return fmt.Errorf("token revocation is not implemented")
+	return snyk.NewNotImplementedError("token revocation is not implemented")
 }
 
-func NewBearerTokenScoper(config configuration.Configuration, httpClient *http.Client) BearerTokenScoper {
+// NewBearerTokenScoper creates a scoper that can down-scope the authentication token.
+func NewBearerTokenScoper(config configuration.Configuration, clients networktypes.NetworkClients) BearerTokenScoper {
 	return bearerTokenScoperImpl{
-		config:     config,
-		httpClient: httpClient,
+		config:  config,
+		clients: clients,
 	}
 }

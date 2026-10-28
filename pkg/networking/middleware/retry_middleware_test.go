@@ -26,6 +26,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -802,6 +803,23 @@ func Test_retryMiddleware_429_then_success(t *testing.T) {
 			assert.Equal(t, http.StatusTooManyRequests, retryErr.StatusCode)
 			assert.Greater(t, retryErr.Attempt, 0)
 			assert.Greater(t, retryErr.MaxAttempts, 0)
+		}
+	})
+
+	t.Run("callback receives the request path without the query string", func(t *testing.T) {
+		tracker := &retryNotifyTracker{}
+		sut, _ := setupRetryMiddleware(t, &logger, tracker.handler(), 3, once429ThenOK)
+		_, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/rest/some/path?token=secret", nil))
+		require.NoError(t, err)
+
+		tracker.mu.Lock()
+		defer tracker.mu.Unlock()
+
+		require.NotEmpty(t, tracker.errors)
+		for _, e := range tracker.errors {
+			var catalogErr snyk_errors.Error
+			require.ErrorAs(t, e, &catalogErr)
+			assert.Equal(t, "/rest/some/path", catalogErr.Meta[constants.ERROR_META_KEY_REQUEST_PATH])
 		}
 	})
 
@@ -2325,4 +2343,41 @@ func Test_handleSuccessfulJSONResponse(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, testErr)
 	})
+}
+
+func Test_RetryMiddleware_WithoutRetry_SendsTheRequestOnce(t *testing.T) {
+	for name, tt := range map[string]struct {
+		withoutRetry bool
+		wantAttempts int
+	}{
+		"marked":   {withoutRetry: true, wantAttempts: 1},
+		"unmarked": {withoutRetry: false, wantAttempts: 3},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.withoutRetry {
+				ctx = WithoutRetry(ctx)
+			}
+			logger := zerolog.Nop()
+			attemptCount := 0
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				return &http.Response{StatusCode: http.StatusBadGateway, Header: http.Header{}, Request: req}, nil
+			}
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(ConfigurationKeyRetryAfter, 1)
+			sut := NewRetryMiddleware(config, &logger, rt)
+
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/v1/anything", nil).WithContext(ctx))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+			assert.Equal(t, tt.wantAttempts, attemptCount)
+		})
+	}
 }

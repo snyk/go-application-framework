@@ -11,6 +11,15 @@ import (
 // joined with error catalog errors describing why, so check for it with errors.Is.
 var ErrNoMachineID = errors.New("no stable machine identifier available")
 
+// Machine describes the machine the application runs on. ID is the stable identifier; the other fields
+// are descriptive and empty when they could not be determined.
+type Machine struct {
+	ID           string
+	Hostname     string
+	SerialNumber string
+	StudioID     string
+}
+
 // RuntimeInfo describes the runtime the application runs in, grouped into application and machine information.
 type RuntimeInfo interface {
 	// application
@@ -22,9 +31,9 @@ type RuntimeInfo interface {
 
 	// machine
 
-	// GetMachineID returns the identifier of the machine the application runs on, or ErrNoMachineID when no stable identifier is available.
-	// A non-empty identifier may come with a non-nil error, such as a machine id file that could not be read; the identifier is still usable.
-	GetMachineID() (string, error)
+	// GetMachineID returns the machine the application runs on, or ErrNoMachineID when no stable identifier is available.
+	// A non-empty Machine.ID may come with a non-nil error, such as a machine id file that could not be read; the identifier is still usable.
+	GetMachineID() (Machine, error)
 }
 
 type opt func(RuntimeInfo)
@@ -61,8 +70,8 @@ func (ri *defaultRuntimeInfo) SetVersion(v string) {
 	ri.version = v
 }
 
-func (ri *defaultRuntimeInfo) GetMachineID() (string, error) {
-	return "", ErrNoMachineID
+func (ri *defaultRuntimeInfo) GetMachineID() (Machine, error) {
+	return Machine{}, ErrNoMachineID
 }
 
 func New(opts ...opt) RuntimeInfo {

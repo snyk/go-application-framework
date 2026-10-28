@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	runtimeinfo "github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 // MockRuntimeInfo is a mock of RuntimeInfo interface.
@@ -34,10 +35,10 @@ func (m *MockRuntimeInfo) EXPECT() *MockRuntimeInfoMockRecorder {
 }
 
 // GetMachineID mocks base method.
-func (m *MockRuntimeInfo) GetMachineID() (string, error) {
+func (m *MockRuntimeInfo) GetMachineID() (runtimeinfo.Machine, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMachineID")
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(runtimeinfo.Machine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
