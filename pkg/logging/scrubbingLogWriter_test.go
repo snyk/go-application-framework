@@ -1308,3 +1308,91 @@ func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t 
 
 	assert.Equal(t, "a banana", scrubbed)
 }
+
+func Test_AddSecretsFromConfig(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "profile.secret+token")
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"call to https://host/path?x=prefix-profile.secret+token-suffix failed"}` + "\n"))
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), "profile.secret+token", "the secret is scrubbed wherever it appears, special characters included")
+}
+
+func Test_AddSecretsFromConfig_MachineCredentialDeviceToken(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "sdt_example-device-token-value")
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"enrolling with sdt_example-device-token-value now"}` + "\n"))
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), "sdt_example-device-token-value")
+}
+
+func Test_AddSecretsFromConfig_ScrubsLikeGetScrubDictFromConfig(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "1234")
+	line := []byte(`{"level":"info","x":12345678,"message":"call with 1234 now"}` + "\n")
+
+	var expected bytes.Buffer
+	fromDict := NewScrubbingWriter(zerolog.MultiLevelWriter(&expected), GetScrubDictFromConfig(config))
+	_, err := fromDict.Write(line)
+	require.NoError(t, err)
+
+	var added bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&added), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+	AddSecretsFromConfig(scrubber, config)
+	_, err = writer.Write(line)
+	require.NoError(t, err)
+
+	assert.True(t, json.Valid(added.Bytes()), "the scrubbed line stays valid JSON: %s", added.String())
+	assert.Equal(t, expected.String(), added.String(), "a secret added after the writer is created is scrubbed as it would be from the start")
+}
+
+func Test_AddSecretsFromConfig_Terms(t *testing.T) {
+	const oauthToken = `{"access_token":"oauth-access-value-1","refresh_token":"oauth-refresh-value-2"}`
+	tests := []struct {
+		name   string
+		set    func(config configuration.Configuration)
+		term   string
+		scrubd bool
+	}{
+		{"oauth access token", func(c configuration.Configuration) { c.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken) }, "oauth-access-value-1", true},
+		{"oauth refresh token", func(c configuration.Configuration) { c.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken) }, "oauth-refresh-value-2", true},
+		{"redaction term as a whole word", func(c configuration.Configuration) { c.Set(REDACTION_TERMS, []string{"internal-name"}) }, "internal-name", true},
+		{
+			"short device token is not a secret",
+			func(c configuration.Configuration) { c.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "short-token") },
+			"short-token",
+			false,
+		},
+		{"empty configuration adds nothing", func(_ configuration.Configuration) {}, "plain-text", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			tt.set(config)
+			var output bytes.Buffer
+			writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+			scrubber, ok := writer.(ScrubbingLogWriter)
+			require.True(t, ok)
+			AddSecretsFromConfig(scrubber, config)
+
+			_, err := writer.Write([]byte(`{"level":"info","message":"seen ` + tt.term + ` here"}` + "\n"))
+			require.NoError(t, err)
+			assert.Equal(t, !tt.scrubd, strings.Contains(output.String(), tt.term))
+		})
+	}
+}
