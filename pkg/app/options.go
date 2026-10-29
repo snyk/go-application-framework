@@ -5,6 +5,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -56,6 +57,16 @@ func WithPostInvokeHooks(hooks ...workflow.PostInvokeHook) Opts {
 			if err := workflow.AddPostInvokeHook(engine, h); err != nil {
 				engine.GetLogger().Warn().Err(err).Msg("failed to add post-invoke hook")
 			}
+		}
+	}
+}
+
+// WithProfileRegistry makes the engine run every root invocation on the profile that the configuration key
+// profile.ConfigKey selects from the registry.
+func WithProfileRegistry(registry profile.Registry) Opts {
+	return func(engine workflow.Engine) {
+		if err := workflow.SetProfileRegistry(engine, registry); err != nil {
+			engine.GetLogger().Warn().Err(err).Msg("failed to set profile registry")
 		}
 	}
 }
