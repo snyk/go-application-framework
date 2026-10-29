@@ -39,13 +39,13 @@ var (
 	ErrAuthCanceled = errors.New("authentication failed (canceled)")
 	// ErrAuthTimedOut is returned when an auth request times out.
 	ErrAuthTimedOut = errors.New("authentication failed (timeout)")
-	// ErrMachineNotEnrolled is returned by StoredMachineCredential when no machine credential is stored.
-	ErrMachineNotEnrolled = machinecredential.ErrNotEnrolled
+	// ErrNoStoredClientCredential is returned by StoredClientCredential when no client credential is stored.
+	ErrNoStoredClientCredential = machinecredential.ErrNotEnrolled
 )
 
-// StoredMachineCredential returns the stored machine credential: its client id and its private key as
+// StoredClientCredential returns the stored client credential: its client id and its private key as
 // PKCS#8 PEM, the form `snyk auth --client-secret` accepts.
-func StoredMachineCredential(config configuration.Configuration) (clientID, keyPEM string, err error) {
+func StoredClientCredential(config configuration.Configuration) (clientID, privateKeyPEM string, err error) {
 	credential, err := machinecredential.Load(config)
 	if err != nil {
 		return "", "", err
