@@ -1282,6 +1282,37 @@ func TestScrubbingWriter_GetScrubDictFromConfig_MachineCredential(t *testing.T) 
 	}
 }
 
+func TestScrubbingWriter_GetScrubDictFromConfig_ClientPrivateKey(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, string(keyPEM))
+	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+
+	for name, line := range map[string]string{
+		"pem as is":        "key: " + string(keyPEM),
+		"one pem line":     "line: " + pemBody,
+		"escaped newlines": "value: " + strings.ReplaceAll(string(keyPEM), "\n", `\n`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			scrubbed := string(Scrub([]byte(line), GetScrubDictFromConfig(config)))
+
+			assert.NotContains(t, scrubbed, pemBody)
+		})
+	}
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_ClientPrivateKeyThatIsNotPEM(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, "not-a-pem")
+
+	scrubbed := string(Scrub([]byte("key: not-a-pem"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "key: ***", scrubbed, "like a client secret, any value is redacted")
+}
+
 func TestScrubbingWriter_GetScrubDictFromConfig_MachineClientIDStaysReadable(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, `{"client_id":"machine-client-id","private_key_pem":""}`)
