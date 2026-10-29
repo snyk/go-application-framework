@@ -3,9 +3,19 @@ package localworkflows
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -13,9 +23,11 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
+	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
@@ -270,6 +282,12 @@ func Test_autodetectAuth(t *testing.T) {
 		actual := autoDetectAuthType(config)
 		assert.Equal(t, expected, actual)
 	})
+
+	t.Run("never machine, even with a client id", func(t *testing.T) {
+		config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		config.Set(auth.PARAMETER_CLIENT_ID, "client-1")
+		assert.NotEqual(t, authTypeMachine, autoDetectAuthType(config))
+	})
 }
 
 func Test_InitAuth_NoLongerOffersAClientPrivateKeyFile(t *testing.T) {
@@ -281,6 +299,27 @@ func Test_InitAuth_NoLongerOffersAClientPrivateKeyFile(t *testing.T) {
 	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	assert.Nil(t, flags.Lookup("client-private-key-file"))
 	assert.NotNil(t, flags.Lookup(auth.PARAMETER_CLIENT_ID))
+}
+
+func Test_InitAuth_DescribesTheMachineAuthType(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	require.NoError(t, InitAuth(engine))
+
+	entry, ok := engine.GetWorkflow(WORKFLOWID_AUTH)
+	require.True(t, ok)
+	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	assert.Contains(t, flags.Lookup(AuthTypeParameter).Usage, authTypeMachine)
+}
+
+func Test_InitAuth_OffersAClientPrivateKeyAlongsideTheClientID(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	require.NoError(t, InitAuth(engine))
+
+	entry, ok := engine.GetWorkflow(WORKFLOWID_AUTH)
+	require.True(t, ok)
+	flags := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	assert.NotNil(t, flags.Lookup(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY))
+	assert.Contains(t, flags.Lookup(AuthTypeParameter).Usage, "--"+machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)
 }
 
 func Test_AuthEntryPointDI_ClearsStoredTokensInLocalAndGlobalConfig(t *testing.T) {
@@ -666,5 +705,310 @@ func Test_AuthEntryPointDI_UnusableCredentialStorageStopsBeforeTheLogin(t *testi
 				assert.NoError(t, loadStoredCredential(t, healthyStorage), "the other storage keeps the credential")
 			})
 		}
+	}
+}
+
+func newMachineAuthEnv(t *testing.T) *enrollEnv {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	server := enrollmenttest.NewServer(t)
+	config := openFileBackedConfig()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	engine := workflow.NewWorkFlowEngine(config)
+	require.NoError(t, InitAuth(engine))
+	require.NoError(t, engine.Init())
+	return &enrollEnv{home: home, server: server, engine: engine, config: config}
+}
+
+// issueMachineCredential registers a client with the fake service, as enrolling elsewhere does, and
+// returns its client id and the PEM of its key.
+func issueMachineCredential(t *testing.T, server *enrollmenttest.Server, clientID string) []byte {
+	t.Helper()
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	server.RegisterClient(clientID, &key.PublicKey)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	return keyPEM
+}
+
+func (e *enrollEnv) importMachineCredential(t *testing.T, clientID string, keyPEM []byte) error {
+	t.Helper()
+	invokeConfig := e.config.Clone()
+	invokeConfig.Set(AuthTypeParameter, authTypeMachine)
+	if clientID != "" {
+		invokeConfig.Set(auth.PARAMETER_CLIENT_ID, clientID)
+	}
+	if keyPEM != nil {
+		invokeConfig.Set(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, string(keyPEM))
+	}
+	_, err := e.engine.InvokeWithConfig(WORKFLOWID_AUTH, invokeConfig)
+	return err
+}
+
+func Test_auth_machine_importedCredentialKeepsAuthenticatingNewProcessesAfterTheTokenExpires(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	keyPEM := issueMachineCredential(t, env.server, "client-imported")
+
+	require.NoError(t, env.importMachineCredential(t, "client-imported", keyPEM))
+
+	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	tokensAfterFirstRun := env.server.TokenRequests
+	env.expireStoredAccessToken(t)
+	assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	assert.Equal(t, tokensAfterFirstRun+1, env.server.TokenRequests, "a new token was minted from the stored key")
+	assert.Equal(t, 0, env.server.EnrollmentRequests(), "importing does not enroll")
+	stored, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, "client-imported", stored.ClientID)
+}
+
+func Test_auth_machine_credentialTheServiceRejectsIsReportedAndStoresNothing(t *testing.T) {
+	rejected := map[string]func(t *testing.T, env *enrollEnv) (string, []byte){
+		"unknown client id": func(t *testing.T, env *enrollEnv) (string, []byte) {
+			t.Helper()
+			return "client-unknown", issueMachineCredential(t, env.server, "client-other")
+		},
+		"key of another client": func(t *testing.T, env *enrollEnv) (string, []byte) {
+			t.Helper()
+			issueMachineCredential(t, env.server, "client-a")
+			return "client-a", issueMachineCredential(t, env.server, "client-b")
+		},
+	}
+	for name, credentialFor := range rejected {
+		t.Run(name+", user token kept", func(t *testing.T) {
+			env := newMachineAuthEnv(t)
+			userToken := env.storeUserToken(t)
+			clientID, keyPEM := credentialFor(t, env)
+
+			err := env.importMachineCredential(t, clientID, keyPEM)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "failed authenticating as client "+clientID)
+			assert.ErrorContains(t, err, "invalid_client", "the service's reason is kept")
+			assertNothingStored(t, env.home)
+			assert.Equal(t, userToken, openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+		})
+		t.Run(name+", machine credential kept", func(t *testing.T) {
+			env := newMachineAuthEnv(t)
+			require.NoError(t, env.importMachineCredential(t, "client-first", issueMachineCredential(t, env.server, "client-first")))
+			clientID, keyPEM := credentialFor(t, env)
+
+			err := env.importMachineCredential(t, clientID, keyPEM)
+
+			require.Error(t, err)
+			stored, loadErr := machinecredential.Load(openFileBackedConfig())
+			require.NoError(t, loadErr)
+			assert.Equal(t, "client-first", stored.ClientID)
+			assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+		})
+	}
+}
+
+func Test_auth_machine_repeatImportReplacesTheCredential(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	require.NoError(t, env.importMachineCredential(t, "client-first", issueMachineCredential(t, env.server, "client-first")))
+	env.server.RevokeClient("client-first")
+
+	require.NoError(t, env.importMachineCredential(t, "client-second", issueMachineCredential(t, env.server, "client-second")))
+
+	stored, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, "client-second", stored.ClientID)
+	assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+}
+
+func Test_auth_machine_unusableStorageFailsBeforeAnyNetworkCall(t *testing.T) {
+	breakages := map[string]func(t *testing.T, env *enrollEnv){
+		"no storage": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			env.config.SetStorage(nil)
+		},
+		"storage that persists nothing": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			env.config.SetStorage(&configuration.EmptyStorage{})
+		},
+		"configuration path is a directory": func(t *testing.T, env *enrollEnv) {
+			t.Helper()
+			require.NoError(t, os.MkdirAll(filepath.Join(env.configDir(), "snyk.json"), 0o755))
+		},
+	}
+	for name, breakStorage := range breakages {
+		t.Run(name, func(t *testing.T) {
+			env := newMachineAuthEnv(t)
+			keyPEM := issueMachineCredential(t, env.server, "client-1")
+			breakStorage(t, env)
+
+			err := env.importMachineCredential(t, "client-1", keyPEM)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "credential cannot be stored")
+			assert.Equal(t, 0, env.server.TokenRequests, "no token was minted")
+		})
+	}
+}
+
+func Test_auth_machine_missingKeyFailsAndStoresNothing(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	issueMachineCredential(t, env.server, "client-1")
+
+	err := env.importMachineCredential(t, "client-1", nil)
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "--"+machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)
+	assert.Equal(t, 0, env.server.TokenRequests)
+	assertNothingStored(t, env.home)
+}
+
+func Test_auth_machine_missingClientIDFailsAndStoresNothing(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	keyPEM := issueMachineCredential(t, env.server, "client-1")
+
+	err := env.importMachineCredential(t, "", keyPEM)
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "--"+auth.PARAMETER_CLIENT_ID)
+	assert.ErrorContains(t, err, "--"+AuthTypeParameter+"="+authTypeMachine)
+	assert.Equal(t, 0, env.server.TokenRequests)
+	assertNothingStored(t, env.home)
+}
+
+func pemOf(t *testing.T, blockType string, der []byte) []byte {
+	t.Helper()
+	return pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der})
+}
+
+func Test_auth_machine_unusableKeyFailsWithoutRevealingIt(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	p384Key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	p384DER, err := x509.MarshalPKCS8PrivateKey(p384Key)
+	require.NoError(t, err)
+	pkcs8DER, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	require.NoError(t, err)
+	corruptDER := slices.Clone(pkcs8DER)
+	corruptDER[len(corruptDER)/2] ^= 0xff
+
+	keys := map[string][]byte{
+		"not PEM":          []byte("this is not a key at all, just some text on stdin"),
+		"PKCS1 RSA key":    pemOf(t, "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(rsaKey)),
+		"P-384 key":        pemOf(t, "PRIVATE KEY", p384DER),
+		"corrupt PKCS8":    pemOf(t, "PRIVATE KEY", corruptDER),
+		"truncated PKCS8":  pemOf(t, "PRIVATE KEY", pkcs8DER[:len(pkcs8DER)/2]),
+		"public key block": pemOf(t, "PUBLIC KEY", x509.MarshalPKCS1PublicKey(&rsaKey.PublicKey)),
+	}
+	for name, keyPEM := range keys {
+		t.Run(name, func(t *testing.T) {
+			env := newMachineAuthEnv(t)
+			logs := &bytes.Buffer{}
+			logger := zerolog.New(logs)
+			env.engine.SetLogger(&logger)
+
+			err := env.importMachineCredential(t, "client-1", keyPEM)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "the machine client key cannot be used")
+			assert.Equal(t, 0, env.server.TokenRequests)
+			assertNothingStored(t, env.home)
+			for _, line := range strings.Split(string(keyPEM), "\n") {
+				if line = strings.TrimSpace(line); len(line) >= 16 && !strings.HasPrefix(line, "-----") {
+					assert.NotContains(t, err.Error(), line)
+					assert.NotContains(t, logs.String(), line)
+				}
+			}
+		})
+	}
+}
+
+func Test_auth_machine_importNeverLogsTheKeyAndLaterLogsRedactIt(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs).Level(zerolog.TraceLevel)
+	env.engine.SetLogger(&logger)
+	keyPEM := issueMachineCredential(t, env.server, "client-1")
+
+	require.NoError(t, env.importMachineCredential(t, "client-1", keyPEM))
+
+	assert.Contains(t, logs.String(), "Authentication Type: machine", "the import was logged")
+	scrubDict := logging.GetScrubDictFromConfig(openFileBackedConfig())
+	for _, line := range strings.Split(string(keyPEM), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "-----") {
+			assert.NotContains(t, logs.String(), line)
+			if len(line) >= 16 {
+				assert.Contains(t, scrubDict, line, "a process started afterwards redacts the stored key")
+			}
+		}
+	}
+}
+
+func Test_auth_machine_theEnginesOwnConfigurationSeesTheCredential(t *testing.T) {
+	env := newMachineAuthEnv(t)
+
+	require.NoError(t, env.importMachineCredential(t, "client-1", issueMachineCredential(t, env.server, "client-1")))
+
+	credential, err := machinecredential.Load(env.engine.GetConfiguration())
+	require.NoError(t, err, "a host that authenticates in the same process sees the credential")
+	assert.Equal(t, "client-1", credential.ClientID)
+}
+
+func Test_auth_machine_removesTheStoredUserToken(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	env.storeUserToken(t)
+
+	require.NoError(t, env.importMachineCredential(t, "client-1", issueMachineCredential(t, env.server, "client-1")))
+
+	assert.NotContains(t, env.storedValues(t), auth.CONFIG_KEY_OAUTH_TOKEN, "the machine credential is the only stored identity")
+	assert.Empty(t, env.engine.GetConfiguration().GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the engine's own configuration no longer holds it")
+	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
+	assert.Equal(t, []string{"token-client-1-2"}, env.server.BearerTokens(), "the next process authenticates as the machine")
+}
+
+func Test_auth_machine_failedUserTokenRemovalIsReported(t *testing.T) {
+	env := newMachineAuthEnv(t)
+	keyPEM := issueMachineCredential(t, env.server, "client-1")
+	storage := mocks.NewMockStorage(gomock.NewController(t))
+	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Unlock().Return(nil).AnyTimes()
+	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	storage.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value any) error {
+		if key == auth.CONFIG_KEY_OAUTH_TOKEN && configuration.IsKeyDeleted(value) {
+			return errDiskFull
+		}
+		return nil
+	}).AnyTimes()
+	env.config.SetStorage(storage)
+
+	err := env.importMachineCredential(t, "client-1", keyPEM)
+
+	require.ErrorIs(t, err, errDiskFull)
+	assert.ErrorContains(t, err, "stored the credential of client client-1, but the token stored by a user login could not be removed")
+	assert.NotContains(t, err.Error(), "PRIVATE KEY")
+}
+
+func Test_importMachineCredential_refusesAKeyOverTheSizeCapBeforeAnythingElse(t *testing.T) {
+	for name, tt := range map[string]struct {
+		size    int
+		wantErr string
+	}{
+		"at the cap":   {size: maxMachineKeySize, wantErr: "cannot be used"},
+		"over the cap": {size: maxMachineKeySize + 1, wantErr: "larger than"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(auth.PARAMETER_CLIENT_ID, "client-1")
+			config.Set(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, strings.Repeat("A", tt.size))
+			invocationCtx := mocks.NewMockInvocationContext(gomock.NewController(t))
+			logger := zerolog.Nop()
+
+			err := importMachineCredential(invocationCtx, &logger, config, config)
+
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
 	}
 }
