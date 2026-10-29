@@ -279,11 +279,13 @@ func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger
 	if err = checkPrivateKeyStorage(invocationCtx.Context(), config); err != nil {
 		return err
 	}
-	token, err := mintToken(invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), config.GetString(configuration.API_URL), credential)
+	token, err := mintToken(invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), apiURLWithoutUserLogin(config), credential)
 	if err != nil {
 		return err
 	}
-	if err = machinecredential.Save(invocationCtx.Context(), config, credential); err != nil {
+	saveCtx, cancel := context.WithTimeout(invocationCtx.Context(), storeTimeout)
+	defer cancel()
+	if err = machinecredential.Save(saveCtx, config, credential); err != nil {
 		return err
 	}
 	if globalConfig != config {
@@ -296,10 +298,19 @@ func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger
 	config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
-	if err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
+	if err = invocationCtx.GetUserInterface().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
 		logger.Debug().Err(err).Msg("Failed to output authenticated message")
 	}
 	return nil
+}
+
+// apiURLWithoutUserLogin hides the stored user tokens, whose region would win over the configured API
+// URL, on a clone: a clone does not inherit the persisted keys, so its Sets never reach the storage.
+func apiURLWithoutUserLogin(config configuration.Configuration) string {
+	urlConfig := config.Clone()
+	urlConfig.Set(configuration.AUTHENTICATION_TOKEN, "")
+	urlConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	return urlConfig.GetString(configuration.API_URL)
 }
 
 func checkPrivateKeyStorage(ctx context.Context, config configuration.Configuration) error {
