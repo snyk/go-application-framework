@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -71,15 +72,52 @@ type scrubStruct struct {
 type ScrubbingDict map[string]scrubStruct
 
 type scrubbingLevelWriter struct {
-	m         sync.RWMutex
-	writer    zerolog.LevelWriter
-	scrubDict ScrubbingDict
+	m               sync.RWMutex
+	writer          zerolog.LevelWriter
+	scrubDict       ScrubbingDict
+	seenSecretTerms atomic.Uint64
 }
 
 type scrubbingIoWriter struct {
-	m         sync.RWMutex
-	writer    io.Writer
-	scrubDict ScrubbingDict
+	m               sync.RWMutex
+	writer          io.Writer
+	scrubDict       ScrubbingDict
+	seenSecretTerms atomic.Uint64
+}
+
+var (
+	secretTermsMu         sync.RWMutex
+	secretTerms           []string
+	secretTermsGeneration atomic.Uint64
+)
+
+// AddSecretTerms redacts terms wherever they appear, from every scrubbing writer, including those
+// created before the call, and from every dict GetScrubDictFromConfig builds afterwards. It is for
+// secrets that only become known while a workflow runs, after the host built its log writer.
+func AddSecretTerms(terms ...string) {
+	secretTermsMu.Lock()
+	defer secretTermsMu.Unlock()
+	secretTerms = append(secretTerms, terms...)
+	secretTermsGeneration.Add(1)
+}
+
+func addSecretTermsToDict(dict ScrubbingDict) {
+	secretTermsMu.RLock()
+	defer secretTermsMu.RUnlock()
+	for _, term := range secretTerms {
+		addStaticTermToDict(term, dict)
+	}
+}
+
+func syncSecretTerms(m *sync.RWMutex, dict ScrubbingDict, seen *atomic.Uint64) {
+	generation := secretTermsGeneration.Load()
+	if seen.Load() == generation {
+		return
+	}
+	m.Lock()
+	defer m.Unlock()
+	addSecretTermsToDict(dict)
+	seen.Store(generation)
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
@@ -166,6 +204,7 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
+	addSecretTermsToDict(dict)
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
 		return dict
@@ -204,6 +243,7 @@ func (w *scrubbingLevelWriter) RemoveTerm(term string) {
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	syncSecretTerms(&w.m, w.scrubDict, &w.seenSecretTerms)
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
@@ -375,6 +415,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
+	syncSecretTerms(&w.m, w.scrubDict, &w.seenSecretTerms)
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
@@ -649,6 +690,7 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) strin
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
+	syncSecretTerms(&w.m, w.scrubDict, &w.seenSecretTerms)
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
