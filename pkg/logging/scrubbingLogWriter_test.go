@@ -630,6 +630,97 @@ func TestScrub_GreedyCapturesStopAtTheirOwnDelimiter(t *testing.T) {
 	}
 }
 
+func TestScrub_RegexBareValuesAreQuoted(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "numeric short-form value keeps closing brace",
+			input:    `{"level":"debug","u":123456}`,
+			expected: `{"level":"debug","u":"***"}`,
+		},
+		{
+			name:     "unquoted token value is quoted",
+			input:    `{"level":"debug","token":abcdef}`,
+			expected: `{"level":"debug","token":"***"}`,
+		},
+		{
+			name:     "unquoted short-form value is quoted",
+			input:    `{"level":"debug","p":hunter2}`,
+			expected: `{"level":"debug","p":"***"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(scrub([]byte(test.input), dict, true))
+
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func TestScrub_LiteralTermsLeaveJSONKeysIntact(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"message", "Content"})
+	config.Set(configuration.AUTHENTICATION_TOKEN, "s3cr3t-v4lu3")
+	dict := GetScrubDictFromConfig(config)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "unterminated string is still redacted",
+			input:    `{"message:"hello"}`,
+			expected: `{"***:"hello"}`,
+		},
+		{
+			name:     "message key intact",
+			input:    `{"level":"debug","message":"hello"}`,
+			expected: `{"level":"debug","message":"hello"}`,
+		},
+		{
+			name:     "Content-Type key intact",
+			input:    `{"Content-Type":"text/plain","body":"hi"}`,
+			expected: `{"Content-Type":"text/plain","body":"hi"}`,
+		},
+		{
+			name:     "same term as value still redacted",
+			input:    `{"message":"message"}`,
+			expected: `{"message":"***"}`,
+		},
+		{
+			name:     "secret value under skipped key still redacted",
+			input:    `{"message":"s3cr3t-v4lu3"}`,
+			expected: `{"message":"***"}`,
+		},
+		{
+			name:     "key containing an escaped quote stays intact",
+			input:    `{"a\"message\"b":"v"}`,
+			expected: `{"a\"message\"b":"v"}`,
+		},
+		{
+			name:     "hyphenated key with whitespace before the colon stays intact",
+			input:    `{"Content-Type" :"text/plain"}`,
+			expected: `{"Content-Type" :"text/plain"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := string(Scrub([]byte(test.input), dict))
+
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
 func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
 		"token":    {groupToRedact: 0, regex: regexp.MustCompile("token")},
@@ -1307,4 +1398,51 @@ func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t 
 	scrubbed := string(Scrub([]byte("a banana"), GetScrubDictFromConfig(config)))
 
 	assert.Equal(t, "a banana", scrubbed)
+}
+
+func TestScrubbingWriter_JSONRedactionBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		name, input, expected, secret, term, pattern string
+	}{
+		{name: "newline escape", input: `{"message":"hello\nworld","after":"keepme"}`, term: "nworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "repeated escapes", input: `{"message":"\nworld \nworld","after":"keepme"}`, term: "nworld", expected: `{"message":"*** ***","after":"keepme"}`},
+		{name: "adjacent backslash secrets", input: `{"message":"\\","after":"keepme"}`, secret: `\`, expected: `{"message":"******","after":"keepme"}`},
+		{name: "tab escape", input: `{"message":"hello\tworld","after":"keepme"}`, term: "tworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "static term at escape", input: `{"message":"hello\nworld","after":"keepme"}`, secret: "nworld", expected: `{"message":"hello***","after":"keepme"}`},
+		{name: "escaped sensitive value", input: `{"token":"abc\"example","after":"keepme"}`, expected: `{"token":"***","after":"keepme"}`},
+		{name: "object sensitive value", input: `{"u":{"p":["secret123"]},"after":"keepme"}`, expected: `{"u":"***","after":"keepme"}`},
+		{name: "array sensitive value", input: `{"p":["secret123",2],"after":"keepme"}`, expected: `{"p":"***","after":"keepme"}`},
+		{name: "structured capture never shrinks", input: `{"data":[1],"ordinary":"hunter2"}`, pattern: `(\[1\],"ordinary":"hunter2")`, expected: `{"data":"***"}`},
+		{name: "contextual custom regex", input: `{"credential":"secret123","after":"secret123"}`, pattern: `"credential":"([^"]+)"`, expected: `{"credential":"***","after":"secret123"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, level := range []bool{false, true} {
+				t.Run(fmt.Sprintf("WriteLevel=%v", level), func(t *testing.T) {
+					config := configuration.NewInMemory()
+					config.Set(configuration.AUTHENTICATION_TOKEN, test.secret)
+					var output bytes.Buffer
+					writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+					if test.term != "" {
+						writer.(ScrubbingLogWriter).AddTermsToReplace([]string{test.term})
+					}
+					if test.pattern != "" {
+						writer.(ScrubbingLogWriter).AddTerm(test.pattern, 1)
+					}
+					var n int
+					var err error
+					if level {
+						n, err = writer.WriteLevel(zerolog.DebugLevel, []byte(test.input))
+					} else {
+						n, err = writer.Write([]byte(test.input))
+					}
+					require.NoError(t, err)
+					require.Equal(t, len(test.input), n)
+					require.Equal(t, test.expected, output.String())
+					var console bytes.Buffer
+					_, err = (zerolog.ConsoleWriter{Out: &console}).Write(output.Bytes())
+					require.NoError(t, err)
+				})
+			}
+		})
+	}
 }
