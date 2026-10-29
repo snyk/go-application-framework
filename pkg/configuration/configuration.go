@@ -1,8 +1,11 @@
 package configuration
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -97,6 +100,9 @@ type extendedViper struct {
 	configFiles         []string
 	defaultCache        *cache.Cache
 
+	// pinnedFile is the file given to WithPinnedFile. When it is set, configFiles are not used.
+	pinnedFile string
+
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
 	persistedKeys map[string]bool
@@ -186,6 +192,22 @@ func WithFiles(files ...string) Opts {
 	}
 }
 
+// WithPinnedFile pins the configuration to one absolute file. The file is read and written as JSON, and it is also the
+// storage, whose lock file sits next to it. A missing file is created by the first persisted write, and an empty or blank
+// file is an empty configuration. Unlike WithFiles, nothing is searched, and a problem is reported: NewWithOpts logs it
+// and gives an in-memory configuration without storage, Derive returns it. A corrupt or unreadable file is never
+// overwritten. The path is cleaned lexically but not checked for trust, so it must not come from user input such as an
+// IDE setting or a request parameter. When WithPinnedFile is given, WithFiles is ignored.
+func WithPinnedFile(path string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithPinnedFile()")
+		}
+		ev.pinnedFile = path
+	}
+}
+
 // WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
 func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
@@ -203,7 +225,10 @@ func WithCachingEnabled(cacheDuration time.Duration) Opts {
 
 // NewWithOpts creates a new snyk configuration file with optional parameters
 func NewWithOpts(opts ...Opts) Configuration {
-	config := createViperDefaultConfig(opts...)
+	config, err := createViperDefaultConfig(opts...)
+	if err != nil {
+		log.Printf("configuration: continuing in memory, %v", err)
+	}
 	return config
 }
 
@@ -241,8 +266,8 @@ func NewInMemory() Configuration {
 	return config
 }
 
-func createViperDefaultConfig(opts ...Opts) *extendedViper {
-	// prepare environment variables
+// newExtendedViper creates a configuration without options, files or values.
+func newExtendedViper() *extendedViper {
 	config := &extendedViper{
 		viper:                viper.New(),
 		alternativeKeys:      make(map[string][]string),
@@ -251,19 +276,92 @@ func createViperDefaultConfig(opts ...Opts) *extendedViper {
 		interkeyDependencies: make(map[string][]string),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	return config
+}
 
+// createViperDefaultConfig applies opts and reads the files. A problem with the pinned file is returned, and the
+// configuration is then in memory.
+func createViperDefaultConfig(opts ...Opts) (*extendedViper, error) {
+	config := newExtendedViper()
 	for _, opt := range opts {
 		opt(config)
 	}
+	return config, config.loadFiles()
+}
 
-	if len(config.configFiles) > 0 {
-		config.configType = jsonFile
-		readConfigFilesIntoViper(config.configFiles, config)
+// loadFiles reads the pinned file, or else the files of WithFiles as before.
+func (ev *extendedViper) loadFiles() error {
+	if ev.pinnedFile != "" {
+		ev.configFiles = nil
+		return ev.pinFile()
+	}
+	if len(ev.configFiles) > 0 {
+		ev.configType = jsonFile
+		readConfigFilesIntoViper(ev.configFiles, ev)
 	} else {
-		config.configType = inMemory
+		ev.configType = inMemory
+	}
+	return nil
+}
+
+// pinFile reads the file of WithPinnedFile. A missing file is an empty configuration. Any other problem turns ev into an
+// in-memory configuration without storage and is returned.
+func (ev *extendedViper) pinFile() error {
+	if err := validatePinnedFile(ev.pinnedFile); err != nil {
+		ev.useMemory()
+		return err
 	}
 
-	return config
+	path := filepath.Clean(ev.pinnedFile)
+	ev.storage = NewJsonStorage(path, WithConfiguration(ev), withBlankFileAsEmpty(), withExactNumbers())
+	ev.configType = jsonFile
+	ev.viper.SetConfigFile(path)
+	ev.viper.SetConfigType("json")
+
+	if content, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(content)) == 0 {
+		return nil
+	}
+	err := ev.viper.ReadInConfig()
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		ev.useMemory()
+		return fmt.Errorf("configuration file %s is not used: %w", path, err)
+	}
+	return nil
+}
+
+// useMemory turns ev into an in-memory configuration without files or storage.
+func (ev *extendedViper) useMemory() {
+	ev.configFiles = nil
+	ev.configType = inMemory
+	ev.storage = nil
+}
+
+// validatePinnedFile rejects a path that cannot name a configuration file: not absolute, a NUL byte, a trailing separator,
+// or an existing entry that is not a regular file, such as a directory or a named pipe.
+func validatePinnedFile(path string) error {
+	switch {
+	case !filepath.IsAbs(path):
+		return fmt.Errorf("configuration file %q is not an absolute path", path)
+	case strings.ContainsRune(path, 0):
+		return errors.New("configuration file path contains a NUL byte")
+	case strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(filepath.Separator)):
+		return fmt.Errorf("configuration file path %q ends with a separator", path)
+	}
+	info, err := os.Stat(path)
+	switch {
+	case err == nil && info.IsDir():
+		return fmt.Errorf("configuration file path %q is a directory", path)
+	case err == nil && !info.Mode().IsRegular():
+		// a named pipe or a device such as CON on Windows would block the read
+		return fmt.Errorf("configuration file path %q is not a regular file", path)
+	case err != nil && !errors.Is(err, fs.ErrNotExist):
+		// nothing is read from a path that cannot be checked
+		return fmt.Errorf("configuration file path %q cannot be checked: %w", path, err)
+	}
+	return nil
 }
 
 func readConfigFilesIntoViper(files []string, config *extendedViper) {
@@ -281,6 +379,99 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	// read config files
 	//nolint:errcheck // breaking api change needed to fix this
 	_ = config.viper.ReadInConfig()
+}
+
+// Derive returns a configuration with the registrations of base, but none of its values, cache contents or storage.
+// base must be a configuration created by this package, such as one from NewWithOpts or Clone, because the registrations
+// are read from its internal state. Any other implementation, including a wrapper that embeds a Configuration, gives an
+// error, and no file is read.
+//
+// The result copies the default value functions (shared by reference), alternative keys, key dependencies, persisted
+// keys, flag sets and supported environment variables and prefixes of base, and its automatic environment. Options in opts
+// apply first, so a registration in opts wins over the one of base for the same key. Values set on base, such as an
+// explicit MACHINE_ID, are not visible; Set what is needed.
+//
+// Persisted keys are copied, so a Set of one of them writes to the storage of the result. Without a storage, for example
+// without WithPinnedFile, Set changes memory only; check GetStorage() != nil.
+//
+// A cache enabled on base is enabled on the result, with the TTL of base, unless opts enable a cache. Values are not
+// carried over, so a cache that base has turned off with its CONFIG_CACHE_DISABLED value is enabled on the result.
+//
+// WithFiles works as in NewWithOpts. WithPinnedFile makes Derive return an error for a file that cannot be used.
+func Derive(base Configuration, opts ...Opts) (Configuration, error) {
+	src, ok := base.(*extendedViper)
+	if !ok {
+		return nil, fmt.Errorf("cannot derive from configuration of type %T", base)
+	}
+
+	derived := newExtendedViper()
+	for _, opt := range opts {
+		opt(derived)
+	}
+	hasCache, cacheTTL := src.copyRegistrationsTo(derived)
+
+	if err := derived.loadFiles(); err != nil {
+		return nil, fmt.Errorf("cannot derive configuration: %w", err)
+	}
+
+	// last, so that the caller's cache option wins and no cache is set up for an invalid file
+	if hasCache && derived.defaultCache == nil {
+		WithCachingEnabled(cacheTTL)(derived)
+	}
+	return derived, nil
+}
+
+// copyRegistrationsTo copies the registrations of ev to dst, where registrations already in dst win. It reports whether ev
+// has a cache and the TTL of ev, read under the same lock.
+func (ev *extendedViper) copyRegistrationsTo(dst *extendedViper) (bool, time.Duration) {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	if ev.automaticEnvEnabled {
+		dst.AutomaticEnv()
+	}
+	for k, v := range ev.defaultValues {
+		if _, ok := dst.defaultValues[k]; !ok {
+			dst.defaultValues[k] = v
+		}
+	}
+	for k, v := range ev.alternativeKeys {
+		if _, ok := dst.alternativeKeys[k]; !ok {
+			dst.alternativeKeys[k] = slices.Clone(v)
+		}
+	}
+	for k, v := range ev.interkeyDependencies {
+		dst.interkeyDependencies[k] = appendMissing(dst.interkeyDependencies[k], v...)
+	}
+	for k := range ev.persistedKeys {
+		dst.persistedKeys[k] = true
+	}
+	dst.supportedEnvVars = appendMissing(dst.supportedEnvVars, ev.supportedEnvVars...)
+	dst.supportedEnvVarPrefixes = appendMissing(dst.supportedEnvVarPrefixes, ev.supportedEnvVarPrefixes...)
+	for _, flagset := range ev.flagsets {
+		//nolint:errcheck // viper's BindPFlags returns nil for a non-nil flag set
+		_ = dst.AddFlagSet(flagset)
+	}
+	return ev.defaultCache != nil, ev.cacheTTLValue()
+}
+
+// cacheTTLValue returns the TTL value of the configuration. The caller holds the lock; GetDuration cannot be used then.
+func (ev *extendedViper) cacheTTLValue() time.Duration {
+	ttl, err := toDuration(ev.viper.Get(CONFIG_CACHE_TTL))
+	if err != nil {
+		return 0
+	}
+	return ttl
+}
+
+// appendMissing appends the values not yet in list.
+func appendMissing(list []string, values ...string) []string {
+	for _, v := range values {
+		if !slices.Contains(list, v) {
+			list = append(list, v)
+		}
+	}
+	return list
 }
 
 // Clone creates a copy of the current configuration.
