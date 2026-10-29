@@ -221,3 +221,24 @@ func Test_CreateAuthenticator_CorruptStoredMachineCredential_IsAMachineAuthentic
 	var machineErr *machinecredential.AuthenticationError
 	assert.ErrorAs(t, err, &machineErr)
 }
+
+func Test_StoredMachineCredential_ReturnsTheClientIDAndTheKeyAsPEM(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	config := configuration.NewWithOpts()
+	require.NoError(t, machinecredential.Publish(config, machinecredential.Credential{ClientID: "client-1", Key: key}))
+
+	clientID, keyPEM, err := StoredMachineCredential(config)
+
+	require.NoError(t, err)
+	assert.Equal(t, "client-1", clientID)
+	parsed, err := machineenrollment.ParseKeyPEM([]byte(keyPEM))
+	require.NoError(t, err)
+	assert.True(t, key.Equal(parsed))
+}
+
+func Test_StoredMachineCredential_NoneStored_ReturnsErrMachineNotEnrolled(t *testing.T) {
+	_, _, err := StoredMachineCredential(configuration.NewWithOpts())
+
+	assert.ErrorIs(t, err, ErrMachineNotEnrolled)
+}
