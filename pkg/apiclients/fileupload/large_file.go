@@ -87,7 +87,7 @@ func (c *HTTPClient) uploadChunks(ctx context.Context, revisionID RevisionID, fi
 
 			err := c.uploadRevisionSealableClient.UploadFiles(groupCtx, c.cfg.OrgID, revisionID,
 				[]uploadrevision.UploadFile{{
-					Path:   p.name,
+					Path:   c.pathEncoder(p.name),
 					Size:   p.length,
 					Reader: io.NewSectionReader(file, p.offset, p.length),
 				}})
