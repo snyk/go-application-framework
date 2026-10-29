@@ -329,13 +329,8 @@ func (e *EngineImpl) Invoke(
 	id Identifier,
 	opts ...EngineInvokeOption,
 ) ([]Data, error) {
-	var output []Data
-	var err error
-	var callbackPanic any
-	var callbackPanicStack []byte
-
 	if !e.initialized.Load() {
-		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
+		return nil, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
 
 	// Parse options once upfront.
@@ -349,75 +344,12 @@ func (e *EngineImpl) Invoke(
 
 	hookCtx := options.ctxFunc()
 
+	var output []Data
+	var err error
+	var panicked *callbackPanic
 	workflow, ok := e.GetWorkflow(id)
 	if ok {
-		callback := workflow.GetEntryPoint()
-		if callback != nil {
-			e.mu.Lock()
-			e.invocationCounter++
-
-			// Apply defaults for options the caller didn't set.
-			if options.config == nil {
-				options.config = e.config.Clone()
-			}
-
-			// prepare logger
-			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
-			localLogger := e.logger.With().Str("ext", prefix).Logger()
-
-			localUi := e.ui
-
-			var localAnalytics analytics.Analytics
-			if options.ic != nil {
-				tmpAnalytics := &analytics.AnalyticsImpl{}
-				tmpAnalytics.SetInstrumentation(options.ic)
-				localAnalytics = NewAnalyticsWrapper(tmpAnalytics, id.Host)
-			} else {
-				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
-			}
-
-			// prepare networkAccess; always a clone, the invocation mutates it
-			localNetworkAccess := CreateNetworkAccess(e.networkAccess, options.config)
-			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
-				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
-				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
-					return hostErrorHandler(withExtensionName(err, id.Host), ctx)
-				})
-			}
-
-			localEngine := &engineWrapper{
-				WrappedEngine:                   e,
-				defaultInstrumentationCollector: options.ic,
-				defaultCtxFunc:                  options.ctxFunc,
-			}
-			e.mu.Unlock()
-
-			// create a context object for the invocation
-			invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
-
-			// invoke workflow through its callback, recovering panics so hooks can observe them
-			localLogger.Printf("Workflow Start")
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						callbackPanic = r
-						callbackPanicStack = debug.Stack()
-					}
-				}()
-				output, err = callback(invocationCtx, options.input)
-			}()
-			err = withExtensionName(err, id.Host)
-			localLogger.Printf("Workflow End")
-
-			if callbackPanic != nil {
-				localLogger.Printf("Workflow callback panicked: %v\n%s", callbackPanic, callbackPanicStack)
-				if panicErr, ok := callbackPanic.(error); ok {
-					err = fmt.Errorf("workflow callback panicked: %w", panicErr)
-				} else {
-					err = fmt.Errorf("workflow callback panicked: %v", callbackPanic)
-				}
-			}
-		}
+		output, panicked, err = e.runWorkflow(id, workflow, &options)
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)
 	}
@@ -426,11 +358,111 @@ func (e *EngineImpl) Invoke(
 		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic, options.config)
 	}
 
-	if callbackPanic != nil {
-		panic(callbackPanic)
+	if panicked != nil {
+		panic(panicked.value)
 	}
 
 	return output, err
+}
+
+// callbackPanic records a panic of a workflow callback, which is re-raised after the post-invoke hooks ran.
+type callbackPanic struct {
+	value any
+	stack []byte
+}
+
+// runWorkflow runs the callback of the workflow on a fresh invocation context. It returns the panic of the callback, if
+// any, and the error of the invocation, which includes the panic. A workflow without a callback runs nothing.
+func (e *EngineImpl) runWorkflow(id Identifier, workflow Entry, options *engineRuntimeConfig) ([]Data, *callbackPanic, error) {
+	callback := workflow.GetEntryPoint()
+	if callback == nil {
+		return nil, nil, nil
+	}
+
+	e.mu.Lock()
+	e.invocationCounter++
+	e.applyInvocationDefaults(options)
+
+	// prepare logger
+	prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
+	localLogger := e.logger.With().Str("ext", prefix).Logger()
+
+	localUi := e.ui
+	localAnalytics := e.invocationAnalytics(id, options.ic)
+	localNetworkAccess := e.invocationNetworkAccess(id, options.config)
+	localEngine := e.invocationEngine(options)
+	e.mu.Unlock()
+
+	// create a context object for the invocation
+	invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
+
+	// invoke workflow through its callback, recovering panics so hooks can observe them
+	localLogger.Printf("Workflow Start")
+	output, panicked, err := runCallback(callback, invocationCtx, options.input)
+	err = withExtensionName(err, id.Host)
+	localLogger.Printf("Workflow End")
+
+	if panicked != nil {
+		localLogger.Printf("Workflow callback panicked: %v\n%s", panicked.value, panicked.stack)
+		if panicErr, ok := panicked.value.(error); ok {
+			err = fmt.Errorf("workflow callback panicked: %w", panicErr)
+		} else {
+			err = fmt.Errorf("workflow callback panicked: %v", panicked.value)
+		}
+	}
+	return output, panicked, err
+}
+
+// runCallback runs the callback and reports a panic of it instead of raising it.
+func runCallback(callback Callback, invocationCtx InvocationContext, input []Data) (output []Data, panicked *callbackPanic, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = &callbackPanic{value: r, stack: debug.Stack()}
+		}
+	}()
+	output, err = callback(invocationCtx, input)
+	return output, panicked, err
+}
+
+// applyInvocationDefaults gives an invocation the engine's configuration clone, unless the caller set one.
+// The caller holds the engine lock.
+func (e *EngineImpl) applyInvocationDefaults(options *engineRuntimeConfig) {
+	if options.config == nil {
+		options.config = e.config.Clone()
+	}
+}
+
+// invocationAnalytics returns the analytics of an invocation, with the instrumentation collector of the caller if it
+// gave one. The caller holds the engine lock.
+func (e *EngineImpl) invocationAnalytics(id Identifier, ic analytics.InstrumentationCollector) analytics.Analytics {
+	if ic == nil {
+		return NewAnalyticsWrapper(e.analytics, id.Host)
+	}
+	tmpAnalytics := &analytics.AnalyticsImpl{}
+	tmpAnalytics.SetInstrumentation(ic)
+	return NewAnalyticsWrapper(tmpAnalytics, id.Host)
+}
+
+// invocationNetworkAccess returns a clone of the engine's network access for an invocation, bound to its configuration.
+// The invocation mutates it, so it is never shared. The caller holds the engine lock.
+func (e *EngineImpl) invocationNetworkAccess(id Identifier, config configuration.Configuration) networking.NetworkAccess {
+	localNetworkAccess := CreateNetworkAccess(e.networkAccess, config)
+	if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
+		// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
+		localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
+			return hostErrorHandler(withExtensionName(err, id.Host), ctx)
+		})
+	}
+	return localNetworkAccess
+}
+
+// invocationEngine returns the engine that an invocation reaches through its context. The caller holds the engine lock.
+func (e *EngineImpl) invocationEngine(options *engineRuntimeConfig) *engineWrapper {
+	return &engineWrapper{
+		WrappedEngine:                   e,
+		defaultInstrumentationCollector: options.ic,
+		defaultCtxFunc:                  options.ctxFunc,
+	}
 }
 
 // withExtensionName keeps an extension name that is already set, so a nested workflow's attribution survives the outer one.
