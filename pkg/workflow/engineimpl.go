@@ -21,6 +21,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -41,6 +42,8 @@ type EngineImpl struct {
 	mu                sync.RWMutex
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
+	// profiles is set once by WithProfileRegistry and never written after construction.
+	profiles profile.Registry
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -61,6 +64,8 @@ type engineRuntimeConfig struct {
 	ic      analytics.InstrumentationCollector
 	ctxFunc func() context.Context
 	nested  bool
+	// scope is the configuration and network access of the profile the invocation runs on, nil for the engine's own.
+	scope *engineWrapper
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -88,6 +93,12 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 		if ctx != nil {
 			e.ctxFunc = func() context.Context { return ctx }
 		}
+	}
+}
+
+func withScope(scope *engineWrapper) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.scope = scope
 	}
 }
 
@@ -171,17 +182,36 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 	return &id
 }
 
+// EngineOption configures an engine when it is created with NewWorkFlowEngine.
+type EngineOption func(*EngineImpl)
+
+// WithProfileRegistry makes the engine run every root invocation that has no configuration of its own on the profile that
+// the engine's configuration selects with profile.ConfigKey. An invocation given a configuration with WithConfig bypasses
+// profiles.
+func WithProfileRegistry(registry profile.Registry) EngineOption {
+	return func(e *EngineImpl) {
+		e.profiles = registry
+	}
+}
+
 // NewWorkFlowEngine is an implementation of the Engine interface.
 // It is called when creating a new app engine via CreateAppEngine().
-func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
-	engine := NewDefaultWorkFlowEngine()
+func NewWorkFlowEngine(configuration configuration.Configuration, opts ...EngineOption) Engine {
+	engine := newEngineImpl()
+	for _, opt := range opts {
+		opt(engine)
+	}
 	engine.SetConfiguration(configuration)
 	return engine
 }
 
 // NewDefaultWorkFlowEngine is an implementation of the Engine interface.
 func NewDefaultWorkFlowEngine() Engine {
-	engine := &EngineImpl{
+	return newEngineImpl()
+}
+
+func newEngineImpl() *EngineImpl {
+	return &EngineImpl{
 		workflows:            make(map[string]Entry),
 		extensionInitializer: make([]ExtensionInit, 0),
 		invocationCounter:    0,
@@ -189,7 +219,6 @@ func NewDefaultWorkFlowEngine() Engine {
 		config:               configuration.New(),
 		ui:                   ui.DefaultUi(),
 	}
-	return engine
 }
 
 // Init initializes the engine by setting up the necessary defaults.
@@ -344,18 +373,31 @@ func (e *EngineImpl) Invoke(
 
 	hookCtx := options.ctxFunc()
 
+	// Only a root invocation without a configuration of its own selects a profile; a nested one keeps the profile of its
+	// parent. A failed selection fails the invocation, and the hooks see an empty configuration rather than the engine's.
+	scope, selectErr := e.selectInvocationScope(&options)
+	if scope != nil {
+		options.scope = scope
+	}
+	if selectErr != nil {
+		options.config = scope.config
+	}
+
 	var output []Data
 	var err error
 	var panicked *callbackPanic
 	workflow, ok := e.GetWorkflow(id)
-	if ok {
+	switch {
+	case selectErr != nil:
+		err = selectErr
+	case ok:
 		output, panicked, err = e.runWorkflow(id, workflow, &options)
-	} else {
+	default:
 		err = fmt.Errorf("workflow '%v' not found", id)
 	}
 
 	if !options.nested {
-		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic, options.config)
+		e.firePostInvokeHooks(hookCtx, id, output, err, &options)
 	}
 
 	if panicked != nil {
@@ -422,12 +464,17 @@ func runCallback(callback Callback, invocationCtx InvocationContext, input []Dat
 	return output, panicked, err
 }
 
-// applyInvocationDefaults gives an invocation the engine's configuration clone, unless the caller set one.
-// The caller holds the engine lock.
+// applyInvocationDefaults sets the configuration of an invocation the caller gave none: a clone of the configuration of
+// its scope, or else of the engine's. The caller holds the engine lock.
 func (e *EngineImpl) applyInvocationDefaults(options *engineRuntimeConfig) {
-	if options.config == nil {
-		options.config = e.config.Clone()
+	if options.config != nil {
+		return
 	}
+	if options.scope != nil {
+		options.config = options.scope.config.Clone()
+		return
+	}
+	options.config = e.config.Clone()
 }
 
 // invocationAnalytics returns the analytics of an invocation, with the instrumentation collector of the caller if it
@@ -454,14 +501,18 @@ func (e *EngineImpl) invocationNetworkAccess(id Identifier, config configuration
 	return localNetworkAccess
 }
 
-// invocationEngine returns the engine wrapper an invocation reaches through its context, carrying the invocation's
-// instrumentation collector and context function.
+// invocationEngine returns the engine that an invocation reaches through its context. Its configuration and network access
+// are those of the invocation's scope, which the post-invoke hooks share, so both views of a profile agree.
 func (e *EngineImpl) invocationEngine(options *engineRuntimeConfig) *engineWrapper {
-	return &engineWrapper{
+	localEngine := &engineWrapper{
 		WrappedEngine:                   e,
 		defaultInstrumentationCollector: options.ic,
 		defaultCtxFunc:                  options.ctxFunc,
 	}
+	if options.scope != nil {
+		localEngine.config, localEngine.networkAccess = options.scope.config, options.scope.networkAccess
+	}
+	return localEngine
 }
 
 // withExtensionName keeps an extension name that is already set, so a nested workflow's attribution survives the outer one.
@@ -478,7 +529,15 @@ func withExtensionName(err error, extensionName string) error {
 	return catalogErr
 }
 
-func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector, cfg configuration.Configuration) {
+// firePostInvokeHooks runs the hooks of the engine for an invocation with the given options. The scope of the invocation
+// replaces the engine's configuration and network access for the hooks, if it has one.
+func (e *EngineImpl) firePostInvokeHooks(
+	ctx context.Context,
+	id Identifier,
+	invokeOutput []Data,
+	invokeErr error,
+	options *engineRuntimeConfig,
+) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
 		e.mu.RUnlock()
@@ -495,7 +554,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 
 	// Use per-invocation config if provided, otherwise fall back to engine-wide config
-	resolvedCfg := cfg
+	resolvedCfg := options.config
 	if resolvedCfg == nil {
 		resolvedCfg = e.config
 	}
@@ -509,7 +568,10 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	defer cancel()
 
 	// Nested invocations made through hookEngine must be bound by the same timeout.
-	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: ic}
+	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: options.ic}
+	if options.scope != nil {
+		hookEngine.config, hookEngine.networkAccess = options.scope.config, options.scope.networkAccess
+	}
 
 	var wg sync.WaitGroup
 	var completedCount atomic.Int32
@@ -646,4 +708,52 @@ func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
+}
+
+// errProfileWithoutConfig is returned when a registry gives a profile without a configuration.
+var errProfileWithoutConfig = errors.New("profile has no configuration")
+
+// selectInvocationScope returns the scope of a root invocation without a configuration of its own: the scope of the profile
+// that the engine's configuration selects. A nil scope without an error means the invocation keeps the engine's own
+// configuration: a nested invocation, an invocation with WithConfig, no registry, or the default profile. A failed selection
+// returns the error with the empty scope of failedProfileScope.
+//
+//nolint:nilnil // a nil scope without an error is the documented "keep the engine's configuration" result
+func (e *EngineImpl) selectInvocationScope(options *engineRuntimeConfig) (*engineWrapper, error) {
+	// The registry is set once at construction, so it is read without the lock.
+	if options.nested || options.config != nil || e.profiles == nil {
+		return nil, nil
+	}
+
+	e.mu.RLock()
+	name := e.config.GetString(profile.ConfigKey)
+	e.mu.RUnlock()
+	if name == "" {
+		name = profile.DefaultName
+	}
+
+	p, err := e.profiles.Profile(name)
+	if err != nil {
+		return e.failedProfileScope(), err
+	}
+	if p == nil || p.Configuration() == nil {
+		return e.failedProfileScope(), fmt.Errorf("profile %q has no configuration: %w", name, errProfileWithoutConfig)
+	}
+	if p.Name() == profile.DefaultName {
+		return nil, nil
+	}
+
+	cfg := p.Configuration()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return &engineWrapper{config: cfg, networkAccess: CreateNetworkAccess(e.networkAccess, cfg)}, nil
+}
+
+// failedProfileScope returns the scope of an invocation whose profile selection failed: an empty configuration that reads
+// no files and no environment, with a network access bound to it.
+func (e *EngineImpl) failedProfileScope() *engineWrapper {
+	cfg := configuration.NewWithOpts()
+	bare := networking.NewNetworkAccess(cfg)
+	bare.SetLogger(e.logger)
+	return &engineWrapper{config: cfg, networkAccess: bare}
 }
