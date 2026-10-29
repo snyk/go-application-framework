@@ -136,11 +136,17 @@ func SecretTerms(config configuration.Configuration) []string {
 	if err := json.Unmarshal([]byte(config.GetString(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)), &stored); err != nil {
 		return nil
 	}
+	return PEMSecretTerms(stored.PrivateKeyPEM)
+}
+
+// PEMSecretTerms returns the values of a PEM key that must not appear in logs: the whole PEM and each
+// of its lines, as a log may escape the line breaks.
+func PEMSecretTerms(keyPEM string) []string {
 	var terms []string
-	if pem := strings.TrimSpace(stored.PrivateKeyPEM); len(pem) >= minSecretTermLength {
+	if pem := strings.TrimSpace(keyPEM); len(pem) >= minSecretTermLength {
 		terms = append(terms, pem)
 	}
-	for _, line := range strings.Split(stored.PrivateKeyPEM, "\n") {
+	for _, line := range strings.Split(keyPEM, "\n") {
 		if line = strings.TrimSpace(line); len(line) >= minSecretTermLength && !strings.HasPrefix(line, "-----") {
 			terms = append(terms, line)
 		}

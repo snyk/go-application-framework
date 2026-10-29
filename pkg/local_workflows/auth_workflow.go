@@ -2,7 +2,9 @@ package localworkflows
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -11,8 +13,10 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -159,6 +163,12 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
 
+	// Before any stored machine credential is hidden: the deferred cleanup would delete the one this
+	// login saves.
+	if secret := config.GetString(auth.PARAMETER_CLIENT_SECRET); strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) && isPEM(secret) {
+		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret)
+	}
+
 	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
 	// stored credential until the login succeeds.
 	credentialConfigs := map[string]configuration.Configuration{"local": config, "global": globalConfig}
@@ -175,11 +185,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
-	logger.Print("Unset existing auth keys")
-	config.Unset(configuration.AUTHENTICATION_TOKEN)
-	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
-	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	clearUserTokens(logger, config, globalConfig)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
@@ -240,4 +246,84 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	}
 
 	return err
+}
+
+func clearUserTokens(logger *zerolog.Logger, config, globalConfig configuration.Configuration) {
+	logger.Print("Unset existing auth keys")
+	config.Unset(configuration.AUTHENTICATION_TOKEN)
+	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+}
+
+func isPEM(secret string) bool {
+	return strings.HasPrefix(strings.TrimSpace(secret), "-----BEGIN")
+}
+
+// authenticateWithPrivateKey logs in with the client credentials grant and a private_key_jwt client
+// assertion signed by keyPEM, then stores the key so that later processes can mint their own tokens.
+func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, globalConfig configuration.Configuration, keyPEM string) error {
+	// The host built its log writer before the flags were parsed, so its client secret term is empty.
+	logging.AddSecretTerms(machinecredential.PEMSecretTerms(keyPEM)...)
+	clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
+	if clientID == "" {
+		return fmt.Errorf("a private key in --%s needs --%s", auth.PARAMETER_CLIENT_SECRET, auth.PARAMETER_CLIENT_ID)
+	}
+	key, err := machineenrollment.ParseKeyPEM([]byte(keyPEM))
+	if err != nil {
+		return fmt.Errorf("--%s looks like a PEM private key but cannot be used: %w. "+
+			"It must be an unencrypted PKCS#8 RSA or P-256 key (BEGIN PRIVATE KEY) with real line breaks; "+
+			"convert other formats with `openssl pkcs8 -topk8 -nocrypt -in <key file>`", auth.PARAMETER_CLIENT_SECRET, err)
+	}
+	credential := machinecredential.Credential{ClientID: clientID, Key: key}
+	if err = checkPrivateKeyStorage(invocationCtx.Context(), config); err != nil {
+		return err
+	}
+	token, err := mintToken(invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), config.GetString(configuration.API_URL), credential)
+	if err != nil {
+		return err
+	}
+	if err = machinecredential.Save(invocationCtx.Context(), config, credential); err != nil {
+		return err
+	}
+	if globalConfig != config {
+		if err = machinecredential.Publish(globalConfig, credential); err != nil {
+			return err
+		}
+	}
+	clearUserTokens(logger, config, globalConfig)
+	// Later processes derive the API URL from this token's audience.
+	config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	if err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
+		logger.Debug().Err(err).Msg("Failed to output authenticated message")
+	}
+	return nil
+}
+
+func checkPrivateKeyStorage(ctx context.Context, config configuration.Configuration) error {
+	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
+		return errors.New("the private key cannot be stored: the configuration has no storage")
+	}
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	if err := machinecredential.CheckStorage(ctx, config); err != nil {
+		return fmt.Errorf("the private key cannot be stored: %w", err)
+	}
+	return nil
+}
+
+// mintToken works on a throwaway configuration, because the authenticator persists the token it
+// mints, and nothing may be stored before the key is.
+func mintToken(httpClient *http.Client, apiURL string, credential machinecredential.Credential) (string, error) {
+	mintConfig := configuration.NewWithOpts()
+	mintConfig.Set(configuration.API_URL, apiURL)
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(mintConfig,
+		auth.WithHttpClient(httpClient),
+		auth.WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
+	if err := authenticator.Authenticate(); err != nil {
+		return "", fmt.Errorf("failed authenticating as client %s, so nothing was stored: %w", credential.ClientID, err)
+	}
+	return mintConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), nil
 }

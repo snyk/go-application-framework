@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -522,9 +523,18 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	}
 	s.jtis[jti] = true
 	s.TokenRequests++
-	accessToken := fmt.Sprintf("token-%s-%d", clientID, s.TokenRequests)
+	accessToken := s.accessToken(clientID)
 	s.tokens[accessToken] = clientID
 	writeJSON(w, http.StatusOK, map[string]any{"access_token": accessToken, "token_type": "bearer", "expires_in": 3600})
+}
+
+// accessToken returns an unsigned JWT: clients only decode its claims, for the API URL in aud.
+func (s *Server) accessToken(clientID string) string {
+	claims, err := json.Marshal(map[string]any{"sub": clientID, "aud": []string{s.URL}, "jti": strconv.Itoa(s.TokenRequests)})
+	if err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`)) + "." + base64.RawURLEncoding.EncodeToString(claims) + "."
 }
 
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
