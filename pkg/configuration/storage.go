@@ -1,9 +1,11 @@
 package configuration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -58,10 +60,54 @@ func IsKeyDeleted(val any) bool {
 	return val == keyDeleted
 }
 
+// withBlankFileAsEmpty makes Set treat a file that holds only white space like an empty file. It is off by default.
+func withBlankFileAsEmpty() JsonOption {
+	return func(s *JsonStorage) { s.blankFileAsEmpty = true }
+}
+
+// withExactNumbers makes Set keep the text of every number of the file, instead of rounding it to float64. Data after the
+// document is rejected in both modes, as json.Unmarshal does. It is off by default.
+func withExactNumbers() JsonOption {
+	return func(s *JsonStorage) { s.exactNumbers = true }
+}
+
+// fileMutexes holds one mutex per absolute, cleaned file path. Set reads and rewrites the whole file, so the writes of all
+// storages of one path are serialized in this process. A symbolic link to the same file, and other processes, need the
+// file lock. The map keeps one entry per path used, which is negligible for a command line tool.
+var fileMutexes = struct {
+	sync.Mutex
+	byPath map[string]*sync.Mutex
+}{byPath: map[string]*sync.Mutex{}}
+
+func fileMutex(path string) *sync.Mutex {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	key := filepath.Clean(path)
+
+	fileMutexes.Lock()
+	defer fileMutexes.Unlock()
+	mu, ok := fileMutexes.byPath[key]
+	if !ok {
+		mu = &sync.Mutex{}
+		fileMutexes.byPath[key] = mu
+	}
+	return mu
+}
+
+// isBlankJSON reports whether data holds only the white space JSON allows: space, tab, carriage return and line feed.
+func isBlankJSON(data []byte) bool {
+	return len(bytes.Trim(data, " \t\r\n")) == 0
+}
+
 type JsonStorage struct {
 	path   string
 	config Configuration
-	mutex  sync.Mutex
+
+	// blankFileAsEmpty treats a file that holds only white space like an empty file.
+	blankFileAsEmpty bool
+	// exactNumbers keeps the text of the numbers of the file when a key is written.
+	exactNumbers bool
 
 	fileInterProcessLock *flock.Flock
 	// fileInProcessLock is a semaphore rather than a sync.Mutex so Lock can give up when ctx is done.
@@ -111,8 +157,9 @@ func (s *JsonStorage) getNonEnvVarKey(key string) string {
 }
 
 func (s *JsonStorage) Set(key string, value any) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	mu := fileMutex(s.path)
+	mu.Lock()
+	defer mu.Unlock()
 	// Check if path to file exists
 	err := os.MkdirAll(filepath.Dir(s.path), fileperms.FILEPERM_755)
 	if err != nil {
@@ -123,13 +170,13 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	if len(fileBytes) == 0 {
+	if len(fileBytes) == 0 || (s.blankFileAsEmpty && isBlankJSON(fileBytes)) {
 		const emptyJson = "{}"
 		fileBytes = []byte(emptyJson)
 	}
 
 	config := make(map[string]any)
-	err = json.Unmarshal(fileBytes, &config)
+	err = decodeConfig(fileBytes, &config, s.exactNumbers)
 	if err != nil {
 		return err
 	}
@@ -153,6 +200,26 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 	return writeConfigFile(s.path, configJson)
+}
+
+// decodeConfig decodes a configuration file. With exact numbers, a number keeps its text, and data after the top-level
+// value is an error, as json.Unmarshal reports it.
+func decodeConfig(data []byte, config *map[string]any, exactNumbers bool) error {
+	if !exactNumbers {
+		return json.Unmarshal(data, config)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(config); err != nil {
+		if errors.Is(err, io.EOF) {
+			return io.ErrUnexpectedEOF
+		}
+		return err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return errors.New("invalid data after the top-level value")
+	}
+	return nil
 }
 
 // ensureFilePermissions removes non-owner permissions without failing reads if repair fails.
