@@ -40,6 +40,11 @@ const (
 // (accessed via TestResult.GetMetadataValue).
 const (
 	TestResultMetadataKeyAsset = "asset"
+
+	// The producer records the target id at scan time; renderers prefer it over
+	// deriving one from the directory, which may have moved or belong to another project.
+	TestResultMetadataKeyTargetId        = "targetid"
+	TestResultMetadataKeyTargetDirectory = "target-directory"
 )
 
 // config holds configuration for the test API client, set using ConfigOption functions.
