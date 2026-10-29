@@ -737,6 +737,23 @@ func issueMachineCredential(t *testing.T, server *enrollmenttest.Server, clientI
 	return keyPEM
 }
 
+// storeUserTokens stores the token of each kind of user login, with the alternative keys a host such
+// as the Snyk CLI registers for the API token.
+func (e *enrollEnv) storeUserTokens(t *testing.T) map[string]string {
+	t.Helper()
+	e.config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_cfg_api", auth.CONFIG_KEY_TOKEN})
+	tokens := map[string]string{
+		auth.CONFIG_KEY_OAUTH_TOKEN:        e.storeUserToken(t),
+		configuration.AUTHENTICATION_TOKEN: "00000000-0000-0000-0000-000000000000",
+		auth.CONFIG_KEY_TOKEN:              "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456",
+	}
+	for _, key := range []string{configuration.AUTHENTICATION_TOKEN, auth.CONFIG_KEY_TOKEN} {
+		e.config.PersistInStorage(key)
+		e.config.Set(key, tokens[key])
+	}
+	return tokens
+}
+
 func (e *enrollEnv) importMachineCredential(t *testing.T, clientID string, keyPEM []byte) error {
 	t.Helper()
 	invokeConfig := e.config.Clone()
@@ -781,9 +798,9 @@ func Test_auth_machine_credentialTheServiceRejectsIsReportedAndStoresNothing(t *
 		},
 	}
 	for name, credentialFor := range rejected {
-		t.Run(name+", user token kept", func(t *testing.T) {
+		t.Run(name+", user tokens kept", func(t *testing.T) {
 			env := newMachineAuthEnv(t)
-			userToken := env.storeUserToken(t)
+			userTokens := env.storeUserTokens(t)
 			clientID, keyPEM := credentialFor(t, env)
 
 			err := env.importMachineCredential(t, clientID, keyPEM)
@@ -792,7 +809,10 @@ func Test_auth_machine_credentialTheServiceRejectsIsReportedAndStoresNothing(t *
 			assert.ErrorContains(t, err, "failed authenticating as client "+clientID)
 			assert.ErrorContains(t, err, "invalid_client", "the service's reason is kept")
 			assertNothingStored(t, env.home)
-			assert.Equal(t, userToken, openFileBackedConfig().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+			stored := env.storedValues(t)
+			for key, token := range userTokens {
+				assert.Equal(t, token, stored[key], key)
+			}
 		})
 		t.Run(name+", machine credential kept", func(t *testing.T) {
 			env := newMachineAuthEnv(t)
@@ -957,38 +977,20 @@ func Test_auth_machine_theEnginesOwnConfigurationSeesTheCredential(t *testing.T)
 	assert.Equal(t, "client-1", credential.ClientID)
 }
 
-func Test_auth_machine_removesTheStoredUserToken(t *testing.T) {
+func Test_auth_machine_removesTheStoredUserTokensLikeALogin(t *testing.T) {
 	env := newMachineAuthEnv(t)
-	env.storeUserToken(t)
+	userTokens := env.storeUserTokens(t)
 
 	require.NoError(t, env.importMachineCredential(t, "client-1", issueMachineCredential(t, env.server, "client-1")))
 
-	assert.NotContains(t, env.storedValues(t), auth.CONFIG_KEY_OAUTH_TOKEN, "the machine credential is the only stored identity")
-	assert.Empty(t, env.engine.GetConfiguration().GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "the engine's own configuration no longer holds it")
+	stored := env.storedValues(t)
+	for key := range userTokens {
+		assert.NotContains(t, stored, key, "the machine credential is the only stored identity")
+		assert.Empty(t, env.engine.GetConfiguration().GetString(key), "the engine's own configuration no longer holds %s", key)
+	}
+	assert.Contains(t, stored, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
 	require.Equal(t, http.StatusOK, env.whoamiInNewProcess(t))
 	assert.Equal(t, []string{"token-client-1-2"}, env.server.BearerTokens(), "the next process authenticates as the machine")
-}
-
-func Test_auth_machine_failedUserTokenRemovalIsReported(t *testing.T) {
-	env := newMachineAuthEnv(t)
-	keyPEM := issueMachineCredential(t, env.server, "client-1")
-	storage := mocks.NewMockStorage(gomock.NewController(t))
-	storage.EXPECT().Lock(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	storage.EXPECT().Unlock().Return(nil).AnyTimes()
-	storage.EXPECT().Refresh(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	storage.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value any) error {
-		if key == auth.CONFIG_KEY_OAUTH_TOKEN && configuration.IsKeyDeleted(value) {
-			return errDiskFull
-		}
-		return nil
-	}).AnyTimes()
-	env.config.SetStorage(storage)
-
-	err := env.importMachineCredential(t, "client-1", keyPEM)
-
-	require.ErrorIs(t, err, errDiskFull)
-	assert.ErrorContains(t, err, "stored the credential of client client-1, but the token stored by a user login could not be removed")
-	assert.NotContains(t, err.Error(), "PRIVATE KEY")
 }
 
 func Test_importMachineCredential_refusesAKeyOverTheSizeCapBeforeAnythingElse(t *testing.T) {

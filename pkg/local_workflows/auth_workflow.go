@@ -152,6 +152,14 @@ func deleteOrRestoreMachineCredentials(configs map[string]configuration.Configur
 	return err
 }
 
+func clearUserTokens(logger *zerolog.Logger, config, globalConfig configuration.Configuration) {
+	logger.Print("Unset existing auth keys")
+	config.Unset(configuration.AUTHENTICATION_TOKEN)
+	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+}
+
 func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
@@ -187,11 +195,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
-	logger.Print("Unset existing auth keys")
-	config.Unset(configuration.AUTHENTICATION_TOKEN)
-	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
-	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	clearUserTokens(logger, config, globalConfig)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
@@ -288,9 +292,7 @@ func importMachineCredential(invocationCtx workflow.InvocationContext, logger *z
 			return err
 		}
 	}
-	if err = forgetUserToken(invocationCtx.Context(), storeTimeout, logger, config, engineConfig); err != nil {
-		return fmt.Errorf("stored the credential of client %s, but the token stored by a user login could not be removed and will be used instead of the machine credential: %w", clientID, err)
-	}
+	clearUserTokens(logger, config, engineConfig)
 	if err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
 		logger.Debug().Err(err).Msg("Failed to output authenticated message")
 	}
