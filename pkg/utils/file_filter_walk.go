@@ -215,6 +215,7 @@ func (fw *FileFilter) discoverFiles(ruleFiles []string, options ...WalkFilteredF
 	walker := newRuleWalker(fw, ruleFiles, config.extraRules)
 	foundRules, excludedDirs, err := walker.collect()
 	if err != nil {
+		fw.releaseTrackedFiles()
 		return nil, nil, err
 	}
 

@@ -179,6 +179,33 @@ func TestFileFilter_trackedFilesAreLoadedOnceUntilReleased(t *testing.T) {
 	assert.True(t, first.paths["tracked.ts"])
 }
 
+func TestFileFilter_trackedFilesAreReleasedWhenRuleCollectionFails(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file permissions are not enforced")
+	}
+
+	root := t.TempDir()
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("ignored/\n"))
+	createFileInPath(t, filepath.Join(root, "ignored", "tracked.ts"), []byte("x"))
+	unreadableRules := filepath.Join(root, "z", ".gitignore")
+	createFileInPath(t, unreadableRules, []byte("token.txt\n"))
+	require.NoError(t, os.Chmod(unreadableRules, 0o000))
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(unreadableRules, 0o644)) })
+	repo, err := git.PlainInit(root, false)
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	_, err = worktree.Add(filepath.Join("ignored", "tracked.ts"))
+	require.NoError(t, err)
+	config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+	_, err = fileFilter.WalkFilteredFiles([]string{".gitignore"})
+
+	require.Error(t, err)
+	assert.Nil(t, fileFilter.trackedFiles)
+}
+
 func filterFiles(t *testing.T, fileFilter *FileFilter, ruleFile string, options ...WalkFilteredFilesOption) []string {
 	t.Helper()
 
