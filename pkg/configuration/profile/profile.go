@@ -41,3 +41,7 @@ type profileImpl struct {
 
 func (p *profileImpl) Name() string                               { return p.name }
 func (p *profileImpl) Configuration() configuration.Configuration { return p.config }
+
+// ConfigKey names the profile a root invocation runs on. It is namespaced so a generic "profile" flag of another
+// command cannot change the selection, and it avoids prefixes that apps read environment variables for.
+const ConfigKey = "config_profile"

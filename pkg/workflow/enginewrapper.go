@@ -18,6 +18,9 @@ type engineWrapper struct {
 	WrappedEngine                   Engine
 	defaultInstrumentationCollector analytics.InstrumentationCollector
 	defaultCtxFunc                  func() context.Context
+	// config and networkAccess replace the engine's own when the invocation runs on a profile; nil otherwise.
+	config        configuration.Configuration
+	networkAccess networking.NetworkAccess
 }
 
 var _ Engine = (*engineWrapper)(nil)
@@ -45,7 +48,7 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 // Invoke invokes the workflow with the given identifier.
 // Calls through the wrapper are marked as nested so post-invoke hooks are skipped.
 func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
-	opts = append([]EngineInvokeOption{withNested()}, opts...)
+	opts = append([]EngineInvokeOption{withNested(), withProfileConfig(e.config)}, opts...)
 
 	options := &engineRuntimeConfig{}
 	for _, opt := range opts {
@@ -91,10 +94,16 @@ func (e *engineWrapper) GetAnalytics() analytics.Analytics {
 }
 
 func (e *engineWrapper) GetNetworkAccess() networking.NetworkAccess {
+	if e.networkAccess != nil {
+		return e.networkAccess
+	}
 	return e.WrappedEngine.GetNetworkAccess()
 }
 
 func (e *engineWrapper) GetConfiguration() configuration.Configuration {
+	if e.config != nil {
+		return e.config
+	}
 	return e.WrappedEngine.GetConfiguration()
 }
 
