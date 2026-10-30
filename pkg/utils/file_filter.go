@@ -38,6 +38,8 @@ const gitIgnoreGlobPrefix = "#gitignore:"
 type FileFilter struct {
 	path            string
 	defaultRules    []string
+	ruleFiles       []string
+	extraRules      []string
 	logger          *zerolog.Logger
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName

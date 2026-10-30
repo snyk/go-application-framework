@@ -28,15 +28,15 @@ type ruleWalker struct {
 	excludedDirs        map[string]struct{}
 }
 
-func newRuleWalker(filter *FileFilter, ruleFiles []string, extraRules []string) *ruleWalker {
+func newRuleWalker(filter *FileFilter) *ruleWalker {
 	w := &ruleWalker{
 		filter:              filter,
-		ruleFiles:           ruleFiles,
+		ruleFiles:           filter.ruleFiles,
 		respectTrackedFiles: filter.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES),
 		excludedDirs:        map[string]struct{}{},
 	}
-	w.hasNegation = slices.ContainsFunc(extraRules, isNegation)
-	w.addMatchers(extraRules)
+	w.hasNegation = slices.ContainsFunc(filter.extraRules, isNegation)
+	w.addMatchers(filter.extraRules)
 	w.addMatchers(filter.defaultRules)
 	return w
 }
@@ -185,20 +185,22 @@ func (w *ruleWalker) loadTrackedDirs() {
 	}
 }
 
-type WalkFilteredFilesOption func(*walkConfig)
-
-type walkConfig struct {
-	extraRules []string
-}
-
-func WithExtraRules(rules []string) WalkFilteredFilesOption {
-	return func(config *walkConfig) {
-		config.extraRules = rules
+func WithRuleFiles(ruleFiles []string) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.ruleFiles = ruleFiles
+		return nil
 	}
 }
 
-func (fw *FileFilter) WalkFilteredFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, error) {
-	files, rules, err := fw.discoverFiles(ruleFiles, options...)
+func WithExtraRules(rules []string) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.extraRules = rules
+		return nil
+	}
+}
+
+func (fw *FileFilter) WalkFilteredFiles() (chan string, error) {
+	files, rules, err := fw.discoverFiles()
 	if err != nil {
 		return nil, err
 	}
@@ -206,13 +208,8 @@ func (fw *FileFilter) WalkFilteredFiles(ruleFiles []string, options ...WalkFilte
 	return fw.GetFilteredFiles(files, rules), nil
 }
 
-func (fw *FileFilter) discoverFiles(ruleFiles []string, options ...WalkFilteredFilesOption) (chan string, []string, error) {
-	var config walkConfig
-	for _, option := range options {
-		option(&config)
-	}
-
-	walker := newRuleWalker(fw, ruleFiles, config.extraRules)
+func (fw *FileFilter) discoverFiles() (chan string, []string, error) {
+	walker := newRuleWalker(fw)
 	foundRules, excludedDirs, err := walker.collect()
 	if err != nil {
 		fw.releaseTrackedFiles()
@@ -225,7 +222,7 @@ func (fw *FileFilter) discoverFiles(ruleFiles []string, options ...WalkFilteredF
 		fw.sendFilesSkipping(excludedDirs, files)
 	}()
 
-	return files, slices.Concat(config.extraRules, fw.defaultRules, foundRules), nil
+	return files, slices.Concat(fw.extraRules, fw.defaultRules, foundRules), nil
 }
 
 func (fw *FileFilter) sendFilesSkipping(excludedDirs map[string]struct{}, files chan<- string) {
