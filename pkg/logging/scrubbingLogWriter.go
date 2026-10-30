@@ -22,6 +22,7 @@ import (
 	"io"
 	"os/user"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -153,26 +154,62 @@ const minDeviceTokenTermLength = 16
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
-	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
-	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
-	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
-	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
-	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
-		addStaticTermToDict(token, dict)
-	}
-	for _, term := range machinecredential.SecretTerms(config) {
-		addStaticTermToDict(term, dict)
+	for _, secret := range secretsFromConfig(config) {
+		addStaticTermToDict(secret, dict)
 	}
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
-	token, err := auth.GetOAuthToken(config)
-	if err != nil || token == nil {
-		return dict
-	}
-	addStaticTermToDict(token.AccessToken, dict)
-	addStaticTermToDict(token.RefreshToken, dict)
 	return dict
+}
+
+// AddSecretsFromConfig makes the writer scrub the secrets the configuration holds, wherever they appear in a
+// message, and the redaction terms it configures. The writer is typically created before it is known which
+// configuration a command runs on, for example the one of a profile, and this adds the secrets of that
+// configuration afterwards. The secrets are scrubbed as GetScrubDictFromConfig scrubs them.
+func AddSecretsFromConfig(writer ScrubbingLogWriter, config configuration.Configuration) {
+	addSecretTerms(writer, secretsFromConfig(config))
+	writer.AddTermsToReplace(config.GetStringSlice(REDACTION_TERMS))
+}
+
+// addSecretTerms adds literal secrets the way GetScrubDictFromConfig adds them, so both redact them alike.
+func addSecretTerms(writer ScrubbingLogWriter, secrets []string) {
+	var mu *sync.RWMutex
+	var dict ScrubbingDict
+	switch w := writer.(type) {
+	case *scrubbingLevelWriter:
+		mu, dict = &w.m, w.scrubDict
+	case *scrubbingIoWriter:
+		mu, dict = &w.m, w.scrubDict
+	default:
+		for _, secret := range secrets {
+			writer.AddTerm(regexp.QuoteMeta(secret), 0)
+		}
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, secret := range secrets {
+		addStaticTermToDict(secret, dict)
+	}
+}
+
+// secretsFromConfig returns the credentials a configuration holds.
+func secretsFromConfig(config configuration.Configuration) []string {
+	secrets := []string{
+		config.GetString(configuration.AUTHENTICATION_TOKEN),
+		config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN),
+		config.GetString(auth.PARAMETER_CLIENT_SECRET),
+		config.GetString(auth.PARAMETER_CLIENT_ID),
+	}
+	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
+		secrets = append(secrets, token)
+	}
+	secrets = append(secrets, machinecredential.SecretTerms(config)...)
+	if token, err := auth.GetOAuthToken(config); err == nil && token != nil {
+		secrets = append(secrets, token.AccessToken, token.RefreshToken)
+	}
+	return slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })
 }
 
 func getDefaultDict() ScrubbingDict {
