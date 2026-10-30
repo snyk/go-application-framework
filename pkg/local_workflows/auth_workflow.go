@@ -87,6 +87,17 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	return nil, err
 }
 
+// AuthTypeOf returns the authentication type the auth workflow uses for the configuration: the one that was asked
+// for with the auth type parameter, otherwise the one it detects from the token it was given and the integration.
+// Applications use it to tell in advance which auth type a command will use. An unknown type is returned as given.
+func AuthTypeOf(config configuration.Configuration) string {
+	authType := config.GetString(AuthTypeParameter)
+	if len(authType) == 0 {
+		authType = autoDetectAuthType(config)
+	}
+	return authType
+}
+
 func autoDetectAuthType(config configuration.Configuration) string {
 	// testing if an API token was specified
 	token := config.GetString(ConfigurationNewAuthenticationToken)
@@ -154,10 +165,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
-	authType := config.GetString(AuthTypeParameter)
-	if len(authType) == 0 {
-		authType = autoDetectAuthType(config)
-	}
+	authType := AuthTypeOf(config)
 
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
