@@ -44,7 +44,7 @@ var (
 )
 
 // StoredClientCredential returns the stored client credential: its client id and its private key as
-// PKCS#8 PEM, the form `snyk auth --client-secret` accepts.
+// PKCS#8 PEM. The key is long-lived, so keep it off command lines, which other local users can read.
 func StoredClientCredential(config configuration.Configuration) (clientID, privateKeyPEM string, err error) {
 	credential, err := machinecredential.Load(config)
 	if err != nil {
