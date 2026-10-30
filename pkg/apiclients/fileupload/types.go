@@ -16,3 +16,10 @@ type UploadResult struct {
 	UploadedFilesCount int           // The number of uploaded files.
 	SkippedFiles       []SkippedFile // The list of files which were skipped.
 }
+
+// LargeFileUploadResult represents the result of a large file upload.
+type LargeFileUploadResult struct {
+	RevisionID RevisionID // The ID of the revision which was created.
+	Size       int64      // The size of the uploaded file in bytes.
+	ChunkCount int        // The number of chunks the file was split into.
+}
