@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,8 +11,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -229,4 +232,83 @@ func TestAuthenticationError_Is(t *testing.T) {
 	err = middleware.AddAuthenticationHeader(authenticator, config, request)
 	assert.ErrorIs(t, err, middleware.ErrAuthenticationFailed)
 	assert.ErrorContains(t, err, "nope")
+}
+
+func TestAuthHeaderMiddleware_MachineAuthenticationError(t *testing.T) {
+	logger := zerolog.Nop()
+	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	newRequest := func(t *testing.T, rawURL string) *http.Request {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, rawURL, http.NoBody)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "token caller-set")
+		req.Header.Set("Session-Token", "token caller-set")
+		return req
+	}
+
+	type sent struct {
+		called        bool
+		authorization string
+		sessionToken  string
+	}
+	recordingNext := func(s *sent) http.RoundTripper {
+		return roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			s.called = true
+			s.authorization = r.Header.Get("Authorization")
+			s.sessionToken = r.Header.Get("Session-Token")
+			return &http.Response{StatusCode: http.StatusOK}, nil
+		})
+	}
+
+	t.Run("Snyk API host — blocks the request, whatever the caller set, and returns the cause", func(t *testing.T) {
+		var s sent
+		authenticator := mocks.NewMockAuthenticator(gomock.NewController(t))
+		authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).
+			Return(&machinecredential.AuthenticationError{Err: errors.New("the stored machine credential cannot be used")})
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(config, authenticator, recordingNext(&s), &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
+
+		var machineErr *machinecredential.AuthenticationError
+		require.ErrorAs(t, err, &machineErr)
+		assert.ErrorContains(t, err, "the stored machine credential cannot be used")
+		assert.False(t, s.called, "the request is not sent")
+		require.NotNil(t, resp, "a nil response makes a proxying caller relay the original request itself")
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.NotNil(t, resp.Header)
+		assert.NotNil(t, resp.Request)
+	})
+
+	t.Run("other authentication error — passes through with the caller's headers", func(t *testing.T) {
+		var s sent
+		authenticator := mocks.NewMockAuthenticator(gomock.NewController(t))
+		authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(errors.New("refresh failed"))
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(config, authenticator, recordingNext(&s), &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, s.called)
+		assert.Equal(t, "token caller-set", s.authorization)
+		assert.Equal(t, "token caller-set", s.sessionToken)
+	})
+
+	t.Run("host without Snyk authentication — keeps the caller's headers", func(t *testing.T) {
+		var s sent
+		authenticator := mocks.NewMockAuthenticator(gomock.NewController(t))
+		authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).
+			Return(&machinecredential.AuthenticationError{Err: errors.New("unused")}).Times(0)
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(config, authenticator, recordingNext(&s), &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://example.com/api/something"))
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, s.called)
+		assert.Equal(t, "token caller-set", s.authorization)
+		assert.Equal(t, "token caller-set", s.sessionToken)
+	})
 }

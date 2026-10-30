@@ -21,9 +21,7 @@ func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFla
 			return existingValue, nil
 		}
 
-		localNetworkStack := engine.GetNetworkAccess().Clone()
-		localNetworkStack.SetConfiguration(c)
-		httpClient := localNetworkStack.GetHttpClient()
+		httpClient := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		return GetFeatureFlagValue(featureFlagName, c, httpClient)
 	}
 

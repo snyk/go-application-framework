@@ -22,10 +22,10 @@ func TestRuntimeInfo_NewWithName(t *testing.T) {
 func TestRuntimeInfo_NewHasNoMachineId(t *testing.T) {
 	ri := New()
 
-	machineID, err := ri.GetMachineID()
+	machine, err := ri.GetMachineID()
 
 	assert.ErrorIs(t, err, ErrNoMachineID)
-	assert.Empty(t, machineID)
+	assert.Empty(t, machine.ID)
 }
 
 func TestRuntimeInfo_NewWithVersion(t *testing.T) {

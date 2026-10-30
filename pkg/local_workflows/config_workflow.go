@@ -33,6 +33,8 @@ var regions = []SnykRegion{
 
 var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
 
+var lookupHost = net.LookupHost
+
 func InitConfigWorkflow(engine workflow.Engine) error {
 	// map environmentAlias to an existing value
 	engine.GetConfiguration().AddAlternativeKeys(environmentAlias, []string{configuration.INPUT_DIRECTORY})
@@ -105,7 +107,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 	}
 
 	// test if the url is can be looked up
-	addr, err := net.LookupHost(envUrl.Host)
+	addr, err := lookupHost(envUrl.Host)
 	if err != nil {
 		return "", err
 	}
