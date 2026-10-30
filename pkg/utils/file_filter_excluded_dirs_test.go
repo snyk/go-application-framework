@@ -59,9 +59,9 @@ func TestFileFilter_ExcludedDirectoriesAreNotWalked(t *testing.T) {
 
 			recorder := newMetricsRecorder(t)
 			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder))
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithRuleFiles([]string{test.ruleFile}))
 
-			files := filterFiles(t, fileFilter, test.ruleFile)
+			files := filterFiles(t, fileFilter)
 
 			expected := []string{filepath.Join(root, test.ruleFile)}
 			for _, file := range kept {
@@ -81,9 +81,9 @@ func TestFileFilter_ReIncludedFileInExcludedDirectoryIsKept(t *testing.T) {
 	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("node_modules/*\n!node_modules/keep.js\n"))
 	createFileInPath(t, filepath.Join(root, "node_modules", "keep.js"), []byte("x"))
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
 
-	files := filterFiles(t, fileFilter, ".gitignore")
+	files := filterFiles(t, fileFilter)
 
 	assert.Contains(t, files, filepath.Join(root, "node_modules", "keep.js"))
 }
@@ -105,7 +105,7 @@ func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
 		}},
 		{name: "WalkFilteredFiles", filter: func(b *testing.B, fileFilter *FileFilter) <-chan string {
 			b.Helper()
-			files, err := fileFilter.WalkFilteredFiles([]string{".gitignore"})
+			files, err := fileFilter.WalkFilteredFiles()
 			require.NoError(b, err)
 			return files
 		}},
@@ -119,7 +119,7 @@ func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
 				for b.Loop() {
 					metrics.ResetAccumulated()
 					recorder := metrics.NewRecorderFake()
-					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithThreadNumber(threads))
+					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithThreadNumber(threads), WithRuleFiles([]string{".gitignore"}))
 
 					outputFiles = 0
 					for range flow.filter(b, fileFilter) {
@@ -146,12 +146,12 @@ func TestFileFilter_UnreadableDirectoryDoesNotStopRuleCollection(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, os.Chmod(locked, 0o755)) })
 	createFileInPath(t, filepath.Join(root, "z", ".gitignore"), []byte("token.txt\n"))
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
 
 	createFileInPath(t, filepath.Join(root, "z", "token.txt"), []byte("x"))
 	createFileInPath(t, filepath.Join(root, "z", "code.ts"), []byte("x"))
 
-	files := filterFiles(t, fileFilter, ".gitignore")
+	files := filterFiles(t, fileFilter)
 
 	assert.Contains(t, files, filepath.Join(root, "z", "code.ts"))
 	assert.NotContains(t, files, filepath.Join(root, "z", "token.txt"))
@@ -198,18 +198,18 @@ func TestFileFilter_trackedFilesAreReleasedWhenRuleCollectionFails(t *testing.T)
 	_, err = worktree.Add(filepath.Join("ignored", "tracked.ts"))
 	require.NoError(t, err)
 	config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
 
-	_, err = fileFilter.WalkFilteredFiles([]string{".gitignore"})
+	_, err = fileFilter.WalkFilteredFiles()
 
 	require.Error(t, err)
 	assert.Nil(t, fileFilter.trackedFiles)
 }
 
-func filterFiles(t *testing.T, fileFilter *FileFilter, ruleFile string, options ...WalkFilteredFilesOption) []string {
+func filterFiles(t *testing.T, fileFilter *FileFilter) []string {
 	t.Helper()
 
-	filesCh, err := fileFilter.WalkFilteredFiles([]string{ruleFile}, options...)
+	filesCh, err := fileFilter.WalkFilteredFiles()
 	require.NoError(t, err)
 
 	return drainFilteredFiles(t, filesCh)
