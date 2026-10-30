@@ -11,6 +11,10 @@ import (
 // DefaultName is the name of the default profile, whose configuration is the base configuration of the registry.
 const DefaultName = "default"
 
+// ConfigKey is the configuration key that names the profile a root invocation runs on. An empty value selects the
+// default profile.
+const ConfigKey = "config_profile"
+
 // ErrNotFound is returned when a profile does not exist.
 var ErrNotFound = errors.New("profile not found")
 
