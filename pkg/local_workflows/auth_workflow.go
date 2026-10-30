@@ -164,7 +164,12 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	// Before any stored machine credential is hidden: the deferred cleanup would delete the one this
 	// login saves.
-	if secret := config.GetString(auth.PARAMETER_CLIENT_SECRET); strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) && isPEM(secret) {
+	if secret := config.GetString(auth.PARAMETER_CLIENT_SECRET); isPEM(secret) {
+		// The other flows would ignore the key or forward it to the legacy CLI in its arguments.
+		if !strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) {
+			return fmt.Errorf("a private key in --%s needs --%s=%s, but the authentication type is %s",
+				auth.PARAMETER_CLIENT_SECRET, AuthTypeParameter, auth.AUTH_TYPE_OAUTH, authType)
+		}
 		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret)
 	}
 

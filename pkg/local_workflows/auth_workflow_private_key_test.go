@@ -284,3 +284,32 @@ func Test_auth_privateKeySecret_missingClientIDFailsAndStoresNothing(t *testing.
 	assert.Equal(t, 0, env.server.TokenRequests)
 	assertNothingStored(t, env.home)
 }
+
+func Test_auth_privateKeySecret_otherAuthTypesFailBeforeUsingTheKey(t *testing.T) {
+	authTypes := map[string]func(config configuration.Configuration){
+		"auth type token": func(config configuration.Configuration) { config.Set(AuthTypeParameter, auth.AUTH_TYPE_TOKEN) },
+		"auth type pat":   func(config configuration.Configuration) { config.Set(AuthTypeParameter, auth.AUTH_TYPE_PAT) },
+		"IDE detected":    func(config configuration.Configuration) { config.Set(configuration.INTEGRATION_NAME, "VS_CODE") },
+	}
+	for name, setAuthType := range authTypes {
+		t.Run(name, func(t *testing.T) {
+			env := newPrivateKeyAuthEnv(t)
+			userTokens := env.storeUserTokens(t)
+			invokeConfig := env.config.Clone()
+			invokeConfig.Set(auth.PARAMETER_CLIENT_ID, "client-1")
+			invokeConfig.Set(auth.PARAMETER_CLIENT_SECRET, issueClientKey(t, env.server, "client-1"))
+			setAuthType(invokeConfig)
+
+			_, err := env.engine.InvokeWithConfig(WORKFLOWID_AUTH, invokeConfig)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "--"+AuthTypeParameter+"="+auth.AUTH_TYPE_OAUTH)
+			assert.Equal(t, 0, env.server.TokenRequests)
+			assertNothingStored(t, env.home)
+			stored := env.storedValues(t)
+			for key, token := range userTokens {
+				assert.Equal(t, token, stored[key], key)
+			}
+		})
+	}
+}
