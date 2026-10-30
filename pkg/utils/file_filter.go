@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,11 +38,15 @@ const gitIgnoreGlobPrefix = "#gitignore:"
 type FileFilter struct {
 	path            string
 	defaultRules    []string
+	ruleFiles       []string
+	extraRules      []string
 	logger          *zerolog.Logger
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
+	trackedFilesMu  sync.Mutex
+	trackedFiles    *trackedFiles
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -216,6 +221,8 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+//
+// Deprecated: use WalkFilteredFiles, which skips folders the ignore rules exclude instead of walking them.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -368,6 +375,28 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	return globs, nil
 }
 
+type trackedFiles struct {
+	repoRoot string
+	paths    map[string]bool
+}
+
+// Shared with the folder walker so the git index is read once per run instead of twice.
+func (fw *FileFilter) loadTrackedFiles() (*trackedFiles, bool) {
+	fw.trackedFilesMu.Lock()
+	defer fw.trackedFilesMu.Unlock()
+
+	if fw.trackedFiles == nil {
+		fw.trackedFiles = fw.readTrackedFiles()
+	}
+	return fw.trackedFiles, fw.trackedFiles != nil
+}
+
+func (fw *FileFilter) releaseTrackedFiles() {
+	fw.trackedFilesMu.Lock()
+	defer fw.trackedFilesMu.Unlock()
+	fw.trackedFiles = nil
+}
+
 // trackedFileExclusionPredicate builds the exclusion predicate used when
 // FF_GITIGNORE_RESPECT_TRACKED_FILES is enabled. keptCount is incremented for every file that a
 // .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
@@ -398,50 +427,61 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		return defaultPredicate
 	}
 
-	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+	trackedFiles, ok := fw.loadTrackedFiles()
+	// Release so a filter reused across scans, as the IDE language server does, does not serve a stale git index.
+	fw.releaseTrackedFiles()
+	if !ok {
 		return defaultPredicate
-	}
-
-	worktree, err := repo.Worktree()
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
-		return defaultPredicate
-	}
-
-	gitIndex, err := repo.Storer.Index()
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to get git index: %v", err)
-		return defaultPredicate
-	}
-
-	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
-	if err != nil {
-		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
-		return defaultPredicate
-	}
-
-	trackedFiles := make(map[string]bool, len(gitIndex.Entries))
-	for _, entry := range gitIndex.Entries {
-		trackedFiles[entry.Name] = true
 	}
 
 	return func(file string) bool {
 		normalizedPath := filepath.ToSlash(file)
-		relativePath, err := filepath.Rel(repoRoot, file)
+		relativePath, err := filepath.Rel(trackedFiles.repoRoot, file)
 		if err != nil {
 			return allMatcher.MatchesPath(normalizedPath)
 		}
 
-		if trackedFiles[filepath.ToSlash(relativePath)] {
+		if trackedFiles.paths[filepath.ToSlash(relativePath)] {
 			return otherMatcher.MatchesPath(normalizedPath)
 		}
 
 		return allMatcher.MatchesPath(normalizedPath)
 	}
+}
+
+func (fw *FileFilter) readTrackedFiles() *trackedFiles {
+	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+		return nil
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
+		return nil
+	}
+
+	gitIndex, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get git index: %v", err)
+		return nil
+	}
+
+	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
+		return nil
+	}
+
+	paths := make(map[string]bool, len(gitIndex.Entries))
+	for _, entry := range gitIndex.Entries {
+		paths[entry.Name] = true
+	}
+
+	return &trackedFiles{repoRoot: repoRoot, paths: paths}
 }
 
 func matchingRepositoryRoot(scanRoot, worktreeRoot string) (string, error) {
