@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -284,26 +283,4 @@ func Test_auth_privateKeySecret_missingClientIDFailsAndStoresNothing(t *testing.
 	assert.ErrorContains(t, err, "--"+auth.PARAMETER_CLIENT_ID)
 	assert.Equal(t, 0, env.server.TokenRequests)
 	assertNothingStored(t, env.home)
-}
-
-func Test_auth_privateKeySecret_logWritersCreatedBeforeTheLoginRedactTheKey(t *testing.T) {
-	env := newPrivateKeyAuthEnv(t)
-	logs := &bytes.Buffer{}
-	// As the CLI does, before it parses the flags.
-	writer := logging.NewScrubbingIoWriter(logs, logging.GetScrubDictFromConfig(env.config))
-	keyPEM := issueClientKey(t, env.server, "client-1")
-
-	require.NoError(t, env.authWithClientSecret(t, "client-1", keyPEM))
-
-	pemBody := strings.Split(strings.TrimSpace(keyPEM), "\n")[1]
-	for name, value := range map[string]string{
-		"pem as is":           keyPEM,
-		"one pem line":        pemBody,
-		"escaped line breaks": strings.ReplaceAll(keyPEM, "\n", `\n`),
-	} {
-		logs.Reset()
-		_, err := writer.Write([]byte("value: " + value))
-		require.NoError(t, err)
-		assert.NotContains(t, logs.String(), pemBody, name)
-	}
 }

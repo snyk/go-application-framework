@@ -16,7 +16,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -263,8 +262,6 @@ func isPEM(secret string) bool {
 // authenticateWithPrivateKey logs in with the client credentials grant and a private_key_jwt client
 // assertion signed by keyPEM, then stores the key so that later processes can mint their own tokens.
 func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, globalConfig configuration.Configuration, keyPEM string) error {
-	// The host built its log writer before the flags were parsed, so its client secret term is empty.
-	logging.AddSecretTerms(machinecredential.PEMSecretTerms(keyPEM)...)
 	clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
 	if clientID == "" {
 		return fmt.Errorf("a private key in --%s needs --%s", auth.PARAMETER_CLIENT_SECRET, auth.PARAMETER_CLIENT_ID)

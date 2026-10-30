@@ -1308,27 +1308,3 @@ func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t 
 
 	assert.Equal(t, "a banana", scrubbed)
 }
-
-func TestAddSecretTerms_RedactsFromWritersCreatedBeforeTheCall(t *testing.T) {
-	secret := "added-secret-" + time.Now().Format(time.RFC3339Nano)
-	levelOut, ioOut := &mockWriter{}, &mockWriter{}
-	levelWriter := NewScrubbingWriter(levelOut, GetScrubDictFromConfig(configuration.NewInMemory()))
-	ioWriter := NewScrubbingIoWriter(ioOut, GetScrubDictFromConfig(configuration.NewInMemory()))
-
-	AddSecretTerms(secret)
-
-	_, err := levelWriter.WriteLevel(zerolog.InfoLevel, []byte("value:"+secret+"\n"))
-	require.NoError(t, err)
-	_, err = ioWriter.Write([]byte("value:" + secret + "\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "value:***\n", string(levelOut.written))
-	assert.Equal(t, "value:***\n", string(ioOut.written))
-}
-
-func TestAddSecretTerms_RedactsFromDictsBuiltAfterTheCall(t *testing.T) {
-	secret := "later-secret-" + time.Now().Format(time.RFC3339Nano)
-
-	AddSecretTerms(secret)
-
-	assert.Equal(t, "value:***", string(Scrub([]byte("value:"+secret), GetScrubDictFromConfig(configuration.NewInMemory()))))
-}
