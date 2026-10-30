@@ -2,7 +2,9 @@ package localworkflows
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -22,9 +25,11 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	AuthTypeParameter = "auth-type"
+	authTypeMachine   = "machine"
 )
 
-var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
+var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ", ", authTypeMachine, "); ",
+	authTypeMachine, " stores the credential of an enrolled machine, given as --", auth.PARAMETER_CLIENT_ID, " and --", machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)
 
 const templateConsoleMessage = `
 Now redirecting you to our auth page, go ahead and log in,
@@ -46,6 +51,7 @@ func InitAuth(engine workflow.Engine) error {
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
+	config.String(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, "", "Machine credential, PKCS8 PEM private key of the client")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
 	return err
@@ -146,6 +152,14 @@ func deleteOrRestoreMachineCredentials(configs map[string]configuration.Configur
 	return err
 }
 
+func clearUserTokens(logger *zerolog.Logger, config, globalConfig configuration.Configuration) {
+	logger.Print("Unset existing auth keys")
+	config.Unset(configuration.AUTHENTICATION_TOKEN)
+	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+}
+
 func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
@@ -158,6 +172,12 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
+
+	// Before the user tokens are cleared and any stored machine credential is hidden: an import that
+	// fails must leave the existing identity in place, and a successful one must not be deleted.
+	if strings.EqualFold(authType, authTypeMachine) {
+		return importMachineCredential(invocationCtx, logger, config, globalConfig)
+	}
 
 	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
 	// stored credential until the login succeeds.
@@ -175,11 +195,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
-	logger.Print("Unset existing auth keys")
-	config.Unset(configuration.AUTHENTICATION_TOKEN)
-	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
-	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	clearUserTokens(logger, config, globalConfig)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
@@ -240,4 +256,71 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	}
 
 	return err
+}
+
+// maxMachineKeySize is far above any RSA or P-256 key PEM, so a larger value is not a key.
+const maxMachineKeySize = 64 * 1024
+
+func importMachineCredential(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, engineConfig configuration.Configuration) error {
+	clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
+	if clientID == "" {
+		return fmt.Errorf("--%s=%s needs --%s", AuthTypeParameter, authTypeMachine, auth.PARAMETER_CLIENT_ID)
+	}
+	keyPEM := config.GetString(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)
+	if strings.TrimSpace(keyPEM) == "" {
+		return fmt.Errorf("--%s=%s needs --%s", AuthTypeParameter, authTypeMachine, machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)
+	}
+	if len(keyPEM) > maxMachineKeySize {
+		return fmt.Errorf("the value of --%s is larger than %d bytes, so it is not a machine client key", machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY, maxMachineKeySize)
+	}
+	key, err := machineenrollment.ParseKeyPEM([]byte(keyPEM))
+	if err != nil {
+		return fmt.Errorf("the machine client key cannot be used, it must be the PKCS8 PEM of an RSA or P-256 private key: %w", err)
+	}
+	credential := machinecredential.Credential{ClientID: clientID, Key: key}
+	if err = checkMachineCredentialStorage(invocationCtx.Context(), config); err != nil {
+		return err
+	}
+	if err = verifyMachineCredential(invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), config.GetString(configuration.API_URL), credential); err != nil {
+		return err
+	}
+	if err = machinecredential.Save(invocationCtx.Context(), config, credential); err != nil {
+		return err
+	}
+	if engineConfig != config {
+		if err = machinecredential.Publish(engineConfig, credential); err != nil {
+			return err
+		}
+	}
+	clearUserTokens(logger, config, engineConfig)
+	if err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
+		logger.Debug().Err(err).Msg("Failed to output authenticated message")
+	}
+	return nil
+}
+
+func checkMachineCredentialStorage(ctx context.Context, config configuration.Configuration) error {
+	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
+		return errors.New("the machine credential cannot be stored: the configuration has no storage")
+	}
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	if err := machinecredential.CheckStorage(ctx, config); err != nil {
+		return fmt.Errorf("the machine credential cannot be stored: %w", err)
+	}
+	return nil
+}
+
+// verifyMachineCredential mints an access token and discards it. It runs on a throwaway
+// configuration because a clone shares the storage, where the authenticator would persist the token.
+func verifyMachineCredential(httpClient *http.Client, apiURL string, credential machinecredential.Credential) error {
+	verifyConfig := configuration.NewWithOpts()
+	verifyConfig.Set(configuration.API_URL, apiURL)
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(verifyConfig,
+		auth.WithHttpClient(httpClient),
+		auth.WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
+	if err := authenticator.Authenticate(); err != nil {
+		return fmt.Errorf("failed authenticating as client %s, so the machine credential was not stored: %w", credential.ClientID, err)
+	}
+	return nil
 }

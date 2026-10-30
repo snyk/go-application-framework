@@ -25,6 +25,11 @@ const CONFIG_KEY_MACHINE_IDENTITY_STORAGE = "INTERNAL_MACHINE_IDENTITY_STORAGE"
 // importing the workflow.
 const CONFIG_KEY_DEVICE_TOKEN = "device-token"
 
+// CONFIG_KEY_CLIENT_PRIVATE_KEY is the configuration key of the PEM private key of an enrolled
+// machine's client, which the auth workflow takes as its --client-private-key flag. It lives here so
+// that log scrubbing can redact it without importing the workflow.
+const CONFIG_KEY_CLIENT_PRIVATE_KEY = "client-private-key"
+
 // minSecretTermLength is the shortest value redacted from logs; anything shorter would also redact
 // unrelated text.
 const minSecretTermLength = 16
@@ -136,11 +141,17 @@ func SecretTerms(config configuration.Configuration) []string {
 	if err := json.Unmarshal([]byte(config.GetString(CONFIG_KEY_MACHINE_IDENTITY_STORAGE)), &stored); err != nil {
 		return nil
 	}
+	return PEMSecretTerms(stored.PrivateKeyPEM)
+}
+
+// PEMSecretTerms returns the values of a PEM key that must not appear in logs: the whole PEM and each
+// of its lines, as a log may escape the line breaks.
+func PEMSecretTerms(keyPEM string) []string {
 	var terms []string
-	if pem := strings.TrimSpace(stored.PrivateKeyPEM); len(pem) >= minSecretTermLength {
+	if pem := strings.TrimSpace(keyPEM); len(pem) >= minSecretTermLength {
 		terms = append(terms, pem)
 	}
-	for _, line := range strings.Split(stored.PrivateKeyPEM, "\n") {
+	for _, line := range strings.Split(keyPEM, "\n") {
 		if line = strings.TrimSpace(line); len(line) >= minSecretTermLength && !strings.HasPrefix(line, "-----") {
 			terms = append(terms, line)
 		}

@@ -160,6 +160,10 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
 		addStaticTermToDict(token, dict)
 	}
+	addStaticTermToDict(config.GetString(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY), dict)
+	for _, term := range machinecredential.PEMSecretTerms(config.GetString(machinecredential.CONFIG_KEY_CLIENT_PRIVATE_KEY)) {
+		addStaticTermToDict(term, dict)
+	}
 	for _, term := range machinecredential.SecretTerms(config) {
 		addStaticTermToDict(term, dict)
 	}
