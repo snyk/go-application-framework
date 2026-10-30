@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -38,7 +39,23 @@ var (
 	ErrAuthCanceled = errors.New("authentication failed (canceled)")
 	// ErrAuthTimedOut is returned when an auth request times out.
 	ErrAuthTimedOut = errors.New("authentication failed (timeout)")
+	// ErrNoStoredClientCredential is returned by StoredClientCredential when no client credential is stored.
+	ErrNoStoredClientCredential = machinecredential.ErrNotEnrolled
 )
+
+// StoredClientCredential returns the stored client credential: its client id and its private key as
+// PKCS#8 PEM. The key is long-lived, so keep it off command lines, which other local users can read.
+func StoredClientCredential(config configuration.Configuration) (clientID, privateKeyPEM string, err error) {
+	credential, err := machinecredential.Load(config)
+	if err != nil {
+		return "", "", err
+	}
+	pemBytes, err := machineenrollment.EncodeKeyPEM(credential.Key)
+	if err != nil {
+		return "", "", err
+	}
+	return credential.ClientID, string(pemBytes), nil
+}
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	var authenticator Authenticator
