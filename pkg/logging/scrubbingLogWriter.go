@@ -160,6 +160,9 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
 		addStaticTermToDict(token, dict)
 	}
+	if fleetKey := config.GetString(machinecredential.CONFIG_KEY_FLEET_KEY); len(fleetKey) >= minDeviceTokenTermLength {
+		addStaticTermToDict(fleetKey, dict)
+	}
 	for _, term := range machinecredential.SecretTerms(config) {
 		addStaticTermToDict(term, dict)
 	}
