@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"io"
 	"maps"
 	"os"
 	"strings"
@@ -25,23 +26,13 @@ func Test_InitAuth_offersStdinAsABooleanFlag(t *testing.T) {
 	assert.Equal(t, "bool", flag.Value.Type())
 }
 
-// pipeToStdin makes input the process's stdin, as `echo "$SECRET" | snyk auth` does.
-func pipeToStdin(t *testing.T, input string) {
+// pipeToStdin makes input what the auth workflow reads on stdin, as `echo "$SECRET" | snyk auth` does.
+func (e *enrollEnv) pipeToStdin(t *testing.T, input string) {
 	t.Helper()
-	r, w, err := os.Pipe()
+	_, err := e.stdin.WriteString(input)
 	require.NoError(t, err)
-	go func() {
-		defer func() { _ = w.Close() }()
-		if _, writeErr := w.WriteString(input); writeErr != nil {
-			return
-		}
-	}()
-	original := os.Stdin
-	os.Stdin = r
-	t.Cleanup(func() {
-		os.Stdin = original
-		_ = r.Close()
-	})
+	_, err = e.stdin.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 }
 
 const testPAT = "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456"
@@ -50,7 +41,7 @@ func Test_auth_stdin_patIsValidatedAndStored(t *testing.T) {
 	env := newSecretArgumentEnv(t)
 	require.NoError(t, InitWhoAmIWorkflow(env.engine))
 	env.server.RegisterPAT(testPAT)
-	pipeToStdin(t, testPAT+"\n")
+	env.pipeToStdin(t, testPAT+"\n")
 
 	err := env.authWith(t, map[string]string{stdinFlag: "true"})
 
@@ -113,7 +104,7 @@ func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			env := newSecretArgumentEnv(t)
 			env.server.RegisterClientSecret("client-1", "shared-secret-1")
-			pipeToStdin(t, tc.piped)
+			env.pipeToStdin(t, tc.piped)
 			values := map[string]string{stdinFlag: "true"}
 			maps.Copy(values, tc.values)
 
@@ -132,7 +123,7 @@ func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 func Test_auth_stdin_sharedSecretIsNotStored(t *testing.T) {
 	env := newSecretArgumentEnv(t)
 	env.server.RegisterClientSecret("client-1", "shared-secret-1")
-	pipeToStdin(t, "shared-secret-1\n")
+	env.pipeToStdin(t, "shared-secret-1\n")
 
 	err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", stdinFlag: "true"})
 

@@ -45,6 +45,10 @@ var ConfigurationNewAuthenticationToken = "internal_new_snyk_token"
 
 // InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
+	return initAuth(engine, os.Stdin)
+}
+
+func initAuth(engine workflow.Engine, stdin *os.File) error {
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
 	config.String(AuthTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
@@ -52,7 +56,9 @@ func InitAuth(engine workflow.Engine) error {
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
 	config.Bool(stdinFlag, false, "Read the secret (PAT, client secret or private key) from stdin")
 
-	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
+	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), func(invocationCtx workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		return authEntryPoint(invocationCtx, input, stdin)
+	})
 	return err
 }
 
@@ -62,7 +68,7 @@ func OpenBrowser(authUrl string) {
 }
 
 // authEntryPoint is the entry point for the auth workflow.
-func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
+func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data, stdin *os.File) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
@@ -84,7 +90,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	}
 
 	// The grant type is fixed when the authenticator is built.
-	if err = resolveSecret(config); err != nil {
+	if err = resolveSecret(config, stdin); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +102,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 // resolveSecret makes the secret given as the argument, which the host passes in
 // ConfigurationNewAuthenticationToken, or on stdin the client secret.
-func resolveSecret(config configuration.Configuration) error {
+func resolveSecret(config configuration.Configuration, stdin *os.File) error {
 	fromStdin := config.GetBool(stdinFlag)
 	inArgument := config.GetString(ConfigurationNewAuthenticationToken) != ""
 	// Before the alternative key below, which IsSet follows.
@@ -115,7 +121,7 @@ func resolveSecret(config configuration.Configuration) error {
 			return argument, nil
 		}
 		if c.GetBool(stdinFlag) {
-			return readSecretFromStdin(os.Stdin)
+			return readSecretFromStdin(stdin)
 		}
 		return "", nil
 	})

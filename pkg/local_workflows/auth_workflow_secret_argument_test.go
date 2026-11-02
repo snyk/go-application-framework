@@ -38,16 +38,16 @@ func newSecretArgumentEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 }
 
 // secretSources give the auth workflow a secret in each way a user can: the config value to set for it.
-var secretSources = map[string]func(t *testing.T, secret string) (key, value string){
-	"argument": func(_ *testing.T, secret string) (string, string) {
+var secretSources = map[string]func(t *testing.T, env *enrollEnv, secret string) (key, value string){
+	"argument": func(_ *testing.T, _ *enrollEnv, secret string) (string, string) {
 		return ConfigurationNewAuthenticationToken, secret
 	},
-	"--" + auth.PARAMETER_CLIENT_SECRET: func(_ *testing.T, secret string) (string, string) {
+	"--" + auth.PARAMETER_CLIENT_SECRET: func(_ *testing.T, _ *enrollEnv, secret string) (string, string) {
 		return auth.PARAMETER_CLIENT_SECRET, secret
 	},
-	"--" + stdinFlag: func(t *testing.T, secret string) (string, string) {
+	"--" + stdinFlag: func(t *testing.T, env *enrollEnv, secret string) (string, string) {
 		t.Helper()
-		pipeToStdin(t, secret+"\n")
+		env.pipeToStdin(t, secret+"\n")
 		return stdinFlag, "true"
 	},
 }
@@ -72,7 +72,7 @@ func Test_auth_secretArgument_logsInLikeClientSecret(t *testing.T) {
 				logger := zerolog.New(logs).Level(zerolog.TraceLevel)
 				env.engine.SetLogger(&logger)
 				secret := secretFor(t, env)
-				key, value := source(t, secret)
+				key, value := source(t, env, secret)
 
 				err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: value})
 
@@ -99,7 +99,7 @@ func Test_auth_secretArgument_withClientIDIsAClientSecretWhateverItLooksLike(t *
 			t.Run(secretName+" in "+sourceName, func(t *testing.T) {
 				env := newSecretArgumentEnv(t)
 				env.server.RegisterClientSecret("client-1", secret)
-				key, value := source(t, secret)
+				key, value := source(t, env, secret)
 
 				err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: value})
 
@@ -121,7 +121,7 @@ func Test_auth_secretReachesTheClientCredentialsGrantWhenTheHostCachedTheKeysBef
 				// As the Snyk CLI does at startup, for its redaction dictionary among others.
 				assert.Empty(t, env.config.GetString(cachedKey))
 			}
-			key, value := secretSources[sourceName](t, "shared-secret-1")
+			key, value := secretSources[sourceName](t, env, "shared-secret-1")
 
 			err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: value})
 
@@ -176,7 +176,7 @@ func Test_auth_privateKeyErrorsNameWhereTheKeyWasGiven(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			env := newSecretArgumentEnv(t)
-			key, value := secretSources[tc.source](t, pemOf(t, "PRIVATE KEY", []byte("not a key")))
+			key, value := secretSources[tc.source](t, env, pemOf(t, "PRIVATE KEY", []byte("not a key")))
 			values := map[string]string{key: value}
 			maps.Copy(values, tc.values)
 

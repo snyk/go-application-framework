@@ -55,6 +55,7 @@ type enrollEnv struct {
 	server *enrollmenttest.Server
 	engine workflow.Engine
 	config configuration.Configuration
+	stdin  *os.File
 }
 
 func newEnrollEnv(t *testing.T) *enrollEnv {

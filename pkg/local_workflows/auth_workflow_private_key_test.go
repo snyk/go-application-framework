@@ -39,9 +39,10 @@ func newPrivateKeyAuthEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	engine := workflow.NewWorkFlowEngine(config)
-	require.NoError(t, InitAuth(engine))
+	stdin := stdinWith(t, "")
+	require.NoError(t, initAuth(engine, stdin))
 	require.NoError(t, engine.Init())
-	return &enrollEnv{home: home, server: server, engine: engine, config: config}
+	return &enrollEnv{home: home, server: server, engine: engine, config: config, stdin: stdin}
 }
 
 // issueClientKey registers a client with the fake service, as enrolling elsewhere does, and returns
