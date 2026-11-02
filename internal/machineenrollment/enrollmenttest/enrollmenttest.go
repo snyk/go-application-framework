@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -73,6 +74,7 @@ type Server struct {
 	mu sync.Mutex
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
+	tokenAttempts     int
 	credentialHeaders []string
 	bearerTokens      []string
 	enrollAttempts    int
@@ -93,8 +95,9 @@ type fleetKey struct {
 }
 
 type client struct {
-	key *rsa.PublicKey
-	kid string // the RFC 7638 thumbprint of key
+	key    *rsa.PublicKey
+	kid    string // the RFC 7638 thumbprint of key
+	secret string
 }
 
 // signs reports whether a JWS with header can be the client's: RS256, by the key kid names.
@@ -164,6 +167,14 @@ func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = client{key: key, kid: thumbprintRSA(key)}
+}
+
+// RegisterClientSecret makes the token endpoint accept the shared secret for clientID, in the
+// Authorization header or in the request body.
+func (s *Server) RegisterClientSecret(clientID, secret string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients[clientID] = client{secret: secret}
 }
 
 // RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
@@ -236,6 +247,13 @@ func (s *Server) ClientCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.clients)
+}
+
+// TokenAttempts returns how many requests reached the token endpoint, accepted or not.
+func (s *Server) TokenAttempts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenAttempts
 }
 
 // EnrollmentRequests returns how many requests reached the enrollment endpoint, accepted or not.
@@ -491,12 +509,18 @@ func (s *Server) verifyAssertion(token, audience string) (*rsa.PublicKey, string
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	s.mu.Lock()
+	s.tokenAttempts++
+	s.mu.Unlock()
+	if err := r.ParseForm(); err != nil || r.PostForm.Get("grant_type") != "client_credentials" {
 		writeOAuthError(w, "invalid_request")
 		return
 	}
-	if r.PostForm.Get("grant_type") != "client_credentials" ||
-		r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
+	if !r.PostForm.Has("client_assertion_type") {
+		s.tokenForSecret(w, r)
+		return
+	}
+	if r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
 		r.PostForm.Has("client_secret") {
 		writeOAuthError(w, "invalid_request")
 		return
@@ -522,6 +546,35 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.jtis[jti] = true
+	s.issueToken(w, clientID)
+}
+
+// tokenForSecret authenticates a client by its shared secret, sent as RFC 6749 section 2.3.1 allows.
+func (s *Server) tokenForSecret(w http.ResponseWriter, r *http.Request) {
+	clientID, secret, inHeader := r.BasicAuth()
+	if inHeader {
+		var errID, errSecret error
+		clientID, errID = url.QueryUnescape(clientID)
+		secret, errSecret = url.QueryUnescape(secret)
+		if errID != nil || errSecret != nil {
+			writeOAuthError(w, "invalid_request")
+			return
+		}
+	} else {
+		clientID, secret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.clients[clientID]
+	if c.secret == "" || c.secret != secret {
+		writeOAuthError(w, "invalid_client")
+		return
+	}
+	s.issueToken(w, clientID)
+}
+
+func (s *Server) issueToken(w http.ResponseWriter, clientID string) {
 	s.TokenRequests++
 	accessToken := s.accessToken(clientID)
 	s.tokens[accessToken] = clientID
