@@ -18,6 +18,7 @@ package logging
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os/user"
@@ -1298,6 +1299,25 @@ func TestScrubbingWriter_GetScrubDictFromConfig_DeviceToken(t *testing.T) {
 	scrubbed := string(Scrub([]byte("enrolling with sdt_example-device-token-value now"), GetScrubDictFromConfig(config)))
 
 	assert.Equal(t, "enrolling with *** now", scrubbed)
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_FleetKey(t *testing.T) {
+	fleetKey := base64.StdEncoding.EncodeToString([]byte("example-fleet-key-value"))
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_FLEET_KEY, fleetKey)
+
+	scrubbed := string(Scrub([]byte("enrolling with "+fleetKey+" now"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "enrolling with *** now", scrubbed)
+}
+
+func TestScrubbingWriter_GetScrubDictFromConfig_ShortFleetKeyIsNotRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_FLEET_KEY, "a")
+
+	scrubbed := string(Scrub([]byte("a banana"), GetScrubDictFromConfig(config)))
+
+	assert.Equal(t, "a banana", scrubbed)
 }
 
 func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t *testing.T) {

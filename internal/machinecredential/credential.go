@@ -25,6 +25,10 @@ const CONFIG_KEY_MACHINE_IDENTITY_STORAGE = "INTERNAL_MACHINE_IDENTITY_STORAGE"
 // importing the workflow.
 const CONFIG_KEY_DEVICE_TOKEN = "device-token"
 
+// CONFIG_KEY_FLEET_KEY is the configuration key of the base64 encoded fleet key that machine.enroll
+// takes as its --fleet-key flag. Like CONFIG_KEY_DEVICE_TOKEN it lives here for log scrubbing.
+const CONFIG_KEY_FLEET_KEY = "fleet-key"
+
 // minSecretTermLength is the shortest value redacted from logs; anything shorter would also redact
 // unrelated text.
 const minSecretTermLength = 16
