@@ -84,10 +84,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	}
 
 	// The grant type is fixed when the authenticator is built.
-	if err = useSecretFromStdin(config); err != nil {
-		return nil, err
-	}
-	if err = useSecretArgument(config); err != nil {
+	if err = resolveSecret(config); err != nil {
 		return nil, err
 	}
 
@@ -97,24 +94,50 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	return nil, err
 }
 
-// useSecretFromStdin puts the secret piped in with --stdin where the host puts the positional
-// argument.
-func useSecretFromStdin(config configuration.Configuration) error {
-	if !config.GetBool(stdinFlag) {
-		return nil
-	}
-	if config.GetString(ConfigurationNewAuthenticationToken) != "" {
+// resolveSecret makes the secret given as the argument, which the host passes in
+// ConfigurationNewAuthenticationToken, or on stdin the client secret.
+func resolveSecret(config configuration.Configuration) error {
+	fromStdin := config.GetBool(stdinFlag)
+	inArgument := config.GetString(ConfigurationNewAuthenticationToken) != ""
+	// Before the alternative key below, which IsSet follows.
+	inClientSecret := config.IsSet(auth.PARAMETER_CLIENT_SECRET)
+	switch {
+	case fromStdin && inArgument:
 		return fmt.Errorf("the secret is given both with --%s and as an argument; give it in only one of them", stdinFlag)
-	}
-	if config.IsSet(auth.PARAMETER_CLIENT_SECRET) {
+	case fromStdin && inClientSecret:
 		return fmt.Errorf("the secret is given both with --%s and in --%s; give it in only one of them", stdinFlag, auth.PARAMETER_CLIENT_SECRET)
+	case inArgument && inClientSecret:
+		return fmt.Errorf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET)
 	}
-	secret, err := readSecretFromStdin(os.Stdin)
+
+	config.AddDefaultValue(ConfigurationNewAuthenticationToken, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if argument, ok := existingValue.(string); ok && argument != "" {
+			return argument, nil
+		}
+		if c.GetBool(stdinFlag) {
+			return readSecretFromStdin(os.Stdin)
+		}
+		return "", nil
+	})
+	config.AddAlternativeKeys(auth.PARAMETER_CLIENT_SECRET, []string{ConfigurationNewAuthenticationToken})
+	// Values cached before the registrations would hide them; a clone inherits its parent's cache.
+	config.ClearCache()
+
+	secret, err := config.GetStringWithError(ConfigurationNewAuthenticationToken)
 	if err != nil {
 		return err
 	}
-	config.Set(ConfigurationNewAuthenticationToken, secret)
+	// An empty value would count as set and switch a lone --client-id to the client credentials grant.
+	if secret != "" {
+		config.Set(ConfigurationNewAuthenticationToken, secret)
+	}
+	if fromStdin {
+		return checkStdinAuthType(config, secret)
+	}
+	return nil
+}
 
+func checkStdinAuthType(config configuration.Configuration, secret string) error {
 	authType := authTypeOf(config)
 	if strings.EqualFold(authType, auth.AUTH_TYPE_TOKEN) {
 		return fmt.Errorf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
@@ -137,20 +160,6 @@ func authTypeOf(config configuration.Configuration) string {
 		return authType
 	}
 	return autoDetectAuthType(config)
-}
-
-// useSecretArgument makes the positional argument, which the host passes in
-// ConfigurationNewAuthenticationToken, the client secret.
-func useSecretArgument(config configuration.Configuration) error {
-	secret := config.GetString(ConfigurationNewAuthenticationToken)
-	if secret == "" {
-		return nil
-	}
-	if config.IsSet(auth.PARAMETER_CLIENT_SECRET) {
-		return fmt.Errorf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET)
-	}
-	config.Set(auth.PARAMETER_CLIENT_SECRET, secret)
-	return nil
 }
 
 func autoDetectAuthType(config configuration.Configuration) string {
@@ -333,8 +342,8 @@ func isPEM(secret string) bool {
 	return strings.HasPrefix(strings.TrimSpace(secret), "-----BEGIN")
 }
 
-// secretSource names, for error messages, where the user gave the secret that authEntryPoint put in
-// --client-secret.
+// secretSource names, for error messages, where the user gave the secret that --client-secret
+// returns.
 func secretSource(config configuration.Configuration) string {
 	if config.GetBool(stdinFlag) {
 		return "the --" + stdinFlag + " input"

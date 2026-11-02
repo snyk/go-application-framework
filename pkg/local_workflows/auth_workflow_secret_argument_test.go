@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
 )
 
@@ -30,10 +31,10 @@ func (e *enrollEnv) authWith(t *testing.T, values map[string]string) error {
 }
 
 // newSecretArgumentEnv is newPrivateKeyAuthEnv where a browser login cannot open a browser.
-func newSecretArgumentEnv(t *testing.T) *enrollEnv {
+func newSecretArgumentEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 	t.Helper()
 	t.Setenv("PATH", t.TempDir())
-	return newPrivateKeyAuthEnv(t)
+	return newPrivateKeyAuthEnv(t, opts...)
 }
 
 // secretSources give the auth workflow a secret in each way a user can: the config value to set for it.
@@ -106,6 +107,27 @@ func Test_auth_secretArgument_withClientIDIsAClientSecretWhateverItLooksLike(t *
 				assert.Equal(t, 1, env.server.TokenRequests, "the client credentials grant got a token")
 			})
 		}
+	}
+}
+
+func Test_auth_secretReachesTheClientCredentialsGrantWhenTheHostCachedTheKeysBefore(t *testing.T) {
+	for _, sourceName := range []string{"argument", "--" + stdinFlag} {
+		t.Run(sourceName, func(t *testing.T) {
+			env := newSecretArgumentEnv(t, configuration.WithCachingEnabled(configuration.NoCacheExpiration))
+			env.server.RegisterClientSecret("client-1", "shared-secret-1")
+			// The cache keeps only values that a default function returns.
+			for _, cachedKey := range []string{auth.PARAMETER_CLIENT_SECRET, ConfigurationNewAuthenticationToken} {
+				env.config.AddDefaultValue(cachedKey, configuration.StandardDefaultValueFunction(""))
+				// As the Snyk CLI does at startup, for its redaction dictionary among others.
+				assert.Empty(t, env.config.GetString(cachedKey))
+			}
+			key, value := secretSources[sourceName](t, "shared-secret-1")
+
+			err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: value})
+
+			require.NoError(t, err)
+			assert.Equal(t, 1, env.server.TokenRequests, "the client credentials grant got a token")
+		})
 	}
 }
 

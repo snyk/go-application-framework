@@ -27,14 +27,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func newPrivateKeyAuthEnv(t *testing.T) *enrollEnv {
+func newPrivateKeyAuthEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
 	server := enrollmenttest.NewServer(t)
-	config := openFileBackedConfig()
+	config := openFileBackedConfig(opts...)
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 

@@ -82,8 +82,8 @@ func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv 
 	return &enrollEnv{home: home, server: server, engine: engine, config: config}
 }
 
-func openFileBackedConfig() configuration.Configuration {
-	return configuration.NewWithOpts(configuration.WithFiles("snyk"))
+func openFileBackedConfig(opts ...configuration.Opts) configuration.Configuration {
+	return configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk")}, opts...)...)
 }
 
 func (e *enrollEnv) enroll(flags map[string]string) error {
