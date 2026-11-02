@@ -262,9 +262,7 @@ func GetOriginRemote(inputDir string) (string, error) {
 //   - An error object (if no git repository found, HEAD cannot be resolved, or
 //     the repository has no commits).
 func TreeHashFromDir(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}

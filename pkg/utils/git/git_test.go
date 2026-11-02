@@ -2,7 +2,9 @@ package git
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -375,4 +377,18 @@ func TestLinkedWorktree_opensFromSubdirectory(t *testing.T) {
 	remoteUrl, err := GetOriginRemote(subDir)
 	require.NoError(t, err)
 	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+}
+
+func TestLinkedWorktree_treeHashMatchesGit(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.GitWorktreeAdd(t, mainDir)
+
+	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	cmd.Dir = worktreeDir
+	out, err := cmd.Output()
+	require.NoError(t, err)
+
+	treeHash, err := TreeHashFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(string(out)), treeHash)
 }
