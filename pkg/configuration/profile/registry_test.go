@@ -1,39 +1,60 @@
 package profile
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-func newTestRegistry(t *testing.T) (Registry, configuration.Configuration, string) {
+// registryEnv is a registry under test with the configuration it derives from and the files it works with.
+type registryEnv struct {
+	reg      Registry
+	base     configuration.Configuration
+	dir      string
+	baseFile string
+}
+
+// newTestRegistry returns a registry that reads the profiles from a new temporary directory. The base configuration
+// is stored in another temporary directory, whose file is baseFile.
+func newTestRegistry(t *testing.T) registryEnv {
 	t.Helper()
-	dir := t.TempDir()
+	return newTestRegistryIn(t, t.TempDir())
+}
+
+// newTestRegistryIn returns a registry that reads the profiles from dir, which need not exist yet.
+func newTestRegistryIn(t *testing.T, dir string) registryEnv {
+	t.Helper()
+	baseFile := filepath.Join(t.TempDir(), "snyk.json")
 	base := configuration.NewWithOpts(
-		configuration.WithPinnedFile(filepath.Join(dir, "snyk.json")),
+		configuration.WithPinnedFile(baseFile),
 		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
 	)
 	reg, err := NewFileRegistry(dir, base)
 	require.NoError(t, err)
-	return reg, base, dir
+	return registryEnv{reg: reg, base: base, dir: dir, baseFile: baseFile}
 }
 
 func writeProfile(t *testing.T, dir, name, content string) string {
 	t.Helper()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "profiles"), 0o700))
-	path := filepath.Join(dir, "profiles", name+".json")
+	path := filepath.Join(dir, name+".json")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
 }
 
-func Test_NewFileRegistry_RelativeBaseDirIsAnError(t *testing.T) {
+func Test_NewFileRegistry_RelativeDirIsAnError(t *testing.T) {
 	base := configuration.NewWithOpts()
 	for _, dir := range []string{"", ".", "relative/dir"} {
 		_, err := NewFileRegistry(dir, base)
@@ -42,15 +63,15 @@ func Test_NewFileRegistry_RelativeBaseDirIsAnError(t *testing.T) {
 }
 
 func Test_Registry_DefaultProfileIsBase(t *testing.T) {
-	reg, base, _ := newTestRegistry(t)
-	p, err := reg.Profile(DefaultName)
+	env := newTestRegistry(t)
+	p, err := env.reg.Profile(DefaultName)
 	require.NoError(t, err)
 	assert.Equal(t, DefaultName, p.Name())
-	assert.Same(t, base, p.Configuration())
+	assert.Same(t, env.base, p.Configuration())
 }
 
 func Test_Registry_NameValidation(t *testing.T) {
-	reg, _, _ := newTestRegistry(t)
+	env := newTestRegistry(t)
 	tests := []struct {
 		name    string
 		invalid bool
@@ -65,21 +86,23 @@ func Test_Registry_NameValidation(t *testing.T) {
 		{name: "com0", invalid: true},
 	}
 	for _, tc := range tests {
-		_, err := reg.Profile(tc.name)
+		_, err := env.reg.Profile(tc.name)
 		if tc.invalid {
 			assert.ErrorIs(t, err, ErrInvalidName, tc.name)
 		} else {
-			assert.ErrorIs(t, err, ErrNotFound, tc.name)
+			assert.NoError(t, err, tc.name)
 		}
 	}
 }
 
+// Test_Registry_ProfileReadsOnlyItsOwnFile checks that the profile directory holds the profile files directly, as
+// <name>.json, and that a profile reads only its own file.
 func Test_Registry_ProfileReadsOnlyItsOwnFile(t *testing.T) {
-	reg, base, dir := newTestRegistry(t)
-	base.Set("only_base", "base")
-	writeProfile(t, dir, "work", `{"own": "work"}`)
+	env := newTestRegistry(t)
+	env.base.Set("only_base", "base")
+	writeProfile(t, env.dir, "work", `{"own": "work"}`)
 
-	p, err := reg.Profile("work")
+	p, err := env.reg.Profile("work")
 	require.NoError(t, err)
 	assert.Equal(t, "work", p.Name())
 	assert.Equal(t, "work", p.Configuration().GetString("own"))
@@ -87,15 +110,14 @@ func Test_Registry_ProfileReadsOnlyItsOwnFile(t *testing.T) {
 }
 
 func Test_Registry_SetWritesOnlyTheProfileFile(t *testing.T) {
-	reg, base, dir := newTestRegistry(t)
-	base.PersistInStorage("key")
-	base.Set("key", "base")
-	baseFile := filepath.Join(dir, "snyk.json")
-	baseBefore, err := os.ReadFile(baseFile)
+	env := newTestRegistry(t)
+	env.base.PersistInStorage("key")
+	env.base.Set("key", "base")
+	baseBefore, err := os.ReadFile(env.baseFile)
 	require.NoError(t, err)
 
-	profileFile := writeProfile(t, dir, "work", "{}")
-	p, err := reg.Profile("work")
+	profileFile := writeProfile(t, env.dir, "work", "{}")
+	p, err := env.reg.Profile("work")
 	require.NoError(t, err)
 	p.Configuration().Set("key", "work")
 
@@ -105,59 +127,156 @@ func Test_Registry_SetWritesOnlyTheProfileFile(t *testing.T) {
 	require.NoError(t, json.Unmarshal(profileBytes, &values))
 	assert.Equal(t, "work", values["key"])
 
-	baseAfter, err := os.ReadFile(baseFile)
+	baseAfter, err := os.ReadFile(env.baseFile)
 	require.NoError(t, err)
 	assert.Equal(t, baseBefore, baseAfter)
-	assert.Equal(t, "base", base.GetString("key"))
+	assert.Equal(t, "base", env.base.GetString("key"))
 }
 
 func Test_Registry_ProfileIsCachedPerName(t *testing.T) {
-	reg, _, dir := newTestRegistry(t)
-	writeProfile(t, dir, "work", "{}")
+	env := newTestRegistry(t)
+	writeProfile(t, env.dir, "work", "{}")
 
-	first, err := reg.Profile("work")
+	first, err := env.reg.Profile("work")
 	require.NoError(t, err)
-	again, err := reg.Profile("work")
+	again, err := env.reg.Profile("work")
 	require.NoError(t, err)
 	assert.Same(t, first, again)
 }
 
-func Test_Registry_SymlinkedProfileIsNotFound(t *testing.T) {
-	reg, _, dir := newTestRegistry(t)
-	target := filepath.Join(t.TempDir(), "target.json")
-	require.NoError(t, os.WriteFile(target, []byte("{}"), 0o600))
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "profiles"), 0o700))
-	if err := os.Symlink(target, filepath.Join(dir, "profiles", "link.json")); err != nil {
-		t.Skipf("cannot create symlink: %v", err)
+// Test_Registry_MissingProfileIsEmptyAndCreatesNothing checks that a profile without a file is an empty profile, and that
+// neither finding it nor reading it creates the profile directory, which does not exist yet, or a file.
+func Test_Registry_MissingProfileIsEmptyAndCreatesNothing(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "not-yet")
+	env := newTestRegistryIn(t, dir)
+	env.base.Set("only_base", "base")
+
+	p, err := env.reg.Profile("new")
+	require.NoError(t, err)
+	assert.Equal(t, "new", p.Name())
+	assert.Nil(t, p.Configuration().Get("only_base"))
+	assert.Empty(t, p.Configuration().GetString("own"))
+
+	_, err = os.Stat(dir)
+	assert.ErrorIs(t, err, fs.ErrNotExist, "reading must not create the profile directory")
+}
+
+// Test_Registry_MissingProfileIsLoggedOncePerName checks that a profile without a file is logged at debug level once
+// per name, with the path of the file the profile would be stored in, and that a profile with a file is not logged.
+func Test_Registry_MissingProfileIsLoggedOncePerName(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "present", `{"own":"value"}`)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	reg, err := NewFileRegistry(dir, configuration.NewWithOpts(), WithLogger(&logger))
+	require.NoError(t, err)
+
+	for _, name := range []string{"nonexistent", "nonexistent", "present", "other"} {
+		_, err = reg.Profile(name)
+		require.NoError(t, err)
 	}
 
-	_, err := reg.Profile("link")
-	assert.ErrorIs(t, err, ErrNotFound)
+	want := []string{
+		fmt.Sprintf("profile %q has no file yet, using an empty profile (%s)", "nonexistent", filepath.Join(dir, "nonexistent.json")),
+		fmt.Sprintf("profile %q has no file yet, using an empty profile (%s)", "other", filepath.Join(dir, "other.json")),
+	}
+	assert.Equal(t, want, debugMessagesOf(t, logs.String()))
+}
+
+// debugMessagesOf returns the messages of the debug entries in the JSON log output.
+func debugMessagesOf(t *testing.T, logOutput string) []string {
+	t.Helper()
+	var messages []string
+	for line := range strings.SplitSeq(strings.TrimSpace(logOutput), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry struct {
+			Level   string `json:"level"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(line), &entry))
+		if entry.Level == zerolog.DebugLevel.String() {
+			messages = append(messages, entry.Message)
+		}
+	}
+	return messages
+}
+
+// Test_Registry_PersistedWriteCreatesTheProfileFile checks that the first persisted write of a missing profile creates
+// the profile directory and the profile file with owner-only permissions, and that the base configuration file is not
+// changed.
+func Test_Registry_PersistedWriteCreatesTheProfileFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "not-yet")
+	env := newTestRegistryIn(t, dir)
+	env.base.PersistInStorage("key")
+	env.base.Set("key", "base")
+	baseBefore, err := os.ReadFile(env.baseFile)
+	require.NoError(t, err)
+
+	p, err := env.reg.Profile("new")
+	require.NoError(t, err)
+	p.Configuration().Set("key", "work")
+
+	profileFile := filepath.Join(dir, "new.json")
+	info, err := os.Stat(profileFile)
+	require.NoError(t, err)
+	// Windows does not have Unix permission bits: it reports 0666 for every writable file
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm())
+	}
+
+	profileBytes, err := os.ReadFile(profileFile)
+	require.NoError(t, err)
+	var values map[string]any
+	require.NoError(t, json.Unmarshal(profileBytes, &values))
+	assert.Equal(t, "work", values["key"])
+
+	baseAfter, err := os.ReadFile(env.baseFile)
+	require.NoError(t, err)
+	assert.Equal(t, baseBefore, baseAfter)
+}
+
+// Test_Registry_NonRegularProfileEntryIsErrCorrupt checks that a symbolic link or a directory named like a profile is
+// refused, and that a symbolic link is never followed to its target.
+func Test_Registry_NonRegularProfileEntryIsErrCorrupt(t *testing.T) {
+	env := newTestRegistry(t)
+	target := filepath.Join(t.TempDir(), "target.json")
+	require.NoError(t, os.WriteFile(target, []byte("{}"), 0o600))
+	if err := os.Symlink(target, filepath.Join(env.dir, "link.json")); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	require.NoError(t, os.Mkdir(filepath.Join(env.dir, "folder.json"), 0o700))
+
+	for _, name := range []string{"link", "folder"} {
+		_, err := env.reg.Profile(name)
+		assert.ErrorIs(t, err, ErrCorrupt, name)
+	}
 }
 
 func Test_Registry_CorruptProfileIsErrCorrupt(t *testing.T) {
-	reg, _, dir := newTestRegistry(t)
-	writeProfile(t, dir, "broken", "{not json")
-	writeProfile(t, dir, "list", "[]")
-	writeProfile(t, dir, "null", "null")
+	env := newTestRegistry(t)
+	writeProfile(t, env.dir, "broken", "{not json")
+	writeProfile(t, env.dir, "list", "[]")
+	writeProfile(t, env.dir, "null", "null")
 
 	for _, name := range []string{"broken", "list", "null"} {
-		_, err := reg.Profile(name)
+		_, err := env.reg.Profile(name)
 		assert.ErrorIs(t, err, ErrCorrupt, name)
 	}
 }
 
 func Test_Registry_EmptyProfileFileIsValid(t *testing.T) {
-	reg, _, dir := newTestRegistry(t)
-	writeProfile(t, dir, "empty", "")
+	env := newTestRegistry(t)
+	writeProfile(t, env.dir, "empty", "")
 
-	_, err := reg.Profile("empty")
+	_, err := env.reg.Profile("empty")
 	assert.NoError(t, err)
 }
 
 func Test_Registry_ConcurrentProfileCalls(t *testing.T) {
-	reg, _, dir := newTestRegistry(t)
-	writeProfile(t, dir, "work", "{}")
+	env := newTestRegistry(t)
+	writeProfile(t, env.dir, "work", "{}")
 
 	const n = 16
 	profiles := make([]Profile, n)
@@ -167,7 +286,7 @@ func Test_Registry_ConcurrentProfileCalls(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			profiles[i], errs[i] = reg.Profile("work")
+			profiles[i], errs[i] = env.reg.Profile("work")
 		}()
 	}
 	wg.Wait()

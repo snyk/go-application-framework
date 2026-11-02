@@ -24,9 +24,9 @@ type engineWrapper struct {
 	networkAccess networking.NetworkAccess
 }
 
-// scope returns the scope that a nested invocation through this wrapper keeps, or nil when the invocation runs on the
-// engine's own configuration.
-func (e *engineWrapper) scope() *engineWrapper {
+// invocationProfile returns the profile that a nested invocation through this wrapper keeps, or nil when the invocation
+// runs on the engine's own configuration.
+func (e *engineWrapper) invocationProfile() *engineWrapper {
 	if e.config == nil {
 		return nil
 	}
@@ -58,7 +58,7 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 // Invoke invokes the workflow with the given identifier.
 // Calls through the wrapper are marked as nested so post-invoke hooks are skipped.
 func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
-	opts = append([]EngineInvokeOption{withNested(), withScope(e.scope())}, opts...)
+	opts = append([]EngineInvokeOption{withNested(), withInvocationProfile(e.invocationProfile())}, opts...)
 
 	options := &engineRuntimeConfig{}
 	for _, opt := range opts {

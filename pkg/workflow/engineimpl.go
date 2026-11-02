@@ -42,8 +42,10 @@ type EngineImpl struct {
 	mu                sync.RWMutex
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
-	// profiles is built on first use from the configuration of the engine, see profileRegistry.
-	profiles profile.Registry
+	// profiles is built on first use from the configuration of the engine, see profileRegistry. profilesDir is the
+	// profile directory that it was built with.
+	profiles    profile.Registry
+	profilesDir string
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -64,8 +66,9 @@ type engineRuntimeConfig struct {
 	ic      analytics.InstrumentationCollector
 	ctxFunc func() context.Context
 	nested  bool
-	// scope is the configuration and network access of the profile the invocation runs on, nil for the engine's own.
-	scope *engineWrapper
+	// invocationProfile is the configuration and network access of the profile the invocation runs on, nil for the
+	// engine's own.
+	invocationProfile *engineWrapper
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -96,9 +99,9 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 	}
 }
 
-func withScope(scope *engineWrapper) EngineInvokeOption {
+func withInvocationProfile(invocationProfile *engineWrapper) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
-		e.scope = scope
+		e.invocationProfile = invocationProfile
 	}
 }
 
@@ -146,7 +149,7 @@ func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.config = config
-	e.profiles = nil // profiles derive from the engine configuration, so they are rebuilt from the new one
+	e.profiles, e.profilesDir = nil, "" // profiles derive from the engine configuration, so they are rebuilt from the new one
 
 	if e.networkAccess != nil {
 		e.networkAccess.SetConfiguration(config)
@@ -337,6 +340,11 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 }
 
 // Invoke invokes the workflow with the given identifier.
+//
+// Every root invocation that does not bring its own configuration with WithConfig runs on the profile that the
+// configuration of the engine selects with profile.ConfigKey. InvokeWithConfig and WithConfig skip the profile
+// selection. The default profile keeps the configuration of the engine, and a nested invocation keeps the profile of
+// its parent.
 func (e *EngineImpl) Invoke(
 	id Identifier,
 	opts ...EngineInvokeOption,
@@ -358,12 +366,12 @@ func (e *EngineImpl) Invoke(
 
 	// Only a root invocation without a configuration of its own selects a profile; a nested one keeps the profile of its
 	// parent. A failed selection fails the invocation, and the hooks see an empty configuration rather than the engine's.
-	scope, selectErr := e.selectInvocationScope(&options)
-	if scope != nil {
-		options.scope = scope
-	}
-	if selectErr != nil {
-		options.config = scope.config
+	invocationProfile, selected, selectErr := e.selectInvocationProfile(&options)
+	if selected {
+		options.invocationProfile = invocationProfile
+		if selectErr != nil {
+			options.config = invocationProfile.config
+		}
 	}
 
 	var output []Data
@@ -448,13 +456,13 @@ func runCallback(callback Callback, invocationCtx InvocationContext, input []Dat
 }
 
 // applyInvocationDefaults sets the configuration of an invocation the caller gave none: a clone of the configuration of
-// its scope, or else of the engine's. The caller holds the engine lock.
+// its profile, or else of the engine's. The caller holds the engine lock.
 func (e *EngineImpl) applyInvocationDefaults(options *engineRuntimeConfig) {
 	if options.config != nil {
 		return
 	}
-	if options.scope != nil {
-		options.config = options.scope.config.Clone()
+	if options.invocationProfile != nil {
+		options.config = options.invocationProfile.config.Clone()
 		return
 	}
 	options.config = e.config.Clone()
@@ -485,15 +493,15 @@ func (e *EngineImpl) invocationNetworkAccess(id Identifier, config configuration
 }
 
 // invocationEngine returns the engine that an invocation reaches through its context. Its configuration and network access
-// are those of the invocation's scope, which the post-invoke hooks share, so both views of a profile agree.
+// are those of the invocation's profile, which the post-invoke hooks share, so both views of a profile agree.
 func (e *EngineImpl) invocationEngine(options *engineRuntimeConfig) *engineWrapper {
 	localEngine := &engineWrapper{
 		WrappedEngine:                   e,
 		defaultInstrumentationCollector: options.ic,
 		defaultCtxFunc:                  options.ctxFunc,
 	}
-	if options.scope != nil {
-		localEngine.config, localEngine.networkAccess = options.scope.config, options.scope.networkAccess
+	if options.invocationProfile != nil {
+		localEngine.config, localEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
 	}
 	return localEngine
 }
@@ -512,7 +520,7 @@ func withExtensionName(err error, extensionName string) error {
 	return catalogErr
 }
 
-// firePostInvokeHooks runs the hooks of the engine for an invocation with the given options. The scope of the invocation
+// firePostInvokeHooks runs the hooks of the engine for an invocation with the given options. The profile of the invocation
 // replaces the engine's configuration and network access for the hooks, if it has one.
 func (e *EngineImpl) firePostInvokeHooks(
 	ctx context.Context,
@@ -552,8 +560,8 @@ func (e *EngineImpl) firePostInvokeHooks(
 
 	// Nested invocations made through hookEngine must be bound by the same timeout.
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: options.ic}
-	if options.scope != nil {
-		hookEngine.config, hookEngine.networkAccess = options.scope.config, options.scope.networkAccess
+	if options.invocationProfile != nil {
+		hookEngine.config, hookEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
 	}
 
 	var wg sync.WaitGroup
@@ -697,6 +705,10 @@ func GetGlobalConfiguration() ConfigurationOptions {
 // errProfileWithoutConfig is returned when a registry gives a profile without a configuration.
 var errProfileWithoutConfig = errors.New("profile has no configuration")
 
+// errProfileDirNotConfigured is returned when the profile directory is not set on the configuration of the engine. The
+// application sets a default, see pkg/app.
+var errProfileDirNotConfigured = errors.New("profile directory is not configured")
+
 // errEngineWithoutProfiles is returned by GetProfileRegistry for an engine that does not support profiles.
 var errEngineWithoutProfiles = errors.New("engine does not support profiles")
 
@@ -705,15 +717,14 @@ type profileRegistryProvider interface {
 	profileRegistry() (profile.Registry, error)
 }
 
-// selectInvocationScope returns the scope of a root invocation without a configuration of its own: the scope of the profile
-// that the engine's configuration selects. A nil scope without an error means the invocation keeps the engine's own
-// configuration: a nested invocation, an invocation with WithConfig, no registry, or the default profile. A failed selection
-// returns the error with the empty scope of failedProfileScope.
-//
-//nolint:nilnil // a nil scope without an error is the documented "keep the engine's configuration" result
-func (e *EngineImpl) selectInvocationScope(options *engineRuntimeConfig) (*engineWrapper, error) {
+// selectInvocationProfile returns the profile that a root invocation without a configuration of its own runs on, which
+// is the profile that the configuration of the engine selects with profile.ConfigKey. The result selected is false, with
+// no profile and no error, when the invocation keeps the configuration of the engine: a nested invocation, an invocation
+// with WithConfig, or the default profile. A failed selection returns selected true, the error, and the empty profile of
+// failedInvocationProfile, so that the invocation fails rather than falls back to another profile.
+func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invocationProfile *engineWrapper, selected bool, err error) {
 	if options.nested || options.config != nil {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	e.mu.RLock()
@@ -721,34 +732,34 @@ func (e *EngineImpl) selectInvocationScope(options *engineRuntimeConfig) (*engin
 	e.mu.RUnlock()
 	// the default profile is the engine's own configuration, so it needs no registry
 	if name == "" || name == profile.DefaultName {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	registry, err := e.profileRegistry()
 	if err != nil {
-		return e.failedProfileScope(), err
+		return e.failedInvocationProfile(), true, err
 	}
 	p, err := registry.Profile(name)
 	if err != nil {
-		return e.failedProfileScope(), err
+		return e.failedInvocationProfile(), true, err
 	}
 	if p == nil || p.Configuration() == nil {
-		return e.failedProfileScope(), fmt.Errorf("profile %q has no configuration: %w", name, errProfileWithoutConfig)
+		return e.failedInvocationProfile(), true, fmt.Errorf("profile %q has no configuration: %w", name, errProfileWithoutConfig)
 	}
 	if p.Name() == profile.DefaultName {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	cfg := p.Configuration()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return &engineWrapper{config: cfg, networkAccess: CreateNetworkAccess(e.networkAccess, cfg)}, nil
+	return &engineWrapper{config: cfg, networkAccess: CreateNetworkAccess(e.networkAccess, cfg)}, true, nil
 }
 
-// GetProfileRegistry returns the registry of configuration profiles that the engine selects from. The engine builds it from
-// its current configuration on first use and rebuilds it when the configuration is replaced with SetConfiguration, so callers
-// must ask for it each time and must not keep the result across such a change. It fails if the registry cannot be created,
-// for example when the base directory is not absolute, and if the engine does not support profiles.
+// GetProfileRegistry returns the registry of configuration profiles that the engine selects from. Its profile files are
+// read from the directory set with profile.DirKey. The engine rebuilds the registry when SetConfiguration replaces its
+// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. It fails if the directory
+// is not set or not absolute, or if the engine does not support profiles.
 func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 	provider, ok := engine.(profileRegistryProvider)
 	if !ok {
@@ -758,28 +769,29 @@ func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 }
 
 // profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration
-// of the engine, and a failed build is not kept, so the next use retries it. The caller must not hold the engine lock.
+// of the engine, and built again when profile.DirKey resolves to another directory than the one it was built with. A
+// failed build is not kept, so the next use retries it. The caller must not hold the engine lock.
 func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.profiles != nil {
+	dir := e.config.GetString(profile.DirKey)
+	if dir == "" {
+		return nil, fmt.Errorf("%w: set %s", errProfileDirNotConfigured, profile.DirKey)
+	}
+	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	dir := e.config.GetString(profile.BaseDirKey)
-	if dir == "" {
-		dir = configuration.DefaultStorageDir()
-	}
-	registry, err := profile.NewFileRegistry(dir, e.config)
+	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
 	if err != nil {
 		return nil, fmt.Errorf("cannot create profile registry: %w", err)
 	}
-	e.profiles = registry
+	e.profiles, e.profilesDir = registry, dir
 	return registry, nil
 }
 
-// failedProfileScope returns the scope of an invocation whose profile selection failed: an empty configuration that reads
-// no files and no environment, with a network access bound to it.
-func (e *EngineImpl) failedProfileScope() *engineWrapper {
+// failedInvocationProfile returns the profile of an invocation whose profile selection failed: an empty configuration that
+// reads no files and no environment, with a network access bound to it.
+func (e *EngineImpl) failedInvocationProfile() *engineWrapper {
 	cfg := configuration.NewWithOpts()
 	bare := networking.NewNetworkAccess(cfg)
 	bare.SetLogger(e.logger)

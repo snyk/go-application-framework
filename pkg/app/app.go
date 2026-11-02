@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -47,6 +48,9 @@ const (
 	orgLookupProvidedSlugFailed OrgLookup = "provided_slug_failed"
 	orgLookupDefault            OrgLookup = "default"
 	orgLookupDefaultFailed      OrgLookup = "default_failed"
+
+	// defaultProfileDirName is the name of the profile directory in the default storage directory.
+	defaultProfileDirName = "snyk_profiles"
 )
 
 type instrumentationRecorder struct {
@@ -360,6 +364,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
+	config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(configuration.DefaultStorageDir(), defaultProfileDirName)))
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
