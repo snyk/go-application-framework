@@ -97,7 +97,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	return nil, err
 }
 
-// useSecretFromStdin puts the secret piped in with --stdin where the Snyk CLI puts the positional
+// useSecretFromStdin puts the secret piped in with --stdin where the host puts the positional
 // argument.
 func useSecretFromStdin(config configuration.Configuration) error {
 	if !config.GetBool(stdinFlag) {
@@ -115,15 +115,21 @@ func useSecretFromStdin(config configuration.Configuration) error {
 	}
 	config.Set(ConfigurationNewAuthenticationToken, secret)
 
-	if strings.EqualFold(authTypeOf(config), auth.AUTH_TYPE_TOKEN) {
+	authType := authTypeOf(config)
+	if strings.EqualFold(authType, auth.AUTH_TYPE_TOKEN) {
 		return fmt.Errorf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
 			stdinFlag, stdinFlag, auth.PARAMETER_CLIENT_ID)
 	}
-	if !auth.IsAuthTypePAT(secret) && config.GetString(auth.PARAMETER_CLIENT_ID) == "" {
-		return fmt.Errorf("the secret on stdin is not a PAT, so --%s needs --%s; add --%s=<id> to log in with a client secret or private key",
-			stdinFlag, auth.PARAMETER_CLIENT_ID, auth.PARAMETER_CLIENT_ID)
+	if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) || config.GetString(auth.PARAMETER_CLIENT_ID) != "" {
+		return nil
 	}
-	return nil
+	if auth.IsAuthTypePAT(secret) {
+		// Detection picks pat for a PAT, so the other type came from the flag.
+		return fmt.Errorf("the secret on stdin is a PAT, but --%s=%s doesn't take one; drop --%s, or add --%s=<id> if the secret is a client secret",
+			AuthTypeParameter, authType, AuthTypeParameter, auth.PARAMETER_CLIENT_ID)
+	}
+	return fmt.Errorf("the secret on stdin is not a PAT, so --%s needs --%s; add --%s=<id> to log in with a client secret or private key",
+		stdinFlag, auth.PARAMETER_CLIENT_ID, auth.PARAMETER_CLIENT_ID)
 }
 
 func authTypeOf(config configuration.Configuration) string {
@@ -133,7 +139,7 @@ func authTypeOf(config configuration.Configuration) string {
 	return autoDetectAuthType(config)
 }
 
-// useSecretArgument makes the positional argument, which the Snyk CLI passes in
+// useSecretArgument makes the positional argument, which the host passes in
 // ConfigurationNewAuthenticationToken, the client secret.
 func useSecretArgument(config configuration.Configuration) error {
 	secret := config.GetString(ConfigurationNewAuthenticationToken)
@@ -227,12 +233,13 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	// Before any stored machine credential is hidden: the deferred cleanup would delete the one this
 	// login saves.
 	if secret := config.GetString(auth.PARAMETER_CLIENT_SECRET); isPEM(secret) {
+		source := secretSource(config)
 		// The other flows would ignore the key or forward it to the legacy CLI in its arguments.
 		if !strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) {
-			return fmt.Errorf("a private key in --%s needs --%s=%s, but the authentication type is %s",
-				auth.PARAMETER_CLIENT_SECRET, AuthTypeParameter, auth.AUTH_TYPE_OAUTH, authType)
+			return fmt.Errorf("a private key in %s needs --%s=%s, but the authentication type is %s",
+				source, AuthTypeParameter, auth.AUTH_TYPE_OAUTH, authType)
 		}
-		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret)
+		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret, source)
 	}
 
 	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
@@ -326,18 +333,30 @@ func isPEM(secret string) bool {
 	return strings.HasPrefix(strings.TrimSpace(secret), "-----BEGIN")
 }
 
+// secretSource names, for error messages, where the user gave the secret that authEntryPoint put in
+// --client-secret.
+func secretSource(config configuration.Configuration) string {
+	if config.GetBool(stdinFlag) {
+		return "the --" + stdinFlag + " input"
+	}
+	if config.GetString(ConfigurationNewAuthenticationToken) != "" {
+		return "the argument"
+	}
+	return "--" + auth.PARAMETER_CLIENT_SECRET
+}
+
 // authenticateWithPrivateKey logs in with the client credentials grant and a private_key_jwt client
 // assertion signed by keyPEM, then stores the key so that later processes can mint their own tokens.
-func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, globalConfig configuration.Configuration, keyPEM string) error {
+func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, globalConfig configuration.Configuration, keyPEM, source string) error {
 	clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
 	if clientID == "" {
-		return fmt.Errorf("a private key in --%s needs --%s", auth.PARAMETER_CLIENT_SECRET, auth.PARAMETER_CLIENT_ID)
+		return fmt.Errorf("a private key in %s needs --%s", source, auth.PARAMETER_CLIENT_ID)
 	}
 	key, err := machineenrollment.ParseKeyPEM([]byte(keyPEM))
 	if err != nil {
-		return fmt.Errorf("--%s looks like a PEM private key but cannot be used: %w. "+
+		return fmt.Errorf("%s looks like a PEM private key but cannot be used: %w. "+
 			"It must be an unencrypted PKCS#8 RSA or P-256 key (BEGIN PRIVATE KEY) with real line breaks; "+
-			"convert other formats with `openssl pkcs8 -topk8 -nocrypt -in <key file>`", auth.PARAMETER_CLIENT_SECRET, err)
+			"convert other formats with `openssl pkcs8 -topk8 -nocrypt -in <key file>`", source, err)
 	}
 	credential := machinecredential.Credential{ClientID: clientID, Key: key}
 	if err = checkPrivateKeyStorage(invocationCtx.Context(), config); err != nil {

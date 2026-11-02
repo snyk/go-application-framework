@@ -559,7 +559,8 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	s.issueToken(w, clientID)
 }
 
-// tokenForSecret authenticates a client by its shared secret, sent as RFC 6749 section 2.3.1 allows.
+// tokenForSecret authenticates a client by its shared secret, sent in a Basic Authorization header or
+// as client_id and client_secret in the form body.
 func (s *Server) tokenForSecret(w http.ResponseWriter, r *http.Request) {
 	clientID, secret, inHeader := r.BasicAuth()
 	if inHeader {

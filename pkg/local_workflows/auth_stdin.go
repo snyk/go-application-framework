@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -13,7 +14,7 @@ const maxStdinSecretSize = 64 * 1024
 
 var (
 	errStdinTerminal = errors.New(`--stdin expects piped input, but stdin is a terminal; pipe the secret in, for example: echo "$SECRET" | snyk auth --stdin`)
-	errStdinTooLarge = errors.New("the input on stdin is too large: --stdin accepts at most 64 KiB; pipe only the secret")
+	errStdinTooLarge = fmt.Errorf("the input on stdin is too large: --stdin accepts at most %d KiB; pipe only the secret", maxStdinSecretSize/1024)
 	errStdinEmpty    = errors.New("stdin was empty, but --stdin needs the secret piped in; check that the variable or file you pipe holds the secret")
 )
 

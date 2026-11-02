@@ -44,17 +44,18 @@ func pipeToStdin(t *testing.T, input string) {
 	})
 }
 
+const testPAT = "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456"
+
 func Test_auth_stdin_patIsValidatedAndStored(t *testing.T) {
 	env := newSecretArgumentEnv(t)
 	require.NoError(t, InitWhoAmIWorkflow(env.engine))
-	pat := "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456"
-	env.server.RegisterPAT(pat)
-	pipeToStdin(t, pat+"\n")
+	env.server.RegisterPAT(testPAT)
+	pipeToStdin(t, testPAT+"\n")
 
 	err := env.authWith(t, map[string]string{stdinFlag: "true"})
 
 	require.NoError(t, err)
-	assert.Equal(t, pat, env.storedValues(t)[auth.CONFIG_KEY_TOKEN], "snyk config get api returns the PAT")
+	assert.Equal(t, testPAT, env.storedValues(t)[auth.CONFIG_KEY_TOKEN], "snyk config get api returns the PAT")
 	assert.Equal(t, 0, env.server.TokenAttempts())
 }
 
@@ -102,11 +103,15 @@ func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 			piped: "shared-secret-1",
 			want:  []string{"not a PAT", "--" + auth.PARAMETER_CLIENT_ID},
 		},
+		"PAT with auth type oauth and without --client-id": {
+			piped:  testPAT,
+			values: map[string]string{AuthTypeParameter: auth.AUTH_TYPE_OAUTH},
+			want:   []string{"--" + AuthTypeParameter + "=" + auth.AUTH_TYPE_OAUTH, "--" + auth.PARAMETER_CLIENT_ID},
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			env := newSecretArgumentEnv(t)
-			holdBrowserLoginPorts(t)
 			env.server.RegisterClientSecret("client-1", "shared-secret-1")
 			pipeToStdin(t, tc.piped)
 			values := map[string]string{stdinFlag: "true"}
