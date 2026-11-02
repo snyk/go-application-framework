@@ -81,23 +81,47 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	}
 
+	// The grant type is fixed when the authenticator is built.
+	if err = useSecretArgument(config); err != nil {
+		return nil, err
+	}
+
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
-func autoDetectAuthType(config configuration.Configuration) string {
-	// testing if an API token was specified
-	token := config.GetString(ConfigurationNewAuthenticationToken)
-	if len(token) > 0 && auth.IsAuthTypeToken(token) {
-		return auth.AUTH_TYPE_TOKEN
+// useSecretArgument makes the positional argument, which the Snyk CLI passes in
+// ConfigurationNewAuthenticationToken, the client secret.
+func useSecretArgument(config configuration.Configuration) error {
+	secret := config.GetString(ConfigurationNewAuthenticationToken)
+	if secret == "" {
+		return nil
 	}
+	if config.IsSet(auth.PARAMETER_CLIENT_SECRET) {
+		return fmt.Errorf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET)
+	}
+	config.Set(auth.PARAMETER_CLIENT_SECRET, secret)
+	return nil
+}
 
+func autoDetectAuthType(config configuration.Configuration) string {
 	// currently the auth workflow defaults to traditional token auth when an IDE environment is detected
 	// this will need to change if IDEs want to invoke this workflow for oauth/PAT
 	integration := config.GetString(configuration.INTEGRATION_NAME)
 	if pgk_utils.IsSnykIde(integration) {
+		return auth.AUTH_TYPE_TOKEN
+	}
+
+	// A client secret can look like an API token or a PAT.
+	if config.GetString(auth.PARAMETER_CLIENT_ID) != "" {
+		return auth.AUTH_TYPE_OAUTH
+	}
+
+	// testing if an API token was specified
+	token := config.GetString(ConfigurationNewAuthenticationToken)
+	if len(token) > 0 && auth.IsAuthTypeToken(token) {
 		return auth.AUTH_TYPE_TOKEN
 	}
 
