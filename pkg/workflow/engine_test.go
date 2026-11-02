@@ -483,8 +483,30 @@ func Test_GetGlobalConfiguration(t *testing.T) {
 	fs := FlagsetFromConfigurationOptions(opts)
 	assert.NotNil(t, fs)
 	assert.NotNil(t, fs.Lookup(configuration.ORGANIZATION))
+	assert.NotNil(t, fs.Lookup(configuration.TENANT))
 	assert.NotNil(t, fs.Lookup(configuration.DEBUG))
 	assert.NotNil(t, fs.Lookup(configuration.INSECURE_HTTPS))
+}
+
+func Test_GlobalTenantFlag_isVisibleToInvokedWorkflow(t *testing.T) {
+	config := configuration.NewInMemory()
+	globalFlags := FlagsetFromConfigurationOptions(GetGlobalConfiguration())
+	require.NoError(t, globalFlags.Parse([]string{"--tenant", "my-tenant"}))
+	require.NoError(t, config.AddFlagSet(globalFlags))
+
+	engine := NewWorkFlowEngine(config)
+	wfId := NewWorkflowIdentifier("tenanttest")
+	var seenTenant string
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("tenanttest", pflag.ContinueOnError)), func(invocation InvocationContext, _ []Data) ([]Data, error) {
+		seenTenant = invocation.GetConfiguration().GetString(configuration.TENANT)
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	_, err = engine.Invoke(wfId)
+	require.NoError(t, err)
+	assert.Equal(t, "my-tenant", seenTenant)
 }
 
 func Test_EngineImpl_InvokeWithConfig(t *testing.T) {

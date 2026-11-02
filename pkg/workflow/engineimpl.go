@@ -643,6 +643,7 @@ func (ri *engineRuntimeInfo) GetMachineID() (runtimeinfo.Machine, error) {
 func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
 	globalFLags.String(configuration.ORGANIZATION, "", "")
+	globalFLags.String(configuration.TENANT, "", "")
 	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
