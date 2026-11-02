@@ -145,6 +145,7 @@ func whoAmIData(payload string) workflow.Data {
 
 func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 	config := configuration.NewWithOpts()
+	config.Set(configuration.TENANT, "test-tenant")
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
@@ -166,6 +167,7 @@ func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 	require.True(t, ok)
 	rendered := string(payload)
 	assert.NotEmpty(t, rendered)
+	assert.Contains(t, rendered, "Tenant: test-tenant")
 }
 
 func Test_runDoctor_continuesWhenConnectivityFails(t *testing.T) {

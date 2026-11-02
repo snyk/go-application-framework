@@ -79,6 +79,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader) ([]wor
 			{Key: "API", Value: config.GetString(configuration.API_URL)},
 			{Key: "Cache", Value: config.GetString(configuration.CACHE_PATH)},
 			{Key: "Organization", Value: config.GetString(configuration.ORGANIZATION)},
+			{Key: "Tenant", Value: config.GetString(configuration.TENANT)},
 		}
 	}
 

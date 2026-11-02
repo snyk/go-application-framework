@@ -19,7 +19,7 @@ type SanityCheckResult struct {
 func CheckSanity(config configuration.Configuration) []SanityCheckResult {
 	var result []SanityCheckResult
 
-	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION}
+	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION, configuration.TENANT}
 	for _, key := range keys {
 		keysSpecified := config.GetAllKeysThatContainValues(key)
 		if len(keysSpecified) > 1 {

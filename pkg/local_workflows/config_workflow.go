@@ -120,7 +120,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 }
 
 func sanityCheck(config configuration.Configuration) error {
-	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION}
+	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION, configuration.TENANT}
 	envVars := []string{}
 
 	for _, key := range keys {
@@ -183,6 +183,7 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	}
 
 	config.Unset(configuration.ORGANIZATION)
+	config.Unset(configuration.TENANT)
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
