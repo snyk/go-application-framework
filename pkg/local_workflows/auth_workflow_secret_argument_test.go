@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -45,21 +47,39 @@ func Test_auth_secretArgument_logsInLikeClientSecret(t *testing.T) {
 			return issueClientKey(t, env.server, "client-1")
 		},
 	}
-	sources := map[string]string{
-		"argument":                          ConfigurationNewAuthenticationToken,
-		"--" + auth.PARAMETER_CLIENT_SECRET: auth.PARAMETER_CLIENT_SECRET,
+	sources := map[string]func(t *testing.T, secret string) (key, value string){
+		"argument": func(_ *testing.T, secret string) (string, string) {
+			return ConfigurationNewAuthenticationToken, secret
+		},
+		"--" + auth.PARAMETER_CLIENT_SECRET: func(_ *testing.T, secret string) (string, string) {
+			return auth.PARAMETER_CLIENT_SECRET, secret
+		},
+		"--" + stdinFlag: func(t *testing.T, secret string) (string, string) {
+			t.Helper()
+			pipeToStdin(t, secret+"\n")
+			return stdinFlag, "true"
+		},
 	}
 	for secretName, secretFor := range secrets {
-		for sourceName, key := range sources {
+		for sourceName, source := range sources {
 			t.Run(secretName+" in "+sourceName, func(t *testing.T) {
 				env := newSecretArgumentEnv(t)
+				logs := &bytes.Buffer{}
+				logger := zerolog.New(logs).Level(zerolog.TraceLevel)
+				env.engine.SetLogger(&logger)
 				secret := secretFor(t, env)
+				key, value := source(t, secret)
 
-				err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: secret})
+				err := env.authWith(t, map[string]string{auth.PARAMETER_CLIENT_ID: "client-1", key: value})
 
 				require.NoError(t, err)
 				assert.Equal(t, 1, env.server.TokenRequests)
 				assert.Equal(t, http.StatusOK, env.whoamiInNewProcess(t), "a later process authenticates with the stored login")
+				for _, line := range strings.Split(secret, "\n") {
+					if len(line) >= 12 && !strings.HasPrefix(line, "-----") {
+						assert.NotContains(t, logs.String(), line, "the secret is not logged")
+					}
+				}
 			})
 		}
 	}

@@ -25,6 +25,7 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	AuthTypeParameter = "auth-type"
+	stdinFlag         = "stdin"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
@@ -49,6 +50,7 @@ func InitAuth(engine workflow.Engine) error {
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
+	config.Bool(stdinFlag, false, "Read the secret (PAT, client secret or private key) from stdin")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
 	return err
@@ -82,6 +84,9 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	}
 
 	// The grant type is fixed when the authenticator is built.
+	if err = useSecretFromStdin(config); err != nil {
+		return nil, err
+	}
 	if err = useSecretArgument(config); err != nil {
 		return nil, err
 	}
@@ -90,6 +95,42 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
+}
+
+// useSecretFromStdin puts the secret piped in with --stdin where the Snyk CLI puts the positional
+// argument.
+func useSecretFromStdin(config configuration.Configuration) error {
+	if !config.GetBool(stdinFlag) {
+		return nil
+	}
+	if config.GetString(ConfigurationNewAuthenticationToken) != "" {
+		return fmt.Errorf("the secret is given both with --%s and as an argument; give it in only one of them", stdinFlag)
+	}
+	if config.IsSet(auth.PARAMETER_CLIENT_SECRET) {
+		return fmt.Errorf("the secret is given both with --%s and in --%s; give it in only one of them", stdinFlag, auth.PARAMETER_CLIENT_SECRET)
+	}
+	secret, err := readSecretFromStdin(os.Stdin)
+	if err != nil {
+		return err
+	}
+	config.Set(ConfigurationNewAuthenticationToken, secret)
+
+	if strings.EqualFold(authTypeOf(config), auth.AUTH_TYPE_TOKEN) {
+		return fmt.Errorf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
+			stdinFlag, stdinFlag, auth.PARAMETER_CLIENT_ID)
+	}
+	if !auth.IsAuthTypePAT(secret) && config.GetString(auth.PARAMETER_CLIENT_ID) == "" {
+		return fmt.Errorf("the secret on stdin is not a PAT, so --%s needs --%s; add --%s=<id> to log in with a client secret or private key",
+			stdinFlag, auth.PARAMETER_CLIENT_ID, auth.PARAMETER_CLIENT_ID)
+	}
+	return nil
+}
+
+func authTypeOf(config configuration.Configuration) string {
+	if authType := config.GetString(AuthTypeParameter); authType != "" {
+		return authType
+	}
+	return autoDetectAuthType(config)
 }
 
 // useSecretArgument makes the positional argument, which the Snyk CLI passes in
@@ -178,10 +219,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
-	authType := config.GetString(AuthTypeParameter)
-	if len(authType) == 0 {
-		authType = autoDetectAuthType(config)
-	}
+	authType := authTypeOf(config)
 
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
