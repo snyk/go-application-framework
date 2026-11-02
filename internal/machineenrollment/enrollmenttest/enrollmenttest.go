@@ -85,6 +85,7 @@ type Server struct {
 	clients           map[string]client
 	jtis              map[string]bool
 	tokens            map[string]string // access token -> client id
+	pats              map[string]bool
 	next              int
 	errorTitles       atomic.Bool
 }
@@ -115,11 +116,13 @@ func NewServer(t *testing.T) *Server {
 		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
+		pats:         map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
+	mux.HandleFunc("GET /rest/self", s.self)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -167,6 +170,13 @@ func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = client{key: key, kid: thumbprintRSA(key)}
+}
+
+// RegisterPAT makes GET /rest/self accept pat, sent as the API sends a token: "Authorization: token <pat>".
+func (s *Server) RegisterPAT(pat string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pats[pat] = true
 }
 
 // RegisterClientSecret makes the token endpoint accept the shared secret for clientID, in the
@@ -600,6 +610,18 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
+}
+
+func (s *Server) self(w http.ResponseWriter, r *http.Request) {
+	pat, found := strings.CutPrefix(r.Header.Get("Authorization"), "token ")
+	s.mu.Lock()
+	known := s.pats[pat]
+	s.mu.Unlock()
+	if !found || !known {
+		s.writeError(w, http.StatusUnauthorized, "", "The token is missing or not valid.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"attributes": map[string]any{"username": "pat-user"}}})
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
