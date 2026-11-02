@@ -11,6 +11,14 @@ import (
 // DefaultName is the name of the default profile, whose configuration is the base configuration of the registry.
 const DefaultName = "default"
 
+// ConfigKey is the configuration key that names the profile a root invocation runs on. An empty value selects the
+// default profile.
+const ConfigKey = "config_profile"
+
+// BaseDirKey is the configuration key of the directory that holds the profiles directory of the profile files, which
+// holds one <name>.json file per profile. An unset or empty value means configuration.DefaultStorageDir().
+const BaseDirKey = "config_profile_dir"
+
 // ErrNotFound is returned when a profile does not exist.
 var ErrNotFound = errors.New("profile not found")
 
