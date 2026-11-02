@@ -50,8 +50,8 @@ func ReadFleetKeyFile(path string) (*ecdsa.PrivateKey, error) {
 	return ParseFleetKey(data)
 }
 
-// DecodeFleetKey decodes a fleet key given inline: the PEM file ReadFleetKeyFile reads, encoded as
-// standard base64, which is how the Snyk web UI hands out a fleet key.
+// DecodeFleetKey decodes a fleet key given inline as standard base64 encoded PEM, which is how the
+// Snyk web UI hands out a fleet key.
 func DecodeFleetKey(value string) (*ecdsa.PrivateKey, error) {
 	value = strings.TrimSpace(value)
 	if strings.HasPrefix(value, "-----BEGIN") {
