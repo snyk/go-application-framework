@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
 
@@ -80,4 +81,18 @@ func Test_CheckSanity_Token(t *testing.T) {
 	assert.Len(t, result, 1)
 
 	assert.Contains(t, result[0].Description, expectedDescription)
+}
+
+func Test_CheckSanity_Tenant(t *testing.T) {
+	alternativeTenantVariable := "snyk_cfg_tenant"
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.TENANT, "tenant1")
+	config.Set(alternativeTenantVariable, "tenant2")
+	config.AddAlternativeKeys(configuration.TENANT, []string{alternativeTenantVariable})
+
+	result := CheckSanity(config)
+	require.Len(t, result, 1)
+
+	assert.Contains(t, result[0].Description, "might override each other TENANT, SNYK_CFG_TENANT")
 }

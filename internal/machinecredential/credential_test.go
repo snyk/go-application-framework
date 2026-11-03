@@ -379,3 +379,42 @@ func TestSecretTerms_IgnoresAPEMTooShortToBeAKey(t *testing.T) {
 	assert.NotContains(t, terms, "a", "it would redact every a in the logs")
 	assert.Empty(t, terms)
 }
+
+func TestSave_OfADerivedConfigurationWritesOnlyThePinnedFile(t *testing.T) {
+	isolateConfigHome(t)
+	dir := t.TempDir()
+	basePath := filepath.Join(dir, "base.json")
+	pinnedPath := filepath.Join(dir, "pinned.json")
+	base := configuration.NewWithOpts(configuration.WithPinnedFile(basePath))
+	credential := newCredential(t)
+
+	derived, err := configuration.Derive(base, configuration.WithPinnedFile(pinnedPath))
+	require.NoError(t, err)
+	require.NoError(t, machinecredential.Save(t.Context(), derived, credential))
+
+	assert.FileExists(t, pinnedPath)
+	assert.NoFileExists(t, basePath)
+	assert.Empty(t, base.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
+}
+
+func TestSave_InvalidPinnedFileHasNoStorageAndWritesNothing(t *testing.T) {
+	isolateConfigHome(t)
+	dir := t.TempDir()
+	config := configuration.NewWithOpts(configuration.WithPinnedFile(dir))
+	require.Nil(t, config.GetStorage())
+
+	err := machinecredential.Save(t.Context(), config, newCredential(t))
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "no storage")
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries)
+}
+
+func isolateConfigHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+}

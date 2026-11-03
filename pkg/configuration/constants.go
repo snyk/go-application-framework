@@ -34,6 +34,7 @@ const (
 
 	ORGANIZATION      string = "org"               // ORGANIZATION (string) sets/returns the Organization ID
 	ORGANIZATION_SLUG string = "internal_org_slug" // ORGANIZATION_SLUG (string) returns the slug of the organization and correlates to the ORGANIZATION ID.
+	TENANT            string = "tenant"            // TENANT (string) sets/returns the Tenant ID
 
 	// TENANT_ID (string) returns the ID of the tenant the authenticated principal belongs to. It is only
 	// looked up for an enrolled machine; for any other principal, or when the lookup fails, it is empty.

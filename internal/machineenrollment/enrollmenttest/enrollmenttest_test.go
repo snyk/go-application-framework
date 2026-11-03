@@ -66,6 +66,14 @@ func TestWhoamiAcceptsOnlyTokensTheServerIssued(t *testing.T) {
 	assert.Equal(t, http.StatusOK, whoami(t, srv, "Bearer "+token))
 }
 
+func TestTokenEndpointMintsAJWTWhoseAudienceIsTheAPIURL(t *testing.T) {
+	srv := enrollmenttest.NewServer(t)
+
+	_, claims := enrollmenttest.DecodeJWT(t, mintAccessToken(t, srv, enrolled(t, srv)))
+
+	assert.Equal(t, []any{srv.URL}, claims["aud"])
+}
+
 func TestEnrollmentRequestsCountsEachAttemptIncludingRejected(t *testing.T) {
 	srv := enrollmenttest.NewServer(t)
 	assert.Zero(t, srv.EnrollmentRequests())
