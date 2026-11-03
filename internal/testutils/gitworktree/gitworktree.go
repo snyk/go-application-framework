@@ -53,6 +53,22 @@ func NewMainRepoWithoutOrigin(t *testing.T) string {
 	return mainDir
 }
 
+// StageInWorktreeIndex adds files to the index of the linked worktree at worktreeDir, which lives in its private gitdir.
+func StageInWorktreeIndex(t *testing.T, worktreeDir string, files ...string) {
+	t.Helper()
+	repo, err := git.PlainOpenWithOptions(worktreeDir, &git.PlainOpenOptions{
+		DetectDotGit:          true,
+		EnableDotGitCommonDir: true,
+	})
+	require.NoError(t, err)
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	for _, file := range files {
+		_, err = wt.Add(file)
+		require.NoError(t, err)
+	}
+}
+
 // SetCommonDir overwrites the commondir file of the worktree private dir in mainDir.
 func SetCommonDir(t *testing.T, mainDir string, value string) {
 	t.Helper()
