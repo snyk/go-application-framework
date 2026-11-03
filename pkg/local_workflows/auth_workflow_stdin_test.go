@@ -64,10 +64,9 @@ func Test_auth_stdin_patIsValidatedAndStored(t *testing.T) {
 
 func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 	tests := map[string]struct {
-		piped     string
-		values    map[string]string
-		want      []string
-		readError bool
+		piped  string
+		values map[string]string
+		want   []string
 	}{
 		"secret also as argument": {
 			piped:  "shared-secret-1",
@@ -80,16 +79,14 @@ func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 			want:   []string{"--" + stdinFlag, "--" + auth.PARAMETER_CLIENT_SECRET},
 		},
 		"empty input": {
-			piped:     "\n",
-			values:    map[string]string{auth.PARAMETER_CLIENT_ID: "client-1"},
-			want:      []string{"stdin was empty"},
-			readError: true,
+			piped:  "\n",
+			values: map[string]string{auth.PARAMETER_CLIENT_ID: "client-1"},
+			want:   []string{"stdin was empty"},
 		},
 		"input over 64 KiB": {
-			piped:     strings.Repeat("a", 64*1024+1),
-			values:    map[string]string{auth.PARAMETER_CLIENT_ID: "client-1"},
-			want:      []string{"too large"},
-			readError: true,
+			piped:  strings.Repeat("a", 64*1024+1),
+			values: map[string]string{auth.PARAMETER_CLIENT_ID: "client-1"},
+			want:   []string{"too large"},
 		},
 		"API token": {
 			piped: "00000000-0000-0000-0000-000000000000",
@@ -125,13 +122,9 @@ func Test_auth_stdin_failsBeforeAnyRequest(t *testing.T) {
 
 			err := env.authWith(t, values)
 
-			require.Error(t, err)
-			message := err.Error()
-			if !tc.readError {
-				message = invalidFlagDetail(t, err)
-			}
+			detail := invalidFlagDetail(t, err)
 			for _, want := range tc.want {
-				assert.Contains(t, message, want)
+				assert.Contains(t, detail, want)
 			}
 			assert.Equal(t, 0, env.server.TokenAttempts())
 			assert.Empty(t, env.server.CredentialHeaders(), "no request carried a credential")

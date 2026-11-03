@@ -78,9 +78,9 @@ func Test_readSecretFromStdin_emptyInputIsAnError(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := readSecretFromStdin(stdinWith(t, input))
 
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "stdin was empty")
-			assert.Contains(t, err.Error(), "--stdin")
+			detail := invalidFlagDetail(t, err)
+			assert.Contains(t, detail, "stdin was empty")
+			assert.Contains(t, detail, "--stdin")
 		})
 	}
 }
@@ -114,14 +114,13 @@ func Test_readSecretFromStdin_inputOf64KiBIsAccepted(t *testing.T) {
 func Test_readSecretFromStdin_inputOver64KiBIsTooLarge(t *testing.T) {
 	_, err := readSecretFromStdin(stdinWith(t, strings.Repeat("a", 64*1024+1)))
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "too large")
-	assert.Contains(t, err.Error(), "--stdin")
+	detail := invalidFlagDetail(t, err)
+	assert.Contains(t, detail, "too large")
+	assert.Contains(t, detail, "--stdin")
 }
 
 func Test_readSecretFromStdin_endlessPipeFailsWithoutReadingItAll(t *testing.T) {
 	_, err := readSecretFromStdin(endlessStdin(t))
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "too large")
+	assert.Contains(t, invalidFlagDetail(t, err), "too large")
 }
