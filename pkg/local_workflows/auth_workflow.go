@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
@@ -109,11 +110,11 @@ func resolveSecret(config configuration.Configuration, stdin *os.File) error {
 	inClientSecret := config.IsSet(auth.PARAMETER_CLIENT_SECRET)
 	switch {
 	case fromStdin && inArgument:
-		return fmt.Errorf("the secret is given both with --%s and as an argument; give it in only one of them", stdinFlag)
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both with --%s and as an argument; give it in only one of them", stdinFlag))
 	case fromStdin && inClientSecret:
-		return fmt.Errorf("the secret is given both with --%s and in --%s; give it in only one of them", stdinFlag, auth.PARAMETER_CLIENT_SECRET)
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both with --%s and in --%s; give it in only one of them", stdinFlag, auth.PARAMETER_CLIENT_SECRET))
 	case inArgument && inClientSecret:
-		return fmt.Errorf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET)
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET))
 	}
 
 	config.AddDefaultValue(ConfigurationNewAuthenticationToken, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
@@ -138,27 +139,24 @@ func resolveSecret(config configuration.Configuration, stdin *os.File) error {
 		config.Set(ConfigurationNewAuthenticationToken, secret)
 	}
 	if fromStdin {
-		return checkStdinAuthType(config, secret)
+		return checkStdinAuthType(config)
 	}
 	return nil
 }
 
-func checkStdinAuthType(config configuration.Configuration, secret string) error {
+// checkStdinAuthType fails when the authentication that would run ignores the secret on stdin.
+func checkStdinAuthType(config configuration.Configuration) error {
 	authType := authTypeOf(config)
-	if strings.EqualFold(authType, auth.AUTH_TYPE_TOKEN) {
-		return fmt.Errorf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
-			stdinFlag, stdinFlag, auth.PARAMETER_CLIENT_ID)
-	}
-	if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) || config.GetString(auth.PARAMETER_CLIENT_ID) != "" {
+	switch {
+	case strings.EqualFold(authType, auth.AUTH_TYPE_TOKEN):
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
+			stdinFlag, stdinFlag, auth.PARAMETER_CLIENT_ID))
+	case strings.EqualFold(authType, auth.AUTH_TYPE_PAT), config.GetString(auth.PARAMETER_CLIENT_ID) != "":
 		return nil
+	default:
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("--%s needs --%s=<id> to log in with a client secret or private key: without it, %s authentication opens a browser login, which ignores stdin; to log in with a PAT, pipe it without --%s",
+			stdinFlag, auth.PARAMETER_CLIENT_ID, authType, AuthTypeParameter))
 	}
-	if auth.IsAuthTypePAT(secret) {
-		// Detection picks pat for a PAT, so the other type came from the flag.
-		return fmt.Errorf("the secret on stdin is a PAT, but --%s=%s doesn't take one; drop --%s, or add --%s=<id> if the secret is a client secret",
-			AuthTypeParameter, authType, AuthTypeParameter, auth.PARAMETER_CLIENT_ID)
-	}
-	return fmt.Errorf("the secret on stdin is not a PAT, so --%s needs --%s; add --%s=<id> to log in with a client secret or private key",
-		stdinFlag, auth.PARAMETER_CLIENT_ID, auth.PARAMETER_CLIENT_ID)
 }
 
 func authTypeOf(config configuration.Configuration) string {

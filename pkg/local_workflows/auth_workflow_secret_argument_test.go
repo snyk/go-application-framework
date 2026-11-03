@@ -142,8 +142,9 @@ func Test_auth_secretArgument_withClientSecretFailsBeforeAnyRequest(t *testing.T
 	})
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "argument")
-	assert.ErrorContains(t, err, "--"+auth.PARAMETER_CLIENT_SECRET)
+	detail := invalidFlagDetail(t, err)
+	assert.Contains(t, detail, "argument")
+	assert.Contains(t, detail, "--"+auth.PARAMETER_CLIENT_SECRET)
 	assert.Equal(t, 0, env.server.TokenAttempts())
 }
 
