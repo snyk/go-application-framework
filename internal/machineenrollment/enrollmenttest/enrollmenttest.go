@@ -519,9 +519,7 @@ func (s *Server) verifyAssertion(token, audience string) (*rsa.PublicKey, string
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	s.tokenAttempts++
-	s.mu.Unlock()
+	s.countTokenAttempt()
 	if err := r.ParseForm(); err != nil || r.PostForm.Get("grant_type") != "client_credentials" {
 		writeOAuthError(w, "invalid_request")
 		return
@@ -574,7 +572,16 @@ func (s *Server) tokenForSecret(w http.ResponseWriter, r *http.Request) {
 	} else {
 		clientID, secret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
 	}
+	s.issueTokenForSecret(w, clientID, secret)
+}
 
+func (s *Server) countTokenAttempt() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenAttempts++
+}
+
+func (s *Server) issueTokenForSecret(w http.ResponseWriter, clientID, secret string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c := s.clients[clientID]
@@ -603,10 +610,7 @@ func (s *Server) accessToken(clientID string) string {
 
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	s.mu.Lock()
-	_, issued := s.tokens[bearer]
-	s.mu.Unlock()
-	if !found || !issued {
+	if !found || !s.hasIssued(bearer) {
 		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
 		return
 	}
@@ -615,14 +619,24 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) self(w http.ResponseWriter, r *http.Request) {
 	pat, found := strings.CutPrefix(r.Header.Get("Authorization"), "token ")
-	s.mu.Lock()
-	known := s.pats[pat]
-	s.mu.Unlock()
-	if !found || !known {
+	if !found || !s.knowsPAT(pat) {
 		s.writeError(w, http.StatusUnauthorized, "", "The token is missing or not valid.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"attributes": map[string]any{"username": "pat-user"}}})
+}
+
+func (s *Server) hasIssued(accessToken string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, issued := s.tokens[accessToken]
+	return issued
+}
+
+func (s *Server) knowsPAT(pat string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pats[pat]
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
