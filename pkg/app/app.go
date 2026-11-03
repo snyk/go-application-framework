@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/fips140"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -147,6 +149,38 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
 		return orgId, err
+	}
+	return callback
+}
+
+func defaultFuncTenantId(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	// the tenant is looked up with these credentials, so a clone changing them must not reuse a cached value
+	for _, key := range []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE} {
+		if err := config.AddKeyDependency(configuration.TENANT_ID, key); err != nil {
+			logger.Print("Failed to add dependency for TENANT_ID:", err)
+		}
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		if existing, ok := existingValue.(string); ok && len(existing) > 0 {
+			return existing, nil
+		}
+
+		// only a machine can read its own record, any other principal would be rejected
+		if _, err := machinecredential.Load(c); err != nil {
+			if !errors.Is(err, machinecredential.ErrNotEnrolled) {
+				logger.Print("Failed to determine default value for \"TENANT_ID\":", err)
+			}
+			return "", nil
+		}
+
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
+		tenantId, err := apiClientFactory(c.GetString(configuration.API_URL), client).GetMachineTenantId(context.Background())
+		if err != nil {
+			logger.Print("Failed to determine default value for \"TENANT_ID\":", err)
+			return "", nil
+		}
+		return tenantId, nil
 	}
 	return callback
 }
@@ -398,6 +432,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.TENANT_ID, defaultFuncTenantId(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {

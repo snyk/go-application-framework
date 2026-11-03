@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ type ApiClient interface {
 	GetUserMe(ctx context.Context) (string, error)
 	GetSelf(ctx context.Context) (contract.SelfResponse, error)
 	GetOrgSettings(ctx context.Context, orgId string) (*contract.OrgSettingsResponse, error)
+	GetMachineTenantId(ctx context.Context) (string, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -240,6 +242,25 @@ func (a *snykApiClient) GetSelf(ctx context.Context) (contract.SelfResponse, err
 	}
 
 	return selfData, nil
+}
+
+// GetMachineTenantId returns the tenant of the authenticated machine. Only a machine's access token may
+// read the machine's own record; any other principal is rejected by the API.
+func (a *snykApiClient) GetMachineTenantId(ctx context.Context) (string, error) {
+	version := "2024-10-15"
+	body, err := clientGet(ctx, a, "/rest/machines/self", &version)
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve the machine's own record: %w", err)
+	}
+
+	var machine contract.MachineSelfResponse
+	if err = json.Unmarshal(body, &machine); err != nil {
+		return "", fmt.Errorf("unable to decode the machine's own record: %w", err)
+	}
+	if machine.Data.Attributes.TenantId == "" {
+		return "", errors.New("the machine's own record names no tenant")
+	}
+	return machine.Data.Attributes.TenantId, nil
 }
 
 func (a *snykApiClient) GetOrgSettings(ctx context.Context, orgId string) (*contract.OrgSettingsResponse, error) {

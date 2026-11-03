@@ -1,6 +1,7 @@
 // Package enrollmenttest provides a test double for the enrollment service: a fake API server
 // that implements the enrollment (by device token and by fleet key) and token endpoints as the
 // service's enrollment spec defines them, and independently verifies everything the client signs.
+// It also serves the machine's own record, which only a machine's access token may read.
 package enrollmenttest
 
 import (
@@ -84,6 +85,9 @@ type Server struct {
 	tokens            map[string]string // access token -> client id
 	next              int
 	errorTitles       atomic.Bool
+	tenantID          string
+	machineSelfStatus int
+	machineSelfCalls  int
 }
 
 type fleetKey struct {
@@ -116,6 +120,7 @@ func NewServer(t *testing.T) *Server {
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
+	mux.HandleFunc("GET /rest/machines/self", s.machineSelf)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -156,6 +161,27 @@ func (s *Server) BearerTokens() []string {
 // SetErrorTitles sets whether enrollment error responses carry a JSON:API title.
 func (s *Server) SetErrorTitles(on bool) {
 	s.errorTitles.Store(on)
+}
+
+// SetTenantID sets the tenant the machine's own record names.
+func (s *Server) SetTenantID(tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tenantID = tenantID
+}
+
+// FailMachineSelf makes the machine's own record answer with status and a JSON:API error, whoever asks.
+func (s *Server) FailMachineSelf(status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.machineSelfStatus = status
+}
+
+// MachineSelfRequests returns how many requests reached the machine's own record, answered or not.
+func (s *Server) MachineSelfRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.machineSelfCalls
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
@@ -537,6 +563,34 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
+}
+
+func (s *Server) machineSelf(w http.ResponseWriter, r *http.Request) {
+	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	s.mu.Lock()
+	s.machineSelfCalls++
+	clientID, issued := s.tokens[bearer]
+	tenantID, failStatus := s.tenantID, s.machineSelfStatus
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-10-15":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case failStatus != 0:
+		s.writeError(w, failStatus, "", http.StatusText(failStatus))
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !found || !issued:
+		s.writeError(w, http.StatusBadRequest, "", "Only a machine can read its own record.")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"jsonapi": map[string]any{"version": "1.0"},
+			"links":   map[string]any{"self": r.URL.Path},
+			"data": map[string]any{
+				"id": clientID, "type": "machine",
+				"attributes": map[string]any{"tenant_id": tenantID, "status": "active", "enrolled": true},
+			},
+		})
+	}
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
