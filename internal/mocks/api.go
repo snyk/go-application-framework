@@ -156,6 +156,21 @@ func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(ctx, orgID interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), ctx, orgID)
 }
 
+// GetTenantIdFromOrgId mocks base method.
+func (m *MockApiClient) GetTenantIdFromOrgId(ctx context.Context, orgID string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTenantIdFromOrgId", ctx, orgID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTenantIdFromOrgId indicates an expected call of GetTenantIdFromOrgId.
+func (mr *MockApiClientMockRecorder) GetTenantIdFromOrgId(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTenantIdFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetTenantIdFromOrgId), ctx, orgID)
+}
+
 // GetUserMe mocks base method.
 func (m *MockApiClient) GetUserMe(ctx context.Context) (string, error) {
 	m.ctrl.T.Helper()

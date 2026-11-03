@@ -1,7 +1,8 @@
 // Package enrollmenttest provides a test double for the enrollment service: a fake API server
 // that implements the enrollment (by device token and by fleet key) and token endpoints as the
 // service's enrollment spec defines them, and independently verifies everything the client signs.
-// It also serves the machine's own record, which only a machine's access token may read.
+// It also serves the machine's own record, which only a machine's access token may read, and the
+// authenticated principal's own record and organization records.
 package enrollmenttest
 
 import (
@@ -89,6 +90,9 @@ type Server struct {
 	tenantID          string
 	machineSelfStatus int
 	machineSelfCalls  int
+	defaultOrgID      string
+	orgTenants        map[string]string // org id -> tenant id, "" for an org whose record names no tenant
+	orgCalls          int
 }
 
 type fleetKey struct {
@@ -116,12 +120,15 @@ func NewServer(t *testing.T) *Server {
 		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
+		orgTenants:   map[string]string{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
 	mux.HandleFunc("GET /rest/machines/self", s.machineSelf)
+	mux.HandleFunc("GET /rest/self", s.self)
+	mux.HandleFunc("GET /rest/orgs/{org_id}", s.org)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -183,6 +190,28 @@ func (s *Server) MachineSelfRequests() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.machineSelfCalls
+}
+
+// SetDefaultOrg sets the organization the principal's own record names as its default.
+func (s *Server) SetDefaultOrg(orgID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultOrgID = orgID
+}
+
+// AddOrg makes the organization record for orgID exist, naming tenantID as its tenant, or no
+// tenant if tenantID is empty.
+func (s *Server) AddOrg(orgID, tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orgTenants[orgID] = tenantID
+}
+
+// OrgRequests returns how many requests reached an organization record, answered or not.
+func (s *Server) OrgRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.orgCalls
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
@@ -600,6 +629,45 @@ func (s *Server) machineSelf(w http.ResponseWriter, r *http.Request) {
 				"attributes": map[string]any{"tenant_id": tenantID, "status": "active", "enrolled": true},
 			},
 		})
+	}
+}
+
+func (s *Server) self(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defaultOrgID := s.defaultOrgID
+	s.mu.Unlock()
+	if r.Header.Get("Authorization") == "" {
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonapi": map[string]any{"version": "1.0"},
+		"data": map[string]any{
+			"id": "self", "type": "user",
+			"attributes": map[string]any{"default_org_context": defaultOrgID},
+		},
+	})
+}
+
+func (s *Server) org(w http.ResponseWriter, r *http.Request) {
+	orgID := r.PathValue("org_id")
+	s.mu.Lock()
+	s.orgCalls++
+	tenantID, exists := s.orgTenants[orgID]
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-03-12":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !exists:
+		s.writeError(w, http.StatusNotFound, "", "The organization was not found.")
+	default:
+		data := map[string]any{"id": orgID, "type": "org", "attributes": map[string]any{"slug": orgID}}
+		if tenantID != "" {
+			data["relationships"] = map[string]any{"tenant": map[string]any{"data": map[string]any{"id": tenantID, "type": "tenant"}}}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": data})
 	}
 }
 

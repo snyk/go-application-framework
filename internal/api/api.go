@@ -26,6 +26,7 @@ type ApiClient interface {
 	GetSelf(ctx context.Context) (contract.SelfResponse, error)
 	GetOrgSettings(ctx context.Context, orgId string) (*contract.OrgSettingsResponse, error)
 	GetMachineTenantId(ctx context.Context) (string, error)
+	GetTenantIdFromOrgId(ctx context.Context, orgID string) (string, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -61,6 +62,24 @@ func (a *snykApiClient) GetSlugFromOrgId(ctx context.Context, orgID string) (str
 	}
 
 	return response.Data.Attributes.Slug, nil
+}
+
+// GetTenantIdFromOrgId returns the ID of the tenant that owns the organization orgID.
+func (a *snykApiClient) GetTenantIdFromOrgId(ctx context.Context, orgID string) (string, error) {
+	version := "2024-03-12"
+	body, err := clientGet(ctx, a, "/rest/orgs/"+url.PathEscape(orgID), &version, "expand", "tenant")
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve the organization's record: %w", err)
+	}
+
+	var response contract.GetOrganizationResponse
+	if err = json.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("unable to decode the organization's record: %w", err)
+	}
+	if response.Data.Relationships.Tenant.Data.Id == "" {
+		return "", errors.New("the organization's record names no tenant")
+	}
+	return response.Data.Relationships.Tenant.Data.Id, nil
 }
 
 // GetOrgIdFromSlug retrieves the organization ID associated with a given Snyk organization slug.
