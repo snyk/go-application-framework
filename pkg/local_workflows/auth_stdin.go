@@ -10,6 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
+// Far above the largest PEM private key; stops a wrong pipe, such as a log file, from being read into memory.
 const maxStdinSecretSize = 64 * 1024
 
 var (
