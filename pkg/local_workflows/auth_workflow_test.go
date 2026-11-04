@@ -668,3 +668,34 @@ func Test_AuthEntryPointDI_UnusableCredentialStorageStopsBeforeTheLogin(t *testi
 		}
 	}
 }
+
+func Test_AuthTypeOf(t *testing.T) {
+	newConfig := func() configuration.Configuration {
+		return configuration.NewWithOpts()
+	}
+
+	t.Run("the type that was asked for wins over what would be detected", func(t *testing.T) {
+		config := newConfig()
+		config.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
+		config.Set(AuthTypeParameter, auth.AUTH_TYPE_PAT)
+		assert.Equal(t, auth.AUTH_TYPE_PAT, AuthTypeOf(config))
+	})
+
+	t.Run("an unknown type is returned as it was asked for", func(t *testing.T) {
+		config := newConfig()
+		config.Set(AuthTypeParameter, "something-else")
+		assert.Equal(t, "something-else", AuthTypeOf(config))
+	})
+
+	t.Run("detects the type when none was asked for", func(t *testing.T) {
+		assert.Equal(t, auth.AUTH_TYPE_OAUTH, AuthTypeOf(newConfig()))
+
+		ide := newConfig()
+		ide.Set(configuration.INTEGRATION_NAME, "VS_CODE")
+		assert.Equal(t, auth.AUTH_TYPE_TOKEN, AuthTypeOf(ide))
+
+		token := newConfig()
+		token.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
+		assert.Equal(t, auth.AUTH_TYPE_TOKEN, AuthTypeOf(token))
+	})
+}
