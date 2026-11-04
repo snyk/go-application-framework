@@ -62,6 +62,15 @@ func Test_GetTenantIdFromOrgId_FailsWhenTheOrgNamesNoTenant(t *testing.T) {
 	assert.Empty(t, tenantID)
 }
 
+func Test_GetTenantIdFromOrgId_FailsWhenTheOrgsTenantRelationshipIsEmpty(t *testing.T) {
+	server, _ := newOrgServer(t, http.StatusOK, `{"data":{"id":"`+orgTenantOrgID+`","type":"org","attributes":{"slug":"my-org"},"relationships":{"tenant":{"data":null}}}}`)
+
+	tenantID, err := api.NewApi(server.URL, server.Client()).GetTenantIdFromOrgId(t.Context(), orgTenantOrgID)
+
+	assert.EqualError(t, err, "the organization's record names no tenant")
+	assert.Empty(t, tenantID)
+}
+
 func Test_GetTenantIdFromOrgId_FailsWhenTheApiRejectsTheRequest(t *testing.T) {
 	for _, status := range []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
