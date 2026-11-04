@@ -1,9 +1,8 @@
-// Package enrollmenttest provides a test double for the enrollment service: a fake API server
-// that implements the enrollment (by device token and by fleet key) and token endpoints as the
-// service's enrollment spec defines them, and independently verifies everything the client signs.
-// It also serves the machine's own record, which only a machine's access token may read, and the
-// authenticated principal's own record and organization records.
-package enrollmenttest
+// Package fakeapi provides a fake Snyk API server for tests. It serves machine enrollment, tokens,
+// whoami, the machine's and the authenticated principal's own records, and organizations. It
+// independently verifies everything the client signs, so a client bug cannot pass by agreeing with
+// itself.
+package fakeapi
 
 import (
 	"crypto"
@@ -306,7 +305,7 @@ func (s *Server) machineByID(id string) *machine {
 			return m
 		}
 	}
-	panic("enrollmenttest: unknown machine " + id)
+	panic("fakeapi: unknown machine " + id)
 }
 
 // parseRequest checks the request against the spec and returns its attributes, or writes the error
@@ -780,7 +779,7 @@ func thumbprintRSA(pub *rsa.PublicKey) string {
 func thumbprintEC(pub *ecdsa.PublicKey) string {
 	b, err := pub.Bytes()
 	if err != nil || pub.Curve != elliptic.P256() {
-		panic("enrollmenttest: not a P-256 key")
+		panic("fakeapi: not a P-256 key")
 	}
 	canonical := fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`,
 		base64.RawURLEncoding.EncodeToString(b[1:33]), base64.RawURLEncoding.EncodeToString(b[33:]))

@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -26,7 +26,7 @@ const (
 	testOtherTenant  = "d4c3b2a1-0f9e-4d8c-b7a6-5f4e3d2c1b0a"
 )
 
-func newTenantTestEngine(t *testing.T, config configuration.Configuration, server *enrollmenttest.Server) {
+func newTenantTestEngine(t *testing.T, config configuration.Configuration, server *fakeapi.Server) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -43,7 +43,7 @@ func parseGlobalFlags(t *testing.T, config configuration.Configuration, args ...
 	require.NoError(t, config.AddFlagSet(globalFlags))
 }
 
-func storeMachineCredential(t *testing.T, config configuration.Configuration, server *enrollmenttest.Server) {
+func storeMachineCredential(t *testing.T, config configuration.Configuration, server *fakeapi.Server) {
 	t.Helper()
 	key, err := machineenrollment.GenerateKey()
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func storeMachineCredential(t *testing.T, config configuration.Configuration, se
 }
 
 func Test_TenantID_EnrolledMachineReadsItsTenantFromTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts()
 	storeMachineCredential(t, config, server)
@@ -63,7 +63,7 @@ func Test_TenantID_EnrolledMachineReadsItsTenantFromTheBackend(t *testing.T) {
 }
 
 func Test_TenantID_UserGetsTheTenantOfTheirDefaultOrg(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, testOrgTenantID)
 	config := configuration.NewWithOpts()
@@ -77,7 +77,7 @@ func Test_TenantID_UserGetsTheTenantOfTheirDefaultOrg(t *testing.T) {
 }
 
 func Test_TenantID_UnauthenticatedEngineReportsTheOrgLookupError(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, testOrgTenantID)
@@ -95,7 +95,7 @@ func Test_TenantID_UnauthenticatedEngineReportsTheOrgLookupError(t *testing.T) {
 }
 
 func Test_TenantID_ExplicitValueWinsWithoutAskingTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts()
 	storeMachineCredential(t, config, server)
@@ -108,7 +108,7 @@ func Test_TenantID_ExplicitValueWinsWithoutAskingTheBackend(t *testing.T) {
 }
 
 func Test_TenantID_EnvironmentVariableWinsWithoutAskingTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	t.Setenv("SNYK_CFG_TENANT", "tenant-from-env")
 	config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
@@ -123,7 +123,7 @@ func Test_TenantID_EnvironmentVariableWinsWithoutAskingTheBackend(t *testing.T) 
 func Test_TenantID_RejectedLookupReportsTheError(t *testing.T) {
 	for _, status := range []int{http.StatusBadRequest, http.StatusInternalServerError} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
-			server := enrollmenttest.NewServer(t)
+			server := fakeapi.NewServer(t)
 			server.SetTenantID(testTenantID)
 			server.FailMachineSelf(status)
 			config := configuration.NewWithOpts()
@@ -140,7 +140,7 @@ func Test_TenantID_RejectedLookupReportsTheError(t *testing.T) {
 }
 
 func Test_TenantID_UnusableMachineCredentialReportsTheErrorWithoutAskingTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts()
 	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
@@ -154,7 +154,7 @@ func Test_TenantID_UnusableMachineCredentialReportsTheErrorWithoutAskingTheBacke
 }
 
 func Test_TenantID_CachedConfigurationAsksTheBackendOnce(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts(configuration.WithCachingEnabled(time.Hour))
 	storeMachineCredential(t, config, server)
@@ -167,7 +167,7 @@ func Test_TenantID_CachedConfigurationAsksTheBackendOnce(t *testing.T) {
 }
 
 func Test_TenantID_CachedTenantIsNotReusedByACloneWithoutTheMachineCredential(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts(configuration.WithCachingEnabled(time.Hour))
 	storeMachineCredential(t, config, server)
@@ -181,7 +181,7 @@ func Test_TenantID_CachedTenantIsNotReusedByACloneWithoutTheMachineCredential(t 
 }
 
 func Test_TenantID_UserWhoSetsAnOrgGetsThatOrgsTenant(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, testOrgTenantID)
 	server.AddOrg(testOtherOrgID, testOtherTenant)
@@ -197,7 +197,7 @@ func Test_TenantID_UserWhoSetsAnOrgGetsThatOrgsTenant(t *testing.T) {
 }
 
 func Test_TenantID_UserWhoSetsATenantGetsExactlyThatTenantWithoutAskingTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, testOrgTenantID)
 	config := configuration.NewWithOpts()
@@ -214,7 +214,7 @@ func Test_TenantID_UserWhoSetsATenantGetsExactlyThatTenantWithoutAskingTheBacken
 }
 
 func Test_TenantID_OrgThatNamesNoTenantReportsAnError(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, "")
 	config := configuration.NewWithOpts()
@@ -229,7 +229,7 @@ func Test_TenantID_OrgThatNamesNoTenantReportsAnError(t *testing.T) {
 }
 
 func Test_TenantID_FailedOrgLookupReportsTheError(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	config := configuration.NewWithOpts()
 	config.Set(configuration.AUTHENTICATION_TOKEN, testUserToken)
 	config.Set(configuration.ORGANIZATION, testOtherOrgID)
@@ -243,7 +243,7 @@ func Test_TenantID_FailedOrgLookupReportsTheError(t *testing.T) {
 }
 
 func Test_TenantID_CachedUserTenantFollowsTheOrgOfAClone(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetDefaultOrg(testDefaultOrgID)
 	server.AddOrg(testDefaultOrgID, testOrgTenantID)
 	server.AddOrg(testOtherOrgID, testOtherTenant)
@@ -262,7 +262,7 @@ func Test_TenantID_CachedUserTenantFollowsTheOrgOfAClone(t *testing.T) {
 }
 
 func Test_TenantID_EnrolledMachinePassedTheTenantFlagGetsThatTenantWithoutAskingTheBackend(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts()
 	storeMachineCredential(t, config, server)
@@ -278,7 +278,7 @@ func Test_TenantID_EnrolledMachinePassedTheTenantFlagGetsThatTenantWithoutAsking
 }
 
 func Test_TenantID_EnrolledMachineWithoutTheTenantFlagStillReadsItsOwnTenant(t *testing.T) {
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	server.SetTenantID(testTenantID)
 	config := configuration.NewWithOpts()
 	storeMachineCredential(t, config, server)
