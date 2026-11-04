@@ -1,4 +1,5 @@
-package localworkflows
+// Package authstdin reads the auth workflow's secret from stdin.
+package authstdin
 
 import (
 	"fmt"
@@ -11,19 +12,19 @@ import (
 )
 
 // Far above the largest PEM private key; stops a wrong pipe, such as a log file, from being read into memory.
-const maxStdinSecretSize = 64 * 1024
+const maxSecretSize = 64 * 1024
 
-// readSecretFromStdin returns the secret piped into stdin, without one trailing LF or CRLF.
-func readSecretFromStdin(stdin *os.File) (string, error) {
+// ReadSecret returns the secret piped into stdin, without one trailing LF or CRLF.
+func ReadSecret(stdin *os.File) (string, error) {
 	if term.IsTerminal(int(stdin.Fd())) {
 		return "", cli.NewInvalidFlagOptionError(`--stdin expects piped input, but stdin is a terminal; pipe the secret in, for example: echo "$SECRET" | snyk auth --stdin`)
 	}
-	data, err := io.ReadAll(io.LimitReader(stdin, maxStdinSecretSize+1))
+	data, err := io.ReadAll(io.LimitReader(stdin, maxSecretSize+1))
 	if err != nil {
 		return "", err
 	}
-	if len(data) > maxStdinSecretSize {
-		return "", cli.NewInvalidFlagOptionError(fmt.Sprintf("the input on stdin is too large: --stdin accepts at most %d KiB; pipe only the secret", maxStdinSecretSize/1024))
+	if len(data) > maxSecretSize {
+		return "", cli.NewInvalidFlagOptionError(fmt.Sprintf("the input on stdin is too large: --stdin accepts at most %d KiB; pipe only the secret", maxSecretSize/1024))
 	}
 	secret, hadLF := strings.CutSuffix(string(data), "\n")
 	if hadLF {

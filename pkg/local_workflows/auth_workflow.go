@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/authstdin"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -122,7 +123,7 @@ func resolveSecret(config configuration.Configuration, stdin *os.File) error {
 			return argument, nil
 		}
 		if c.GetBool(stdinFlag) {
-			return readSecretFromStdin(stdin)
+			return authstdin.ReadSecret(stdin)
 		}
 		return "", nil
 	})

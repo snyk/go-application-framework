@@ -29,6 +29,18 @@ func Test_InitAuth_offersStdinAsABooleanFlag(t *testing.T) {
 	assert.Equal(t, "bool", flag.Value.Type())
 }
 
+func stdinWith(t *testing.T, input string) *os.File {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "stdin")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	_, err = f.WriteString(input)
+	require.NoError(t, err)
+	_, err = f.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	return f
+}
+
 // pipeToStdin makes input what the auth workflow reads on stdin, as `echo "$SECRET" | snyk auth` does.
 func (e *enrollEnv) pipeToStdin(t *testing.T, input string) {
 	t.Helper()
