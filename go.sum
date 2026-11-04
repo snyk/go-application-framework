@@ -239,6 +239,8 @@ github.com/snyk/error-catalog-golang-public v0.0.0-20261020103931-0013eaae3b01 h
 github.com/snyk/error-catalog-golang-public v0.0.0-20261020103931-0013eaae3b01/go.mod h1:0dz+HUR/r7VLlQpLfF0a/F1tdHH84NLTZzCxjZ+Q1nk=
 github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc h1:tuZVhmJFxS4qJlwYIIIw8xgw3VaVqIR3IAV0WaaFVnI=
 github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc/go.mod h1:f42qLL7WXOS0od7dXJV/hK3myjms/r6HsXgLrg1HRRY=
+github.com/snyk/go-ripgrep-gitignore/v2 v2.0.2 h1:LyUY9nrHQmQPKwPN3yIqSalRR+sFaY/ynRbdwgjoulg=
+github.com/snyk/go-ripgrep-gitignore/v2 v2.0.2/go.mod h1:0I1NHdnls3qS2YpEU0O+UYWFEsc3AGTP/QO5Exjb19s=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
 github.com/sourcegraph/conc v0.3.0/go.mod h1:Sdozi7LEKbFPqYX2/J+iBAM6HpqSLTASQIKqDmF7Mt0=
 github.com/speakeasy-api/jsonpath v0.6.1 h1:FWbuCEPGaJTVB60NZg2orcYHGZlelbNJAcIk/JGnZvo=
@@ -269,6 +271,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
+github.com/tetratelabs/wazero v1.11.0 h1:+gKemEuKCTevU4d7ZTzlsvgd1uaToIDtlQlmNbwqYhA=
+github.com/tetratelabs/wazero v1.11.0/go.mod h1:eV28rsN8Q+xwjogd7f4/Pp4xFxO7uOGbLcD/LzB1wiU=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/gjson v1.17.0 h1:/Jocvlh98kcTfpN2+JzGQWQcqrPQwDrVEMApx/M5ZwM=
 github.com/tidwall/gjson v1.17.0/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
