@@ -57,11 +57,11 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		"https://localhost:9000/api",
 		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
-		"http://stella:8000",
+		"https://stella:8000",
 		"http://192.168.2.1",
 		"http://192.168.2.1:8080",
-		"http://[2001:db8::]",
-		"http://[2001:db8::]:8080",
+		"https://[2001:db8::]",
+		"https://[2001:db8::]:8080",
 	}
 
 	for i, input := range inputList {
@@ -70,6 +70,64 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		t.Log(input, actual)
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
+	}
+}
+
+func Test_GetCanonicalApiUrlFromString_HttpUpgradedToHttps(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"http://snyk.io/api/v1", "https://api.snyk.io"},
+		{"http://app.snyk.io/api", "https://api.snyk.io"},
+		{"http://api.snyk.io", "https://api.snyk.io"},
+		{"http://api.eu.snyk.io", "https://api.eu.snyk.io"},
+		{"http://custom.example.com", "https://api.custom.example.com"},
+	}
+
+	for _, tt := range tests {
+		actual, err := GetCanonicalApiUrlFromString(tt.input)
+		t.Logf("%s -> %s", tt.input, actual)
+		assert.Nil(t, err)
+		assert.Equal(t, tt.expected, actual)
+	}
+}
+
+func Test_GetCanonicalApiUrlFromString_HttpPreservedForImmutableHosts(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"http://localhost:9000/api/v1", "http://localhost:9000/api"},
+		{"http://127.0.0.1:8080/v1", "http://127.0.0.1:8080"},
+		{"http://192.168.2.1:8080/v1", "http://192.168.2.1:8080"},
+		{"http://10.0.0.5:8080/v1", "http://10.0.0.5:8080"},
+		{"http://[::1]:8080/v1", "http://[::1]:8080"},
+	}
+
+	for _, tt := range tests {
+		actual, err := GetCanonicalApiUrlFromString(tt.input)
+		t.Logf("%s -> %s", tt.input, actual)
+		assert.Nil(t, err)
+		assert.Equal(t, tt.expected, actual)
+	}
+}
+
+func Test_GetCanonicalApiUrlFromString_HttpUpgradedForPublicIPs(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"http://203.0.113.50/v1", "https://203.0.113.50"},
+		{"http://8.8.8.8:8080/v1", "https://8.8.8.8:8080"},
+		{"http://[2001:db8::]:8080/v1", "https://[2001:db8::]:8080"},
+	}
+
+	for _, tt := range tests {
+		actual, err := GetCanonicalApiUrlFromString(tt.input)
+		t.Logf("%s -> %s", tt.input, actual)
+		assert.Nil(t, err)
+		assert.Equal(t, tt.expected, actual)
 	}
 }
 
@@ -98,5 +156,30 @@ func Test_isImmutableHost(t *testing.T) {
 
 	for _, host := range hostlistNonLocalhost {
 		assert.False(t, isImmutableHost(host), host)
+	}
+}
+
+func Test_isLocalHost(t *testing.T) {
+	local := []string{
+		"localhost", "localhost:3123",
+		"127.0.0.1", "127.0.0.1:9000",
+		"192.168.1.1", "10.0.0.5:8080",
+		"[::1]:3212",
+		"[fe80::1]:8080",
+	}
+	notLocal := []string{
+		"snyk.io",
+		"203.0.113.50", "203.0.113.50:8080",
+		"8.8.8.8",
+		"stella", "stella:8000",
+		"[2001:db8::]", "[2001:db8::]:8080",
+		"evil.example.com",
+	}
+
+	for _, host := range local {
+		assert.True(t, isLocalHost(host), "expected local: %s", host)
+	}
+	for _, host := range notLocal {
+		assert.False(t, isLocalHost(host), "expected non-local: %s", host)
 	}
 }
