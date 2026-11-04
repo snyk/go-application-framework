@@ -292,3 +292,57 @@ func Test_TenantID_EnrolledMachineWithoutTheTenantFlagStillReadsItsOwnTenant(t *
 	assert.Equal(t, 1, server.MachineSelfRequests())
 	assert.Zero(t, server.OrgRequests())
 }
+
+func Test_TenantID_EnrolledMachineWithTheOAuthFlowOffGetsTheTenantOfTheUsersOrg(t *testing.T) {
+	server := fakeapi.NewServer(t)
+	server.SetTenantID(testTenantID)
+	server.SetDefaultOrg(testDefaultOrgID)
+	server.AddOrg(testDefaultOrgID, testOrgTenantID)
+	config := configuration.NewWithOpts()
+	storeMachineCredential(t, config, server)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(configuration.AUTHENTICATION_TOKEN, testUserToken)
+	newTenantTestEngine(t, config, server)
+
+	tenantID, err := config.GetWithError(configuration.TENANT)
+
+	require.NoError(t, err)
+	assert.Equal(t, testOrgTenantID, tenantID)
+	assert.Zero(t, server.MachineSelfRequests())
+}
+
+func Test_TenantID_CachedMachineTenantIsNotReusedByACloneWithTheOAuthFlowOff(t *testing.T) {
+	server := fakeapi.NewServer(t)
+	server.SetTenantID(testTenantID)
+	server.SetDefaultOrg(testDefaultOrgID)
+	server.AddOrg(testDefaultOrgID, testOrgTenantID)
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(time.Hour))
+	storeMachineCredential(t, config, server)
+	config.Set(configuration.AUTHENTICATION_TOKEN, testUserToken)
+	newTenantTestEngine(t, config, server)
+	require.Equal(t, testTenantID, config.GetString(configuration.TENANT))
+
+	clone := config.Clone()
+	clone.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+
+	assert.Equal(t, testOrgTenantID, clone.GetString(configuration.TENANT))
+}
+
+func Test_TenantID_UnusableMachineCredentialWithTheOAuthFlowOffStillReportsTheError(t *testing.T) {
+	server := fakeapi.NewServer(t)
+	server.SetDefaultOrg(testDefaultOrgID)
+	server.AddOrg(testDefaultOrgID, testOrgTenantID)
+	config := configuration.NewWithOpts()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "{not json")
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(configuration.AUTHENTICATION_TOKEN, testUserToken)
+	config.Set(configuration.ORGANIZATION, testDefaultOrgID)
+	newTenantTestEngine(t, config, server)
+
+	tenantID, err := config.GetWithError(configuration.TENANT)
+
+	assert.Error(t, err)
+	assert.Empty(t, tenantID)
+	assert.Zero(t, server.MachineSelfRequests())
+	assert.Zero(t, server.OrgRequests())
+}

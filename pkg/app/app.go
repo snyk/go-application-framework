@@ -159,7 +159,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 
 func defaultFuncTenantId(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	// the tenant is looked up with these credentials and for this org, so a clone changing them must not reuse a cached value
-	for _, key := range []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, configuration.ORGANIZATION} {
+	for _, key := range []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ORGANIZATION} {
 		if err := config.AddKeyDependency(configuration.TENANT, key); err != nil {
 			logger.Print("Failed to add dependency for TENANT:", err)
 		}
@@ -187,8 +187,8 @@ func lookupTenantId(engine workflow.Engine, c configuration.Configuration, apiCl
 	client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 	apiClient := apiClientFactory(c.GetString(configuration.API_URL), client)
 
-	// only a machine can read its own record, any other principal would be rejected
-	if err == nil {
+	// only a machine can read its own record, and requests go out as the machine only when the OAuth flow is on
+	if err == nil && c.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
 		return apiClient.GetMachineTenantId(context.Background())
 	}
 
