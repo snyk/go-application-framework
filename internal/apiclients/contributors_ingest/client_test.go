@@ -182,7 +182,10 @@ func startServer(t *testing.T, status int) (baseURL string, client *http.Client,
 	got = &capturedRequest{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		got.method = r.Method
 		got.url = r.URL.String()

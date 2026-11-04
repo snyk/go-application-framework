@@ -459,9 +459,11 @@ func Test_Findings_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			findings, complete, err := testResults[0].Findings(ctx)
-			require.NoError(t, err)
-			require.True(t, complete)
-			require.Len(t, findings, 47)
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.True(t, complete)
+			assert.Len(t, findings, 47)
 		}()
 	}
 	wg.Wait()

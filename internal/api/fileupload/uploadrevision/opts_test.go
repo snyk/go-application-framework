@@ -27,7 +27,10 @@ func Test_WithHTTPClient(t *testing.T) {
 		assert.Equal(t, "bar", fooValue)
 
 		resp, err := json.Marshal(uploadrevision2.ResponseBody{})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusCreated)
 		_, err = w.Write(resp)
