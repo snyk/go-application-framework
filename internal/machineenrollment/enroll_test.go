@@ -21,8 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 )
 
 func TestClientAssertion(t *testing.T) {
@@ -33,8 +33,8 @@ func TestClientAssertion(t *testing.T) {
 	assertion, err := machineenrollment.ClientAssertion(key, "client-1", "https://api.example.com/oauth2/token", now)
 	require.NoError(t, err)
 
-	require.NoError(t, enrollmenttest.VerifyJWT(assertion, &key.PublicKey))
-	header, claims := enrollmenttest.DecodeJWT(t, assertion)
+	require.NoError(t, fakeapi.VerifyJWT(assertion, &key.PublicKey))
+	header, claims := fakeapi.DecodeJWT(t, assertion)
 	assert.Equal(t, "RS256", header["alg"])
 	assert.NotEmpty(t, header["kid"])
 	assert.Equal(t, "client-1", claims["iss"])
@@ -46,7 +46,7 @@ func TestClientAssertion(t *testing.T) {
 
 	another, err := machineenrollment.ClientAssertion(key, "client-1", "https://api.example.com/oauth2/token", now)
 	require.NoError(t, err)
-	_, anotherClaims := enrollmenttest.DecodeJWT(t, another)
+	_, anotherClaims := fakeapi.DecodeJWT(t, another)
 	assert.NotEqual(t, claims["jti"], anotherClaims["jti"])
 }
 
@@ -66,7 +66,7 @@ func serials(values ...string) []machineenrollment.Identifier {
 }
 
 func TestEnrollWithDeviceToken(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	token := srv.IssueDeviceToken(srv.RegisterMachine())
 
 	e, err := machineenrollment.EnrollWithDeviceToken(context.Background(), http.DefaultClient, srv.URL, token, time.Now())
@@ -88,7 +88,7 @@ func TestEnrollWithDeviceToken(t *testing.T) {
 }
 
 func TestEnrollWithDeviceTokenReEnrollsAnEnrolledMachine(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	machineID := srv.RegisterMachine()
 
 	first, err := machineenrollment.EnrollWithDeviceToken(context.Background(), http.DefaultClient, srv.URL, srv.IssueDeviceToken(machineID), time.Now())
@@ -102,7 +102,7 @@ func TestEnrollWithDeviceTokenReEnrollsAnEnrolledMachine(t *testing.T) {
 }
 
 func TestEnrollWithDeviceTokenRevokedByANewerToken(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	machineID := srv.RegisterMachine()
 	old := srv.IssueDeviceToken(machineID)
 	srv.IssueDeviceToken(machineID)
@@ -201,13 +201,13 @@ func decodeAttributes(t *testing.T, body []byte) capturedAttributes {
 }
 
 func TestEnrollWithDeviceTokenSendsClientKeyAssertion(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	var body []byte
 
 	e, err := machineenrollment.EnrollWithDeviceToken(context.Background(), capturingClient(&body), srv.URL, srv.IssueDeviceToken(srv.RegisterMachine()), time.Now())
 	require.NoError(t, err)
 
-	header, claims := enrollmenttest.DecodeJWT(t, decodeAttributes(t, body).Assertion)
+	header, claims := fakeapi.DecodeJWT(t, decodeAttributes(t, body).Assertion)
 	assert.Equal(t, "RS256", header["alg"])
 	assert.Equal(t, "client-key-assertion+jwt", header["typ"])
 	jwk, ok := header["jwk"].(map[string]any)
@@ -223,7 +223,7 @@ func TestEnrollWithDeviceTokenSendsClientKeyAssertion(t *testing.T) {
 }
 
 func TestEnrollWithFleetKey(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	fleetKey := newFleetKey(t)
 	machineID := srv.RegisterMachine("SERIAL-1", "BOARD-1")
 	srv.AllowFleetKey(&fleetKey.PublicKey, machineID)
@@ -239,7 +239,7 @@ func TestEnrollWithFleetKey(t *testing.T) {
 
 	attrs := decodeAttributes(t, body)
 	assert.Equal(t, "fleet_key", attrs.Method)
-	header, claims := enrollmenttest.DecodeJWT(t, attrs.Authorization)
+	header, claims := fakeapi.DecodeJWT(t, attrs.Authorization)
 	assert.Equal(t, "ES256", header["alg"])
 	assert.Equal(t, "fleet-key-authorization+jwt", header["typ"])
 	assert.NotEmpty(t, header["kid"])
@@ -247,11 +247,11 @@ func TestEnrollWithFleetKey(t *testing.T) {
 	assert.Contains(t, claims, "iat")
 	assert.Len(t, claims["identifiers"], 2)
 	assert.Contains(t, claims["cnf"], "jkt")
-	require.NoError(t, enrollmenttest.VerifyJWT(attrs.Authorization, &fleetKey.PublicKey))
+	require.NoError(t, fakeapi.VerifyJWT(attrs.Authorization, &fleetKey.PublicKey))
 }
 
 func TestEnrollWithFleetKeyIsReusableByOtherMachines(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	fleetKey := newFleetKey(t)
 	a, b := srv.RegisterMachine("A"), srv.RegisterMachine("B")
 	srv.AllowFleetKey(&fleetKey.PublicKey, a, b)
@@ -268,21 +268,21 @@ func TestEnrollWithFleetKeyIsReusableByOtherMachines(t *testing.T) {
 func TestEnrollWithFleetKeyErrors(t *testing.T) {
 	tests := []struct {
 		name   string
-		setup  func(t *testing.T, srv *enrollmenttest.Server, fleetKey *ecdsa.PrivateKey)
+		setup  func(t *testing.T, srv *fakeapi.Server, fleetKey *ecdsa.PrivateKey)
 		ids    []machineenrollment.Identifier
 		want   error
 		status int
 	}{
 		{
 			name:   "machine not registered",
-			setup:  func(_ *testing.T, srv *enrollmenttest.Server, fk *ecdsa.PrivateKey) { srv.AllowFleetKey(&fk.PublicKey) },
+			setup:  func(_ *testing.T, srv *fakeapi.Server, fk *ecdsa.PrivateKey) { srv.AllowFleetKey(&fk.PublicKey) },
 			ids:    serials("UNKNOWN"),
 			want:   machineenrollment.ErrMachineNotRegistered,
 			status: http.StatusForbidden,
 		},
 		{
 			name: "identifiers ambiguous",
-			setup: func(_ *testing.T, srv *enrollmenttest.Server, fk *ecdsa.PrivateKey) {
+			setup: func(_ *testing.T, srv *fakeapi.Server, fk *ecdsa.PrivateKey) {
 				srv.AllowFleetKey(&fk.PublicKey, srv.RegisterMachine("A"), srv.RegisterMachine("B"))
 			},
 			ids:    serials("A", "B"),
@@ -291,7 +291,7 @@ func TestEnrollWithFleetKeyErrors(t *testing.T) {
 		},
 		{
 			name: "machine deprovisioned",
-			setup: func(_ *testing.T, srv *enrollmenttest.Server, fk *ecdsa.PrivateKey) {
+			setup: func(_ *testing.T, srv *fakeapi.Server, fk *ecdsa.PrivateKey) {
 				id := srv.RegisterMachine("A")
 				srv.AllowFleetKey(&fk.PublicKey, id)
 				srv.DeprovisionMachine(id)
@@ -302,7 +302,7 @@ func TestEnrollWithFleetKeyErrors(t *testing.T) {
 		},
 		{
 			name: "machine enrolled",
-			setup: func(t *testing.T, srv *enrollmenttest.Server, fk *ecdsa.PrivateKey) {
+			setup: func(t *testing.T, srv *fakeapi.Server, fk *ecdsa.PrivateKey) {
 				t.Helper()
 				id := srv.RegisterMachine("A")
 				srv.AllowFleetKey(&fk.PublicKey, id)
@@ -315,14 +315,14 @@ func TestEnrollWithFleetKeyErrors(t *testing.T) {
 		},
 		{
 			name:   "unknown fleet key",
-			setup:  func(*testing.T, *enrollmenttest.Server, *ecdsa.PrivateKey) {},
+			setup:  func(*testing.T, *fakeapi.Server, *ecdsa.PrivateKey) {},
 			ids:    serials("A"),
 			status: http.StatusUnauthorized,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := enrollmenttest.NewServer(t)
+			srv := fakeapi.NewServer(t)
 			fleetKey := newFleetKey(t)
 			tt.setup(t, srv, fleetKey)
 
@@ -345,7 +345,7 @@ func TestEnrollWithFleetKeyErrors(t *testing.T) {
 }
 
 func TestEnrollWithFleetKeyNotRegisteredListsIdentifiers(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	fleetKey := newFleetKey(t)
 	srv.AllowFleetKey(&fleetKey.PublicKey)
 
@@ -383,7 +383,7 @@ func TestEnrollWithFleetKeyRejectsBadInput(t *testing.T) {
 }
 
 func TestEnrollRejectsRequestsThatDontConformToTheSpec(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	post := func(body string) int {
 		res, err := http.Post(srv.URL+"/hidden/machines/enrollments?version=2024-10-15", "application/vnd.api+json", strings.NewReader(body))
 		require.NoError(t, err)
@@ -398,7 +398,7 @@ func TestEnrollRejectsRequestsThatDontConformToTheSpec(t *testing.T) {
 }
 
 func TestEnrollRejectsANilHTTPClientBeforeSendingAnything(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	fleetKey := newFleetKey(t)
 	srv.AllowFleetKey(&fleetKey.PublicKey, srv.RegisterMachine("A"))
 	token := srv.IssueDeviceToken(srv.RegisterMachine())

@@ -1,4 +1,4 @@
-package enrollmenttest_test
+package fakeapi_test
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 )
 
-func enrolled(t *testing.T, srv *enrollmenttest.Server) machineenrollment.Enrollment {
+func enrolled(t *testing.T, srv *fakeapi.Server) machineenrollment.Enrollment {
 	t.Helper()
 	e, err := machineenrollment.EnrollWithDeviceToken(context.Background(), http.DefaultClient, srv.URL, srv.IssueDeviceToken(srv.RegisterMachine()), time.Now())
 	require.NoError(t, err)
 	return e
 }
 
-func mintAccessToken(t *testing.T, srv *enrollmenttest.Server, e machineenrollment.Enrollment) string {
+func mintAccessToken(t *testing.T, srv *fakeapi.Server, e machineenrollment.Enrollment) string {
 	t.Helper()
 	tokenURL := srv.URL + "/oauth2/token"
 	assertion, err := machineenrollment.ClientAssertion(e.Key, e.ClientID, tokenURL, time.Now())
@@ -43,7 +43,7 @@ func mintAccessToken(t *testing.T, srv *enrollmenttest.Server, e machineenrollme
 	return body.AccessToken
 }
 
-func whoami(t *testing.T, srv *enrollmenttest.Server, authorization string) int {
+func whoami(t *testing.T, srv *fakeapi.Server, authorization string) int {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/rest/whoami", nil)
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func whoami(t *testing.T, srv *enrollmenttest.Server, authorization string) int 
 }
 
 func TestWhoamiAcceptsOnlyTokensTheServerIssued(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	token := mintAccessToken(t, srv, enrolled(t, srv))
 
 	assert.Equal(t, http.StatusUnauthorized, whoami(t, srv, ""))
@@ -67,15 +67,15 @@ func TestWhoamiAcceptsOnlyTokensTheServerIssued(t *testing.T) {
 }
 
 func TestTokenEndpointMintsAJWTWhoseAudienceIsTheAPIURL(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 
-	_, claims := enrollmenttest.DecodeJWT(t, mintAccessToken(t, srv, enrolled(t, srv)))
+	_, claims := fakeapi.DecodeJWT(t, mintAccessToken(t, srv, enrolled(t, srv)))
 
 	assert.Equal(t, []any{srv.URL}, claims["aud"])
 }
 
 func TestEnrollmentRequestsCountsEachAttemptIncludingRejected(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	assert.Zero(t, srv.EnrollmentRequests())
 
 	token := srv.IssueDeviceToken(srv.RegisterMachine())

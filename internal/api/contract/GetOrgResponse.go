@@ -13,11 +13,20 @@ type GetOrgAttributes struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type GetOrgRelationships struct {
+	Tenant struct {
+		Data struct {
+			Id string `json:"id"`
+		} `json:"data"`
+	} `json:"tenant"`
+}
+
 type GetOrganizationResponse struct {
 	Data struct {
-		Id         string           `json:"id"`
-		Type       string           `json:"type"`
-		Attributes GetOrgAttributes `json:"attributes"`
+		Id            string              `json:"id"`
+		Type          string              `json:"type"`
+		Attributes    GetOrgAttributes    `json:"attributes"`
+		Relationships GetOrgRelationships `json:"relationships"`
 	} `json:"data"`
 	Jsonapi struct {
 		Version string `json:"version"`

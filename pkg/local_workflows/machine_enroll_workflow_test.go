@@ -37,9 +37,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
@@ -52,7 +52,7 @@ import (
 
 type enrollEnv struct {
 	home   string
-	server *enrollmenttest.Server
+	server *fakeapi.Server
 	engine workflow.Engine
 	config configuration.Configuration
 }
@@ -68,7 +68,7 @@ func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv 
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	config := openFileBackedConfig()
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -99,7 +99,7 @@ func (e *enrollEnv) enrollForData(flags map[string]string) ([]workflow.Data, err
 	return e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
 }
 
-func requestToken(t *testing.T, server *enrollmenttest.Server, credential machinecredential.Credential) *http.Response {
+func requestToken(t *testing.T, server *fakeapi.Server, credential machinecredential.Credential) *http.Response {
 	t.Helper()
 	tokenURL := server.URL + "/oauth2/token"
 	assertionType, assertion, err := machinecredential.NewSigner(credential.Key).ClientAssertion(t.Context(), credential.ClientID, tokenURL)
@@ -1020,7 +1020,7 @@ func Test_machineEnroll_otherRegionNamesItsTokenEndpointAndKeepsTheCredential(t 
 			res, err := env.whoami(t, "")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
-			otherRegion := enrollmenttest.NewServer(t)
+			otherRegion := fakeapi.NewServer(t)
 
 			env.switchEnvironment(otherRegion.URL)
 			_, err = env.whoami(t, "")

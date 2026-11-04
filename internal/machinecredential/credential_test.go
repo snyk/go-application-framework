@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -253,8 +253,8 @@ func TestSigner_AssertionVerifiesAgainstTheKey(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, machineenrollment.ClientAssertionType, assertionType)
-	require.NoError(t, enrollmenttest.VerifyJWT(assertion, credential.Key.Public()))
-	_, claims := enrollmenttest.DecodeJWT(t, assertion)
+	require.NoError(t, fakeapi.VerifyJWT(assertion, credential.Key.Public()))
+	_, claims := fakeapi.DecodeJWT(t, assertion)
 	assert.Equal(t, "client-1", claims["iss"])
 	assert.Equal(t, "client-1", claims["sub"])
 	assert.Equal(t, "https://api.example.test/oauth2/token", claims["aud"])
