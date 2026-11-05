@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -73,6 +74,7 @@ type Server struct {
 	mu sync.Mutex
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
+	tokenAttempts     int
 	credentialHeaders []string
 	bearerTokens      []string
 	enrollAttempts    int
@@ -83,6 +85,7 @@ type Server struct {
 	clients           map[string]client
 	jtis              map[string]bool
 	tokens            map[string]string // access token -> client id
+	pats              map[string]bool
 	next              int
 	errorTitles       atomic.Bool
 }
@@ -93,8 +96,9 @@ type fleetKey struct {
 }
 
 type client struct {
-	key *rsa.PublicKey
-	kid string // the RFC 7638 thumbprint of key
+	key    *rsa.PublicKey
+	kid    string // the RFC 7638 thumbprint of key
+	secret string
 }
 
 // signs reports whether a JWS with header can be the client's: RS256, by the key kid names.
@@ -112,11 +116,13 @@ func NewServer(t *testing.T) *Server {
 		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
+		pats:         map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
+	mux.HandleFunc("GET /rest/self", s.self)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -164,6 +170,21 @@ func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = client{key: key, kid: thumbprintRSA(key)}
+}
+
+// RegisterPAT makes GET /rest/self accept pat, sent as the API sends a token: "Authorization: token <pat>".
+func (s *Server) RegisterPAT(pat string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pats[pat] = true
+}
+
+// RegisterClientSecret makes the token endpoint accept the shared secret for clientID, in the
+// Authorization header or in the request body.
+func (s *Server) RegisterClientSecret(clientID, secret string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients[clientID] = client{secret: secret}
 }
 
 // RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
@@ -236,6 +257,13 @@ func (s *Server) ClientCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.clients)
+}
+
+// TokenAttempts returns how many requests reached the token endpoint, accepted or not.
+func (s *Server) TokenAttempts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenAttempts
 }
 
 // EnrollmentRequests returns how many requests reached the enrollment endpoint, accepted or not.
@@ -491,12 +519,16 @@ func (s *Server) verifyAssertion(token, audience string) (*rsa.PublicKey, string
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	s.countTokenAttempt()
+	if err := r.ParseForm(); err != nil || r.PostForm.Get("grant_type") != "client_credentials" {
 		writeOAuthError(w, "invalid_request")
 		return
 	}
-	if r.PostForm.Get("grant_type") != "client_credentials" ||
-		r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
+	if !r.PostForm.Has("client_assertion_type") {
+		s.tokenForSecret(w, r)
+		return
+	}
+	if r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
 		r.PostForm.Has("client_secret") {
 		writeOAuthError(w, "invalid_request")
 		return
@@ -522,6 +554,45 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.jtis[jti] = true
+	s.issueToken(w, clientID)
+}
+
+// tokenForSecret authenticates a client by its shared secret, sent in a Basic Authorization header or
+// as client_id and client_secret in the form body.
+func (s *Server) tokenForSecret(w http.ResponseWriter, r *http.Request) {
+	clientID, secret, inHeader := r.BasicAuth()
+	if inHeader {
+		var errID, errSecret error
+		clientID, errID = url.QueryUnescape(clientID)
+		secret, errSecret = url.QueryUnescape(secret)
+		if errID != nil || errSecret != nil {
+			writeOAuthError(w, "invalid_request")
+			return
+		}
+	} else {
+		clientID, secret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+	}
+	s.issueTokenForSecret(w, clientID, secret)
+}
+
+func (s *Server) countTokenAttempt() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenAttempts++
+}
+
+func (s *Server) issueTokenForSecret(w http.ResponseWriter, clientID, secret string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.clients[clientID]
+	if c.secret == "" || c.secret != secret {
+		writeOAuthError(w, "invalid_client")
+		return
+	}
+	s.issueToken(w, clientID)
+}
+
+func (s *Server) issueToken(w http.ResponseWriter, clientID string) {
 	s.TokenRequests++
 	accessToken := s.accessToken(clientID)
 	s.tokens[accessToken] = clientID
@@ -539,14 +610,33 @@ func (s *Server) accessToken(clientID string) string {
 
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	s.mu.Lock()
-	_, issued := s.tokens[bearer]
-	s.mu.Unlock()
-	if !found || !issued {
+	if !found || !s.hasIssued(bearer) {
 		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
+}
+
+func (s *Server) self(w http.ResponseWriter, r *http.Request) {
+	pat, found := strings.CutPrefix(r.Header.Get("Authorization"), "token ")
+	if !found || !s.knowsPAT(pat) {
+		s.writeError(w, http.StatusUnauthorized, "", "The token is missing or not valid.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"attributes": map[string]any{"username": "pat-user"}}})
+}
+
+func (s *Server) hasIssued(accessToken string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, issued := s.tokens[accessToken]
+	return issued
+}
+
+func (s *Server) knowsPAT(pat string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pats[pat]
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
