@@ -47,7 +47,7 @@ func lifecycleEntryPoint(lifecycle catalog.Lifecycle) workflow.Callback {
 		if len(failures) == 0 {
 			return nil, nil
 		}
-		err := installOrUninstallFailedError(failureDetail(ic.GetConfiguration(), failures))
+		err := installOrUninstallFailedError(failureDetail(ic.GetConfiguration(), failures), failureCauses(failures))
 		return nil, err
 	}
 }
