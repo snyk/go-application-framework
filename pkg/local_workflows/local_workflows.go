@@ -3,6 +3,7 @@ package localworkflows
 import (
 	contributors "github.com/snyk/go-application-framework/internal/contributors/hook"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/lifecycle_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -21,6 +22,7 @@ func Init(engine workflow.Engine) error {
 		InitDataTransformationWorkflow,
 		InitFilterFindingsWorkflow,
 		doctor_workflow.InitDoctorWorkflow,
+		lifecycle_workflow.InitLifecycleWorkflows,
 		contributors.Init,
 	}
 
