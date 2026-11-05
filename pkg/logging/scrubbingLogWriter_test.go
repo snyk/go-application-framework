@@ -21,9 +21,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/user"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1327,4 +1329,226 @@ func TestScrubbingWriter_GetScrubDictFromConfig_ShortDeviceTokenIsNotRedacted(t 
 	scrubbed := string(Scrub([]byte("a banana"), GetScrubDictFromConfig(config)))
 
 	assert.Equal(t, "a banana", scrubbed)
+}
+
+func Test_AddSecretsFromConfig(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "profile.secret+token")
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"call to https://host/path?x=prefix-profile.secret+token-suffix failed"}` + "\n"))
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), "profile.secret+token", "the secret is scrubbed wherever it appears, special characters included")
+}
+
+func Test_AddSecretsFromConfig_MachineCredentialDeviceToken(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "sdt_example-device-token-value")
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"enrolling with sdt_example-device-token-value now"}` + "\n"))
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), "sdt_example-device-token-value")
+}
+
+func Test_AddSecretsFromConfig_ScrubsLikeGetScrubDictFromConfig(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "1234")
+	line := []byte(`{"level":"info","x":12345678,"message":"call with 1234 now"}` + "\n")
+
+	var expected bytes.Buffer
+	fromDict := NewScrubbingWriter(zerolog.MultiLevelWriter(&expected), GetScrubDictFromConfig(config))
+	_, err := fromDict.Write(line)
+	require.NoError(t, err)
+
+	var added bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&added), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+	AddSecretsFromConfig(scrubber, config)
+	_, err = writer.Write(line)
+	require.NoError(t, err)
+
+	assert.True(t, json.Valid(added.Bytes()), "the scrubbed line stays valid JSON: %s", added.String())
+	assert.Equal(t, expected.String(), added.String(), "a secret added after the writer is created is scrubbed as it would be from the start")
+}
+
+func Test_AddSecretsFromConfig_Terms(t *testing.T) {
+	const oauthToken = `{"access_token":"oauth-access-value-1","refresh_token":"oauth-refresh-value-2"}`
+	tests := []struct {
+		name   string
+		set    func(config configuration.Configuration)
+		term   string
+		scrubd bool
+	}{
+		{"oauth access token", func(c configuration.Configuration) { c.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken) }, "oauth-access-value-1", true},
+		{"oauth refresh token", func(c configuration.Configuration) { c.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken) }, "oauth-refresh-value-2", true},
+		{"redaction term as a whole word", func(c configuration.Configuration) { c.Set(REDACTION_TERMS, []string{"internal-name"}) }, "internal-name", true},
+		{
+			"short device token is not a secret",
+			func(c configuration.Configuration) { c.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "short-token") },
+			"short-token",
+			false,
+		},
+		{"empty configuration adds nothing", func(_ configuration.Configuration) {}, "plain-text", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			tt.set(config)
+			var output bytes.Buffer
+			writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+			scrubber, ok := writer.(ScrubbingLogWriter)
+			require.True(t, ok)
+			AddSecretsFromConfig(scrubber, config)
+
+			_, err := writer.Write([]byte(`{"level":"info","message":"seen ` + tt.term + ` here"}` + "\n"))
+			require.NoError(t, err)
+			assert.Equal(t, !tt.scrubd, strings.Contains(output.String(), tt.term))
+		})
+	}
+}
+
+// newAddableWriter returns a scrubbing writer that holds no secrets yet, and the buffer it writes to.
+func newAddableWriter(t *testing.T) (io.Writer, ScrubbingLogWriter, *bytes.Buffer) {
+	t.Helper()
+	output := &bytes.Buffer{}
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+	return writer, scrubber, output
+}
+
+func Test_AddSecretsFromConfig_EachKindOfSecret(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	storedJSON, err := json.Marshal(map[string]string{"client_id": "machine-client-id", "private_key_pem": string(keyPEM)})
+	require.NoError(t, err)
+	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+	fleetKey := base64.StdEncoding.EncodeToString([]byte("example-fleet-key-value"))
+
+	tests := []struct {
+		name   string
+		set    func(c configuration.Configuration)
+		secret string
+	}{
+		{"authentication token", func(c configuration.Configuration) { c.Set(configuration.AUTHENTICATION_TOKEN, "auth-token-value") }, "auth-token-value"},
+		{"bearer token", func(c configuration.Configuration) {
+			c.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "bearer-value-1")
+		}, "bearer-value-1"},
+		{"client secret", func(c configuration.Configuration) { c.Set(auth.PARAMETER_CLIENT_SECRET, "client-secret-value") }, "client-secret-value"},
+		{"client id", func(c configuration.Configuration) { c.Set(auth.PARAMETER_CLIENT_ID, "client-id-value") }, "client-id-value"},
+		{"fleet key", func(c configuration.Configuration) { c.Set(machinecredential.CONFIG_KEY_FLEET_KEY, fleetKey) }, fleetKey},
+		{"machine credential pem line", func(c configuration.Configuration) {
+			c.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON))
+		}, pemBody},
+		{"special characters", func(c configuration.Configuration) { c.Set(configuration.AUTHENTICATION_TOKEN, "a.b+c(d)[e]*?$^|{1}") }, "a.b+c(d)[e]*?$^|{1}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			tt.set(config)
+			writer, scrubber, output := newAddableWriter(t)
+			AddSecretsFromConfig(scrubber, config)
+
+			line, err := json.Marshal(map[string]string{"level": "info", "message": "seen " + tt.secret + " here"})
+			require.NoError(t, err)
+			_, err = writer.Write(append(line, '\n'))
+			require.NoError(t, err)
+
+			assert.NotContains(t, output.String(), tt.secret)
+			assert.Contains(t, output.String(), "***")
+		})
+	}
+}
+
+func Test_AddSecretsFromConfig_ShortFleetKeyIsNotRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_FLEET_KEY, "a")
+	writer, scrubber, output := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"a banana"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.Contains(t, output.String(), "a banana")
+}
+
+func Test_AddSecretsFromConfig_ScrubsLikeGetScrubDictFromConfig_AllSecrets(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	storedJSON, err := json.Marshal(map[string]string{"client_id": "machine-client-id", "private_key_pem": string(keyPEM)})
+	require.NoError(t, err)
+	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "auth-token+value")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "bearer-token-value")
+	config.Set(auth.PARAMETER_CLIENT_SECRET, "client-secret-value")
+	config.Set(auth.PARAMETER_CLIENT_ID, "client-id-value")
+	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "sdt_example-device-token-value")
+	config.Set(machinecredential.CONFIG_KEY_FLEET_KEY, base64.StdEncoding.EncodeToString([]byte("example-fleet-key-value")))
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON))
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, `{"access_token":"oauth-access-value-1","refresh_token":"oauth-refresh-value-2"}`)
+	config.Set(REDACTION_TERMS, []string{"internal-name"})
+
+	message := strings.Join([]string{
+		"auth-token+value", "bearer-token-value", "client-secret-value", "client-id-value", "sdt_example-device-token-value",
+		base64.StdEncoding.EncodeToString([]byte("example-fleet-key-value")), pemBody, "oauth-access-value-1", "oauth-refresh-value-2",
+		"internal-name", "internal-names", "plain text",
+	}, " | ")
+	line, err := json.Marshal(map[string]string{"level": "info", "message": message})
+	require.NoError(t, err)
+	line = append(line, '\n')
+
+	var expected bytes.Buffer
+	_, err = NewScrubbingWriter(zerolog.MultiLevelWriter(&expected), GetScrubDictFromConfig(config)).Write(line)
+	require.NoError(t, err)
+
+	writer, scrubber, added := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+	_, err = writer.Write(line)
+	require.NoError(t, err)
+
+	assert.Equal(t, expected.String(), added.String())
+	assert.Contains(t, added.String(), "internal-names", "a redaction term only matches as a whole word")
+	assert.Contains(t, added.String(), "plain text")
+}
+
+func Test_AddSecretsFromConfig_ConcurrentWithWrites(t *testing.T) {
+	// concurrent writes share the sink, so it must be safe for that; the dictionary is what is under test
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(io.Discard), GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "concurrent-token-value")
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			AddSecretsFromConfig(scrubber, config)
+		}()
+		go func() {
+			defer wg.Done()
+			_, err := writer.Write([]byte(`{"level":"info","message":"concurrent-token-value"}` + "\n"))
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
 }
