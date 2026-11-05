@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +35,14 @@ const (
 	defaultPayload = "default-value|default-value|default-value|only-default"
 	// machinePayload is what the leaf workflow reports on the "machine" profile, which lacks the default-only key.
 	machinePayload = "machine-value|machine-value|machine-value|"
+)
+
+// The expected error codes come from the catalog entries themselves, so a renumbering cannot leave the tests behind.
+var (
+	catalogCodeInvalidName = cli.NewInvalidConfigProfileNameError("").ErrorCode
+	catalogCodeUnreadable  = cli.NewConfigProfileUnreadableError("").ErrorCode
+	catalogCodeDirInvalid  = cli.NewConfigProfileDirectoryInvalidError("").ErrorCode
+	catalogCodeUnavailable = cli.NewConfigProfilesUnavailableError("").ErrorCode
 )
 
 type profileEnv struct {
@@ -203,6 +214,16 @@ func report(t *testing.T, output []Data, err error) string {
 	return payload
 }
 
+// catalogDetail returns the detail of the error-catalog error in the chain of err, or "" when there is none. The message
+// of a catalog error is only its title, so the detail is what names the value that went wrong.
+func catalogDetail(err error) string {
+	var catalogErr snyk_errors.Error
+	if errors.As(err, &catalogErr) {
+		return catalogErr.Detail
+	}
+	return ""
+}
+
 // assertErrMatches checks that err is wantErr, when set, and contains wantMsg, when set.
 func assertErrMatches(t *testing.T, err, wantErr error, wantMsg string) {
 	t.Helper()
@@ -211,6 +232,15 @@ func assertErrMatches(t *testing.T, err, wantErr error, wantMsg string) {
 	}
 	if wantMsg != "" {
 		assert.ErrorContains(t, err, wantMsg)
+	}
+}
+
+// assertCatalogCode checks that err carries an error-catalog error with the code.
+func assertCatalogCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var catalogErr snyk_errors.Error
+	if assert.ErrorAs(t, err, &catalogErr) {
+		assert.Equal(t, code, catalogErr.ErrorCode)
 	}
 }
 
@@ -271,7 +301,9 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 		name         string
 		setup        func(env *profileEnv)
 		wantErr      error
-		wantMsg      string
+		wantCode     string                // optional: the error-catalog code that the invocation error carries
+		wantMsg      string                // optional: text of the error message
+		wantDetail   string                // optional: text that the detail of the error-catalog error contains
 		fix          func(env *profileEnv) // optional: fixing the cause lets the same selection succeed
 		wantAfterFix string
 	}{
@@ -281,19 +313,34 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 				require.NoError(env.t, os.WriteFile(filepath.Join(env.dir, "broken.json"), []byte("{not json"), 0o600))
 				env.selectProfile("broken")
 			},
-			wantErr: profile.ErrCorrupt,
-		},
-		{name: "name_with_a_path_separator_is_rejected", setup: func(env *profileEnv) { env.selectProfile("../escape") }, wantErr: profile.ErrInvalidName},
-		{name: "name_with_a_space_is_rejected", setup: func(env *profileEnv) { env.selectProfile("Bad Name") }, wantErr: profile.ErrInvalidName},
-		{
-			name:    "nil_profile_fails_the_invocation",
-			setup:   func(env *profileEnv) { env.setRegistry(nilProfileRegistry{}); env.selectProfile("anything") },
-			wantErr: errProfileWithoutConfig,
+			wantErr:  profile.ErrCorrupt,
+			wantCode: catalogCodeUnreadable,
 		},
 		{
-			name:    "profile_without_configuration_fails_the_invocation",
-			setup:   func(env *profileEnv) { env.setRegistry(nilConfigRegistry{}); env.selectProfile("machine") },
-			wantErr: errProfileWithoutConfig,
+			name:     "name_with_a_path_separator_is_rejected",
+			setup:    func(env *profileEnv) { env.selectProfile("../escape") },
+			wantErr:  profile.ErrInvalidName,
+			wantCode: catalogCodeInvalidName,
+		},
+		{
+			name:     "name_with_a_space_is_rejected",
+			setup:    func(env *profileEnv) { env.selectProfile("Bad Name") },
+			wantErr:  profile.ErrInvalidName,
+			wantCode: catalogCodeInvalidName,
+		},
+		{
+			name:       "nil_profile_fails_the_invocation",
+			setup:      func(env *profileEnv) { env.setRegistry(nilProfileRegistry{}); env.selectProfile("anything") },
+			wantErr:    errProfileWithoutConfig,
+			wantCode:   catalogCodeUnavailable,
+			wantDetail: "anything",
+		},
+		{
+			name:       "profile_without_configuration_fails_the_invocation",
+			setup:      func(env *profileEnv) { env.setRegistry(nilConfigRegistry{}); env.selectProfile("machine") },
+			wantErr:    errProfileWithoutConfig,
+			wantCode:   catalogCodeUnavailable,
+			wantDetail: "machine",
 		},
 		{
 			name: "relative_base_dir_fails_the_selection_and_is_retried_after_the_fix",
@@ -301,7 +348,8 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 				env.base.Set(profile.DirKey, "relative-profiles")
 				env.selectProfile("machine")
 			},
-			wantMsg:      "must be absolute",
+			wantDetail:   "absolute path",
+			wantCode:     catalogCodeDirInvalid,
 			fix:          func(env *profileEnv) { env.base.Set(profile.DirKey, env.dir) },
 			wantAfterFix: machinePayload,
 		},
@@ -315,6 +363,19 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 
 			output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
 			assertFailedInvocation(t, env, output, err, tc.wantErr, tc.wantMsg)
+			if tc.wantCode != "" {
+				assertCatalogCode(t, err, tc.wantCode)
+				env.hookMu.Lock()
+				assertCatalogCode(t, env.hookErr, tc.wantCode)
+				env.hookMu.Unlock()
+			}
+
+			if tc.wantDetail != "" {
+				assert.Contains(t, catalogDetail(err), tc.wantDetail)
+				env.hookMu.Lock()
+				assert.Contains(t, catalogDetail(env.hookErr), tc.wantDetail)
+				env.hookMu.Unlock()
+			}
 
 			if tc.fix != nil {
 				tc.fix(env)
@@ -537,6 +598,12 @@ func Test_Engine_Profile_ChangedDirKeyRebuildsTheRegistry(t *testing.T) {
 	rebuilt, err := GetProfileRegistry(env.engine)
 	require.NoError(t, err)
 	assert.NotSame(t, first, rebuilt, "a changed directory must replace the registry")
+
+	env.base.Set(profile.DirKey, "")
+	_, err = GetProfileRegistry(env.engine)
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr, "an emptied directory must not keep the registry")
+	assert.Equal(t, catalogCodeDirInvalid, catalogErr.ErrorCode)
 }
 
 // Test_Engine_Profile_UnknownProfileNameRunsEmptyAndIsLoggedOnce checks that a selected profile without a file runs on an
@@ -686,7 +753,10 @@ func Test_Engine_Profile_WithoutDirKeyFailsSelection(t *testing.T) {
 	env.selectProfile("machine")
 
 	output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
-	assertFailedInvocation(t, env, output, err, errProfileDirNotConfigured, "")
+	assertFailedInvocation(t, env, output, err, nil, "")
+	assertCatalogCode(t, err, catalogCodeDirInvalid)
+	assert.Contains(t, catalogDetail(err), profile.DirKey)
+	assert.Contains(t, catalogDetail(err), "absolute path")
 	entries, err := os.ReadDir(home)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "the home directory must not be touched")
@@ -738,6 +808,7 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 
 	registry, err := GetProfileRegistry(foreignEngine{Engine: env.engine})
 	assert.ErrorIs(t, err, errEngineWithoutProfiles)
+	assertCatalogCode(t, err, catalogCodeUnavailable)
 	assert.Nil(t, registry)
 }
 
@@ -749,7 +820,7 @@ func Test_GetProfileRegistry_FailsForARelativeDirAndKeepsNoFailure(t *testing.T)
 
 	registry, err := GetProfileRegistry(env.engine)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "must be absolute")
+	assert.Contains(t, catalogDetail(err), "absolute path")
 	assert.Nil(t, registry)
 
 	env.base.Set(profile.DirKey, env.dir)
