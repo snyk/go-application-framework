@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -52,11 +53,11 @@ func invokeRunner(t *testing.T, engine workflow.Engine, opts ...workflow.EngineI
 	return *failures, err
 }
 
-// failureLines renders each failure as "<step ID>: <message>".
+// failureLines renders each failure as "<step ID>: <error text>".
 func failureLines(failures []catalog.StepFailure) []string {
 	lines := make([]string, 0, len(failures))
 	for _, failure := range failures {
-		lines = append(lines, failure.ID.String()+": "+failure.Message)
+		lines = append(lines, failure.ID.String()+": "+failure.Err.Error())
 	}
 	return lines
 }
@@ -100,12 +101,14 @@ func Test_RunLifecycle_RunsStepsInIDOrderAndSkipsCaller(t *testing.T) {
 }
 
 // Acceptance: a failing step and a panicking step do not stop the other steps, and both are reported with their IDs and
-// messages. A panic is reported by its type only, so the panic value does not leak. The panic is recovered, so the runner
-// returns normally.
+// errors. The original error is kept, so errors.Is works on it. A panic is reported by its type only, so the panic value
+// does not leak through the text, while the value stays reachable through a PanicError. The panic is recovered, so the
+// runner returns normally.
 func Test_RunLifecycle_FailingAndPanickingStepsDoNotStopOthers(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	boom := errors.New("boom")
 	failing := registerStep(t, engine, "lifecycle a failing", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
-		return nil, errors.New("boom")
+		return nil, boom
 	})
 	panicking := registerStep(t, engine, "lifecycle b panicking", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
 		panic("kaboom")
@@ -123,6 +126,11 @@ func Test_RunLifecycle_FailingAndPanickingStepsDoNotStopOthers(t *testing.T) {
 		failing.String() + ": boom",
 		panicking.String() + ": workflow callback panicked (string)",
 	}, failureLines(failures))
+	require.Len(t, failures, 2)
+	assert.ErrorIs(t, failures[0].Err, boom, "the original error must be kept, not only its text")
+	var panicErr *catalog.PanicError
+	require.ErrorAs(t, failures[1].Err, &panicErr)
+	assert.Equal(t, "kaboom", panicErr.Value)
 }
 
 // Acceptance: the runner reports no failures when there are no steps, when every step succeeds, or when the steps run
@@ -131,12 +139,14 @@ func Test_RunLifecycle_ReturnsNilWhenNoStepFails(t *testing.T) {
 	tests := map[string]func(t *testing.T, engine workflow.Engine){
 		"no steps": func(*testing.T, workflow.Engine) {},
 		"steps succeed and return data": func(t *testing.T, engine workflow.Engine) {
+			t.Helper()
 			output := mocks.NewMockData(gomock.NewController(t))
 			registerStep(t, engine, "lifecycle with output", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
 				return []workflow.Data{output}, nil
 			})
 		},
 		"progress without a terminal": func(t *testing.T, engine workflow.Engine) {
+			t.Helper()
 			engine.SetUserInterface(consoleui.New(consoleui.WithProgressWriter(&bytes.Buffer{})))
 			registerStep(t, engine, "lifecycle alpha", noopStep)
 			registerStep(t, engine, "lifecycle zeta", noopStep)
@@ -194,6 +204,92 @@ func Test_RunLifecycle_StopsWhenContextIsCanceledMidStep(t *testing.T) {
 		beta.String() + ": not run: context canceled",
 		gamma.String() + ": not run: context canceled",
 	}, failureLines(failures))
+	require.Len(t, failures, 2)
+	assert.ErrorIs(t, failures[0].Err, context.Canceled)
+	assert.ErrorIs(t, failures[1].Err, context.Canceled)
+}
+
+// Acceptance: a step that invokes the runner again, which runs the lifecycle, does not run the steps a second time. The
+// nested run sees that the lifecycle is already running in its invocation chain, so the step does not recurse. The
+// counters stop a regression at the second run, so the test fails instead of recursing without end.
+func Test_RunLifecycle_StepThatInvokesRunnerRunsEachStepOnce(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	runnerID, failures := registerRunner(t, engine)
+	var alphaRuns, zetaRuns int
+	var nestedErr error
+	registerStep(t, engine, "lifecycle alpha", func(ic workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		alphaRuns++
+		if alphaRuns > 1 {
+			return nil, nil
+		}
+		_, nestedErr = ic.GetEngine().Invoke(runnerID)
+		return nil, nil
+	})
+	registerStep(t, engine, "lifecycle zeta", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
+		zetaRuns++
+		return nil, nil
+	})
+	require.NoError(t, engine.Init())
+
+	_, err := engine.Invoke(runnerID)
+	require.NoError(t, err)
+	require.NoError(t, nestedErr)
+	assert.Equal(t, 1, alphaRuns)
+	assert.Equal(t, 1, zetaRuns)
+	assert.Empty(t, *failures)
+}
+
+// Acceptance, run with -race: two independent runs of the lifecycle started at the same time on one engine each run every
+// step. The guard against nested runs is per invocation chain, so one run never stops the other.
+func Test_RunLifecycle_ConcurrentIndependentRunsEachRunSteps(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	var runs atomic.Int32
+	countRun := func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
+		runs.Add(1)
+		return nil, nil
+	}
+	registerStep(t, engine, "lifecycle alpha", countRun)
+	registerStep(t, engine, "lifecycle zeta", countRun)
+	runnerID := workflow.NewWorkflowIdentifier("lifecycle runner")
+	_, err := engine.Register(runnerID, configOptions(), func(ic workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		if len(catalog.RunLifecycle(ic, catalog.Install)) > 0 {
+			return nil, errors.New("lifecycle steps failed")
+		}
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	var runners sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		runners.Add(1)
+		go func() {
+			defer runners.Done()
+			_, errs[i] = engine.Invoke(runnerID, workflow.WithContext(context.Background()))
+		}()
+	}
+	runners.Wait()
+
+	require.NoError(t, errors.Join(errs...))
+	assert.Equal(t, int32(4), runs.Load(), "each of the two runs must run both steps")
+}
+
+// Acceptance: the runner works when the engine has no user interface, which the engine allows. The steps run and no
+// progress is shown.
+func Test_RunLifecycle_WithoutUserInterfaceRunsSteps(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	engine.SetUserInterface(nil)
+	var ran int
+	registerStep(t, engine, "lifecycle alpha", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
+		ran++
+		return nil, nil
+	})
+
+	failures, err := invokeRunner(t, engine)
+	require.NoError(t, err)
+	assert.Nil(t, failures)
+	assert.Equal(t, 1, ran)
 }
 
 // Acceptance, run with -race: a step that queries the catalog while the runner runs neither deadlocks nor races, and

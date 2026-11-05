@@ -13,6 +13,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow/catalog"
 )
 
+// Unit: the text of a panic error names only the type of the panic value, so a value that carries a secret does not leak.
+func Test_PanicError_ReportsOnlyTypeOfValue(t *testing.T) {
+	err := &catalog.PanicError{Value: "token=secret"}
+	assert.Equal(t, "workflow callback panicked (string)", err.Error())
+	assert.NotContains(t, err.Error(), "secret")
+}
+
 // Unit: progress goes through the user interface, one update per step before it runs, and the steps are invoked with no
 // input and with the context of the invocation. The engine mock has no expectation for SetConfiguration or Register, so any
 // write to the engine configuration fails the test.
@@ -28,8 +35,8 @@ func Test_RunLifecycle_ReportsProgressThroughUserInterface(t *testing.T) {
 	engine.EXPECT().GetWorkflow(self).Return(labeledEntry(ctrl, map[string]any{"label:lifecycle": "install"}), true)
 	engine.EXPECT().GetWorkflow(alpha).Return(labeledEntry(ctrl, map[string]any{"label:lifecycle": "install"}), true)
 	engine.EXPECT().GetWorkflow(beta).Return(labeledEntry(ctrl, map[string]any{"label:lifecycle": "install"}), true)
-	engine.EXPECT().Invoke(alpha).Return(nil, nil)
-	engine.EXPECT().Invoke(beta).Return(nil, nil)
+	engine.EXPECT().Invoke(alpha, gomock.Any()).Return(nil, nil)
+	engine.EXPECT().Invoke(beta, gomock.Any()).Return(nil, nil)
 
 	bar := mocks.NewMockProgressBar(ctrl)
 	bar.EXPECT().SetTitle("Running install steps")
