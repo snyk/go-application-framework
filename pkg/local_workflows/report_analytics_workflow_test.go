@@ -29,7 +29,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-const testOrgID = "orgId"
+const (
+	testOrgID    = "orgId"
+	testTenantID = "8f2d3c1a-5b6e-4f70-9a8b-1c2d3e4f5a6b"
+)
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPayloadToApi(t *testing.T) {
 	// setup
@@ -499,6 +502,97 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	require.Error(t, err)
 }
 
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsToTheTenantWhenThereIsNoOrg(t *testing.T) {
+	tests := map[string]struct {
+		org         string
+		orgErr      error
+		tenant      string
+		expectedURI string
+	}{
+		"org and tenant": {
+			org:         testOrgID,
+			tenant:      testTenantID,
+			expectedURI: "/hidden/orgs/" + testOrgID + "/analytics?version=2024-10-15",
+		},
+		"tenant without org": {
+			tenant:      testTenantID,
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+		"tenant when the org lookup fails": {
+			orgErr:      errors.New("org lookup failed"),
+			tenant:      testTenantID,
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+		"uppercase tenant": {
+			tenant:      strings.ToUpper(testTenantID),
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			var requestURIs []string
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				requestURIs = append(requestURIs, req.URL.RequestURI())
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), tc.org, tc.orgErr, tc.tenant)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
+
+			require.NoError(t, err)
+			require.Equal(t, []string{tc.expectedURI}, requestURIs)
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAValidTenant(t *testing.T) {
+	orgErr := errors.New("org lookup failed")
+	tests := map[string]struct {
+		orgErr error
+		tenant string
+	}{
+		"neither org nor tenant":          {},
+		"org lookup fails and no tenant":  {orgErr: orgErr},
+		"tenant that is not a UUID":       {tenant: "../orgs/" + testTenantID},
+		"tenant that is a bare word":      {tenant: "my-tenant"},
+		"org lookup fails and bad tenant": {orgErr: orgErr, tenant: "my-tenant"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				t.Errorf("unexpected request to %s", req.URL)
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", tc.orgErr, tc.tenant)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
+
+			require.Error(t, err)
+			if tc.orgErr != nil && tc.tenant == "" {
+				require.ErrorIs(t, err, tc.orgErr)
+			}
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_succeedsWithoutInputWhenThereIsNoOrgOrTenant(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+		t.Errorf("unexpected request to %s", req.URL)
+		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+	})
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+	testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", nil, "")
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{})
+
+	require.NoError(t, err)
+}
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T) {
 	// setup
 	logger := zerolog.New(io.Discard)
@@ -746,6 +840,17 @@ func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller,
 	invocationCtx.EXPECT().GetRuntimeInfo().Return(ri).AnyTimes()
 	invocationCtx.EXPECT().Context().Return(t.Context()).AnyTimes()
 	return invocationCtx
+}
+
+// testSetOrgAndTenant replaces the org of a test configuration, failing its lookup with orgErr when set, and sets the tenant.
+func testSetOrgAndTenant(config configuration.Configuration, org string, orgErr error, tenant string) {
+	config.Unset(configuration.ORGANIZATION)
+	config.AddDefaultValue(configuration.ORGANIZATION, func(_ configuration.Configuration, _ any) (any, error) {
+		return org, orgErr
+	})
+	if tenant != "" {
+		config.Set(configuration.TENANT, tenant)
+	}
 }
 
 // testWithMachineID returns the v2 payload with runtime.machine_id set, in the key order the workflow encodes it.

@@ -79,7 +79,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), reportAnalyticsAPIVersion)
+	url, urlErr := analyticsURL(config)
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
@@ -147,6 +147,10 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 		logger.Printf("[%d] Data: %s", i, input.GetPayload())
 
+		if urlErr != nil {
+			return nil, urlErr
+		}
+
 		// send to V2 analytics endpoint
 		callErr := callEndpoint(invocationCtx, input, url)
 		if callErr != nil {
@@ -155,6 +159,26 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 	}
 	return nil, nil
+}
+
+// analyticsURL returns the analytics endpoint of the organization, or of the tenant when there is no organization.
+func analyticsURL(config configuration.Configuration) (string, error) {
+	apiURL := config.GetString(configuration.API_URL)
+	orgID, orgErr := config.GetStringWithError(configuration.ORGANIZATION)
+	if orgID != "" {
+		return fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", apiURL, orgID, reportAnalyticsAPIVersion), nil
+	}
+
+	tenantID, tenantErr := config.GetStringWithError(configuration.TENANT)
+	if tenantID == "" {
+		return "", errors.Join(errors.New("no organization or tenant to send analytics to"), orgErr, tenantErr)
+	}
+	// the tenant can be set to any string, and it goes into the request path
+	tenantUUID, err := uuid.Parse(tenantID)
+	if err != nil {
+		return "", fmt.Errorf("the tenant to send analytics to is not a UUID: %w", err)
+	}
+	return fmt.Sprintf("%s/hidden/tenants/%s/analytics?version=%s", apiURL, tenantUUID, reportAnalyticsAPIVersion), nil
 }
 
 // enrichV2Event adds the runtime fields GAF knows to a v2 event without overwriting values the producer set.
