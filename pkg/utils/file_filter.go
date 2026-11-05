@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
@@ -292,7 +291,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
 		} else {
-			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+			globPatternMatcher := newScopedMatcher(globs)
 			isFileExcluded = func(filePath string) bool {
 				return globPatternMatcher.MatchesPath(filePath)
 			}
@@ -387,9 +386,9 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		allGlobs = append(allGlobs, glob)
 	}
 
-	otherMatcher := gitignore.CompileIgnoreLines(globs...)
+	otherMatcher := newScopedMatcher(globs)
 
-	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
+	allMatcher := newScopedMatcher(allGlobs)
 	defaultPredicate := func(file string) bool {
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
 	}
