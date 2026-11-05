@@ -31,7 +31,7 @@ import (
 
 const (
 	testOrgID    = "orgId"
-	testTenantID = "8f2d3c1a-5b6e-4f70-9a8b-1c2d3e4f5a6b"
+	testTenantID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 )
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPayloadToApi(t *testing.T) {
@@ -537,7 +537,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsToTheTenantWhenThereIsN
 				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
 			})
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
-			testSetOrgAndTenant(invocationCtx.GetConfiguration(), tc.org, tc.orgErr, tc.tenant)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), tc.org, tc.orgErr, tc.tenant, nil)
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
 
@@ -549,15 +549,20 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsToTheTenantWhenThereIsN
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAValidTenant(t *testing.T) {
 	orgErr := errors.New("org lookup failed")
+	tenantErr := errors.New("tenant lookup failed")
 	tests := map[string]struct {
-		orgErr error
-		tenant string
+		orgErr       error
+		tenant       string
+		tenantErr    error
+		expectedErrs []error
 	}{
-		"neither org nor tenant":          {},
-		"org lookup fails and no tenant":  {orgErr: orgErr},
-		"tenant that is not a UUID":       {tenant: "../orgs/" + testTenantID},
-		"tenant that is a bare word":      {tenant: "my-tenant"},
-		"org lookup fails and bad tenant": {orgErr: orgErr, tenant: "my-tenant"},
+		"neither org nor tenant":                  {},
+		"org lookup fails and no tenant":          {orgErr: orgErr, expectedErrs: []error{orgErr}},
+		"tenant lookup fails":                     {tenantErr: tenantErr, expectedErrs: []error{tenantErr}},
+		"org and tenant lookups fail":             {orgErr: orgErr, tenantErr: tenantErr, expectedErrs: []error{orgErr, tenantErr}},
+		"tenant that is not a UUID":               {tenant: "../orgs/" + testTenantID},
+		"tenant that is a bare word":              {tenant: "my-tenant"},
+		"org lookup fails and tenant is not UUID": {orgErr: orgErr, tenant: "my-tenant"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -567,14 +572,15 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAV
 				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
 			})
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
-			testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", tc.orgErr, tc.tenant)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", tc.orgErr, tc.tenant, tc.tenantErr)
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
 
 			require.Error(t, err)
-			if tc.orgErr != nil && tc.tenant == "" {
-				require.ErrorIs(t, err, tc.orgErr)
+			for _, expectedErr := range tc.expectedErrs {
+				require.ErrorIs(t, err, expectedErr)
 			}
+			require.NotContains(t, err.Error(), "is not a string", "an unset tenant is not an invalid one")
 		})
 	}
 }
@@ -586,7 +592,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_succeedsWithoutInputWhenTher
 		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
 	})
 	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
-	testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", nil, "")
+	testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", nil, "", nil)
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{})
 
@@ -842,14 +848,20 @@ func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller,
 	return invocationCtx
 }
 
-// testSetOrgAndTenant replaces the org of a test configuration, failing its lookup with orgErr when set, and sets the tenant.
-func testSetOrgAndTenant(config configuration.Configuration, org string, orgErr error, tenant string) {
+// testSetOrgAndTenant replaces the org of a test configuration, failing its lookup with orgErr when set, and sets the
+// tenant, failing its lookup with tenantErr when set.
+func testSetOrgAndTenant(config configuration.Configuration, org string, orgErr error, tenant string, tenantErr error) {
 	config.Unset(configuration.ORGANIZATION)
 	config.AddDefaultValue(configuration.ORGANIZATION, func(_ configuration.Configuration, _ any) (any, error) {
 		return org, orgErr
 	})
 	if tenant != "" {
 		config.Set(configuration.TENANT, tenant)
+	}
+	if tenantErr != nil {
+		config.AddDefaultValue(configuration.TENANT, func(_ configuration.Configuration, _ any) (any, error) {
+			return "", tenantErr
+		})
 	}
 }
 

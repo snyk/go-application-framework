@@ -165,12 +165,14 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 func analyticsURL(config configuration.Configuration) (string, error) {
 	apiURL := config.GetString(configuration.API_URL)
 	orgID, orgErr := config.GetStringWithError(configuration.ORGANIZATION)
-	if orgID != "" {
+	if orgErr == nil && orgID != "" {
 		return fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", apiURL, orgID, reportAnalyticsAPIVersion), nil
 	}
 
-	tenantID, tenantErr := config.GetStringWithError(configuration.TENANT)
-	if tenantID == "" {
+	// unlike GetStringWithError, GetWithError reports no error for an unset tenant
+	tenantValue, tenantErr := config.GetWithError(configuration.TENANT)
+	tenantID, isString := tenantValue.(string)
+	if tenantErr != nil || !isString || tenantID == "" {
 		return "", errors.Join(errors.New("no organization or tenant to send analytics to"), orgErr, tenantErr)
 	}
 	// the tenant can be set to any string, and it goes into the request path
