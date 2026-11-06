@@ -66,3 +66,24 @@ func Test_EngineRegister_ConcurrentWithQueriesDoesNotRace(t *testing.T) {
 
 	assert.Len(t, engine.GetWorkflows(), count)
 }
+
+func Test_EngineRegister_InvalidIDIsRejected(t *testing.T) {
+	for _, name := range []string{"ext/setup", "ext?setup", "ext#setup", "ext@setup", "ext:setup", "ext[setup", "ext\\setup", "ext\nsetup"} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			config := mocks.NewMockConfiguration(ctrl) // no AddFlagSet expected: nothing is added to the configuration
+			engine := workflow.NewWorkFlowEngine(config)
+			id := workflow.NewWorkflowIdentifier(name)
+			flags := pflag.NewFlagSet("invalid", pflag.ContinueOnError)
+			flags.String("some-flag", "", "")
+
+			entry, err := engine.Register(id, workflow.ConfigurationOptionsFromFlagset(flags), noopRegistrationCallback)
+
+			require.Error(t, err)
+			assert.Nil(t, entry)
+			_, found := engine.GetWorkflow(id)
+			assert.False(t, found)
+			assert.NotPanics(t, func() { assert.Empty(t, engine.GetWorkflows()) })
+		})
+	}
+}
