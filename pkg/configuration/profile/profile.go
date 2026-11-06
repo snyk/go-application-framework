@@ -32,14 +32,16 @@ var ErrInvalidName = errors.New("invalid profile name")
 // Deprecated: a profile without a file is an empty profile, nothing returns this error any more.
 var ErrNotFound = errors.New("profile not found")
 
-// ErrCorrupt is returned when a profile file exists but is not a valid configuration file.
+// ErrCorrupt is returned when a profile entry is not a regular file, or a profile file is not a valid configuration
+// file. Problems with the profile directory do not match it.
 var ErrCorrupt = errors.New("profile file is not valid")
 
 // Registry finds profiles by name.
 type Registry interface {
 	// Profile returns the profile with the given name. A profile without a file is empty, and reading it creates no
-	// file: the file is created by the first persisted write. It returns ErrInvalidName for a name that is not allowed,
-	// and ErrCorrupt for an entry that is not a regular file holding a configuration.
+	// file: the file is created by the first persisted write. The errors are error-catalog errors. A name that is not
+	// allowed matches ErrInvalidName, and an unusable profile entry or file matches ErrCorrupt. Problems with the profile
+	// directory do not match ErrCorrupt.
 	Profile(name string) (Profile, error)
 }
 
