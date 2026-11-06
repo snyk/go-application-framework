@@ -691,6 +691,57 @@ func (mr *MockEntryMockRecorder) SetVisibility(visible interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVisibility", reflect.TypeOf((*MockEntry)(nil).SetVisibility), visible)
 }
 
+// MockEntryWithMetadata is a mock of EntryWithMetadata interface.
+type MockEntryWithMetadata struct {
+	ctrl     *gomock.Controller
+	recorder *MockEntryWithMetadataMockRecorder
+}
+
+// MockEntryWithMetadataMockRecorder is the mock recorder for MockEntryWithMetadata.
+type MockEntryWithMetadataMockRecorder struct {
+	mock *MockEntryWithMetadata
+}
+
+// NewMockEntryWithMetadata creates a new mock instance.
+func NewMockEntryWithMetadata(ctrl *gomock.Controller) *MockEntryWithMetadata {
+	mock := &MockEntryWithMetadata{ctrl: ctrl}
+	mock.recorder = &MockEntryWithMetadataMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEntryWithMetadata) EXPECT() *MockEntryWithMetadataMockRecorder {
+	return m.recorder
+}
+
+// Metadata mocks base method.
+func (m *MockEntryWithMetadata) Metadata() map[string]any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Metadata")
+	ret0, _ := ret[0].(map[string]any)
+	return ret0
+}
+
+// Metadata indicates an expected call of Metadata.
+func (mr *MockEntryWithMetadataMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockEntryWithMetadata)(nil).Metadata))
+}
+
+// SetMetadata mocks base method.
+func (m *MockEntryWithMetadata) SetMetadata(key string, value any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetMetadata", key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetMetadata indicates an expected call of SetMetadata.
+func (mr *MockEntryWithMetadataMockRecorder) SetMetadata(key, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadata", reflect.TypeOf((*MockEntryWithMetadata)(nil).SetMetadata), key, value)
+}
+
 // MockEngine is a mock of Engine interface.
 type MockEngine struct {
 	ctrl     *gomock.Controller
