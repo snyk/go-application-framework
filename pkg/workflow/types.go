@@ -122,6 +122,16 @@ type Entry interface {
 	SetVisibility(visible bool)
 }
 
+// EntryWithMetadata is an optional interface for entries that carry metadata. Entries returned by Engine.Register
+// implement it; check with a type assertion.
+type EntryWithMetadata interface {
+	// SetMetadata fails if the key is already set; the first value is kept.
+	SetMetadata(key string, value any) error
+
+	// Metadata returns a shallow copy; values are treated as immutable.
+	Metadata() map[string]any
+}
+
 // Engine is the interface that wraps the methods that are used to manage workflows.
 type Engine interface {
 	Init() error
