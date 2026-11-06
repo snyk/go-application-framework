@@ -436,19 +436,40 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 	return scrub(data, scrubDict, false)
 }
 
+// Order tiers for scrub: literal secrets run first, then regexes, then whole-word terms.
+// Literal secrets must run before regexes, because a regex can cut a secret into pieces that no
+// longer match it. Within the literal tier the longest term runs first, so a short secret cannot
+// split a longer one that contains it.
+const (
+	scrubTierStaticTerm = iota
+	scrubTierRegex
+	scrubTierWholeWord
+)
+
+func scrubTier(entry scrubStruct) int {
+	switch {
+	case entry.wholeWord:
+		return scrubTierWholeWord
+	case entry.replace != "":
+		return scrubTierStaticTerm
+	default:
+		return scrubTierRegex
+	}
+}
+
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 	s := string(p)
-	// Apply secrets first, then longer whole-word terms, to avoid partial redaction.
+	// Apply literal secrets first, then regexes, then longer whole-word terms, to avoid partial redaction.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		wi, wj := scrubDict[keys[i]].wholeWord, scrubDict[keys[j]].wholeWord
-		if wi != wj {
-			return wj
+		ti, tj := scrubTier(scrubDict[keys[i]]), scrubTier(scrubDict[keys[j]])
+		if ti != tj {
+			return ti < tj
 		}
-		if wi && len(keys[i]) != len(keys[j]) {
+		if ti != scrubTierRegex && len(keys[i]) != len(keys[j]) {
 			return len(keys[i]) > len(keys[j])
 		}
 		return keys[i] < keys[j]

@@ -1597,3 +1597,123 @@ func Test_AddSecretsFromConfig_IoWriter(t *testing.T) {
 	assert.NotContains(t, output.String(), "io-writer-token-value")
 	assert.Contains(t, output.String(), "seen")
 }
+
+// currentUsername returns the OS username, or skips the test when it is unavailable.
+func currentUsername(t *testing.T) string {
+	t.Helper()
+	u, err := user.Current()
+	if err != nil || u.Username == "" {
+		t.Skip("no current OS username available")
+	}
+	return u.Username
+}
+
+func Test_AddSecretsFromConfig_SecretContainingUsernameIsFullyRedacted(t *testing.T) {
+	username := currentUsername(t)
+	secret := "abc-" + username + "-xyz0123456"
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, secret)
+	writer, scrubber, output := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"value=` + secret + `"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "xyz0123456", "the secret must not be split by the username pattern")
+	assert.Contains(t, output.String(), "value=")
+}
+
+func Test_GetScrubDictFromConfig_SecretContainingUsernameIsFullyRedacted(t *testing.T) {
+	username := currentUsername(t)
+	secret := "abc-" + username + "-xyz0123456"
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, secret)
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"value=` + secret + `"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "xyz0123456", "the secret must not be split by the username pattern")
+	assert.Contains(t, output.String(), "value=")
+}
+
+func Test_AddSecretsFromConfig_SecretAfterBearerPatternIsFullyRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "longprefix!tail99")
+	writer, scrubber, output := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"Authorization: Bearer longprefix!tail99"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "tail99", "the Bearer pattern stops at '!' and must not leave the secret's tail")
+	assert.Contains(t, output.String(), "Authorization")
+}
+
+func Test_AddSecretsFromConfig_SecretInJSONEscapedTokenFieldIsFullyRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "longprefix!tail99")
+	writer, scrubber, output := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"{\"token\": \"longprefix!tail99\"}"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "tail99")
+	assert.Contains(t, output.String(), "debug")
+}
+
+func Test_GetScrubDictFromConfig_SecretAfterBearerPatternIsFullyRedacted(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "longprefix!tail99")
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"Authorization: Bearer longprefix!tail99"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "tail99")
+	assert.Contains(t, output.String(), "Authorization")
+}
+
+func Test_AddSecretsFromConfig_ShorterSecretInsideLongerSecretRedactsWhole(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "abcdef123456")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "abcdef123456-tail789xyz")
+	writer, scrubber, output := newAddableWriter(t)
+	AddSecretsFromConfig(scrubber, config)
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"v=abcdef123456-tail789xyz end"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "tail789xyz", "the longer secret must be redacted before its shorter substring")
+	assert.Contains(t, output.String(), "end")
+}
+
+func Test_GetScrubDictFromConfig_ShorterSecretInsideLongerSecretRedactsWhole(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "abcdef123456")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "abcdef123456-tail789xyz")
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+
+	_, err := writer.Write([]byte(`{"level":"info","message":"v=abcdef123456-tail789xyz end"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "tail789xyz")
+	assert.Contains(t, output.String(), "end")
+}
+
+func Test_GetScrubDictFromConfig_RedactionTermDoesNotStopJSONValueRedaction(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(REDACTION_TERMS, []string{"key"})
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(config))
+
+	_, err := writer.Write([]byte(`{"level":"debug","message":"api key rotated","token": "unknownvalue123"}` + "\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "unknownvalue123", "whole-word terms run last and must not hide the JSON value")
+	assert.Contains(t, output.String(), SANITIZE_REPLACEMENT_STRING)
+}
