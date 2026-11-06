@@ -40,6 +40,7 @@ type EngineImpl struct {
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
 	mu                sync.RWMutex
+	workflowsMu       sync.RWMutex // guards workflows; separate from mu so registry access never waits on config or hooks
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
 	// profiles is built on first use from the configuration of the engine, see profileRegistry. profilesDir is the
@@ -259,6 +260,7 @@ func (e *EngineImpl) initAnalytics() analytics.Analytics {
 // - id: the workflow identifier
 // - config: the configuration options for the workflow
 // - entryPoint: the entry point function for the workflow
+// If the configuration options cannot be added to the configuration, the workflow is not registered.
 func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryPoint Callback) (Entry, error) {
 	if entryPoint == nil {
 		return nil, fmt.Errorf("EntryPoint must not be nil")
@@ -272,15 +274,6 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		return nil, fmt.Errorf("ID must not be nil")
 	}
 
-	entry := &EntryImpl{
-		visible:        true,
-		expectedConfig: config,
-		entryPoint:     entryPoint,
-	}
-
-	tmp := id.String()
-	e.workflows[tmp] = entry
-
 	flagset := FlagsetFromConfigurationOptions(config)
 	if flagset != nil {
 		err := e.config.AddFlagSet(flagset)
@@ -289,6 +282,16 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		}
 	}
 
+	entry := &EntryImpl{
+		visible:        true,
+		expectedConfig: config,
+		entryPoint:     entryPoint,
+	}
+
+	e.workflowsMu.Lock()
+	defer e.workflowsMu.Unlock()
+	e.workflows[id.String()] = entry
+
 	return entry, nil
 }
 
@@ -296,7 +299,14 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 func (e *EngineImpl) GetWorkflows() []Identifier {
 	var result []Identifier
 
+	e.workflowsMu.RLock()
+	keys := make([]string, 0, len(e.workflows))
 	for k := range e.workflows {
+		keys = append(keys, k)
+	}
+	e.workflowsMu.RUnlock()
+
+	for _, k := range keys {
 		u, err := url.Parse(k)
 		if err != nil {
 			// a panic here is reasonable; how did we register an invalid URL in the first place?
@@ -310,6 +320,8 @@ func (e *EngineImpl) GetWorkflows() []Identifier {
 
 // GetWorkflow returns the workflow entry for the given workflow identifier.
 func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
+	e.workflowsMu.RLock()
+	defer e.workflowsMu.RUnlock()
 	workflow, ok := e.workflows[id.String()]
 	return workflow, ok
 }
