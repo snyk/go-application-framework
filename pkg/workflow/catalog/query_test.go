@@ -16,14 +16,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow/catalog"
 )
 
-// labeledEntry returns a metadata entry whose metadata is the given map.
 func labeledEntry(ctrl *gomock.Controller, metadata map[string]any) metadataEntry {
 	entry := newMetadataEntry(ctrl)
 	entry.MockEntryWithMetadata.EXPECT().Metadata().Return(metadata)
 	return entry
 }
 
-// Unit: entries without metadata support are skipped, and so are entries labeled with another value.
 func Test_FindByLifecycle_SkipsEntriesWithoutMatchingLabel(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	plainID := workflow.NewWorkflowIdentifier("unit plain")
@@ -41,7 +39,6 @@ func Test_FindByLifecycle_SkipsEntriesWithoutMatchingLabel(t *testing.T) {
 	assert.Equal(t, []string{installID.String()}, idStrings(catalog.FindByLifecycle(engine, catalog.Install)))
 }
 
-// Unit: a workflow that is removed between listing and lookup is skipped, and so is a missing entry. Nothing panics.
 func Test_FindByLifecycle_SkipsWorkflowMissingAtLookup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	goneID := workflow.NewWorkflowIdentifier("unit gone")
@@ -57,7 +54,6 @@ func Test_FindByLifecycle_SkipsWorkflowMissingAtLookup(t *testing.T) {
 	assert.Equal(t, []string{keptID.String()}, idStrings(catalog.FindByLifecycle(engine, catalog.Install)))
 }
 
-// Unit: the IDs come back sorted, whatever order the engine lists them in.
 func Test_FindByLifecycle_ReturnsSortedIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	a := workflow.NewWorkflowIdentifier("unit a")
@@ -73,8 +69,6 @@ func Test_FindByLifecycle_ReturnsSortedIDs(t *testing.T) {
 	assert.Equal(t, []string{a.String(), b.String(), c.String()}, idStrings(catalog.FindByLifecycle(engine, catalog.Install)))
 }
 
-// replacingEngine wraps an engine and replaces a workflow with an unlabeled one after it is listed and before it is
-// looked up. It stands in for a wrapped engine whose registry changes between the two calls.
 type replacingEngine struct {
 	workflow.Engine
 	replaceID  workflow.Identifier
@@ -90,7 +84,6 @@ func (e *replacingEngine) GetWorkflow(id workflow.Identifier) (workflow.Entry, b
 	return e.Engine.GetWorkflow(id)
 }
 
-// Unit: a workflow replaced between listing and lookup is seen as its current entry, so the old label does not match.
 func Test_FindByLifecycle_WorkflowReplacedAtLookup_UsesCurrentEntry(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	id := workflow.NewWorkflowIdentifier("unit replaced")
@@ -103,8 +96,6 @@ func Test_FindByLifecycle_WorkflowReplacedAtLookup_UsesCurrentEntry(t *testing.T
 	require.NoError(t, wrapped.replaceErr)
 }
 
-// Run with -race: registering labeled workflows while other goroutines query by label must not race, and every result
-// must be sorted. A workflow may be seen before its label is set, which is accepted.
 func Test_FindByLifecycle_ConcurrentWithRegistrationDoesNotRace(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	const count = 50

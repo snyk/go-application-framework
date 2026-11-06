@@ -11,8 +11,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// Acceptance: a workflow registered through the public Engine API can store metadata on its entry, and the stored
-// metadata is visible through the workflow looked up later.
 func Test_Engine_RegisteredEntryCarriesMetadata(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	id := workflow.NewWorkflowIdentifier("metadata acceptance")

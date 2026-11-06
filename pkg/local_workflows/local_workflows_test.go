@@ -13,7 +13,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// Acceptance: the production Init registers install and uninstall, and analytics recognizes them as commands.
 func Test_Init_RegistersInstallAndUninstallWorkflows(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	require.NoError(t, localworkflows.Init(engine))

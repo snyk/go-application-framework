@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -15,8 +14,6 @@ import (
 
 var errEngine = errors.New("engine refused the registration")
 
-// metadataEntry is a test entry that is both a workflow.Entry and a workflow.EntryWithMetadata. It is composed from the two
-// generated mocks, so no combined interface has to be added to the public API just for tests.
 type metadataEntry struct {
 	*mocks.MockEntry
 	*mocks.MockEntryWithMetadata
@@ -32,70 +29,58 @@ func engineReturning(ctrl *gomock.Controller, entry workflow.Entry, err error) *
 	return engine
 }
 
-// Unit: an error from engine.Register is returned unchanged, together with the nil entry the engine returned.
-func Test_Register_EngineError_ReturnedUnchanged(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	engine := engineReturning(ctrl, nil, errEngine)
+func Test_Register(t *testing.T) {
+	type metadataCall struct {
+		value string
+		err   error
+	}
+	tests := []struct {
+		name         string
+		engineErr    error
+		setMetadata  *metadataCall
+		opts         []catalog.RegisterOption
+		wantNilEntry bool
+		wantErr      error
+	}{
+		{name: "engine error is returned unchanged with a nil entry", engineErr: errEngine,
+			opts: []catalog.RegisterOption{catalog.WithLifecycle(catalog.Install)}, wantNilEntry: true, wantErr: errEngine},
+		{name: "without options nothing is written"},
+		{name: "entry without metadata support returns the entry and ErrMetadataUnsupported",
+			opts: []catalog.RegisterOption{catalog.WithLifecycle(catalog.Install)}, wantErr: catalog.ErrMetadataUnsupported},
+		{name: "lifecycle is written under the label prefix", setMetadata: &metadataCall{value: "install"},
+			opts: []catalog.RegisterOption{catalog.WithLifecycle(catalog.Install)}},
+		{name: "repeated lifecycle keeps the last value and writes once", setMetadata: &metadataCall{value: "uninstall"},
+			opts: []catalog.RegisterOption{catalog.WithLifecycle(catalog.Install), catalog.WithLifecycle(catalog.Uninstall)}},
+		{name: "SetMetadata error is returned with the entry", setMetadata: &metadataCall{value: "install", err: errEngine},
+			opts: []catalog.RegisterOption{catalog.WithLifecycle(catalog.Install)}, wantErr: errEngine},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			var entry workflow.Entry
+			switch {
+			case tt.wantNilEntry:
+			case tt.setMetadata != nil:
+				withMetadata := newMetadataEntry(ctrl)
+				withMetadata.MockEntryWithMetadata.EXPECT().SetMetadata("label:lifecycle", tt.setMetadata.value).Return(tt.setMetadata.err)
+				entry = withMetadata
+			default:
+				entry = mocks.NewMockEntry(ctrl)
+			}
+			engine := engineReturning(ctrl, entry, tt.engineErr)
 
-	entry, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, catalog.WithLifecycle(catalog.Install))
-	assert.Nil(t, entry)
-	assert.ErrorIs(t, err, errEngine)
-}
+			got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, tt.opts...)
 
-// Unit: without options, the entry from engine.Register is returned and nothing is written to it.
-func Test_Register_WithoutOptions_ReturnsEngineEntry(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	entry := mocks.NewMockEntry(ctrl)
-	engine := engineReturning(ctrl, entry, nil)
-
-	got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback)
-	require.NoError(t, err)
-	assert.Equal(t, entry, got)
-}
-
-// Unit: an entry without metadata support is returned with ErrMetadataUnsupported; nothing can be labeled on it.
-func Test_Register_EntryWithoutMetadata_ReturnsEntryAndError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	entry := mocks.NewMockEntry(ctrl)
-	engine := engineReturning(ctrl, entry, nil)
-
-	got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, catalog.WithLifecycle(catalog.Install))
-	assert.Equal(t, entry, got)
-	assert.ErrorIs(t, err, catalog.ErrMetadataUnsupported)
-}
-
-// Unit: the lifecycle label is written to the entry metadata under the reserved label prefix.
-func Test_Register_WithLifecycle_WritesLabelToMetadata(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	entry := newMetadataEntry(ctrl)
-	entry.MockEntryWithMetadata.EXPECT().SetMetadata("label:lifecycle", "install").Return(nil)
-	engine := engineReturning(ctrl, entry, nil)
-
-	got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, catalog.WithLifecycle(catalog.Install))
-	require.NoError(t, err)
-	assert.Equal(t, entry, got)
-}
-
-// Unit: one value per label. Passing the lifecycle option twice keeps the last value and writes only that one.
-func Test_Register_RepeatedLifecycle_KeepsLastValue(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	entry := newMetadataEntry(ctrl)
-	entry.MockEntryWithMetadata.EXPECT().SetMetadata("label:lifecycle", "uninstall").Return(nil)
-	engine := engineReturning(ctrl, entry, nil)
-
-	_, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback,
-		catalog.WithLifecycle(catalog.Install), catalog.WithLifecycle(catalog.Uninstall))
-	require.NoError(t, err)
-}
-
-// Unit: an error from SetMetadata is returned together with the entry.
-func Test_Register_SetMetadataError_ReturnedWithEntry(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	entry := newMetadataEntry(ctrl)
-	entry.MockEntryWithMetadata.EXPECT().SetMetadata("label:lifecycle", "install").Return(errEngine)
-	engine := engineReturning(ctrl, entry, nil)
-
-	got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, catalog.WithLifecycle(catalog.Install))
-	assert.Equal(t, entry, got)
-	assert.ErrorIs(t, err, errEngine)
+			if tt.wantNilEntry {
+				assert.Nil(t, got)
+			} else {
+				assert.Equal(t, entry, got)
+			}
+			if tt.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
 }

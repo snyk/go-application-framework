@@ -39,7 +39,6 @@ func Test_EngineRegister_FailedFlagRegistrationLeavesNoWorkflow(t *testing.T) {
 	assert.Empty(t, engine.GetWorkflows())
 }
 
-// Run with -race: registering while other goroutines list and look up workflows must not race on the workflow map.
 func Test_EngineRegister_ConcurrentWithQueriesDoesNotRace(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	const count = 50

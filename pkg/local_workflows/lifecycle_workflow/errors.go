@@ -12,11 +12,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow/catalog"
 )
 
-// installOrUninstallFailedError is the error for steps of an install or uninstall that failed.
-//
-// INTERIM: replace with the released error-catalog error (CLI-2044). Until it is released, this mirrors its design:
-// SNYK-CLI-0036, with the details as one line per failed step. The cause keeps the original errors of the failed steps
-// reachable with errors.Is and errors.As.
+// INTERIM: replace with the released error-catalog error (CLI-2044), which this mirrors (SNYK-CLI-0036).
 func installOrUninstallFailedError(detail string, cause error) snyk_errors.Error {
 	return snyk_errors.Error{
 		ID:             uuid.NewString(),
@@ -33,7 +29,6 @@ func installOrUninstallFailedError(detail string, cause error) snyk_errors.Error
 	}
 }
 
-// failureCauses joins the original errors of the failed steps, so errors.Is and errors.As reach each of them.
 func failureCauses(failures []catalog.StepFailure) error {
 	errs := make([]error, 0, len(failures))
 	for _, failure := range failures {
@@ -42,8 +37,6 @@ func failureCauses(failures []catalog.StepFailure) error {
 	return errors.Join(errs...)
 }
 
-// failureDetail renders each failed step on its own line as "<step ID>: <cause>". A message is redacted with the
-// secrets of the configuration, because step messages are not redacted, and then flattened onto one line.
 func failureDetail(config configuration.Configuration, failures []catalog.StepFailure) string {
 	scrubDict := logging.GetScrubDictFromConfig(config)
 	lines := make([]string, 0, len(failures))
@@ -54,8 +47,7 @@ func failureDetail(config configuration.Configuration, failures []catalog.StepFa
 	return strings.Join(lines, "\n")
 }
 
-// causeText returns the text that names the cause of a failed step. A Snyk error-catalog error contributes its title and
-// its detail, because its message is only the title. Any other error contributes its message.
+// causeText includes the detail of catalog errors, whose message is only the title.
 func causeText(err error) string {
 	var catalogErr snyk_errors.Error
 	if errors.As(err, &catalogErr) {

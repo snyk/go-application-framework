@@ -27,8 +27,6 @@ var _ workflow.Engine = (*MockEngine)(nil)
 var _ workflow.Entry = (*MockEntry)(nil)
 var _ workflow.InvocationContext = (*MockInvocationContext)(nil)
 
-// Entries carry metadata only through workflow.EntryWithMetadata. A generated MockEntry must not implement it, so
-// callers that type-assert for metadata see a plain entry.
 func Test_MockEntry_DoesNotImplementEntryWithMetadata(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	var entry workflow.Entry = NewMockEntry(ctrl)

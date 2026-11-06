@@ -122,15 +122,13 @@ type Entry interface {
 	SetVisibility(visible bool)
 }
 
-// EntryWithMetadata is an optional interface for an Entry that carries metadata. Entry itself does not change; check
-// for this interface with a type assertion. Entries returned by Engine.Register implement it.
+// EntryWithMetadata is an optional interface for entries that carry metadata. Entries returned by Engine.Register
+// implement it; check with a type assertion.
 type EntryWithMetadata interface {
-	// SetMetadata stores value under key. The engine does not interpret keys or values. A key can be set only once:
-	// setting a key that already has a value returns an error and keeps the first value.
+	// SetMetadata fails if the key is already set; the first value is kept.
 	SetMetadata(key string, value any) error
 
-	// Metadata returns a shallow copy of all metadata. Changing the copy does not change the entry. Values are treated
-	// as immutable.
+	// Metadata returns a shallow copy; values are treated as immutable.
 	Metadata() map[string]any
 }
 

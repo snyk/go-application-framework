@@ -40,7 +40,7 @@ type EngineImpl struct {
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
 	mu                sync.RWMutex
-	workflowsMu       sync.RWMutex // guards workflows; separate from mu so registry access never waits on config or hooks
+	workflowsMu       sync.RWMutex
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
 	// profiles is built on first use from the configuration of the engine, see profileRegistry. profilesDir is the

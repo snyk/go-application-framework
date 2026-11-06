@@ -6,9 +6,7 @@ import (
 	"sync"
 )
 
-// EntryImpl is the default implementation of the Entry interface and of EntryWithMetadata.
 type EntryImpl struct {
-	// mu guards visible and metadata. The other fields are set once when the entry is created and do not change afterwards.
 	mu             sync.RWMutex
 	visible        bool
 	metadata       map[string]any
@@ -42,8 +40,6 @@ func (e *EntryImpl) SetVisibility(visible bool) {
 	e.visible = visible
 }
 
-// SetMetadata stores value under key. A key can be set only once; setting it again returns an error and keeps the
-// first value.
 func (e *EntryImpl) SetMetadata(key string, value any) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -57,7 +53,6 @@ func (e *EntryImpl) SetMetadata(key string, value any) error {
 	return nil
 }
 
-// Metadata returns a shallow copy of the metadata of the workflow entry.
 func (e *EntryImpl) Metadata() map[string]any {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

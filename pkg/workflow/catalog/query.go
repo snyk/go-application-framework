@@ -7,16 +7,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// FindByLifecycle returns the IDs of the workflows of the engine that are labeled lifecycle=<lifecycle>, sorted by ID.
-//
-// The result is a snapshot. Entries without metadata support are skipped. A workflow that is removed or replaced between
-// listing and lookup is skipped or seen as its current entry; it never causes a panic. The engine is only used through
-// its workflow.Engine methods, so wrapped engines work.
+// FindByLifecycle returns a sorted snapshot of the IDs of workflows labeled lifecycle=<lifecycle>. Entries without metadata support are skipped, as are workflows removed between listing and lookup.
 func FindByLifecycle(engine workflow.Engine, lifecycle Lifecycle) []workflow.Identifier {
 	return findByLabel(engine, lifecycleLabel, string(lifecycle))
 }
 
-// findByLabel returns the sorted IDs of the workflows whose label name has the given value.
 func findByLabel(engine workflow.Engine, name, value string) []workflow.Identifier {
 	var matches []workflow.Identifier
 	for _, id := range engine.GetWorkflows() {

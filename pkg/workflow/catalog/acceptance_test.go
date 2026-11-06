@@ -27,7 +27,6 @@ func metadataOf(t *testing.T, entry workflow.Entry) map[string]any {
 	return withMetadata.Metadata()
 }
 
-// Acceptance: a workflow registered with the lifecycle option is labeled, and the entry returned is the registered one.
 func Test_Register_WithLifecycle_LabelsRegisteredWorkflow(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	id := workflow.NewWorkflowIdentifier("catalog install")
@@ -41,7 +40,6 @@ func Test_Register_WithLifecycle_LabelsRegisteredWorkflow(t *testing.T) {
 	assert.Equal(t, map[string]any{"label:lifecycle": "install"}, metadataOf(t, found))
 }
 
-// Acceptance: a workflow registered from inside another workflow, through the engine its callback receives, is labeled.
 func Test_Register_InsideWorkflow_LabelsNestedWorkflow(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	outerID := workflow.NewWorkflowIdentifier("catalog outer")
@@ -62,7 +60,6 @@ func Test_Register_InsideWorkflow_LabelsNestedWorkflow(t *testing.T) {
 	assert.Equal(t, map[string]any{"label:lifecycle": "uninstall"}, metadataOf(t, found))
 }
 
-// Acceptance: when engine.Register fails, the error is returned with a nil entry and nothing stays registered.
 func Test_Register_EngineFailure_ReturnsNilEntryAndError(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	id := workflow.NewWorkflowIdentifier("catalog broken")
@@ -75,8 +72,6 @@ func Test_Register_EngineFailure_ReturnsNilEntryAndError(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// Acceptance: the query returns only the IDs of the workflows labeled lifecycle=install, sorted, both on the engine and
-// on the engine a workflow callback receives.
 func Test_FindByLifecycle_ReturnsSortedInstallWorkflows(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
 	zeta := workflow.NewWorkflowIdentifier("catalog zeta")

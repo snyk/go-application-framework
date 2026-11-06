@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Run with -race: visibility is read by lookups while it is set by callers.
 func Test_EntryImpl_VisibilityConcurrentAccessDoesNotRace(t *testing.T) {
 	entry := &EntryImpl{visible: true}
 
@@ -29,17 +28,11 @@ func Test_EntryImpl_VisibilityConcurrentAccessDoesNotRace(t *testing.T) {
 
 func Test_EntryImpl_ZeroValueSupportsMetadata(t *testing.T) {
 	var entry EntryImpl
+	assert.NotNil(t, entry.Metadata())
+	assert.Empty(t, entry.Metadata())
 
 	require.NoError(t, entry.SetMetadata("key", "value"))
 	assert.Equal(t, map[string]any{"key": "value"}, entry.Metadata())
-}
-
-func Test_EntryImpl_MetadataWithoutValuesIsEmptyMap(t *testing.T) {
-	var entry EntryImpl
-
-	metadata := entry.Metadata()
-	assert.NotNil(t, metadata)
-	assert.Empty(t, metadata)
 }
 
 func Test_EntryImpl_SetMetadataTwiceKeepsFirstValue(t *testing.T) {
@@ -61,7 +54,6 @@ func Test_EntryImpl_MetadataCopyDoesNotChangeEntry(t *testing.T) {
 	assert.Equal(t, map[string]any{"key": "value"}, entry.Metadata())
 }
 
-// Run with -race: metadata is written by callers while other goroutines read it.
 func Test_EntryImpl_MetadataConcurrentAccessDoesNotRace(t *testing.T) {
 	entry := &EntryImpl{}
 

@@ -1,5 +1,5 @@
-// Package lifecycle_workflow registers the install and uninstall workflows. They run the steps that extensions provide for
-// a lifecycle: the workflows labeled with that lifecycle. GAF installs nothing itself.
+// Package lifecycle_workflow registers the install and uninstall workflows. They run the steps that extensions provide:
+// the workflows labeled with that lifecycle. GAF installs nothing itself.
 package lifecycle_workflow
 
 import (
@@ -14,13 +14,11 @@ const (
 	uninstallWorkflowName = "uninstall"
 )
 
-// WORKFLOWID_INSTALL and WORKFLOWID_UNINSTALL identify the workflows that run the install and uninstall steps.
 var (
 	WORKFLOWID_INSTALL   workflow.Identifier = workflow.NewWorkflowIdentifier(installWorkflowName)
 	WORKFLOWID_UNINSTALL workflow.Identifier = workflow.NewWorkflowIdentifier(uninstallWorkflowName)
 )
 
-// InitLifecycleWorkflows registers the install and uninstall workflows with the engine.
 func InitLifecycleWorkflows(engine workflow.Engine) error {
 	_, err := engine.Register(
 		WORKFLOWID_INSTALL,
@@ -39,8 +37,6 @@ func InitLifecycleWorkflows(engine workflow.Engine) error {
 	return err
 }
 
-// lifecycleEntryPoint returns the callback that runs the steps of a lifecycle. It returns nil when no step fails, and
-// otherwise one error that lists the failed steps. The output data of the steps is dropped.
 func lifecycleEntryPoint(lifecycle catalog.Lifecycle) workflow.Callback {
 	return func(ic workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 		failures := catalog.RunLifecycle(ic, lifecycle)
