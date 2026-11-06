@@ -1529,13 +1529,33 @@ func Test_AddSecretsFromConfig_ScrubsLikeGetScrubDictFromConfig_AllSecrets(t *te
 	assert.Contains(t, added.String(), "plain text")
 }
 
+// lockedBuffer is a buffer that concurrent writers may share.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func Test_AddSecretsFromConfig_ConcurrentWithWrites(t *testing.T) {
 	// concurrent writes share the sink, so it must be safe for that; the dictionary is what is under test
-	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(io.Discard), GetScrubDictFromConfig(configuration.NewInMemory()))
+	const token = "concurrent-token-value"
+	output := &lockedBuffer{}
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(output), GetScrubDictFromConfig(configuration.NewInMemory()))
 	scrubber, ok := writer.(ScrubbingLogWriter)
 	require.True(t, ok)
 	config := configuration.NewInMemory()
-	config.Set(configuration.AUTHENTICATION_TOKEN, "concurrent-token-value")
+	config.Set(configuration.AUTHENTICATION_TOKEN, token)
 
 	var wg sync.WaitGroup
 	for range 8 {
@@ -1546,9 +1566,34 @@ func Test_AddSecretsFromConfig_ConcurrentWithWrites(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			_, err := writer.Write([]byte(`{"level":"info","message":"concurrent-token-value"}` + "\n"))
+			_, err := writer.Write([]byte(`{"level":"info","message":"` + token + `"}` + "\n"))
 			assert.NoError(t, err)
 		}()
 	}
 	wg.Wait()
+
+	// whatever the interleaving was, the token is known once every add has returned
+	output.mu.Lock()
+	output.buf.Reset()
+	output.mu.Unlock()
+	_, err := writer.Write([]byte(`{"level":"info","message":"` + token + `"}` + "\n"))
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), token)
+	assert.Contains(t, output.String(), "message")
+}
+
+func Test_AddSecretsFromConfig_IoWriter(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingIoWriter(&output, GetScrubDictFromConfig(configuration.NewInMemory()))
+	scrubber, ok := writer.(ScrubbingLogWriter)
+	require.True(t, ok)
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "io-writer-token-value")
+
+	AddSecretsFromConfig(scrubber, config)
+	_, err := writer.Write([]byte("seen io-writer-token-value here\n"))
+	require.NoError(t, err)
+
+	assert.NotContains(t, output.String(), "io-writer-token-value")
+	assert.Contains(t, output.String(), "seen")
 }
