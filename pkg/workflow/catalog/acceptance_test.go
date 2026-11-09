@@ -74,3 +74,45 @@ func Test_Register_EngineFailure_ReturnsNilEntryAndError(t *testing.T) {
 	_, ok := engine.GetWorkflow(id)
 	assert.False(t, ok)
 }
+
+// Acceptance: the query returns only the IDs of the workflows labeled lifecycle=install, sorted, both on the engine and
+// on the engine a workflow callback receives.
+func Test_FindByLifecycle_ReturnsSortedInstallWorkflows(t *testing.T) {
+	engine := workflow.NewWorkFlowEngine(configuration.NewWithOpts())
+	zeta := workflow.NewWorkflowIdentifier("catalog zeta")
+	alpha := workflow.NewWorkflowIdentifier("catalog alpha")
+	removal := workflow.NewWorkflowIdentifier("catalog removal")
+	plain := workflow.NewWorkflowIdentifier("catalog plain")
+	lister := workflow.NewWorkflowIdentifier("catalog lister")
+
+	register := func(id workflow.Identifier, opts ...catalog.RegisterOption) {
+		_, err := catalog.Register(engine, id, configOptions(), noopCallback, opts...)
+		require.NoError(t, err)
+	}
+	register(zeta, catalog.WithLifecycle(catalog.Install))
+	register(alpha, catalog.WithLifecycle(catalog.Install))
+	register(removal, catalog.WithLifecycle(catalog.Uninstall))
+	register(plain)
+
+	assert.Equal(t, []string{alpha.String(), zeta.String()}, idStrings(catalog.FindByLifecycle(engine, catalog.Install)))
+
+	var fromWorkflow []string
+	_, err := engine.Register(lister, configOptions(), func(ic workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		fromWorkflow = idStrings(catalog.FindByLifecycle(ic.GetEngine(), catalog.Install))
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+	_, err = engine.Invoke(lister)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{alpha.String(), zeta.String()}, fromWorkflow)
+}
+
+func idStrings(ids []workflow.Identifier) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, id.String())
+	}
+	return result
+}
