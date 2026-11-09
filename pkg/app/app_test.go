@@ -365,8 +365,7 @@ func Test_CreateAppEngine_reportAnalyticsSendsTheRuntimeFieldsOfTheEngine(t *tes
 	_, err := engine.Invoke(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.WithInput([]workflow.Data{input}))
 
 	require.NoError(t, err)
-	assert.NotContains(t, requestBody.Load(), `"machine"`)
-	assert.NotContains(t, requestBody.Load(), `"machine_id"`)
+	assert.Contains(t, requestBody.Load(), `"machine_id":"supplied-machine-id"`)
 	assert.Contains(t, requestBody.Load(), `"network_request_attempts":1,`)
 }
 

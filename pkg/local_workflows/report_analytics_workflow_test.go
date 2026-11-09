@@ -67,66 +67,55 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testing.T) {
-	tests := map[string]string{
-		"v2 input":                   testGetAnalyticsV2PayloadString(),
-		"v1 scan-done input":         testGetScanDonePayloadString(),
-		"machine id of the producer": testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsTheMachineId(t *testing.T) {
+	v2Payload := testGetAnalyticsV2PayloadString()
+	tests := map[string]struct {
+		payload  string
+		machine  runtimeinfo.Machine
+		err      error
+		expected string
+	}{
+		"v2 input": {
+			payload:  v2Payload,
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"v1 scan-done input": {
+			payload:  testGetScanDonePayloadString(),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"machine id of the producer": {
+			payload:  testWithMachineID(v2Payload, "producer-machine-id"),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "producer-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"flat id in place of a nested machine of the producer": {
+			payload:  strings.Replace(v2Payload, `"performance"`, `"machine": {"id": "producer-machine-id"}, "performance"`, 1),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"no stable machine id": {
+			payload:  v2Payload,
+			err:      runtimeinfo.ErrNoMachineID,
+			expected: testEnriched(v2Payload, testDefaultPlatformConfiguration),
+		},
 	}
-	for name, payload := range tests {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			// Arrange
 			ctrl := gomock.NewController(t)
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
-			expected := testEnriched(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
-			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
+			ri.EXPECT().GetMachineID().Return(tc.machine, tc.err).AnyTimes()
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, tc.expected), ri)
 
-			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+			// Act
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(tc.payload)})
 
+			// Assert: the mock HTTP client compares the request body with the expected payload
 			require.NoError(t, err)
-		})
-	}
-}
-
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNoMachineKeysInRuntime(t *testing.T) {
-	tests := map[string]string{
-		"v2 input":                       testGetAnalyticsV2PayloadString(),
-		"v1 scan-done input":             testGetScanDonePayloadString(),
-		"machine id of the producer":     testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
-		"nested machine of the producer": strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": {"id": "producer-machine-id"}, "performance"`, 1),
-	}
-	for name, payload := range tests {
-		t.Run(name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			ri := mocks.NewMockRuntimeInfo(ctrl)
-			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
-			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
-			var sent []byte
-			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
-				body, err := io.ReadAll(req.Body)
-				require.NoError(t, err)
-				sent = body
-				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
-			})
-			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, ri)
-
-			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
-
-			require.NoError(t, err)
-			var body struct {
-				Data struct {
-					Attributes struct {
-						Runtime map[string]any `json:"runtime"`
-					} `json:"attributes"`
-				} `json:"data"`
-			}
-			require.NoError(t, json.Unmarshal(sent, &body))
-			require.NotEmpty(t, body.Data.Attributes.Runtime)
-			require.NotContains(t, body.Data.Attributes.Runtime, "machine")
-			require.NotContains(t, body.Data.Attributes.Runtime, "machine_id")
 		})
 	}
 }
@@ -386,24 +375,14 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsUndecodableInputUnchang
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_removesMachineIdFromUndecodableInput(t *testing.T) {
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsMachineIdOfTheProducerOnUndecodableInput(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	expected := testGetUndecodableAnalyticsV2PayloadString()
-	payload := testWithMachineID(expected, "producer-machine-id")
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
+	payload := testWithMachineID(testGetUndecodableAnalyticsV2PayloadString(), "producer-machine-id")
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), nil)
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
 	require.NoError(t, err)
-}
-
-func Test_ReportAnalytics_withoutMachineID_returnsAnEventWithoutOneUnchanged(t *testing.T) {
-	logger := zerolog.New(io.Discard)
-	payload := `{"data": {"type": "analytics", "attributes": {"runtime": {"application": {"name": "snyk-ls"}}}}}`
-
-	output := withoutMachineID(testPayload(payload), &logger)
-
-	require.Equal(t, []byte(payload), output.GetPayload())
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testing.T) {
