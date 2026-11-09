@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -98,4 +99,24 @@ func Test_Register_SetMetadataError_ReturnedWithEntry(t *testing.T) {
 	got, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, catalog.WithLifecycle(catalog.Install))
 	assert.Equal(t, entry, got)
 	assert.ErrorIs(t, err, errEngine)
+}
+
+func Test_Register_WritesLabelsInSortedOrder(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	entry := newMetadataEntry(ctrl)
+	engine := engineReturning(ctrl, entry, nil)
+	names := []string{"zz", "A", "label-name", "Bb", "m.1", "kilo_2", "x", "Abcdefghij", "9lives", "#tag", "z-Z"}
+	calls := make([]*gomock.Call, 0, len(names))
+	for _, name := range slices.Sorted(slices.Values(names)) {
+		calls = append(calls, entry.MockEntryWithMetadata.EXPECT().SetMetadata("label:"+name, "value").Return(nil))
+	}
+	gomock.InOrder(calls...)
+	labelOptions := make([]catalog.RegisterOption, 0, len(names))
+	for _, name := range names {
+		labelOptions = append(labelOptions, func(labels map[string]string) { labels[name] = "value" })
+	}
+
+	_, err := catalog.Register(engine, workflow.NewWorkflowIdentifier("unit"), configOptions(), noopCallback, labelOptions...)
+
+	assert.NoError(t, err)
 }
