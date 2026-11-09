@@ -260,7 +260,7 @@ func (e *EngineImpl) initAnalytics() analytics.Analytics {
 // - id: the workflow identifier
 // - config: the configuration options for the workflow
 // - entryPoint: the entry point function for the workflow
-// If the configuration options cannot be added to the configuration, the workflow is not registered.
+// The workflow is not registered if the ID is not a valid URL or the configuration options cannot be added.
 func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryPoint Callback) (Entry, error) {
 	if entryPoint == nil {
 		return nil, fmt.Errorf("EntryPoint must not be nil")
@@ -272,6 +272,10 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 
 	if id == nil {
 		return nil, fmt.Errorf("ID must not be nil")
+	}
+
+	if _, err := url.Parse(id.String()); err != nil {
+		return nil, fmt.Errorf("invalid workflow ID %q: %w", id.String(), err)
 	}
 
 	flagset := FlagsetFromConfigurationOptions(config)
