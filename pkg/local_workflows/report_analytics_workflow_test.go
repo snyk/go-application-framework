@@ -29,7 +29,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-const testOrgID = "orgId"
+const (
+	testOrgID    = "orgId"
+	testTenantID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+)
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPayloadToApi(t *testing.T) {
 	// setup
@@ -64,66 +67,55 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_withholdsMachineId(t *testing.T) {
-	tests := map[string]string{
-		"v2 input":                   testGetAnalyticsV2PayloadString(),
-		"v1 scan-done input":         testGetScanDonePayloadString(),
-		"machine id of the producer": testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsTheMachineId(t *testing.T) {
+	v2Payload := testGetAnalyticsV2PayloadString()
+	tests := map[string]struct {
+		payload  string
+		machine  runtimeinfo.Machine
+		err      error
+		expected string
+	}{
+		"v2 input": {
+			payload:  v2Payload,
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"v1 scan-done input": {
+			payload:  testGetScanDonePayloadString(),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"machine id of the producer": {
+			payload:  testWithMachineID(v2Payload, "producer-machine-id"),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "producer-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"flat id in place of a nested machine of the producer": {
+			payload:  strings.Replace(v2Payload, `"performance"`, `"machine": {"id": "producer-machine-id"}, "performance"`, 1),
+			machine:  runtimeinfo.Machine{ID: "test-machine-id"},
+			expected: testEnriched(testWithMachineID(v2Payload, "test-machine-id"), testDefaultPlatformConfiguration),
+		},
+		"no stable machine id": {
+			payload:  v2Payload,
+			err:      runtimeinfo.ErrNoMachineID,
+			expected: testEnriched(v2Payload, testDefaultPlatformConfiguration),
+		},
 	}
-	for name, payload := range tests {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			// Arrange
 			ctrl := gomock.NewController(t)
 			ri := mocks.NewMockRuntimeInfo(ctrl)
 			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
-			expected := testEnriched(testGetAnalyticsV2PayloadString(), testDefaultPlatformConfiguration)
-			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), ri)
+			ri.EXPECT().GetMachineID().Return(tc.machine, tc.err).AnyTimes()
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, tc.expected), ri)
 
-			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
+			// Act
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(tc.payload)})
 
+			// Assert: the mock HTTP client compares the request body with the expected payload
 			require.NoError(t, err)
-		})
-	}
-}
-
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNoMachineKeysInRuntime(t *testing.T) {
-	tests := map[string]string{
-		"v2 input":                       testGetAnalyticsV2PayloadString(),
-		"v1 scan-done input":             testGetScanDonePayloadString(),
-		"machine id of the producer":     testWithMachineID(testGetAnalyticsV2PayloadString(), "producer-machine-id"),
-		"nested machine of the producer": strings.Replace(testGetAnalyticsV2PayloadString(), `"performance"`, `"machine": {"id": "producer-machine-id"}, "performance"`, 1),
-	}
-	for name, payload := range tests {
-		t.Run(name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			ri := mocks.NewMockRuntimeInfo(ctrl)
-			ri.EXPECT().GetName().Return("snyk-cli").AnyTimes()
-			ri.EXPECT().GetVersion().Return("1.1233.0").AnyTimes()
-			ri.EXPECT().GetMachineID().Return(runtimeinfo.Machine{ID: "test-machine-id"}, nil).Times(0)
-			var sent []byte
-			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
-				body, err := io.ReadAll(req.Body)
-				require.NoError(t, err)
-				sent = body
-				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
-			})
-			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, ri)
-
-			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
-
-			require.NoError(t, err)
-			var body struct {
-				Data struct {
-					Attributes struct {
-						Runtime map[string]any `json:"runtime"`
-					} `json:"attributes"`
-				} `json:"data"`
-			}
-			require.NoError(t, json.Unmarshal(sent, &body))
-			require.NotEmpty(t, body.Data.Attributes.Runtime)
-			require.NotContains(t, body.Data.Attributes.Runtime, "machine")
-			require.NotContains(t, body.Data.Attributes.Runtime, "machine_id")
 		})
 	}
 }
@@ -383,24 +375,14 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsUndecodableInputUnchang
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_removesMachineIdFromUndecodableInput(t *testing.T) {
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_keepsMachineIdOfTheProducerOnUndecodableInput(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	expected := testGetUndecodableAnalyticsV2PayloadString()
-	payload := testWithMachineID(expected, "producer-machine-id")
-	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, expected), nil)
+	payload := testWithMachineID(testGetUndecodableAnalyticsV2PayloadString(), "producer-machine-id")
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, testGetMockHTTPClient(t, payload), nil)
 
 	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(payload)})
 
 	require.NoError(t, err)
-}
-
-func Test_ReportAnalytics_withoutMachineID_returnsAnEventWithoutOneUnchanged(t *testing.T) {
-	logger := zerolog.New(io.Discard)
-	payload := `{"data": {"type": "analytics", "attributes": {"runtime": {"application": {"name": "snyk-ls"}}}}}`
-
-	output := withoutMachineID(testPayload(payload), &logger)
-
-	require.Equal(t, []byte(payload), output.GetPayload())
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_rejectsInvalidInput(t *testing.T) {
@@ -497,6 +479,103 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
 	require.Error(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsToTheTenantWhenThereIsNoOrg(t *testing.T) {
+	tests := map[string]struct {
+		org         string
+		orgErr      error
+		tenant      string
+		expectedURI string
+	}{
+		"org and tenant": {
+			org:         testOrgID,
+			tenant:      testTenantID,
+			expectedURI: "/hidden/orgs/" + testOrgID + "/analytics?version=2024-10-15",
+		},
+		"tenant without org": {
+			tenant:      testTenantID,
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+		"tenant when the org lookup fails": {
+			orgErr:      errors.New("org lookup failed"),
+			tenant:      testTenantID,
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+		"uppercase tenant": {
+			tenant:      strings.ToUpper(testTenantID),
+			expectedURI: "/hidden/tenants/" + testTenantID + "/analytics?version=2024-10-15",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			var requestURIs []string
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				requestURIs = append(requestURIs, req.URL.RequestURI())
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), tc.org, tc.orgErr, tc.tenant, nil)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
+
+			require.NoError(t, err)
+			require.Equal(t, []string{tc.expectedURI}, requestURIs)
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAValidTenant(t *testing.T) {
+	orgErr := errors.New("org lookup failed")
+	tenantErr := errors.New("tenant lookup failed")
+	tests := map[string]struct {
+		orgErr       error
+		tenant       string
+		tenantErr    error
+		expectedErrs []error
+	}{
+		"neither org nor tenant":                  {},
+		"org lookup fails and no tenant":          {orgErr: orgErr, expectedErrs: []error{orgErr}},
+		"tenant lookup fails":                     {tenantErr: tenantErr, expectedErrs: []error{tenantErr}},
+		"org and tenant lookups fail":             {orgErr: orgErr, tenantErr: tenantErr, expectedErrs: []error{orgErr, tenantErr}},
+		"tenant that is not a UUID":               {tenant: "../orgs/" + testTenantID},
+		"tenant that is a bare word":              {tenant: "my-tenant"},
+		"org lookup fails and tenant is not UUID": {orgErr: orgErr, tenant: "my-tenant"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+				t.Errorf("unexpected request to %s", req.URL)
+				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+			})
+			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", tc.orgErr, tc.tenant, tc.tenantErr)
+
+			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
+
+			require.Error(t, err)
+			for _, expectedErr := range tc.expectedErrs {
+				require.ErrorIs(t, err, expectedErr)
+			}
+			require.NotContains(t, err.Error(), "is not a string", "an unset tenant is not an invalid one")
+		})
+	}
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_succeedsWithoutInputWhenThereIsNoOrgOrTenant(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := testutils.NewTestClient(func(req *http.Request) *http.Response {
+		t.Errorf("unexpected request to %s", req.URL)
+		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
+	})
+	invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
+	testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", nil, "", nil)
+
+	_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{})
+
+	require.NoError(t, err)
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T) {
@@ -746,6 +825,23 @@ func testReportAnalyticsInvocationContext(t *testing.T, ctrl *gomock.Controller,
 	invocationCtx.EXPECT().GetRuntimeInfo().Return(ri).AnyTimes()
 	invocationCtx.EXPECT().Context().Return(t.Context()).AnyTimes()
 	return invocationCtx
+}
+
+// testSetOrgAndTenant replaces the org of a test configuration, failing its lookup with orgErr when set, and sets the
+// tenant, failing its lookup with tenantErr when set.
+func testSetOrgAndTenant(config configuration.Configuration, org string, orgErr error, tenant string, tenantErr error) {
+	config.Unset(configuration.ORGANIZATION)
+	config.AddDefaultValue(configuration.ORGANIZATION, func(_ configuration.Configuration, _ any) (any, error) {
+		return org, orgErr
+	})
+	if tenant != "" {
+		config.Set(configuration.TENANT, tenant)
+	}
+	if tenantErr != nil {
+		config.AddDefaultValue(configuration.TENANT, func(_ configuration.Configuration, _ any) (any, error) {
+			return "", tenantErr
+		})
+	}
 }
 
 // testWithMachineID returns the v2 payload with runtime.machine_id set, in the key order the workflow encodes it.

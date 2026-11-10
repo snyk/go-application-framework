@@ -79,7 +79,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), reportAnalyticsAPIVersion)
+	url, urlErr := analyticsURL(config)
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
@@ -142,10 +142,12 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 
 		input = enrichV2Event(invocationCtx, input)
-		// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID in enrichV2Event and drop this call
-		input = withoutMachineID(input, logger)
 
 		logger.Printf("[%d] Data: %s", i, input.GetPayload())
+
+		if urlErr != nil {
+			return nil, urlErr
+		}
 
 		// send to V2 analytics endpoint
 		callErr := callEndpoint(invocationCtx, input, url)
@@ -155,6 +157,28 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 	}
 	return nil, nil
+}
+
+// analyticsURL returns the analytics endpoint of the organization, or of the tenant when there is no organization.
+func analyticsURL(config configuration.Configuration) (string, error) {
+	apiURL := config.GetString(configuration.API_URL)
+	orgID, orgErr := config.GetStringWithError(configuration.ORGANIZATION)
+	if orgErr == nil && orgID != "" {
+		return fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", apiURL, orgID, reportAnalyticsAPIVersion), nil
+	}
+
+	// unlike GetStringWithError, GetWithError reports no error for an unset tenant
+	tenantValue, tenantErr := config.GetWithError(configuration.TENANT)
+	tenantID, isString := tenantValue.(string)
+	if tenantErr != nil || !isString || tenantID == "" {
+		return "", errors.Join(errors.New("no organization or tenant to send analytics to"), orgErr, tenantErr)
+	}
+	// the tenant can be set to any string, and it goes into the request path
+	tenantUUID, err := uuid.Parse(tenantID)
+	if err != nil {
+		return "", fmt.Errorf("the tenant to send analytics to is not a UUID: %w", err)
+	}
+	return fmt.Sprintf("%s/hidden/tenants/%s/analytics?version=%s", apiURL, tenantUUID, reportAnalyticsAPIVersion), nil
 }
 
 // enrichV2Event adds the runtime fields GAF knows to a v2 event without overwriting values the producer set.
@@ -177,6 +201,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	if body.Data.Attributes.Runtime == nil {
 		body.Data.Attributes.Runtime = &api.Runtime{}
 	}
+	addMachineID(body.Data.Attributes.Runtime, invocationCtx.GetRuntimeInfo(), logger)
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
 	addOSName(body.Data.Attributes.Runtime.Platform, osname.Get())
 
@@ -186,44 +211,6 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 		return input
 	}
 	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
-}
-
-// withoutMachineID removes runtime.machine_id from a v2 event and returns an event without one unchanged.
-func withoutMachineID(input workflow.Data, logger *zerolog.Logger) workflow.Data {
-	payload, ok := input.GetPayload().([]byte)
-	if !ok {
-		return input
-	}
-	var body map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.UseNumber()
-	if err := decoder.Decode(&body); err != nil {
-		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
-		return input
-	}
-	rt := runtimeOf(body)
-	if _, ok := rt["machine_id"]; !ok {
-		return input
-	}
-	delete(rt, "machine_id")
-
-	stripped, err := json.Marshal(body)
-	if err != nil {
-		logger.Printf("Sending the event unchanged, failed to encode it: %v", err)
-		return input
-	}
-	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), stripped, workflow.WithLogger(logger))
-}
-
-func runtimeOf(body map[string]any) map[string]any {
-	if data, ok := body["data"].(map[string]any); ok {
-		if attributes, ok := data["attributes"].(map[string]any); ok {
-			if rt, ok := attributes["runtime"].(map[string]any); ok {
-				return rt
-			}
-		}
-	}
-	return nil
 }
 
 func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {

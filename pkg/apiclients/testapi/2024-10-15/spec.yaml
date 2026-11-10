@@ -2244,6 +2244,15 @@ components:
       type: object
     ScaScanConfiguration:
       description: Scan configuration parameters for the SCA scanner.
+      properties:
+        reachability_analysis:
+          description: |-
+            Explicitly request (true) or skip (false) Reachability analysis for
+            this SCA scan.
+
+            When omitted (e.g. older clients), Reachability analysis is performed
+            if the Test Resources include both an SBOM and a Source upload.
+          type: boolean
       type: object
     ScanConfiguration:
       description: |-

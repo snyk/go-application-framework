@@ -31,6 +31,7 @@ func newTenantTestEngine(t *testing.T, config configuration.Configuration, serve
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	server.RegisterPAT(testUserToken)
 	config.Set(configuration.API_URL, server.URL)
 	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(log.New(io.Discard, "", 0)))
 	require.NoError(t, engine.Init())
