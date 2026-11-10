@@ -2444,7 +2444,7 @@ func Test_NewStartTestParamsFromResources(t *testing.T) {
 	testData := setupTestScenarioWithResources(t)
 	riskScoreThreshold := uint16(750)
 	localPolicy := &testapi.LocalPolicy{RiskScoreThreshold: &riskScoreThreshold}
-	scaScanConfig := testapi.ScaScanConfiguration{"package_manifests": []string{"package.json"}}
+	scaScanConfig := testapi.ScaScanConfiguration{ReachabilityAnalysis: utils.Ptr(true)}
 	scanConfig := &testapi.ScanConfiguration{Sca: &scaScanConfig}
 	config := &testapi.TestConfiguration{LocalPolicy: localPolicy, ScanConfig: scanConfig}
 
@@ -2535,9 +2535,7 @@ func Test_StartTest_Error_ScanConfigWithSubject(t *testing.T) {
 
 	// Arrange
 	testSubject := newDepGraphTestSubject(t)
-	scaScanConfig := testapi.ScaScanConfiguration{
-		"package_manifests": []string{"package.json"},
-	}
+	scaScanConfig := testapi.ScaScanConfiguration{ReachabilityAnalysis: utils.Ptr(true)}
 	scanConfig := &testapi.ScanConfiguration{
 		Sca: &scaScanConfig,
 	}
@@ -2566,9 +2564,7 @@ func Test_StartTestWithResources_WithScanConfig_Success(t *testing.T) {
 	testData := setupTestScenarioWithResources(t)
 
 	// Define ScanConfig
-	scaScanConfig := testapi.ScaScanConfiguration{
-		"package_manifests": []string{"package.json"},
-	}
+	scaScanConfig := testapi.ScaScanConfiguration{ReachabilityAnalysis: utils.Ptr(true)}
 	scanConfig := &testapi.ScanConfiguration{
 		Sca: &scaScanConfig,
 	}
@@ -2834,9 +2830,7 @@ func Test_StartTestWithResources_WithLocalPolicyAndScanConfig_Success(t *testing
 	}
 
 	// Define ScanConfig
-	scaScanConfig := testapi.ScaScanConfiguration{
-		"package_manifests": []string{"package.json"},
-	}
+	scaScanConfig := testapi.ScaScanConfiguration{ReachabilityAnalysis: utils.Ptr(true)}
 	scanConfig := &testapi.ScanConfiguration{
 		Sca: &scaScanConfig,
 	}

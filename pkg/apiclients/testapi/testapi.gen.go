@@ -1610,7 +1610,14 @@ type SbomSubject struct {
 type SbomSubjectType string
 
 // ScaScanConfiguration Scan configuration parameters for the SCA scanner.
-type ScaScanConfiguration = map[string]interface{}
+type ScaScanConfiguration struct {
+	// ReachabilityAnalysis Explicitly request (true) or skip (false) Reachability analysis for
+	// this SCA scan.
+	//
+	// When omitted (e.g. older clients), Reachability analysis is performed
+	// if the Test Resources include both an SBOM and a Source upload.
+	ReachabilityAnalysis *bool `json:"reachability_analysis,omitempty"`
+}
 
 // ScanConfiguration A map of scanner types to their specific set of
 // configuration parameters.
