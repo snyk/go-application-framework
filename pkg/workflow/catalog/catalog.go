@@ -12,6 +12,7 @@ package catalog
 import (
 	"errors"
 
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -68,7 +69,8 @@ func Register(engine workflow.Engine, id workflow.Identifier, config workflow.Co
 	if !ok {
 		return entry, ErrMetadataUnsupported
 	}
-	for name, value := range labels {
+	for _, name := range utils.SortedMapKeys(labels) {
+		value := labels[name]
 		if err := withMetadata.SetMetadata(labelPrefix+name, value); err != nil {
 			return entry, err
 		}
