@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
@@ -714,15 +715,11 @@ func GetGlobalConfiguration() ConfigurationOptions {
 	return ConfigurationOptionsFromFlagset(globalFLags)
 }
 
-// errProfileWithoutConfig is returned when a registry gives a profile without a configuration.
-var errProfileWithoutConfig = errors.New("profile has no configuration")
-
-// errProfileDirNotConfigured is returned when the profile directory is not set on the configuration of the engine. The
-// application sets a default, see pkg/app.
-var errProfileDirNotConfigured = errors.New("profile directory is not configured")
-
-// errEngineWithoutProfiles is returned by GetProfileRegistry for an engine that does not support profiles.
-var errEngineWithoutProfiles = errors.New("engine does not support profiles")
+func profilesUnavailableError(reason string) error {
+	return cli.NewConfigProfilesUnavailableError(
+		fmt.Sprintf("Profiles are unavailable: %s.", reason),
+	)
+}
 
 // profileRegistryProvider is implemented by the engines that own a profile registry.
 type profileRegistryProvider interface {
@@ -756,7 +753,7 @@ func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invo
 		return e.failedInvocationProfile(), true, err
 	}
 	if p == nil || p.Configuration() == nil {
-		return e.failedInvocationProfile(), true, fmt.Errorf("profile %q has no configuration: %w", name, errProfileWithoutConfig)
+		return e.failedInvocationProfile(), true, profilesUnavailableError(fmt.Sprintf("profile %q has no configuration", name))
 	}
 	if p.Name() == profile.DefaultName {
 		return nil, false, nil
@@ -775,7 +772,7 @@ func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invo
 func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 	provider, ok := engine.(profileRegistryProvider)
 	if !ok {
-		return nil, errEngineWithoutProfiles
+		return nil, profilesUnavailableError("the engine does not support profiles")
 	}
 	return provider.profileRegistry()
 }
@@ -787,15 +784,12 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	dir := e.config.GetString(profile.DirKey)
-	if dir == "" {
-		return nil, fmt.Errorf("%w: set %s", errProfileDirNotConfigured, profile.DirKey)
-	}
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
 	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
 	if err != nil {
-		return nil, fmt.Errorf("cannot create profile registry: %w", err)
+		return nil, err
 	}
 	e.profiles, e.profilesDir = registry, dir
 	return registry, nil
