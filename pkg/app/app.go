@@ -196,6 +196,9 @@ func lookupTenantId(engine workflow.Engine, c configuration.Configuration, apiCl
 	if err != nil {
 		return "", err
 	}
+	if orgId == "" {
+		return "", errors.New("no organization to look up the tenant of")
+	}
 	return apiClient.GetTenantIdFromOrgId(context.Background(), orgId)
 }
 

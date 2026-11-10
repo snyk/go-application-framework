@@ -229,6 +229,18 @@ func Test_TenantID_OrgThatNamesNoTenantReportsAnError(t *testing.T) {
 	assert.Equal(t, 1, server.OrgRequests())
 }
 
+func Test_TenantID_UserWithNoDefaultOrgReportsAnError(t *testing.T) {
+	server := fakeapi.NewServer(t)
+	config := configuration.NewWithOpts()
+	config.Set(configuration.AUTHENTICATION_TOKEN, testUserToken)
+	newTenantTestEngine(t, config, server)
+
+	tenantID, err := config.GetWithError(configuration.TENANT)
+
+	assert.ErrorContains(t, err, "no organization to look up the tenant of")
+	assert.Empty(t, tenantID)
+}
+
 func Test_TenantID_FailedOrgLookupReportsTheError(t *testing.T) {
 	server := fakeapi.NewServer(t)
 	config := configuration.NewWithOpts()
