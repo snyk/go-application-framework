@@ -2,6 +2,7 @@ package fileupload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -25,6 +26,7 @@ type HTTPClient struct {
 	logger                       *zerolog.Logger
 	pathEncoder                  PathEncoder
 	contentTranscoder            ContentTranscoder
+	largeFileUpload              bool
 }
 
 // Client defines the interface for the high level file upload client.
@@ -36,6 +38,11 @@ var _ Client = (*HTTPClient)(nil)
 
 // NewClient creates a new high-level file upload client.
 func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
+	return newHTTPClient(httpClient, cfg, opts...)
+}
+
+// newHTTPClient builds an HTTPClient with all defaults applied; shared by the client constructors.
+func newHTTPClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient {
 	client := &HTTPClient{
 		cfg: cfg,
 	}
@@ -81,6 +88,7 @@ func (c *HTTPClient) addPathsToRevision(
 	rootPath string,
 	pathsChan <-chan string,
 ) (UploadResult, error) {
+	limits := c.uploadRevisionSealableClient.GetLimits()
 	res := UploadResult{
 		RevisionID:   revisionID,
 		SkippedFiles: make([]SkippedFile, 0),
@@ -115,7 +123,7 @@ func (c *HTTPClient) addPathsToRevision(
 		filePathLengthFilter,
 	}
 
-	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, c.pathEncoder, c.contentTranscoder, filters...) {
+	for batchResult := range batchPaths(rootPath, pathsChan, limits, c.logger, c.pathEncoder, c.contentTranscoder, filters...) {
 		res.SkippedFiles = append(res.SkippedFiles, batchResult.skippedFiles...)
 
 		err := c.uploadBatch(ctx, revisionID, batchResult.batch)
@@ -124,6 +132,30 @@ func (c *HTTPClient) addPathsToRevision(
 		}
 
 		res.UploadedFilesCount += len(batchResult.batch.files)
+	}
+
+	if c.largeFileUpload {
+		var sizeErr *FileSizeLimitError
+
+		remaining := make([]SkippedFile, 0, len(res.SkippedFiles))
+
+		for i, sk := range res.SkippedFiles {
+			if !errors.As(sk.Reason, &sizeErr) {
+				remaining = append(remaining, sk)
+				continue
+			}
+
+			chErr := c.uploadLargeFileChunked(ctx, revisionID, rootPath, sk.Path, limits)
+			if chErr != nil {
+				// keep the failed and not yet processed files reported as skipped
+				res.SkippedFiles = append(remaining, res.SkippedFiles[i:]...)
+				return res, chErr
+			}
+
+			res.UploadedFilesCount++
+		}
+
+		res.SkippedFiles = remaining
 	}
 
 	return res, nil
