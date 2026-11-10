@@ -1,10 +1,11 @@
 // Package lifecycle_workflow registers the install and uninstall workflows. They run the steps that extensions provide for
-// a lifecycle: the workflows labeled with that lifecycle. GAF installs nothing itself.
+// a lifecycle: the workflows labeled with that lifecycle. GAF installs nothing itself. Both workflows are experimental.
 package lifecycle_workflow
 
 import (
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow/catalog"
 )
@@ -20,11 +21,12 @@ var (
 	WORKFLOWID_UNINSTALL workflow.Identifier = workflow.NewWorkflowIdentifier(uninstallWorkflowName)
 )
 
-// InitLifecycleWorkflows registers the install and uninstall workflows with the engine.
+// InitLifecycleWorkflows registers the install and uninstall workflows with the engine. Both are experimental, so the
+// CLI requires --experimental to run them.
 func InitLifecycleWorkflows(engine workflow.Engine) error {
 	_, err := engine.Register(
 		WORKFLOWID_INSTALL,
-		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet(installWorkflowName, pflag.ExitOnError)),
+		workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(pflag.NewFlagSet(installWorkflowName, pflag.ExitOnError))),
 		lifecycleEntryPoint(catalog.Install),
 	)
 	if err != nil {
@@ -33,7 +35,7 @@ func InitLifecycleWorkflows(engine workflow.Engine) error {
 
 	_, err = engine.Register(
 		WORKFLOWID_UNINSTALL,
-		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet(uninstallWorkflowName, pflag.ExitOnError)),
+		workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(pflag.NewFlagSet(uninstallWorkflowName, pflag.ExitOnError))),
 		lifecycleEntryPoint(catalog.Uninstall),
 	)
 	return err
