@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -33,7 +33,7 @@ func newPrivateKeyAuthEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	config := openFileBackedConfig(opts...)
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -47,7 +47,7 @@ func newPrivateKeyAuthEnv(t *testing.T, opts ...configuration.Opts) *enrollEnv {
 
 // issueClientKey registers a client with the fake service, as enrolling elsewhere does, and returns
 // the PEM of its key.
-func issueClientKey(t *testing.T, server *enrollmenttest.Server, clientID string) string {
+func issueClientKey(t *testing.T, server *fakeapi.Server, clientID string) string {
 	t.Helper()
 	key, err := machineenrollment.GenerateKey()
 	require.NoError(t, err)

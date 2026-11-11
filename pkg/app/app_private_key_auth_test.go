@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -27,13 +27,13 @@ func newFileBackedAppEngine(t *testing.T) workflow.Engine {
 
 // newPrivateKeyLoginServer isolates the user's configuration and returns a fake service that knows
 // client-1, and the PEM of client-1's key.
-func newPrivateKeyLoginServer(t *testing.T) (*enrollmenttest.Server, string) {
+func newPrivateKeyLoginServer(t *testing.T) (*fakeapi.Server, string) {
 	t.Helper()
 	configtest.IsolateEnvironmentForTest(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	key, err := machineenrollment.GenerateKey()
 	require.NoError(t, err)
 	server.RegisterClient("client-1", &key.PublicKey)

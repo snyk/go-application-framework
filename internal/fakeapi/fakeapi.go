@@ -1,7 +1,8 @@
-// Package enrollmenttest provides a test double for the enrollment service: a fake API server
-// that implements the enrollment (by device token and by fleet key) and token endpoints as the
-// service's enrollment spec defines them, and independently verifies everything the client signs.
-package enrollmenttest
+// Package fakeapi provides a fake Snyk API server for tests. It serves machine enrollment, tokens,
+// whoami, the machine's and the authenticated principal's own records, and organizations. It
+// independently verifies everything the client signs, so a client bug cannot pass by agreeing with
+// itself.
+package fakeapi
 
 import (
 	"crypto"
@@ -88,6 +89,12 @@ type Server struct {
 	pats              map[string]bool
 	next              int
 	errorTitles       atomic.Bool
+	tenantID          string
+	machineSelfStatus int
+	machineSelfCalls  int
+	defaultOrgID      string
+	orgTenants        map[string]string // org id -> tenant id, "" for an org whose record names no tenant
+	orgCalls          int
 }
 
 type fleetKey struct {
@@ -116,13 +123,16 @@ func NewServer(t *testing.T) *Server {
 		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
+		orgTenants:   map[string]string{},
 		pats:         map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
+	mux.HandleFunc("GET /rest/machines/self", s.machineSelf)
 	mux.HandleFunc("GET /rest/self", s.self)
+	mux.HandleFunc("GET /rest/orgs/{org_id}", s.org)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -163,6 +173,49 @@ func (s *Server) BearerTokens() []string {
 // SetErrorTitles sets whether enrollment error responses carry a JSON:API title.
 func (s *Server) SetErrorTitles(on bool) {
 	s.errorTitles.Store(on)
+}
+
+// SetTenantID sets the tenant the machine's own record names.
+func (s *Server) SetTenantID(tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tenantID = tenantID
+}
+
+// FailMachineSelf makes the machine's own record answer with status and a JSON:API error, whoever asks.
+func (s *Server) FailMachineSelf(status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.machineSelfStatus = status
+}
+
+// MachineSelfRequests returns how many requests reached the machine's own record, answered or not.
+func (s *Server) MachineSelfRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.machineSelfCalls
+}
+
+// SetDefaultOrg sets the organization the principal's own record names as its default.
+func (s *Server) SetDefaultOrg(orgID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultOrgID = orgID
+}
+
+// AddOrg makes the organization record for orgID exist, naming tenantID as its tenant, or no
+// tenant if tenantID is empty.
+func (s *Server) AddOrg(orgID, tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orgTenants[orgID] = tenantID
+}
+
+// OrgRequests returns how many requests reached an organization record, answered or not.
+func (s *Server) OrgRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.orgCalls
 }
 
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
@@ -279,7 +332,7 @@ func (s *Server) machineByID(id string) *machine {
 			return m
 		}
 	}
-	panic("enrollmenttest: unknown machine " + id)
+	panic("fakeapi: unknown machine " + id)
 }
 
 // parseRequest checks the request against the spec and returns its attributes, or writes the error
@@ -617,13 +670,72 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
 }
 
+func (s *Server) machineSelf(w http.ResponseWriter, r *http.Request) {
+	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	s.mu.Lock()
+	s.machineSelfCalls++
+	clientID, issued := s.tokens[bearer]
+	tenantID, failStatus := s.tenantID, s.machineSelfStatus
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-10-15":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case failStatus != 0:
+		s.writeError(w, failStatus, "", http.StatusText(failStatus))
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !found || !issued:
+		s.writeError(w, http.StatusBadRequest, "", "Only a machine can read its own record.")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"jsonapi": map[string]any{"version": "1.0"},
+			"links":   map[string]any{"self": r.URL.Path},
+			"data": map[string]any{
+				"id": clientID, "type": "machine",
+				"attributes": map[string]any{"tenant_id": tenantID, "status": "active", "enrolled": true},
+			},
+		})
+	}
+}
+
 func (s *Server) self(w http.ResponseWriter, r *http.Request) {
-	pat, found := strings.CutPrefix(r.Header.Get("Authorization"), "token ")
-	if !found || !s.knowsPAT(pat) {
+	auth := r.Header.Get("Authorization")
+	if pat, isPAT := strings.CutPrefix(auth, "token "); auth == "" || isPAT && !s.knowsPAT(pat) {
 		s.writeError(w, http.StatusUnauthorized, "", "The token is missing or not valid.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"attributes": map[string]any{"username": "pat-user"}}})
+	s.mu.Lock()
+	defaultOrgID := s.defaultOrgID
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonapi": map[string]any{"version": "1.0"},
+		"data": map[string]any{
+			"id": "self", "type": "user",
+			"attributes": map[string]any{"username": "pat-user", "default_org_context": defaultOrgID},
+		},
+	})
+}
+
+func (s *Server) org(w http.ResponseWriter, r *http.Request) {
+	orgID := r.PathValue("org_id")
+	s.mu.Lock()
+	s.orgCalls++
+	tenantID, exists := s.orgTenants[orgID]
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-03-12":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !exists:
+		s.writeError(w, http.StatusNotFound, "", "The organization was not found.")
+	default:
+		data := map[string]any{"id": orgID, "type": "org", "attributes": map[string]any{"slug": orgID}}
+		if tenantID != "" {
+			data["relationships"] = map[string]any{"tenant": map[string]any{"data": map[string]any{"id": tenantID, "type": "tenant"}}}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": data})
+	}
 }
 
 func (s *Server) hasIssued(accessToken string) bool {
@@ -748,7 +860,7 @@ func thumbprintRSA(pub *rsa.PublicKey) string {
 func thumbprintEC(pub *ecdsa.PublicKey) string {
 	b, err := pub.Bytes()
 	if err != nil || pub.Curve != elliptic.P256() {
-		panic("enrollmenttest: not a P-256 key")
+		panic("fakeapi: not a P-256 key")
 	}
 	canonical := fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`,
 		base64.RawURLEncoding.EncodeToString(b[1:33]), base64.RawURLEncoding.EncodeToString(b[33:]))
