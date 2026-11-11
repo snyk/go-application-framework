@@ -46,3 +46,11 @@ func WithContentTranscoder(transcode ContentTranscoder) Option {
 		h.contentTranscoder = transcode
 	}
 }
+
+// WithLargeFileUpload allows uploading files larger than the max file size in chunks of the max size
+// chunks should be reassembled by the consumer itself
+func WithLargeFileUpload(enabled bool) Option {
+	return func(h *HTTPClient) {
+		h.largeFileUpload = enabled
+	}
+}
