@@ -60,14 +60,24 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 }
 
 func scopeOfGlob(glob string) globScope {
-	pattern := strings.TrimPrefix(glob, "!")
-	if strings.HasPrefix(pattern, "#") || strings.HasPrefix(pattern, "/**/") {
+	pattern := strings.TrimRight(glob, "\r")
+	if strings.HasPrefix(pattern, "#") {
+		return globScope{}
+	}
+
+	pattern = strings.TrimPrefix(strings.Trim(pattern, " "), "!")
+	if strings.HasPrefix(pattern, "#") || strings.HasPrefix(pattern, "!") || strings.HasPrefix(pattern, "/**/") {
 		return globScope{}
 	}
 
 	literalEnd := strings.IndexAny(pattern, globLiteralEnd)
 	if literalEnd == -1 {
 		literalEnd = len(pattern)
+	}
+
+	// go-gitignore compiles a "/**" that is not "/**/" to "(|/.*)", so "dir/**" also matches a file named "dir".
+	if literalEnd > 0 && strings.HasPrefix(pattern[literalEnd-1:], "/**") && !strings.HasPrefix(pattern[literalEnd-1:], "/**/") {
+		literalEnd--
 	}
 
 	dir := pattern[:strings.LastIndex(pattern[:literalEnd], "/")+1]

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"math/rand"
+	"strings"
 	"testing"
 
 	gitignore "github.com/sabhiram/go-gitignore"
@@ -26,6 +28,12 @@ func TestScopeOfGlob(t *testing.T) {
 		{glob: "**/.git/**", expected: globScope{}},
 		{glob: "foo", expected: globScope{}},
 		{glob: "#gitignore:/repo/a/foo", expected: globScope{}},
+		{glob: "/repo/a/bin/**", expected: globScope{dir: "/repo/a/", anchored: true}},
+		{glob: "repo/bin/**", expected: globScope{dir: "repo/", anchored: false}},
+		{glob: "/repo/a/**/**", expected: globScope{dir: "/repo/a/", anchored: true}},
+		{glob: " /repo/a/foo ", expected: globScope{dir: "/repo/a/", anchored: true}},
+		{glob: "/repo/a/foo\r", expected: globScope{dir: "/repo/a/", anchored: true}},
+		{glob: "!!/repo/a/foo", expected: globScope{}},
 	}
 
 	for _, tt := range tests {
@@ -59,6 +67,8 @@ func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
 				"!/repo/stamps/s/.terragrunt-cache/h1/h2/**/main.tf",
 				"#gitignore:/repo/a/**/*.md",
 				"relative/**/*.log",
+				"/repo/bin/**",
+				" /repo/padded/** ",
 			},
 			paths: []string{
 				"/repo/main.go",
@@ -80,6 +90,9 @@ func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
 				"/repo/a/doc.md",
 				"/repo/relative/deep/x.log",
 				"/other/relative/x.log",
+				"/repo/bin",
+				"/repo/bin/tool",
+				"/repo/padded/x.go",
 			},
 		},
 		{
@@ -95,6 +108,7 @@ func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
 				"!a/b/c/**/*.txt",
 				"stamps/s/.terragrunt-cache/h1/h2/**/*.tfvars",
 				"!stamps/s/.terragrunt-cache/h1/h2/**/main.tf",
+				"bin/**",
 			},
 			paths: []string{
 				"main.go",
@@ -113,6 +127,9 @@ func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
 				"x/stamps/s/.terragrunt-cache/h1/h2/main.tf",
 				"stamps/s/.terragrunt-cache/h1/h2/vars.tfvars",
 				"stamps/t/.terragrunt-cache/h1/h2/main.tf",
+				"bin",
+				"q/bin",
+				"q/bin/tool",
 			},
 		},
 	}
@@ -125,6 +142,45 @@ func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
 			t.Run(tt.name+"/"+path, func(t *testing.T) {
 				assert.Equal(t, expected.MatchesPath(path), actual.MatchesPath(path))
 			})
+		}
+	}
+}
+
+func TestScopedMatcher_matchesUnscopedMatcherForGeneratedGlobs(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	names := []string{"a", "b", "bin", "foo", "x.txt", "a(b)", "a+b", "c d", "*.txt", "?", "[ab]", "**", "a/b", "foo/**", "**/foo"}
+	bases := []string{".", "/repo", "/repo/a", "repo/a", " a", "a ", "/r(x)", "/r+x", "//srv/share"}
+	pick := func(s []string) string { return s[r.Intn(len(s))] }
+
+	for i := 0; i < 2000; i++ {
+		var globs []string
+		for range 1 + r.Intn(6) {
+			rule := pick(names)
+			switch r.Intn(4) {
+			case 0:
+				rule = "/" + rule
+			case 1:
+				rule += "/"
+			case 2:
+				rule = "!" + rule
+			}
+			globs = append(globs, parseIgnoreRuleToGlobs(rule, pick(bases), defaultInvalidRules, r.Intn(2) == 0)...)
+		}
+
+		expected := gitignore.CompileIgnoreLines(globs...)
+		actual := newScopedMatcher(globs)
+		for range 20 {
+			parts := []string{}
+			if base := pick(bases); base != "." {
+				parts = append(parts, base)
+			}
+			for range 1 + r.Intn(4) {
+				parts = append(parts, strings.Trim(pick(names), "/*?[]!"))
+			}
+			path := strings.Join(parts, "/")
+			if expected.MatchesPath(path) != actual.MatchesPath(path) {
+				t.Fatalf("path %q, globs %q: expected %v", path, globs, expected.MatchesPath(path))
+			}
 		}
 	}
 }
