@@ -337,10 +337,15 @@ The commit type is used to summarize intent and to automate various steps.
 | docs            | Changes to documentation for existing features.  		| none         |
 | chore           | Build, workflow and pipeline changes.            		| none         |
 | revert          | Reverting a previous commit.                     		| patch        |
-| _any type_**!** | Appending a ! to any type denotes a breaking change.	| major        |
+
+There is no breaking-change type: see [Handling breaking changes](#handling-breaking-changes).
 
 ### Handling breaking changes
 
-A major version bump is automatically triggered in one of two ways:
-- The ! Modifier: Append a ! directly after the commit type (e.g.: feat!).
-- The Footer Message: Include `BREAKING CHANGE:` in the commit footer, followed by a description of the change.
+GAF stays below version 1.0.0 so that its stability guarantees are clear: the public API can still change. Avoid breaking changes where reasonable, but accept deliberate ones. Iterating sometimes means removing something added shortly before, and keeping it only to avoid a break is not worthwhile.
+
+- **Prefer additive changes** (new function, optional field, functional option) and keep the old path working.
+- **Keep breaks small and deliberate**, for example removing or reshaping recently added API with no known consumers.
+- **Never use `!` or a `BREAKING CHANGE:` footer.** Both bump the major version. Use the normal type (`feat` for minor, `fix` for patch).
+- **Flag the break in the PR description** under "Breaking change": what changed and how consumers migrate.
+- **Check known consumers** (such as the CLI). The PR template's CLI steps cover this.
