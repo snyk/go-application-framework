@@ -4,7 +4,14 @@
 package v20241015
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -268,11 +275,20 @@ type Target struct {
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
 
+// TenantId defines model for TenantId.
+type TenantId = openapi_types.UUID
+
 // Version Requested API version
 type Version = QueryVersion
 
 // N400 defines model for 400.
 type N400 = ErrorDocument
+
+// N401 defines model for 401.
+type N401 = ErrorDocument
+
+// N403 defines model for 403.
+type N403 = ErrorDocument
 
 // N404 defines model for 404.
 type N404 = ErrorDocument
@@ -280,14 +296,26 @@ type N404 = ErrorDocument
 // N500 defines model for 500.
 type N500 = ErrorDocument
 
+// AnalyticsCreated defines model for AnalyticsCreated.
+type AnalyticsCreated = map[string]interface{}
+
 // CreateAnalyticsParams defines parameters for CreateAnalytics.
 type CreateAnalyticsParams struct {
 	// Version The requested version of the endpoint to process the request
 	Version Version `form:"version" json:"version"`
 }
 
+// CreateTenantAnalyticsParams defines parameters for CreateTenantAnalytics.
+type CreateTenantAnalyticsParams struct {
+	// Version The requested version of the endpoint to process the request
+	Version Version `form:"version" json:"version"`
+}
+
 // CreateAnalyticsJSONRequestBody defines body for CreateAnalytics for application/json ContentType.
 type CreateAnalyticsJSONRequestBody = AnalyticsRequestBody
+
+// CreateTenantAnalyticsJSONRequestBody defines body for CreateTenantAnalytics for application/json ContentType.
+type CreateTenantAnalyticsJSONRequestBody = AnalyticsRequestBody
 
 // AsLinkProperty0 returns the union data inside the LinkProperty as a LinkProperty0
 func (t LinkProperty) AsLinkProperty0() (LinkProperty0, error) {
@@ -349,4 +377,781 @@ func (t LinkProperty) MarshalJSON() ([]byte, error) {
 func (t *LinkProperty) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
+}
+
+// RequestEditorFn  is the function signature for the RequestEditor callback function
+type RequestEditorFn func(ctx context.Context, req *http.Request) error
+
+// Doer performs HTTP requests.
+//
+// The standard http.Client implements this interface.
+type HttpRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Client which conforms to the OpenAPI3 specification for this service.
+type Client struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	// Doer for performing requests, typically a *http.Client with any
+	// customized settings, such as certificate chains.
+	Client HttpRequestDoer
+
+	// A list of callbacks for modifying requests which are generated before sending over
+	// the network.
+	RequestEditors []RequestEditorFn
+}
+
+// ClientOption allows setting custom parameters during construction
+type ClientOption func(*Client) error
+
+// Creates a new Client, with reasonable defaults
+func NewClient(server string, opts ...ClientOption) (*Client, error) {
+	// create a client with sane default values
+	client := Client{
+		Server: server,
+	}
+	// mutate client and add all optional params
+	for _, o := range opts {
+		if err := o(&client); err != nil {
+			return nil, err
+		}
+	}
+	// ensure the server URL always has a trailing slash
+	if !strings.HasSuffix(client.Server, "/") {
+		client.Server += "/"
+	}
+	// create httpClient, if not already present
+	if client.Client == nil {
+		client.Client = &http.Client{}
+	}
+	return &client, nil
+}
+
+// WithHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+func WithHTTPClient(doer HttpRequestDoer) ClientOption {
+	return func(c *Client) error {
+		c.Client = doer
+		return nil
+	}
+}
+
+// WithRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
+	return func(c *Client) error {
+		c.RequestEditors = append(c.RequestEditors, fn)
+		return nil
+	}
+}
+
+// The interface specification for the client above.
+type ClientInterface interface {
+	// ListAPIVersions request
+	ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAPIVersion request
+	GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAnalyticsWithBody request with any body
+	CreateAnalyticsWithBody(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateAnalytics(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, body CreateAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTenantAnalyticsWithBody request with any body
+	CreateTenantAnalyticsWithBody(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateTenantAnalytics(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, body CreateTenantAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAPIVersionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAPIVersionRequest(c.Server, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAnalyticsWithBody(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAnalyticsRequestWithBody(c.Server, orgId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAnalytics(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, body CreateAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAnalyticsRequest(c.Server, orgId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTenantAnalyticsWithBody(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTenantAnalyticsRequestWithBody(c.Server, tenantId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTenantAnalytics(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, body CreateTenantAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTenantAnalyticsRequest(c.Server, tenantId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewListAPIVersionsRequest generates requests for ListAPIVersions
+func NewListAPIVersionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/openapi")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAPIVersionRequest generates requests for GetAPIVersion
+func NewGetAPIVersionRequest(server string, version string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "version", runtime.ParamLocationPath, version)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/openapi/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateAnalyticsRequest calls the generic CreateAnalytics builder with application/json body
+func NewCreateAnalyticsRequest(server string, orgId OrgId, params *CreateAnalyticsParams, body CreateAnalyticsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAnalyticsRequestWithBody(server, orgId, params, "application/json", bodyReader)
+}
+
+// NewCreateAnalyticsRequestWithBody generates requests for CreateAnalytics with any type of body
+func NewCreateAnalyticsRequestWithBody(server string, orgId OrgId, params *CreateAnalyticsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/analytics", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateTenantAnalyticsRequest calls the generic CreateTenantAnalytics builder with application/json body
+func NewCreateTenantAnalyticsRequest(server string, tenantId TenantId, params *CreateTenantAnalyticsParams, body CreateTenantAnalyticsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateTenantAnalyticsRequestWithBody(server, tenantId, params, "application/json", bodyReader)
+}
+
+// NewCreateTenantAnalyticsRequestWithBody generates requests for CreateTenantAnalytics with any type of body
+func NewCreateTenantAnalyticsRequestWithBody(server string, tenantId TenantId, params *CreateTenantAnalyticsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "tenant_id", runtime.ParamLocationPath, tenantId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/tenants/%s/analytics", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
+	for _, r := range c.RequestEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	for _, r := range additionalEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ClientWithResponses builds on ClientInterface to offer response payloads
+type ClientWithResponses struct {
+	ClientInterface
+}
+
+// NewClientWithResponses creates a new ClientWithResponses, which wraps
+// Client with return type handling
+func NewClientWithResponses(server string, opts ...ClientOption) (*ClientWithResponses, error) {
+	client, err := NewClient(server, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &ClientWithResponses{client}, nil
+}
+
+// WithBaseURL overrides the baseURL.
+func WithBaseURL(baseURL string) ClientOption {
+	return func(c *Client) error {
+		newBaseURL, err := url.Parse(baseURL)
+		if err != nil {
+			return err
+		}
+		c.Server = newBaseURL.String()
+		return nil
+	}
+}
+
+// ClientWithResponsesInterface is the interface specification for the client with responses above.
+type ClientWithResponsesInterface interface {
+	// ListAPIVersionsWithResponse request
+	ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error)
+
+	// GetAPIVersionWithResponse request
+	GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error)
+
+	// CreateAnalyticsWithBodyWithResponse request with any body
+	CreateAnalyticsWithBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAnalyticsResponse, error)
+
+	CreateAnalyticsWithResponse(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, body CreateAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAnalyticsResponse, error)
+
+	// CreateTenantAnalyticsWithBodyWithResponse request with any body
+	CreateTenantAnalyticsWithBodyWithResponse(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTenantAnalyticsResponse, error)
+
+	CreateTenantAnalyticsWithResponse(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, body CreateTenantAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTenantAnalyticsResponse, error)
+}
+
+type ListAPIVersionsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *[]string
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAPIVersionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAPIVersionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAPIVersionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *map[string]interface{}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAPIVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAPIVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateAnalyticsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON201                  *AnalyticsCreated
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAnalyticsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAnalyticsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateTenantAnalyticsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON201                  *AnalyticsCreated
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTenantAnalyticsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTenantAnalyticsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ListAPIVersionsWithResponse request returning *ListAPIVersionsResponse
+func (c *ClientWithResponses) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error) {
+	rsp, err := c.ListAPIVersions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAPIVersionsResponse(rsp)
+}
+
+// GetAPIVersionWithResponse request returning *GetAPIVersionResponse
+func (c *ClientWithResponses) GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error) {
+	rsp, err := c.GetAPIVersion(ctx, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAPIVersionResponse(rsp)
+}
+
+// CreateAnalyticsWithBodyWithResponse request with arbitrary body returning *CreateAnalyticsResponse
+func (c *ClientWithResponses) CreateAnalyticsWithBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAnalyticsResponse, error) {
+	rsp, err := c.CreateAnalyticsWithBody(ctx, orgId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAnalyticsResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateAnalyticsWithResponse(ctx context.Context, orgId OrgId, params *CreateAnalyticsParams, body CreateAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAnalyticsResponse, error) {
+	rsp, err := c.CreateAnalytics(ctx, orgId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAnalyticsResponse(rsp)
+}
+
+// CreateTenantAnalyticsWithBodyWithResponse request with arbitrary body returning *CreateTenantAnalyticsResponse
+func (c *ClientWithResponses) CreateTenantAnalyticsWithBodyWithResponse(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTenantAnalyticsResponse, error) {
+	rsp, err := c.CreateTenantAnalyticsWithBody(ctx, tenantId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTenantAnalyticsResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateTenantAnalyticsWithResponse(ctx context.Context, tenantId TenantId, params *CreateTenantAnalyticsParams, body CreateTenantAnalyticsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTenantAnalyticsResponse, error) {
+	rsp, err := c.CreateTenantAnalytics(ctx, tenantId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTenantAnalyticsResponse(rsp)
+}
+
+// ParseListAPIVersionsResponse parses an HTTP response from a ListAPIVersionsWithResponse call
+func ParseListAPIVersionsResponse(rsp *http.Response) (*ListAPIVersionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAPIVersionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAPIVersionResponse parses an HTTP response from a GetAPIVersionWithResponse call
+func ParseGetAPIVersionResponse(rsp *http.Response) (*GetAPIVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAPIVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateAnalyticsResponse parses an HTTP response from a CreateAnalyticsWithResponse call
+func ParseCreateAnalyticsResponse(rsp *http.Response) (*CreateAnalyticsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAnalyticsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AnalyticsCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateTenantAnalyticsResponse parses an HTTP response from a CreateTenantAnalyticsWithResponse call
+func ParseCreateTenantAnalyticsResponse(rsp *http.Response) (*CreateTenantAnalyticsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTenantAnalyticsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AnalyticsCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
 }
