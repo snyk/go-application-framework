@@ -3,6 +3,7 @@ package profile
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,11 +14,62 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+// Codes come from the catalog constructors, so a renumbered entry does not fail the tests.
+var (
+	codeInvalidName = cli.NewInvalidConfigProfileNameError("").ErrorCode
+	codeUnreadable  = cli.NewConfigProfileUnreadableError("").ErrorCode
+	codeDirInvalid  = cli.NewConfigProfileDirectoryInvalidError("").ErrorCode
+	codeUnavailable = cli.NewConfigProfilesUnavailableError("").ErrorCode
+)
+
+// assertCatalogError asserts that err is the catalog error itself, not a wrapper of one, with the code and detail, and
+// that it has no upstream cause, because a cause would put its path into the marshaled error.
+func assertCatalogError(t *testing.T, err error, code, detail string) {
+	t.Helper()
+	// IsType fails for a wrapper, which errors.As would still find
+	if !assert.IsType(t, snyk_errors.Error{}, err, "the error must not be wrapped") {
+		return
+	}
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, code, catalogErr.ErrorCode)
+	assert.Equal(t, detail, catalogErr.Detail)
+	assert.Nil(t, errors.Unwrap(catalogErr), "the error must have no upstream cause")
+}
+
+func skipWithoutPermissionBits(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("file permission bits do not restrict access on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the permission bits")
+	}
+}
+
+// skipOnWindowsRegularFileDir skips a case whose directory is a regular file: Windows reports a path under a regular
+// file as missing, so the lookup does not fail there.
+func skipOnWindowsRegularFileDir(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("windows reports a path under a regular file as missing")
+	}
+}
+
+func symlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+}
 
 // registryEnv is a registry under test with the configuration it derives from and the files it works with.
 type registryEnv struct {
@@ -54,11 +106,19 @@ func writeProfile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func Test_NewFileRegistry_RelativeDirIsAnError(t *testing.T) {
-	base := configuration.NewWithOpts()
-	for _, dir := range []string{"", ".", "relative/dir"} {
-		_, err := NewFileRegistry(dir, base)
-		assert.Error(t, err, dir)
+func Test_NewFileRegistry_UnusableDirIsDirectoryInvalid(t *testing.T) {
+	tests := []struct {
+		dir    string
+		detail string
+	}{
+		{dir: "", detail: "The profile directory is not set. Set config_profile_dir to an absolute path."},
+		{dir: ".", detail: "The profile directory must be an absolute path. Set config_profile_dir to one."},
+		{dir: "relative/dir", detail: "The profile directory must be an absolute path. Set config_profile_dir to one."},
+	}
+	for _, tc := range tests {
+		reg, err := NewFileRegistry(tc.dir, configuration.NewWithOpts())
+		assertCatalogError(t, err, codeDirInvalid, tc.detail)
+		assert.Nil(t, reg, tc.dir)
 	}
 }
 
@@ -70,29 +130,160 @@ func Test_Registry_DefaultProfileIsBase(t *testing.T) {
 	assert.Same(t, env.base, p.Configuration())
 }
 
-func Test_Registry_NameValidation(t *testing.T) {
-	env := newTestRegistry(t)
+func Test_Registry_UnusableProfileDirectoryIsDirectoryInvalid(t *testing.T) {
 	tests := []struct {
-		name    string
-		invalid bool
+		name   string
+		dir    func(t *testing.T) string
+		reason string
 	}{
-		{name: "work", invalid: false},
-		{name: "a-b_1", invalid: false},
-		{name: "", invalid: true},
-		{name: "Work", invalid: true},
-		{name: "../x", invalid: true},
-		{name: "a/b", invalid: true},
-		{name: "nul", invalid: true},
-		{name: "com0", invalid: true},
+		{
+			name: "directory_is_a_regular_file",
+			dir: func(t *testing.T) string {
+				t.Helper()
+				skipOnWindowsRegularFileDir(t)
+				dir := filepath.Join(t.TempDir(), "not-a-dir")
+				require.NoError(t, os.WriteFile(dir, []byte("{}"), 0o600))
+				return dir
+			},
+			reason: "not a directory",
+		},
+		{
+			name: "parent_directory_without_search_permission",
+			dir: func(t *testing.T) string {
+				t.Helper()
+				skipWithoutPermissionBits(t)
+				parent := filepath.Join(t.TempDir(), "locked")
+				dir := filepath.Join(parent, "profiles")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				require.NoError(t, os.Chmod(parent, 0o000))
+				// registered after t.TempDir, so it runs before the tree is removed
+				t.Cleanup(func() { assert.NoError(t, os.Chmod(parent, 0o700)) })
+				if _, err := os.Stat(dir); !errors.Is(err, fs.ErrPermission) {
+					t.Skip("the permission change has no effect here")
+				}
+				return dir
+			},
+			reason: "permission denied",
+		},
 	}
 	for _, tc := range tests {
-		_, err := env.reg.Profile(tc.name)
-		if tc.invalid {
-			assert.ErrorIs(t, err, ErrInvalidName, tc.name)
-		} else {
-			assert.NoError(t, err, tc.name)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestRegistryIn(t, tc.dir(t))
+
+			_, err := env.reg.Profile("work")
+			assertCatalogError(t, err, codeDirInvalid, "The profile directory cannot be used: "+tc.reason+".")
+			assert.NotErrorIs(t, err, fs.ErrNotExist, "the directory exists, so the lookup of its file must not report that it does not")
+		})
 	}
+}
+
+func Test_Registry_NameValidation(t *testing.T) {
+	env := newTestRegistry(t)
+	for _, name := range []string{"", "Work", "bad name", "../x", "a/b"} {
+		_, err := env.reg.Profile(name)
+		assertCatalogError(t, err, codeInvalidName, fmt.Sprintf(
+			`Profile name %q is invalid: use lowercase letters, digits, "-" or "_".`,
+			name,
+		))
+	}
+	for _, name := range []string{"work", "a-b_1"} {
+		_, err := env.reg.Profile(name)
+		assert.NoError(t, err, name)
+	}
+}
+
+func Test_Registry_UnusableProfileFileIsUnreadable(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, dir string)
+		why   string
+	}{
+		{
+			name: "invalid_json",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, "x", "{not json")
+			},
+			why: "the file is not valid JSON",
+		},
+		{
+			name: "json_null",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, "x", "null")
+			},
+			why: "the file is not a JSON object",
+		},
+		{
+			name: "symbolic_link_to_a_valid_profile",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				symlink(t, writeProfile(t, t.TempDir(), "target", "{}"), filepath.Join(dir, "x.json"))
+			},
+			why: "it is not a regular file",
+		},
+		{
+			name: "unreadable_file",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				skipWithoutPermissionBits(t)
+				require.NoError(t, os.Chmod(writeProfile(t, dir, "x", "{}"), 0))
+			},
+			why: "permission denied",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestRegistry(t)
+			tc.setup(t, env.dir)
+
+			_, err := env.reg.Profile("x")
+			assertCatalogError(t, err, codeUnreadable, fmt.Sprintf("Profile %q cannot be read: %s.", "x", tc.why))
+		})
+	}
+}
+
+func Test_Registry_DeriveFailureIsUnavailable(t *testing.T) {
+	base := struct{ configuration.Configuration }{configuration.NewWithOpts()}
+	reg, err := NewFileRegistry(t.TempDir(), base)
+	require.NoError(t, err)
+
+	_, err = reg.Profile("work")
+	assertCatalogError(t, err, codeUnavailable, `Profile "work" cannot be loaded.`)
+}
+
+// Test_Registry_ErrorsDoNotLeakPaths checks that the marshaled errors of an unreadable file and of an unusable directory
+// hold no path, because the OS error that carries the path is not kept as a cause.
+func Test_Registry_ErrorsDoNotLeakPaths(t *testing.T) {
+	t.Run("unreadable_file", func(t *testing.T) {
+		skipWithoutPermissionBits(t)
+		env := newTestRegistry(t)
+		path := writeProfile(t, env.dir, "x", "{}")
+		require.NoError(t, os.Chmod(path, 0))
+
+		_, err := env.reg.Profile("x")
+		require.Error(t, err)
+		assertNoPath(t, err, env.dir)
+	})
+	t.Run("directory_is_a_regular_file", func(t *testing.T) {
+		skipOnWindowsRegularFileDir(t)
+		dir := filepath.Join(t.TempDir(), "not-a-dir")
+		require.NoError(t, os.WriteFile(dir, []byte("{}"), 0o600))
+		reg, err := NewFileRegistry(dir, configuration.NewWithOpts())
+		require.NoError(t, err)
+
+		_, err = reg.Profile("work")
+		require.Error(t, err)
+		assertNoPath(t, err, dir)
+	})
+}
+
+// assertNoPath asserts that the JSON of err does not contain the path of the test directory.
+func assertNoPath(t *testing.T, err error, path string) {
+	t.Helper()
+	marshaled, marshalErr := json.Marshal(err)
+	require.NoError(t, marshalErr)
+	assert.NotContains(t, string(marshaled), path)
 }
 
 // Test_Registry_ProfileReadsOnlyItsOwnFile checks that the profile directory holds the profile files directly, as
@@ -237,35 +428,6 @@ func Test_Registry_PersistedWriteCreatesTheProfileFile(t *testing.T) {
 	assert.Equal(t, baseBefore, baseAfter)
 }
 
-// Test_Registry_NonRegularProfileEntryIsErrCorrupt checks that a symbolic link or a directory named like a profile is
-// refused, and that a symbolic link is never followed to its target.
-func Test_Registry_NonRegularProfileEntryIsErrCorrupt(t *testing.T) {
-	env := newTestRegistry(t)
-	target := filepath.Join(t.TempDir(), "target.json")
-	require.NoError(t, os.WriteFile(target, []byte("{}"), 0o600))
-	if err := os.Symlink(target, filepath.Join(env.dir, "link.json")); err != nil {
-		t.Skipf("cannot create symlink: %v", err)
-	}
-	require.NoError(t, os.Mkdir(filepath.Join(env.dir, "folder.json"), 0o700))
-
-	for _, name := range []string{"link", "folder"} {
-		_, err := env.reg.Profile(name)
-		assert.ErrorIs(t, err, ErrCorrupt, name)
-	}
-}
-
-func Test_Registry_CorruptProfileIsErrCorrupt(t *testing.T) {
-	env := newTestRegistry(t)
-	writeProfile(t, env.dir, "broken", "{not json")
-	writeProfile(t, env.dir, "list", "[]")
-	writeProfile(t, env.dir, "null", "null")
-
-	for _, name := range []string{"broken", "list", "null"} {
-		_, err := env.reg.Profile(name)
-		assert.ErrorIs(t, err, ErrCorrupt, name)
-	}
-}
-
 func Test_Registry_EmptyProfileFileIsValid(t *testing.T) {
 	env := newTestRegistry(t)
 	writeProfile(t, env.dir, "empty", "")
@@ -295,4 +457,20 @@ func Test_Registry_ConcurrentProfileCalls(t *testing.T) {
 		require.NoError(t, errs[i])
 		assert.Same(t, profiles[0], profiles[i])
 	}
+}
+
+func Test_Registry_DirectoryThatIsASymbolicLinkToADirectoryIsUsed(t *testing.T) {
+	target := t.TempDir()
+	writeProfile(t, target, "work", `{"own": "work"}`)
+	link := filepath.Join(t.TempDir(), "link")
+	symlink(t, target, link)
+	env := newTestRegistryIn(t, link)
+
+	p, err := env.reg.Profile("work")
+	require.NoError(t, err)
+	assert.Equal(t, "work", p.Configuration().GetString("own"))
+
+	absent, err := env.reg.Profile("absent")
+	require.NoError(t, err)
+	assert.Empty(t, absent.Configuration().GetString("own"))
 }

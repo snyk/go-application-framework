@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +35,18 @@ const (
 	defaultPayload = "default-value|default-value|default-value|only-default"
 	// machinePayload is what the leaf workflow reports on the "machine" profile, which lacks the default-only key.
 	machinePayload = "machine-value|machine-value|machine-value|"
+)
+
+// Codes come from the catalog constructors, so a renumbered entry does not fail the tests.
+var (
+	codeInvalidName = cli.NewInvalidConfigProfileNameError("").ErrorCode
+	codeUnreadable  = cli.NewConfigProfileUnreadableError("").ErrorCode
+	codeDirInvalid  = cli.NewConfigProfileDirectoryInvalidError("").ErrorCode
+	codeUnavailable = cli.NewConfigProfilesUnavailableError("").ErrorCode
+)
+
+const (
+	profileDirNotSetDetail = "The profile directory is not set. Set config_profile_dir to an absolute path."
 )
 
 type profileEnv struct {
@@ -203,29 +218,41 @@ func report(t *testing.T, output []Data, err error) string {
 	return payload
 }
 
-// assertErrMatches checks that err is wantErr, when set, and contains wantMsg, when set.
-func assertErrMatches(t *testing.T, err, wantErr error, wantMsg string) {
+// assertCatalogCode asserts that err is the catalog error itself, not a wrapper of one, with the code. The registry tests
+// own the detail of the errors that the registry returns.
+func assertCatalogCode(t *testing.T, err error, code string) {
 	t.Helper()
-	if wantErr != nil {
-		assert.ErrorIs(t, err, wantErr)
+	// IsType fails for a wrapper, which errors.As would still find
+	if !assert.IsType(t, snyk_errors.Error{}, err, "the error must not be wrapped") {
+		return
 	}
-	if wantMsg != "" {
-		assert.ErrorContains(t, err, wantMsg)
-	}
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, code, catalogErr.ErrorCode)
 }
 
-// assertFailedInvocation checks a failed selection: the invocation fails with the error, the workflow does not run, and
-// the post-invoke hooks see the same error and an empty configuration with a network access bound to it that reads no
-// environment.
-func assertFailedInvocation(t *testing.T, env *profileEnv, output []Data, err, wantErr error, wantMsg string) {
+// assertCatalogError asserts that err is the catalog error itself, not a wrapper of one, with the code and detail, and
+// that it has no upstream cause. The engine creates these errors without a cause.
+func assertCatalogError(t *testing.T, err error, code, detail string) {
 	t.Helper()
-	assertErrMatches(t, err, wantErr, wantMsg)
+	if !assert.IsType(t, snyk_errors.Error{}, err, "the error must not be wrapped") {
+		return
+	}
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, code, catalogErr.ErrorCode)
+	assert.Equal(t, detail, catalogErr.Detail)
+	assert.Nil(t, errors.Unwrap(catalogErr), "the engine has no cause to wrap")
+}
+
+func assertFailedInvocation(t *testing.T, env *profileEnv, output []Data, err error) {
+	t.Helper()
+	assert.Error(t, err)
 	assert.Empty(t, output)
 	assert.Equal(t, 0, env.leafRuns(), "the workflow must not run")
 
 	env.hookMu.Lock()
 	defer env.hookMu.Unlock()
-	assertErrMatches(t, env.hookErr, wantErr, wantMsg)
 	assert.Empty(t, env.hookValue, "post-invoke hooks must not see the default configuration")
 	assert.Empty(t, env.hookState.token, "the hook configuration must not read the environment")
 	assert.Empty(t, env.hookState.networkToken, "the hook network access must not read the environment")
@@ -268,11 +295,12 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 	t.Setenv("SNYK_TOKEN", "token-from-environment") // no failed selection may read the environment
 
 	tests := []struct {
-		name         string
-		setup        func(env *profileEnv)
-		wantErr      error
-		wantMsg      string
-		fix          func(env *profileEnv) // optional: fixing the cause lets the same selection succeed
+		name  string
+		setup func(env *profileEnv)
+		// wantDetail is set only for errors that the engine creates
+		wantDetail   string
+		wantCode     string
+		fix          func(env *profileEnv)
 		wantAfterFix string
 	}{
 		{
@@ -281,19 +309,24 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 				require.NoError(env.t, os.WriteFile(filepath.Join(env.dir, "broken.json"), []byte("{not json"), 0o600))
 				env.selectProfile("broken")
 			},
-			wantErr: profile.ErrCorrupt,
-		},
-		{name: "name_with_a_path_separator_is_rejected", setup: func(env *profileEnv) { env.selectProfile("../escape") }, wantErr: profile.ErrInvalidName},
-		{name: "name_with_a_space_is_rejected", setup: func(env *profileEnv) { env.selectProfile("Bad Name") }, wantErr: profile.ErrInvalidName},
-		{
-			name:    "nil_profile_fails_the_invocation",
-			setup:   func(env *profileEnv) { env.setRegistry(nilProfileRegistry{}); env.selectProfile("anything") },
-			wantErr: errProfileWithoutConfig,
+			wantCode: codeUnreadable,
 		},
 		{
-			name:    "profile_without_configuration_fails_the_invocation",
-			setup:   func(env *profileEnv) { env.setRegistry(nilConfigRegistry{}); env.selectProfile("machine") },
-			wantErr: errProfileWithoutConfig,
+			name:     "name_with_a_path_separator_is_rejected",
+			setup:    func(env *profileEnv) { env.selectProfile("../escape") },
+			wantCode: codeInvalidName,
+		},
+		{
+			name:       "nil_profile_fails_the_invocation",
+			setup:      func(env *profileEnv) { env.setRegistry(nilProfileRegistry{}); env.selectProfile("anything") },
+			wantCode:   codeUnavailable,
+			wantDetail: `Profiles are unavailable: profile "anything" has no configuration.`,
+		},
+		{
+			name:       "profile_without_configuration_fails_the_invocation",
+			setup:      func(env *profileEnv) { env.setRegistry(nilConfigRegistry{}); env.selectProfile("machine") },
+			wantCode:   codeUnavailable,
+			wantDetail: `Profiles are unavailable: profile "machine" has no configuration.`,
 		},
 		{
 			name: "relative_base_dir_fails_the_selection_and_is_retried_after_the_fix",
@@ -301,7 +334,7 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 				env.base.Set(profile.DirKey, "relative-profiles")
 				env.selectProfile("machine")
 			},
-			wantMsg:      "must be absolute",
+			wantCode:     codeDirInvalid,
 			fix:          func(env *profileEnv) { env.base.Set(profile.DirKey, env.dir) },
 			wantAfterFix: machinePayload,
 		},
@@ -314,7 +347,17 @@ func Test_Engine_Profile_FailedSelectionFailsTheInvocation(t *testing.T) {
 			tc.setup(env)
 
 			output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
-			assertFailedInvocation(t, env, output, err, tc.wantErr, tc.wantMsg)
+			assertFailedInvocation(t, env, output, err)
+			env.hookMu.Lock()
+			hookErr := env.hookErr
+			env.hookMu.Unlock()
+			for _, got := range []error{err, hookErr} {
+				if tc.wantDetail != "" {
+					assertCatalogError(t, got, tc.wantCode, tc.wantDetail)
+				} else {
+					assertCatalogCode(t, got, tc.wantCode)
+				}
+			}
 
 			if tc.fix != nil {
 				tc.fix(env)
@@ -498,7 +541,7 @@ func Test_Engine_Profile_NestedInvocationFromHookAfterFailedSelectionStaysEmpty(
 	}
 
 	output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
-	assert.ErrorIs(t, err, profile.ErrInvalidName)
+	assertCatalogCode(t, err, codeInvalidName)
 	assert.Empty(t, output)
 
 	// Invoke returns once the hooks completed, so the hook's writes are visible here
@@ -537,6 +580,11 @@ func Test_Engine_Profile_ChangedDirKeyRebuildsTheRegistry(t *testing.T) {
 	rebuilt, err := GetProfileRegistry(env.engine)
 	require.NoError(t, err)
 	assert.NotSame(t, first, rebuilt, "a changed directory must replace the registry")
+
+	env.base.Set(profile.DirKey, "")
+	_, err = GetProfileRegistry(env.engine)
+	require.Error(t, err, "an emptied directory must not keep the registry")
+	assertCatalogError(t, err, codeDirInvalid, profileDirNotSetDetail)
 }
 
 // Test_Engine_Profile_UnknownProfileNameRunsEmptyAndIsLoggedOnce checks that a selected profile without a file runs on an
@@ -686,7 +734,8 @@ func Test_Engine_Profile_WithoutDirKeyFailsSelection(t *testing.T) {
 	env.selectProfile("machine")
 
 	output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
-	assertFailedInvocation(t, env, output, err, errProfileDirNotConfigured, "")
+	assertFailedInvocation(t, env, output, err)
+	assertCatalogError(t, err, codeDirInvalid, profileDirNotSetDetail)
 	entries, err := os.ReadDir(home)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "the home directory must not be touched")
@@ -737,23 +786,6 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 	env := newProfileEnv(t)
 
 	registry, err := GetProfileRegistry(foreignEngine{Engine: env.engine})
-	assert.ErrorIs(t, err, errEngineWithoutProfiles)
+	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
 	assert.Nil(t, registry)
-}
-
-// Test_GetProfileRegistry_FailsForARelativeDirAndKeepsNoFailure checks that a relative profile directory is an error,
-// and that the failure is not kept once the profile directory is fixed.
-func Test_GetProfileRegistry_FailsForARelativeDirAndKeepsNoFailure(t *testing.T) {
-	env := newProfileEnv(t)
-	env.base.Set(profile.DirKey, "relative-profiles")
-
-	registry, err := GetProfileRegistry(env.engine)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "must be absolute")
-	assert.Nil(t, registry)
-
-	env.base.Set(profile.DirKey, env.dir)
-	registry, err = GetProfileRegistry(env.engine)
-	require.NoError(t, err)
-	assert.NotNil(t, registry, "the failure must not be cached")
 }
