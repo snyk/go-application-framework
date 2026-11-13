@@ -70,7 +70,7 @@ func TestSanitizeEnv_FiltersEnvEntries(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tt.wantEnv, sanitize(t, tt.env, ""))
+			assert.Equal(t, tt.wantEnv, sanitize(t, tt.env, ""))
 		})
 	}
 }
@@ -124,9 +124,19 @@ func TestSanitizeEnv_SetsPWDToAbsoluteDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tt.wantEnv, sanitize(t, tt.env, tt.dir))
+			assert.Equal(t, tt.wantEnv, sanitize(t, tt.env, tt.dir))
 		})
 	}
+}
+
+func TestSanitizeEnv_DoesNotSetPWDOnWindowsOrPlan9(t *testing.T) {
+	if runtime.GOOS != "windows" && runtime.GOOS != "plan9" {
+		t.Skip("covers the platforms where the PWD tests above are skipped")
+	}
+
+	got := sanitize(t, []string{"PATH=/bin", "PWD=/stale", "SNYK_TOKEN=secret"}, t.TempDir())
+
+	assert.Equal(t, []string{"PATH=/bin", "PWD=/stale"}, got)
 }
 
 func TestSanitizeEnv_ReturnsErrorWhenDirCannotBeResolved(t *testing.T) {
