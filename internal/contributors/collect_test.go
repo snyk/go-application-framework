@@ -2,12 +2,14 @@ package contributors
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -335,6 +337,141 @@ func TestCollectContributors_StopsWalkingWhenContextIsCancelled(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled, "cancellation during the commit walk must abort it")
 	assert.Empty(t, contributors, "a canceled walk must not report the contributors it found so far")
 	assert.Less(t, ctx.checks, 3, "the walk must stop on the first canceled commit, not keep going")
+}
+
+func TestDetectGitDir(t *testing.T) {
+	t.Parallel()
+
+	t.Run("repository root", func(t *testing.T) {
+		t.Parallel()
+
+		repo := newEmptyTestRepo(t)
+
+		gitDir, worktreeRoot, err := detectGitDir(repo.path())
+		require.NoError(t, err)
+		assertSamePath(t, filepath.Join(repo.path(), ".git"), gitDir)
+		assertSamePath(t, repo.path(), worktreeRoot)
+	})
+
+	t.Run("directory below the repository root", func(t *testing.T) {
+		t.Parallel()
+
+		repo := newEmptyTestRepo(t)
+		nested := filepath.Join(repo.path(), "pkg", "deep")
+		require.NoError(t, os.MkdirAll(nested, 0o750))
+
+		gitDir, worktreeRoot, err := detectGitDir(nested)
+		require.NoError(t, err)
+		assertSamePath(t, filepath.Join(repo.path(), ".git"), gitDir)
+		assertSamePath(t, repo.path(), worktreeRoot, "the worktree root is the repository, not the directory scanned")
+	})
+
+	t.Run("linked worktree", func(t *testing.T) {
+		t.Parallel()
+
+		now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+		worktree := newTestRepo(t, commit{email: "alice@example.com", when: now}).worktree()
+
+		gitDir, worktreeRoot, err := detectGitDir(worktree.path())
+		require.NoError(t, err)
+		assertSamePath(t, worktree.git("rev-parse", "--absolute-git-dir"), gitDir)
+		assertSamePath(t, worktree.path(), worktreeRoot)
+	})
+
+	t.Run("directory below a linked worktree", func(t *testing.T) {
+		t.Parallel()
+
+		now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+		worktree := newTestRepo(t, commit{email: "alice@example.com", when: now}).worktree()
+		nested := filepath.Join(worktree.path(), "pkg")
+		require.NoError(t, os.MkdirAll(nested, 0o750))
+
+		gitDir, worktreeRoot, err := detectGitDir(nested)
+		require.NoError(t, err)
+		assertSamePath(t, worktree.git("rev-parse", "--absolute-git-dir"), gitDir)
+		assertSamePath(t, worktree.path(), worktreeRoot)
+	})
+
+	t.Run("bare repository", func(t *testing.T) {
+		t.Parallel()
+
+		repo := newEmptyTestRepo(t, "--bare")
+
+		gitDir, worktreeRoot, err := detectGitDir(repo.path())
+		require.NoError(t, err)
+		assertSamePath(t, repo.path(), gitDir, "a bare repository is its own git directory")
+		assert.Empty(t, worktreeRoot, "a bare repository has no worktree")
+	})
+
+	t.Run("git file pointing at a relative path", func(t *testing.T) {
+		t.Parallel()
+
+		root := t.TempDir()
+		target := filepath.Join(root, "modules", "sub")
+		require.NoError(t, os.MkdirAll(target, 0o750))
+		worktree := filepath.Join(root, "sub")
+		require.NoError(t, os.MkdirAll(worktree, 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: ../modules/sub\n"), 0o600))
+
+		gitDir, worktreeRoot, err := detectGitDir(worktree)
+		require.NoError(t, err)
+		assertSamePath(t, target, gitDir)
+		assertSamePath(t, worktree, worktreeRoot)
+	})
+
+	t.Run("git file with no target", func(t *testing.T) {
+		t.Parallel()
+
+		worktree := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir:\n"), 0o600))
+
+		_, _, err := detectGitDir(worktree)
+		require.ErrorIs(t, err, git.ErrRepositoryNotExists)
+	})
+
+	t.Run("directory that is not in a repository", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, err := detectGitDir(t.TempDir())
+		require.ErrorIs(t, err, git.ErrRepositoryNotExists, "the walk up must end at the filesystem root rather than looping")
+	})
+
+	t.Run("directory that does not exist", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, err := detectGitDir(filepath.Join(t.TempDir(), "gone"))
+		require.ErrorIs(t, err, git.ErrRepositoryNotExists)
+	})
+}
+
+// TestDetectGitDir_ResolvesAPathRelativeToTheWorkingDirectory belongs to the
+// suite above, but t.Chdir cannot be used in a parallel test.
+func TestDetectGitDir_ResolvesAPathRelativeToTheWorkingDirectory(t *testing.T) {
+	repo := newEmptyTestRepo(t)
+	nested := filepath.Join(repo.path(), "pkg")
+	require.NoError(t, os.MkdirAll(nested, 0o750))
+	t.Chdir(repo.path())
+
+	gitDir, worktreeRoot, err := detectGitDir("pkg")
+	require.NoError(t, err)
+	assertSamePath(t, filepath.Join(repo.path(), ".git"), gitDir)
+	assertSamePath(t, repo.path(), worktreeRoot)
+}
+
+// assertSamePath asserts that two paths lead to the same directory, comparing
+// what they point at rather than how they are spelled, since a temporary
+// directory is reached through a symlink on some platforms.
+func assertSamePath(t *testing.T, want, got string, msgAndArgs ...any) {
+	t.Helper()
+
+	wantInfo, err := os.Stat(want)
+	require.NoError(t, err)
+	gotInfo, err := os.Stat(got)
+	require.NoErrorf(t, err, "detected path must exist: %s", got)
+
+	if !os.SameFile(wantInfo, gotInfo) {
+		assert.Fail(t, fmt.Sprintf("paths differ: want %s, got %s", want, got), msgAndArgs...)
+	}
 }
 
 // canceledOnErrCheck is a context that reports itself canceled when calls
