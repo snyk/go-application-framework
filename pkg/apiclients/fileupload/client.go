@@ -25,6 +25,7 @@ type HTTPClient struct {
 	logger                       *zerolog.Logger
 	pathEncoder                  PathEncoder
 	contentTranscoder            ContentTranscoder
+	largeFileUpload              bool
 }
 
 // Client defines the interface for the high level file upload client.
@@ -36,6 +37,16 @@ var _ Client = (*HTTPClient)(nil)
 
 // NewClient creates a new high-level file upload client.
 func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
+	client := newHTTPClient(httpClient, cfg, opts...)
+	if client.largeFileUpload {
+		return &largeFileClient{HTTPClient: client}
+	}
+
+	return client
+}
+
+// newHTTPClient builds an HTTPClient with all defaults applied.
+func newHTTPClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient {
 	client := &HTTPClient{
 		cfg: cfg,
 	}
