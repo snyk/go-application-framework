@@ -43,9 +43,9 @@ Before changing anything under `pkg/`, ask:
 - Can I make this **additive** instead (new function, new optional field, new
   functional option, new default value) and keep the old path working? → prefer
   this.
-- If a break is truly unavoidable, it must be a `feat!`/`fix!` or carry a
-  `BREAKING CHANGE:` footer so semantic-release bumps the major version. See
-  [CONTRIBUTING.md](CONTRIBUTING.md#handling-breaking-changes).
+- If a break is truly unavoidable, follow the
+  [breaking change policy](CONTRIBUTING.md#handling-breaking-changes). GAF stays
+  on major version 0, so **never** use `!` or a `BREAKING CHANGE:` footer.
 
 ---
 
@@ -251,10 +251,13 @@ Use these lenses when evaluating a design proposal, implementation plan, or PR.
   - `pkg/` is the public API
     - `pkg/workflow/` implements the workflow engine, which is the extensibility/orchestration layer for local clients. To extensions authors it provides an opinionated usage of the basic library functions like configuration, logging, network, ... This way authors can use functions consistently and don't have to deal with the complexity of the basic library functions but can focus on the actual business logic. 
     - `pkg/app` is the application integration layer, it provides a pre-configured workflow.Engine, whose configuration can be extended with application specific aspects by the final applications like the CLI ...
-    - `pkg/local_workflows/` hosts extension workflows available for all applications and are based on the `workflow` package
+    - `pkg/local_workflows/` hosts the built-in workflows available for all applications, plus Snyk-specific primitives and helpers around them. This is the layer where Snyk-specific behavior is allowed
     - `pkg/apiclients` contains auto-generated API clients from Open API Specs, in addition it might also contain a higher level API abstraction if reasonable
     - `pkg/*` are raw/basic library functions that might depend on other gaf library functions but basically have no assumptions on how they are used and should not know about products etc 
   - `docs/` is for documentation.
+- **Keep generic `pkg/*` packages free of Snyk-specific behavior** (env var prefixes, hostnames, product terms).
+  It belongs in `pkg/local_workflows/`, see its
+  [AGENTS.md](pkg/local_workflows/AGENTS.md).
 
 ### API surface tradeoffs
 
@@ -265,6 +268,11 @@ Use these lenses when evaluating a design proposal, implementation plan, or PR.
   functional options (`With…`) keep the surface narrow and typed.
 - **Keep related code close to each other.** Don't spread related code across different packages.
   For example, keep configuration key constants close to the code that uses them.
+- **Prefer pure functions over mutating inputs.** Take values and return values
+  (e.g. `func(env []string, dir string) ([]string, error)`) rather than modifying an `*exec.Cmd`,
+  a configuration or a slice the caller owns. Mutation makes call order matter and is harder to test.
+- **Doc comments state behavior and limits.** Say what is not covered (denylist vs. allowlist,
+  opt-in vs. enforced) and keep package docs true to what the package does.
 
 ### Scope & complexity pushback
 
@@ -312,6 +320,8 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
 
 - **Test public API.** Test need to cover the public API.
 - **Test coverage.** test internal APIs, unexported functions and dependency injection to increase test coverage for edge cases.
+- **Cover the boundaries explicitly.** Add cases for nil vs. empty inputs, relative vs. absolute paths,
+  and platform-specific branches. If a test skips on a platform, note where it is covered.
 
 
 ---
