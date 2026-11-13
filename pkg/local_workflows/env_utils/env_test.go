@@ -1,4 +1,4 @@
-package subprocess_test
+package env_utils_test
 
 import (
 	"os"
@@ -11,17 +11,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/subprocess"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/env_utils"
 )
 
 func sanitize(t *testing.T, env []string, dir string) []string {
 	t.Helper()
-	cmd := &exec.Cmd{Dir: dir, Env: env}
-	require.NoError(t, subprocess.SanitizeCmdEnv(cmd))
-	return cmd.Env
+	got, err := env_utils.SanitizeEnv(env, dir)
+	require.NoError(t, err)
+	return got
 }
 
-func TestSanitizeCmdEnv_FiltersEnvEntries(t *testing.T) {
+func TestSanitizeEnv_FiltersEnvEntries(t *testing.T) {
 	tests := []struct {
 		name    string
 		env     []string
@@ -75,7 +75,7 @@ func TestSanitizeCmdEnv_FiltersEnvEntries(t *testing.T) {
 	}
 }
 
-func TestSanitizeCmdEnv_SetsPWDToAbsoluteDir(t *testing.T) {
+func TestSanitizeEnv_SetsPWDToAbsoluteDir(t *testing.T) {
 	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
 		t.Skip("PWD is not set on windows or plan9")
 	}
@@ -115,6 +115,12 @@ func TestSanitizeCmdEnv_SetsPWDToAbsoluteDir(t *testing.T) {
 			dir:     "sub",
 			wantEnv: []string{"PATH=/bin", "PWD=" + wantPWD},
 		},
+		{
+			name:    "uses an already absolute dir as PWD",
+			env:     []string{"PATH=/bin"},
+			dir:     filepath.Join(root, "sub"),
+			wantEnv: []string{"PATH=/bin", "PWD=" + wantPWD},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,7 +129,7 @@ func TestSanitizeCmdEnv_SetsPWDToAbsoluteDir(t *testing.T) {
 	}
 }
 
-func TestSanitizeCmdEnv_ReturnsErrorWhenDirCannotBeResolved(t *testing.T) {
+func TestSanitizeEnv_ReturnsErrorWhenDirCannotBeResolved(t *testing.T) {
 	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
 		t.Skip("PWD is not set on windows or plan9")
 	}
@@ -135,34 +141,42 @@ func TestSanitizeCmdEnv_ReturnsErrorWhenDirCannotBeResolved(t *testing.T) {
 		t.Skip("platform resolves the working directory of a removed directory")
 	}
 
-	env := []string{"SNYK_TOKEN=secret", "PATH=/bin", "PWD=/stale"}
-	cmd := &exec.Cmd{Dir: "sub", Env: env}
-
-	err := subprocess.SanitizeCmdEnv(cmd)
+	got, err := env_utils.SanitizeEnv([]string{"SNYK_TOKEN=secret", "PATH=/bin"}, "sub")
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "resolve working directory")
-	assert.Equal(t, []string{"SNYK_TOKEN=secret", "PATH=/bin", "PWD=/stale"}, cmd.Env)
+	assert.Nil(t, got)
 }
 
-func TestSanitizeCmdEnv_NilCmdIsNoOp(t *testing.T) {
-	assert.NoError(t, subprocess.SanitizeCmdEnv(nil))
-}
-
-func TestSanitizeCmdEnv_NilEnvStartsFromProcessEnvironment(t *testing.T) {
-	t.Setenv("SNYK_TOKEN", "process-secret")
+func TestSanitizeEnv_NilEnvDoesNotReadProcessEnvironment(t *testing.T) {
 	t.Setenv("KEEP_ME", "1")
 
-	cmd := &exec.Cmd{}
-	require.NoError(t, subprocess.SanitizeCmdEnv(cmd))
+	got := sanitize(t, nil, "")
 
-	assert.Contains(t, cmd.Env, "KEEP_ME=1")
-	for _, entry := range cmd.Env {
-		assert.False(t, strings.HasPrefix(strings.ToUpper(entry), "SNYK_"), "cmd.Env kept a SNYK_ variable")
+	assert.Empty(t, got)
+}
+
+func TestSanitizeEnv_NonNilEmptyEnvStaysEmpty(t *testing.T) {
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+		t.Skip("PWD is not set on windows or plan9")
+	}
+	dir := t.TempDir()
+	tests := []struct {
+		name    string
+		dir     string
+		wantEnv []string
+	}{
+		{name: "without dir", dir: "", wantEnv: []string{}},
+		{name: "with dir only adds PWD", dir: dir, wantEnv: []string{"PWD=" + dir}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.wantEnv, sanitize(t, []string{}, tt.dir))
+		})
 	}
 }
 
-func TestSanitizeCmdEnv_DoesNotModifyCallerSlice(t *testing.T) {
+func TestSanitizeEnv_DoesNotModifyCallerSlice(t *testing.T) {
 	env := []string{"SNYK_TOKEN=secret", "PATH=/bin", "PWD=/stale"}
 	before := append([]string(nil), env...)
 
@@ -171,17 +185,16 @@ func TestSanitizeCmdEnv_DoesNotModifyCallerSlice(t *testing.T) {
 	assert.Equal(t, before, env)
 }
 
-func TestSanitizeCmdEnv_DoesNotChangeProcessEnvironment(t *testing.T) {
+func TestSanitizeEnv_DoesNotChangeProcessEnvironment(t *testing.T) {
 	t.Setenv("SNYK_TOKEN", "process-secret")
 	before := os.Environ()
 
-	cmd := &exec.Cmd{Dir: t.TempDir(), Env: []string{"SNYK_TOKEN=explicit", "PATH=/bin"}}
-	require.NoError(t, subprocess.SanitizeCmdEnv(cmd))
+	sanitize(t, []string{"SNYK_TOKEN=explicit", "PATH=/bin"}, t.TempDir())
 
 	assert.Equal(t, before, os.Environ())
 }
 
-func TestSanitizeCmdEnv_ChildProcessDoesNotReceiveSnykVars(t *testing.T) {
+func TestSanitizeEnv_ChildProcessDoesNotReceiveSnykVars(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("needs a POSIX sh")
 	}
@@ -190,7 +203,9 @@ func TestSanitizeCmdEnv_ChildProcessDoesNotReceiveSnykVars(t *testing.T) {
 
 	cmd := exec.Command("sh", "-c", "env")
 	cmd.Dir = t.TempDir()
-	require.NoError(t, subprocess.SanitizeCmdEnv(cmd))
+	env, err := env_utils.SanitizeEnv(os.Environ(), cmd.Dir)
+	require.NoError(t, err)
+	cmd.Env = env
 
 	out, err := cmd.Output()
 	require.NoError(t, err)
