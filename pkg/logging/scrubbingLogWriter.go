@@ -468,7 +468,7 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 			continue
 		}
 		// then scrub from the regex list
-		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
+		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact, jsonAware)
 	}
 	return []byte(s)
 }
@@ -665,7 +665,7 @@ func isJSONNumberChar(b byte) bool {
 // happens to be `{`, `,` or `"` — blank out identical text elsewhere in the same event, which
 // corrupts the surrounding payload (see CLI-1732). Matches returned by FindAll are non-overlapping
 // and in order, so the spans can be stitched back together in a single pass.
-func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) string {
+func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int, jsonAware bool) string {
 	matches := regex.FindAllStringSubmatchIndex(s, -1)
 	if len(matches) == 0 {
 		return s
@@ -674,18 +674,86 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) strin
 	var builder strings.Builder
 	builder.Grow(len(s))
 	end := 0
+	var qs quoteState
+	scanned := 0
 	for _, match := range matches {
 		lo, hi := 2*groupToRedact, 2*groupToRedact+1
 		// group out of range, or it did not participate in the match, or it matched empty
 		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
 			continue
 		}
-		builder.WriteString(s[end:match[lo]])
-		builder.WriteString(SANITIZE_REPLACEMENT_STRING)
-		end = match[hi]
+		start, stop, replacement := match[lo], match[hi], SANITIZE_REPLACEMENT_STRING
+		if jsonAware {
+			if start < end {
+				continue
+			}
+			qs = qs.advance(s[scanned:start])
+			scanned = start
+			var ok bool
+			if start, stop, replacement, ok = jsonSafeSpan(s, start, stop, qs.inQuotes); !ok {
+				continue
+			}
+		}
+		builder.WriteString(s[end:start])
+		builder.WriteString(replacement)
+		end = stop
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
+}
+
+func jsonSafeSpan(s string, start, stop int, inQuotes bool) (newStart, newStop int, replacement string, ok bool) {
+	if inQuotes {
+		if endsInDanglingBackslash(s[start:stop]) {
+			stop = jsonStringEnd(s, stop+1)
+		}
+		return start, stop, SANITIZE_REPLACEMENT_STRING, true
+	}
+
+	opensContainer := s[start] == '{' || s[start] == '['
+	if !opensContainer && strings.Trim(s[start:stop], jsonPunctuation) == "" {
+		return start, stop, "", false
+	}
+	valueLen, isValue := bareJSONValueLen(s[start:])
+	if !isValue {
+		return start, stop, SANITIZE_REPLACEMENT_STRING, true
+	}
+	return start, start + valueLen, `"` + SANITIZE_REPLACEMENT_STRING + `"`, true
+}
+
+const jsonPunctuation = `{}[],:" ` + "\t\r\n"
+
+func bareJSONValueLen(s string) (int, bool) {
+	decoder := json.NewDecoder(strings.NewReader(s))
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil || len(raw) == 0 {
+		return 0, false
+	}
+	n := int(decoder.InputOffset())
+	if n < len(s) && !isJSONWhitespace(s[n]) && !strings.ContainsRune(",}]", rune(s[n])) {
+		return 0, false
+	}
+	return n, true
+}
+
+func endsInDanglingBackslash(span string) bool {
+	n := 0
+	for i := len(span) - 1; i >= 0 && span[i] == '\\'; i-- {
+		n++
+	}
+	return n%2 == 1
+}
+
+func jsonStringEnd(s string, from int) int {
+	for i := from; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '"':
+			return i
+		}
+	}
+	return len(s)
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (int, error) {

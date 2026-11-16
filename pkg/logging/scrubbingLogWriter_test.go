@@ -1597,3 +1597,88 @@ func Test_AddSecretsFromConfig_IoWriter(t *testing.T) {
 	assert.NotContains(t, output.String(), "io-writer-token-value")
 	assert.Contains(t, output.String(), "seen")
 }
+
+func TestScrub_MandatoryRulesKeepValidJSONValid(t *testing.T) {
+	dict := getDefaultDict()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"bare number under short-form key", `{"p":5}`, `{"p":"***"}`},
+		{"bare true under short-form key", `{"level":"debug","u":true,"m":1}`, `{"level":"debug","u":"***","m":1}`},
+		{"bare null under short-form key", `{"p":null,"m":1}`, `{"p":"***","m":1}`},
+		{"exponent number under short-form key", `{"time":"t","p":1.5e3}`, `{"time":"t","p":"***"}`},
+		{"object under short-form key", `{"p":{"a":1},"m":2}`, `{"p":"***","m":2}`},
+		{"array under short-form key", `{"p":[1,2],"m":2}`, `{"p":"***","m":2}`},
+		{"nested object under short-form key", `{"a":{"p":"x"},"u":{"k":1}}`, `{"a":{"p":"***"},"u":"***"}`},
+		{"bare number under token key", `{"token":1234567,"m":1}`, `{"token":"***","m":1}`},
+		{"message ending in a lone u", `{"message":"ends -u"}`, `{"message":"ends -u"}`},
+		{"message that is a lone u", `{"message":"u"}`, `{"message":"u"}`},
+		{"message ending in p colon", `{"message":"p:"}`, `{"message":"p:"}`},
+		{"message ending in -p", `{"level":"debug","message":"flags -u 5 and -p"}`, `{"level":"debug","message":"flags -u *** and -p"}`},
+		{"string value is still redacted", `{"p":"hunter2","m":1}`, `{"p":"***","m":1}`},
+		{"value in message is still redacted", `{"message":"u: john.doe"}`, `{"message":"u: ***"}`},
+		{"escaped quote in value does not break the string", `{"message":"u: a\"b"}`, `{"message":"u: ***"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, json.Valid([]byte(tc.input)), "test input must be valid JSON")
+			actual := Scrub([]byte(tc.input), dict)
+			assert.True(t, json.Valid(actual), "output is not valid JSON: %s", actual)
+			assert.Equal(t, tc.expected, string(actual))
+		})
+	}
+}
+
+func TestScrub_ValidJSONInValidJSONOut(t *testing.T) {
+	const secret = "s3cr3tvalue99"
+	dict := getDefaultDict()
+	addStaticTermToDict(secret, dict)
+	addWholeWordTermToDict("Content", dict)
+
+	keys := []string{"p", "u", "P", "token", "user", "key", "level", "message", "count", "ok"}
+	values := []string{
+		`5`, `-1.5e3`, `true`, `null`, `"x"`, `""`, `"p:"`, `"u"`, `"ends -u"`, `"-p"`, `"a\"b"`, `"a\\"`,
+		`"Content-Type"`, `"token ` + secret + `"`, `"u: ` + secret + `"`, `{"p":1,"u":{"a":[1,2]}}`, `[1,"p",null]`,
+		`1234567`, `"` + secret + `"`,
+	}
+
+	type member struct{ key, text string }
+	var members []member
+	for _, key := range keys {
+		for _, value := range values {
+			members = append(members, member{key, fmt.Sprintf(`"%s":%s`, key, value)})
+		}
+	}
+
+	for _, first := range members {
+		for _, second := range members {
+			if first.key == second.key {
+				continue
+			}
+			input := fmt.Sprintf(`{%s,%s}`, first.text, second.text)
+			if !json.Valid([]byte(input)) {
+				continue
+			}
+			actual := Scrub([]byte(input), dict)
+			require.True(t, json.Valid(actual), "input %s produced invalid JSON: %s", input, actual)
+			require.NotContains(t, string(actual), secret, "input %s leaked the secret: %s", input, actual)
+		}
+	}
+}
+
+func TestRedactMatchedGroup_SpanEdges(t *testing.T) {
+	t.Run("span ending on a backslash is widened to the end of the string", func(t *testing.T) {
+		actual := Scrub([]byte(`{"message":"u: a\\\"tail","n":1}`), getDefaultDict())
+		assert.True(t, json.Valid(actual), "output is not valid JSON: %s", actual)
+		assert.NotContains(t, string(actual), "tail")
+	})
+
+	t.Run("non-JSON input keeps plain replacement", func(t *testing.T) {
+		assert.Equal(t, `u: ***`, string(Scrub([]byte(`u: john`), getDefaultDict())))
+		assert.Equal(t, `{"p":***`, string(Scrub([]byte(`{"p":5`), getDefaultDict())))
+	})
+}
