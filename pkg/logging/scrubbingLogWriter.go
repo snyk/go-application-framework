@@ -17,7 +17,9 @@
 package logging
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/user"
@@ -361,8 +363,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Same as above, only with short form
-	shorts := []string{"p", "u"}
-	shortForm := strings.Join(shorts, "")
+	shortForm := strings.Join(shortFormFieldNames, "")
 	s = fmt.Sprintf(`(?im)'[%s]=(?<value>[^'\n]*)'`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
@@ -380,9 +381,13 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// bounded classes keep the line-at-a-time reach the previous `.` had. An escaped instance of
 	// the bounding quote (e.g. `Nick\'s`) is kept part of the value via `\\.`, the same idiom the
 	// CLI-argument pattern below uses — without it, the class stops at that escaped quote instead
-	// of the value's real closing one and leaks the remainder of the value.
+	// of the value's real closing one and leaks the remainder of the value. JSON string values are
+	// scrubbed decoded, so an escaped quote arrives unescaped: a bounding quote followed by anything
+	// other than a separator is part of the value too.
 	for _, quote := range []string{`'`, `"`} {
-		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*%s(?<short_form_value>(?:[^%s\n\\]|\\.)*)%s[,}]?`, shortForm, quote, quote, quote)
+		chars := fmt.Sprintf(`(?:[^%s\n\\]|\\.)*`, quote)
+		embeddedQuote := fmt.Sprintf(`%s[^%s\s,;)\]}\\]`, quote, quote)
+		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*%s(?<short_form_value>%s(?:%s%s)*)%s[,}]?`, shortForm, quote, chars, embeddedQuote, chars, quote)
 		dict[s] = scrubStruct{
 			groupToRedact: 2,
 			regex:         regexp.MustCompile(s),
@@ -391,8 +396,10 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 
 	// Same as above, but for values with no surrounding quotes at all, e.g. u: john.doe,
 	// The value class excludes ':' too: without that, a greedy separator backtracking off an
-	// already-redacted 'key': '***' leaves the colon for this group to swallow instead.
-	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s]+)[,}]?`, shortForm)
+	// already-redacted 'key': '***' leaves the colon for this group to swallow instead. A quote
+	// inside the value belongs to it, but the first and last character are never a quote, so a
+	// quoted value is left to the patterns above and a closing quote is kept.
+	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s](?:[^,:\s]*[^,'":\s])?)[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -401,11 +408,10 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// CLI argument-style-specific scrubbing
 	// Many cases are already covered by the JSON scrubbing above, thus this might seem incomplete.
 	// Refer to the unit tests for the full set of covered cases.
-	// An unescaped `"` ends the value: when the argument list is logged inside a JSON string that
-	// quote closes the string, and a plain `\S*` would run on through the rest of the event and
-	// redact every field after it (see CLI-1732). An *escaped* quote is still part of the value,
-	// so `\\.` keeps `-p hun\"ter2` (and Windows paths such as `-p C:\dir\file`) fully redacted.
-	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>(?:[^\s"\\]|\\.)*)`, shortForm)
+	// A quote is part of the value: JSON string values are scrubbed decoded, so an escaped quote in
+	// the event arrives here as a bare `"`. `\\.` keeps Windows paths such as `-p C:\dir\file`
+	// fully redacted.
+	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>(?:[^\s\\]|\\.)*)`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
@@ -436,9 +442,20 @@ func ScrubValue(data []byte, scrubDict ScrubbingDict) []byte {
 	return scrub(data, scrubDict, false)
 }
 
+// scrub redacts p. When jsonAware is set and p is valid JSON, each field name and value is
+// scrubbed on its own (see scrubJSON); otherwise p is scrubbed as plain text.
 func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
-	s := string(p)
-	// Apply secrets first, then longer whole-word terms, to avoid partial redaction.
+	rules := orderedRules(scrubDict)
+	if jsonAware {
+		if scrubbed, err := scrubJSON(p, rules); err == nil {
+			return scrubbed
+		}
+	}
+	return []byte(applyRules(string(p), rules, true))
+}
+
+// orderedRules puts secrets first, then longer whole-word terms, to avoid partial redaction.
+func orderedRules(scrubDict ScrubbingDict) []scrubStruct {
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
@@ -453,24 +470,168 @@ func scrub(p []byte, scrubDict ScrubbingDict, jsonAware bool) []byte {
 		}
 		return keys[i] < keys[j]
 	})
-	for _, key := range keys {
-		entry := scrubDict[key]
-		// scrub from the replacement list first
-		if entry.replace != "" {
-			switch {
-			case jsonAware:
-				s = redactTerm(s, entry.replace, SANITIZE_REPLACEMENT_STRING, entry.wholeWord)
-			case entry.wholeWord:
-				s = redactWholeWord(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			default:
-				s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
-			}
-			continue
-		}
-		// then scrub from the regex list
-		s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
+	rules := make([]scrubStruct, len(keys))
+	for i, key := range keys {
+		rules[i] = scrubDict[key]
 	}
-	return []byte(s)
+	return rules
+}
+
+// applyRules redacts s as plain text. Whole-word terms are guesses rather than known secrets, so
+// they are skipped when includeWholeWordTerms is false.
+func applyRules(s string, rules []scrubStruct, includeWholeWordTerms bool) string {
+	for _, entry := range rules {
+		switch {
+		case entry.replace == "":
+			s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
+		case !entry.wholeWord:
+			s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+		case includeWholeWordTerms:
+			s = redactWholeWord(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+		}
+	}
+	return s
+}
+
+// shortFormFieldNames are single-letter field names used for credentials, e.g. 'p' for password.
+var shortFormFieldNames = []string{"p", "u"}
+
+// isSensitiveFieldName reports whether the value of a field with this name is redacted as a whole.
+// It matches SENSITIVE_FIELD_NAMES as case-insensitive substrings, and shortFormFieldNames exactly.
+func isSensitiveFieldName(name string) bool {
+	lower := strings.ToLower(name)
+	for _, sensitive := range SENSITIVE_FIELD_NAMES {
+		if strings.Contains(lower, sensitive) {
+			return true
+		}
+	}
+	return slices.Contains(shortFormFieldNames, lower)
+}
+
+type jsonFrame struct {
+	isObject  bool
+	expectKey bool
+}
+
+type jsonScrubber struct {
+	p       []byte
+	rules   []scrubStruct
+	decoder *json.Decoder
+	out     []byte
+	copied  int
+	end     int
+	stack   []jsonFrame
+}
+
+// scrubJSON walks a valid JSON document and rewrites only the spans that change, so the output is
+// valid JSON and every unchanged byte is kept as it was. Rules see one decoded field name or value
+// at a time, so no pattern can run from one field into the next. Field names are not matched
+// against whole-word terms. A field with a sensitive name has its whole value replaced, whatever
+// its type. A changed number becomes a string. true, false and null carry no secret and are kept.
+func scrubJSON(p []byte, rules []scrubStruct) ([]byte, error) {
+	decoder := json.NewDecoder(bytes.NewReader(p))
+	decoder.UseNumber()
+	w := &jsonScrubber{p: p, rules: rules, decoder: decoder, out: make([]byte, 0, len(p))}
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			return append(w.out, p[w.copied:]...), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		start := skipJSONSeparators(p, w.end)
+		w.end = int(decoder.InputOffset())
+		if err = w.scrubToken(token, start); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func (w *jsonScrubber) scrubToken(token json.Token, start int) error {
+	switch t := token.(type) {
+	case json.Delim:
+		if t == '{' || t == '[' {
+			w.markValue()
+			w.stack = append(w.stack, jsonFrame{isObject: t == '{', expectKey: true})
+		} else {
+			w.stack = w.stack[:len(w.stack)-1]
+		}
+		return nil
+	case string:
+		if n := len(w.stack); n > 0 && w.stack[n-1].isObject && w.stack[n-1].expectKey {
+			w.stack[n-1].expectKey = false
+			return w.scrubField(t, start)
+		}
+		w.markValue()
+		return w.replaceIfChanged(start, t, applyRules(t, w.rules, true))
+	case json.Number:
+		w.markValue()
+		return w.replaceIfChanged(start, t.String(), applyRules(t.String(), w.rules, true))
+	default:
+		w.markValue()
+		return nil
+	}
+}
+
+func (w *jsonScrubber) scrubField(name string, start int) error {
+	if err := w.replaceIfChanged(start, name, applyRules(name, w.rules, false)); err != nil {
+		return err
+	}
+	if !isSensitiveFieldName(name) {
+		return nil
+	}
+	valueStart := skipJSONSeparators(w.p, w.end)
+	var value json.RawMessage
+	if err := w.decoder.Decode(&value); err != nil {
+		return err
+	}
+	w.end = int(w.decoder.InputOffset())
+	w.markValue()
+	return w.replace(valueStart, SANITIZE_REPLACEMENT_STRING)
+}
+
+func (w *jsonScrubber) markValue() {
+	if n := len(w.stack); n > 0 && w.stack[n-1].isObject {
+		w.stack[n-1].expectKey = true
+	}
+}
+
+func (w *jsonScrubber) replaceIfChanged(start int, original, scrubbed string) error {
+	if scrubbed == original {
+		return nil
+	}
+	return w.replace(start, scrubbed)
+}
+
+// replace rewrites the bytes from start to the end of the last consumed token as the JSON string s.
+func (w *jsonScrubber) replace(start int, s string) error {
+	encoded, err := encodeJSONString(s)
+	if err != nil {
+		return err
+	}
+	w.out = append(w.out, w.p[w.copied:start]...)
+	w.out = append(w.out, encoded...)
+	w.copied = w.end
+	return nil
+}
+
+// skipJSONSeparators returns the offset of the first byte at or after from that starts a token.
+func skipJSONSeparators(p []byte, from int) int {
+	for from < len(p) && (isJSONWhitespace(p[from]) || p[from] == ',' || p[from] == ':') {
+		from++
+	}
+	return from
+}
+
+func encodeJSONString(s string) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(s); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 // RedactStaticTerm replaces every occurrence of term in s with replacement, quoting the
