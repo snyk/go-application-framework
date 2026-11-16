@@ -227,6 +227,19 @@ func TestDebugLog_ConfiguredAPITokenIsRedactedWhereverItAppears(t *testing.T) {
 	assert.NotContains(t, shown, apiToken)
 }
 
+func TestDebugLog_ConfiguredSecretJoinedByHyphenOrDotIsStillRedacted(t *testing.T) {
+	apiToken := fakeAPIToken()
+	config := configWithRedactionTerms("Content", "reference", "command")
+	config.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
+	logger, out := newDebugLog(t, config)
+
+	logger.Debug().Str("header", "prefix-"+apiToken).Msgf("cached under %s.suffix", apiToken)
+
+	shown := requireEventShown(t, out, "cached under ***.suffix")
+	assert.Contains(t, shown, "header=prefix-***")
+	assert.NotContains(t, shown, apiToken)
+}
+
 func TestDebugLog_PasswordFieldIsRedacted(t *testing.T) {
 	logger, out := newDebugLog(t, configuration.NewWithOpts())
 
@@ -291,4 +304,34 @@ func TestDebugLog_BareBooleanFieldSurvivesTermWithTrailingComma(t *testing.T) {
 	logger.Debug().Bool("cached", true).Str("source", "example").Msg("feature flag evaluated")
 
 	requireEventShown(t, out, "feature flag evaluated")
+}
+
+func TestDebugLog_SecretsStayRedactedNextToEnvironmentTerms(t *testing.T) {
+	apiToken := fakeAPIToken()
+	proxyPassword := fakeURLPassword()
+	config := configWithRedactionTerms("token", "Content", "child", "Version:", "using")
+	config.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
+	base, out := newDebugLog(t, config)
+	legacy := withExt(base, "legacy:2")
+
+	base.Debug().Msgf("> request [0x1]: header: map[Authorization:[token %s] Content-Type:[application/json] Session-Token:[token %s] User-Agent:[example-app/1.0.0 (linux;amd64)] X-App-Version:[1.0.0]]", apiToken, apiToken)
+	legacy.Debug().Msgf("HTTPS_PROXY = http://proxyuser:%s@127.0.0.1:41234", proxyPassword)
+	legacy.Debug().Msgf("client using proxy: http://proxyuser:%s@127.0.0.1:41234", proxyPassword)
+
+	shown := requireEventShown(t, out, "Content-Type:[application/json]")
+	assert.NotContains(t, shown, apiToken)
+	assert.NotContains(t, shown, proxyPassword)
+}
+
+func TestDebugLog_HyphenatedNamesSurviveEnvironmentTerms(t *testing.T) {
+	base, out := newDebugLog(t, configWithRedactionTerms("Content", "reference", "depth", "script", "login", "cycle", "group", "child"))
+	legacy := withExt(base, "legacy:2")
+
+	legacy.Debug().Msg("monitor /home/ci/project --org=example-org --target-reference=feature-x --detection-depth=3 --project-lifecycle=production --all-projects -d")
+	base.Debug().Msg("< response [0x2]: header: map[Content-Security-Policy:[script-src 'self'; frame-ancestors https://login.example.com; report-to csp-report-group] X-Content-Type-Options:[nosniff]]")
+
+	shown := requireEventShown(t, out, "--target-reference=")
+	for _, visible := range []string{"--detection-depth=3", "--project-lifecycle=production", "Content-Security-Policy", "script-src", "login.example.com", "csp-report-group", "X-Content-Type-Options"} {
+		assert.Contains(t, shown, visible)
+	}
 }

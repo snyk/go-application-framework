@@ -718,7 +718,7 @@ func TestAddTermsToReplace(t *testing.T) {
 			name:       "term inside an identifier is left intact",
 			termsToAdd: []string{"requests"},
 			input:      "no_relevant_requests requests app-requests",
-			expected:   "no_relevant_requests *** app-***",
+			expected:   "no_relevant_requests *** app-requests",
 		},
 	}
 
@@ -1165,10 +1165,64 @@ func TestRedactWholeWord_OnlyMatchesStandaloneWords(t *testing.T) {
 			expected: "request١",
 		},
 		{
-			name:     "a rejected candidate match resumes search to find a later valid one",
+			name:     "hyphenated term joined to a word by a hyphen is not a whole word",
 			input:    "xa-a-a",
 			term:     "a-a",
-			expected: "xa-***",
+			expected: "xa-a-a",
+		},
+		{
+			name:     "a rejected candidate match resumes search to find a later valid one",
+			input:    "xrequest request",
+			term:     "request",
+			expected: "xrequest ***",
+		},
+		{
+			name:     "term joined to a word by a hyphen is not a whole word",
+			input:    "Content-Type",
+			term:     "Content",
+			expected: "Content-Type",
+		},
+		{
+			name:     "term joined to a word by a dot is not a whole word",
+			input:    "request.id",
+			term:     "request",
+			expected: "request.id",
+		},
+		{
+			name:     "term after a double hyphen is a whole word",
+			input:    "wait--request",
+			term:     "request",
+			expected: "wait--***",
+		},
+		{
+			name:     "term followed by a full stop is a whole word",
+			input:    "the password is request.",
+			term:     "request",
+			expected: "the password is ***.",
+		},
+		{
+			name:     "term between slashes is a whole word",
+			input:    "/a/request/b",
+			term:     "request",
+			expected: "/a/***/b",
+		},
+		{
+			name:     "term between query separators is a whole word",
+			input:    "?a=request&b=1",
+			term:     "request",
+			expected: "?a=***&b=1",
+		},
+		{
+			name:     "exact hyphenated term is a whole word",
+			input:    "value a-b here",
+			term:     "a-b",
+			expected: "value *** here",
+		},
+		{
+			name:     "term followed by a trailing hyphen is a whole word",
+			input:    "request- next",
+			term:     "request",
+			expected: "***- next",
 		},
 		{
 			name:     "no occurrence of the term",

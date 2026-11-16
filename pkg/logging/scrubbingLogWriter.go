@@ -680,7 +680,7 @@ func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 		}
 		start := end + idx
 		matchEnd := start + len(term)
-		if wholeWord && hasIdentifierNeighbor(s, start, matchEnd) {
+		if wholeWord && isPartOfLargerToken(s, start, matchEnd) {
 			if jsonAware {
 				qs = qs.advance(s[end : start+1])
 			}
@@ -714,24 +714,40 @@ func redact(s, term, replacement string, wholeWord, jsonAware bool) string {
 	return builder.String()
 }
 
-func hasIdentifierNeighbor(s string, start, end int) bool {
-	if start > 0 {
-		r, _ := utf8.DecodeLastRuneInString(s[:start])
-		if isIdentifierRune(r) {
+// isPartOfLargerToken reports whether s[start:end] continues into its neighbors. `-` and `.` join
+// only between identifier characters, so `Content-Type` and `--target-reference` are single tokens
+// while the full stop ending a sentence is not part of the last word.
+func isPartOfLargerToken(s string, start, end int) bool {
+	first, _ := utf8.DecodeRuneInString(s[start:end])
+	before, size := utf8.DecodeLastRuneInString(s[:start])
+	if isIdentifierRune(before) {
+		return true
+	}
+	if isWordJoiner(before) && isIdentifierRune(first) {
+		beyond, _ := utf8.DecodeLastRuneInString(s[:start-size])
+		if isIdentifierRune(beyond) {
 			return true
 		}
 	}
-	if end < len(s) {
-		r, _ := utf8.DecodeRuneInString(s[end:])
-		if isIdentifierRune(r) {
-			return true
-		}
+
+	last, _ := utf8.DecodeLastRuneInString(s[start:end])
+	after, size := utf8.DecodeRuneInString(s[end:])
+	if isIdentifierRune(after) {
+		return true
+	}
+	if isWordJoiner(after) && isIdentifierRune(last) {
+		beyond, _ := utf8.DecodeRuneInString(s[end+size:])
+		return isIdentifierRune(beyond)
 	}
 	return false
 }
 
 func isIdentifierRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_'
+}
+
+func isWordJoiner(r rune) bool {
+	return r == '-' || r == '.'
 }
 
 // quoteState tracks whether a scan position sits inside an open, unescaped double-quoted JSON
