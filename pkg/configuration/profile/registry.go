@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -18,9 +21,6 @@ import (
 const profileExt = ".json"
 
 var namePattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
-
-// reservedNames are device names that Windows reserves, so they cannot be used as file names there.
-var reservedNames = regexp.MustCompile(`^(con|prn|aux|nul|com[0-9]|lpt[0-9])$`)
 
 type fileRegistry struct {
 	dir    string
@@ -48,10 +48,18 @@ func WithLogger(logger *zerolog.Logger) FileRegistryOption {
 
 // NewFileRegistry returns a registry that reads each profile from dir/<name>.json, where dir is the profile directory
 // itself. The default profile is base itself, and every other profile is derived from base. dir must be absolute, and
-// it is not created: a profile file is created by the first persisted write of its profile.
+// it is not created: a profile file is created by the first persisted write of its profile. An empty or relative dir
+// returns SNYK-CLI-0036.
 func NewFileRegistry(dir string, base configuration.Configuration, opts ...FileRegistryOption) (Registry, error) {
+	if dir == "" {
+		return nil, cli.NewConfigProfileDirectoryInvalidError(
+			fmt.Sprintf("The profile directory is not set. Set %s to an absolute path.", DirKey),
+		)
+	}
 	if !filepath.IsAbs(dir) {
-		return nil, fmt.Errorf("profile directory must be absolute: %q", dir)
+		return nil, cli.NewConfigProfileDirectoryInvalidError(
+			fmt.Sprintf("The profile directory must be an absolute path. Set %s to one.", DirKey),
+		)
 	}
 	r := &fileRegistry{
 		dir:      dir,
@@ -66,8 +74,10 @@ func NewFileRegistry(dir string, base configuration.Configuration, opts ...FileR
 }
 
 func (r *fileRegistry) Profile(name string) (Profile, error) {
-	if err := validName(name); err != nil {
-		return nil, err
+	if !namePattern.MatchString(name) {
+		return nil, cli.NewInvalidConfigProfileNameError(
+			fmt.Sprintf(`Profile name %q is invalid: use lowercase letters, digits, "-" or "_".`, name),
+		)
 	}
 
 	r.mu.Lock()
@@ -98,45 +108,62 @@ func (r *fileRegistry) load(name string) (*profileImpl, error) {
 		// load of a name logs it, as the profile is cached.
 		r.logger.Debug().Msgf("profile %q has no file yet, using an empty profile (%s)", name, path)
 	case err != nil:
-		return nil, fmt.Errorf("profile %s: %w", name, err)
+		return nil, directoryError(err)
 	case !info.Mode().IsRegular():
-		return nil, fmt.Errorf("%w: %s: not a regular file", ErrCorrupt, name)
+		return nil, unreadableError(name, "it is not a regular file")
 	default:
 		// an unreadable or invalid file must not pass as an empty profile, or the command would run with the defaults
-		if err = checkProfileFile(path); err != nil {
-			return nil, fmt.Errorf("%w: %s: %w", ErrCorrupt, name, err)
+		if err = checkProfileFile(name, path); err != nil {
+			return nil, err
 		}
 	}
 
 	config, err := configuration.Derive(r.base, configuration.WithPinnedFile(path))
 	if err != nil {
-		return nil, fmt.Errorf("profile %s: %w", name, err)
+		return nil, cli.NewConfigProfilesUnavailableError(fmt.Sprintf("Profile %q cannot be loaded.", name))
 	}
 	return &profileImpl{name: name, config: config}, nil
 }
 
-func validName(name string) error {
-	if !namePattern.MatchString(name) || reservedNames.MatchString(name) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, name)
-	}
-	return nil
+// unreadableError reports a profile file that cannot be used. It has no cause, because an OS error carries the path.
+func unreadableError(name, why string) error {
+	return cli.NewConfigProfileUnreadableError(fmt.Sprintf("Profile %q cannot be read: %s.", name, why))
 }
 
-// checkProfileFile reports whether the file is empty or holds a JSON object.
-func checkProfileFile(path string) error {
+// directoryError reports a profile directory that cannot be used, because of an OS error. Its detail never contains a
+// path, and it has no cause, because the OS error carries one.
+func directoryError(err error) error {
+	return cli.NewConfigProfileDirectoryInvalidError(
+		fmt.Sprintf("The profile directory cannot be used: %s.", osText(err)),
+	)
+}
+
+// osText is the reason of an OS error for a detail sentence, without the path that os.Lstat, os.Stat and os.ReadFile
+// add to it, and without the period that Windows ends it with.
+func osText(err error) string {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		err = pathErr.Err
+	}
+	return strings.TrimRight(err.Error(), ". ")
+}
+
+// checkProfileFile returns the error when the profile file cannot be used, and nil when it can. The error has no cause,
+// so the path of the file does not reach the marshal error.
+func checkProfileFile(name, path string) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return unreadableError(name, osText(err))
 	}
 	if len(bytes.TrimSpace(content)) == 0 {
 		return nil
 	}
-	var values map[string]any
-	if err := json.Unmarshal(content, &values); err != nil {
-		return err
+	var value any
+	if err = json.Unmarshal(content, &value); err != nil {
+		return unreadableError(name, "the file is not valid JSON")
 	}
-	if values == nil {
-		return errors.New("not a JSON object")
+	if _, ok := value.(map[string]any); !ok {
+		return unreadableError(name, "the file is not a JSON object")
 	}
 	return nil
 }
