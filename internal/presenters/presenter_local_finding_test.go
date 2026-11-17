@@ -736,3 +736,29 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 		require.Regexp(t, "Snyk/Code/.*", sarifOutput.Runs[0].AutomationDetails.Id)
 	})
 }
+
+func renderLocalFindingHuman(t *testing.T, testdata string) string {
+	t.Helper()
+	input, err := sarifToLocalFinding(t, testdata)
+	require.NoError(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	writer := new(bytes.Buffer)
+
+	p := presenters.NewLocalFindingsRenderer([]*local_models.LocalFinding{input}, config, writer)
+	require.NoError(t, p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType))
+	return writer.String()
+}
+
+func TestPresenterLocalFinding_SummaryReportsFilesNotAnalyzed(t *testing.T) {
+	// with-ignores.json reports 5 TypeScript files with type FAILED_PARSING.
+	result := renderLocalFindingHuman(t, "testdata/with-ignores.json")
+	assert.Contains(t, result, "Not analyzed:      5 files (TypeScript 5, failed to parse)")
+}
+
+func TestPresenterLocalFinding_SummaryOmitsNotAnalyzedWhenAllFilesAnalyzed(t *testing.T) {
+	result := renderLocalFindingHuman(t, "testdata/3-low-issues.json")
+	assert.NotContains(t, result, "Not analyzed")
+}

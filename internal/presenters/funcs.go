@@ -291,8 +291,15 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+// describeFilesNotAnalyzed summarises the coverage entries that were not analyzed
+// (unsupported or failed parsing) for the human-readable test summary.
+func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
+	return ""
+}
+
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
+	fnMap["describeFilesNotAnalyzed"] = describeFilesNotAnalyzed
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
 	fnMap["toLowerCase"] = strings.ToLower
