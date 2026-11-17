@@ -258,9 +258,12 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	const charGroup = "[a-zA-Z0-9-_:.=/+~]{6,}"
-	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
+	// The userinfo cannot cross a space, quote or '/', so the rule stays inside one URL and never
+	// reaches an email address later in the text. It runs to the last '@' before the host, because a
+	// password may contain an unencoded '@'.
+	s := `(https?://)([^\s/"']+)@`
 	dict[s] = scrubStruct{
-		groupToRedact: 3,
+		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
@@ -383,7 +386,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	for _, quote := range []string{`'`, `"`} {
 		chars := fmt.Sprintf(`(?:[^%s\n\\]|\\.)*`, quote)
 		embeddedQuote := fmt.Sprintf(`%s[^%s\s,;)\]}\\]`, quote, quote)
-		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*%s(?<short_form_value>%s(?:%s%s)*)%s[,}]?`, shortForm, quote, chars, embeddedQuote, chars, quote)
+		s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)['"]?:\s*%s(?<short_form_value>%s(?:%s%s)*)%s[,}]?`, shortForm, quote, chars, embeddedQuote, chars, quote)
 		dict[s] = scrubStruct{
 			groupToRedact: 2,
 			regex:         regexp.MustCompile(s),
@@ -391,11 +394,9 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Same as above, but for values with no surrounding quotes at all, e.g. u: john.doe,
-	// The value class excludes ':' too: without that, a greedy separator backtracking off an
-	// already-redacted 'key': '***' leaves the colon for this group to swallow instead. A quote
-	// inside the value belongs to it, but the first and last character are never a quote, so a
-	// quoted value is left to the patterns above and a closing quote is kept.
-	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?<short_form_value>[^,'":\s](?:[^,:\s]*[^,'":\s])?)[,}]?`, shortForm)
+	// The first and last character are never a quote, so a quoted value is left to the patterns
+	// above and a closing quote is kept.
+	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)['"]?:\s*(?<short_form_value>[^,'":\s](?:[^,:\s]*[^,'":\s])?)[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),

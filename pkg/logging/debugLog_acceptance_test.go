@@ -68,6 +68,10 @@ func fakeLowercaseCredential() string {
 	return strings.Repeat("qwertyuiop", 2)
 }
 
+func fakeURLPasswordParts() (string, string) {
+	return strings.Repeat("Kq7", 2), strings.Repeat("Zp9", 2)
+}
+
 func fakeGitHubPATSuffix() string {
 	return strings.Repeat("Ab12Cd34Ef56", 3)
 }
@@ -374,4 +378,23 @@ func TestDebugLog_LowercaseBasicCredentialInAnAuthorizationHeaderIsRedacted(t *t
 
 	shown := requireEventShown(t, out, "> Authorization: Basic ***")
 	assert.NotContains(t, shown, credential)
+}
+
+func TestDebugLog_URLFollowedByAnEmailAddressInTheSameMessageIsShown(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("cloning https://api.example.com:8443/org/repo for dev@example.com")
+
+	requireEventShown(t, out, "cloning https://api.example.com:8443/org/repo for dev@example.com")
+}
+
+func TestDebugLog_URLPasswordContainingAnAtSignIsRedactedWhole(t *testing.T) {
+	before, after := fakeURLPasswordParts()
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("cloning https://someone:" + before + "@" + after + "@git.example.com/org/repo.git")
+
+	shown := requireEventShown(t, out, "cloning https://***@git.example.com/org/repo.git")
+	assert.NotContains(t, shown, before)
+	assert.NotContains(t, shown, after)
 }
