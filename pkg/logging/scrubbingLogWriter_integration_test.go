@@ -129,6 +129,16 @@ func TestScrubbingWriter_NonSecretFieldsKeepTheirValues(t *testing.T) {
 			event:     `{"level":"debug","message":"refreshing the token because the server rejected the Bearer request"}`,
 			preserved: map[string]any{"message": "refreshing the token because the server rejected the Bearer request"},
 		},
+		{
+			name:      "URL followed by an email address in the same message",
+			event:     `{"level":"debug","message":"cloning https://api.example.com:8443/org/repo for dev@example.com"}`,
+			preserved: map[string]any{"message": "cloning https://api.example.com:8443/org/repo for dev@example.com"},
+		},
+		{
+			name:      "short-form key next to another field in a non-JSON message",
+			event:     `{"level":"debug","message":"fields \"u\",\"region\":\"eu\" loaded"}`,
+			preserved: map[string]any{"message": `fields "u","region":"eu" loaded`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,6 +158,8 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 	tokenConfig.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
 	tokenWithTermsConfig := configWithRedactionTerms("Content", "reference", "command")
 	tokenWithTermsConfig.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
+	before, after := fakeURLPasswordParts()
+	atSignPasswordEvent := `{"level":"debug","message":"cloning https://someone:` + before + "@" + after + `@git.example.com/org/repo.git"}`
 
 	tests := []struct {
 		name   string
@@ -220,6 +232,18 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 			config: configuration.NewWithOpts(),
 			event:  `{"level":"debug","message":"> Authorization: Basic ` + fakeLowercaseCredential() + `"}`,
 			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "URL password before an at sign inside it",
+			config: configuration.NewWithOpts(),
+			event:  atSignPasswordEvent,
+			secret: before,
+		},
+		{
+			name:   "URL password after an at sign inside it",
+			config: configuration.NewWithOpts(),
+			event:  atSignPasswordEvent,
+			secret: after,
 		},
 	}
 	for _, tt := range tests {

@@ -1928,3 +1928,44 @@ func TestScrubValue_ShortFormValuesKeepAnEmbeddedQuote(t *testing.T) {
 		})
 	}
 }
+
+func TestScrubValue_URLCredentialsStopAtTheURL(t *testing.T) {
+	dict := getDefaultDict()
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"URL followed by an email address", "cloning https://api.example.com:8443/org/repo for dev@example.com", "cloning https://api.example.com:8443/org/repo for dev@example.com"},
+		{"at sign inside the password", "cloning https://a:b@c@host.com/org/repo", "cloning https://***@host.com/org/repo"},
+		{"host with a port", "cloning https://a:b@host.com:8443/org/repo", "cloning https://***@host.com:8443/org/repo"},
+		{"URL inside double quotes", `url="https://a:b@host.com/x" next="c@d.com"`, `url="https://***@host.com/x" next="c@d.com"`},
+		{"URL inside single quotes followed by a quoted email", `url='https://host.com:8443/x', login='a:b@c.com'`, `url='https://host.com:8443/x', login='a:b@c.com'`},
+		{"URL followed by whitespace and an at sign", "https://host.com:8443 a@b", "https://host.com:8443 a@b"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, string(ScrubValue([]byte(tc.input), dict)))
+		})
+	}
+}
+
+func TestScrubValue_ShortFormKeyNeedsASingleSeparatorBeforeItsValue(t *testing.T) {
+	dict := getDefaultDict()
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"double-quoted key next to another field", `fields "u","region":"eu" loaded`, `fields "u","region":"eu" loaded`},
+		{"single-quoted key next to another field", `fields 'p','host':'example.com' loaded`, `fields 'p','host':'example.com' loaded`},
+		{"unquoted key followed by a comma", `keys u, region: eu`, `keys u, region: eu`},
+		{"key with a colon is still redacted", `u: john.doe, region: eu`, `u: ***, region: eu`},
+		{"argument value followed by more text", `-u john.doe -p hunter2 and more text`, `-u *** -p *** and more text`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, string(ScrubValue([]byte(tc.input), dict)))
+		})
+	}
+}
