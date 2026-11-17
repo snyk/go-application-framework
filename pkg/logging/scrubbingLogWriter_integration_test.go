@@ -107,6 +107,18 @@ func TestScrubbingWriter_NonSecretFieldsKeepTheirValues(t *testing.T) {
 			event:     `{"level":"debug","args":"snyk test -u","command":"monitor","message":"dispatching"}`,
 			preserved: map[string]any{"args": "snyk test -u", "command": "monitor"},
 		},
+		{
+			name:      "hyphenated word containing a redaction term",
+			terms:     redactionTerms,
+			event:     `{"level":"debug","message":"> Content-Type: application/json"}`,
+			preserved: map[string]any{"message": "> Content-Type: application/json"},
+		},
+		{
+			name:      "command line flag containing a redaction term",
+			terms:     redactionTerms,
+			event:     `{"level":"debug","message":"args: --target-reference=main"}`,
+			preserved: map[string]any{"message": "args: --target-reference=main"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,6 +136,8 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 	apiToken := fakeAPIToken()
 	tokenConfig := configuration.NewWithOpts()
 	tokenConfig.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
+	tokenWithTermsConfig := configWithRedactionTerms("Content", "reference", "command")
+	tokenWithTermsConfig.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
 
 	tests := []struct {
 		name   string
@@ -165,6 +179,12 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 			name:   "configured API token anywhere in the event",
 			config: tokenConfig,
 			event:  `{"level":"debug","env":"SNYK_CFG=` + apiToken + `","message":"authenticating with ` + apiToken + `"}`,
+			secret: apiToken,
+		},
+		{
+			name:   "configured API token joined to other text by a hyphen or dot",
+			config: tokenWithTermsConfig,
+			event:  `{"level":"debug","header":"prefix-` + apiToken + `","message":"cached under ` + apiToken + `.suffix"}`,
 			secret: apiToken,
 		},
 		{
