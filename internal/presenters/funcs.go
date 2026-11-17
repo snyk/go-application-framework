@@ -294,7 +294,32 @@ func getSarifTemplateFuncMap() template.FuncMap {
 // describeFilesNotAnalyzed summarises the coverage entries that were not analyzed
 // (unsupported or failed parsing) for the human-readable test summary.
 func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
-	return ""
+	total := 0
+	parts := make([]string, 0, len(coverage))
+	for _, entry := range coverage {
+		if entry.IsSupported || entry.Files <= 0 {
+			continue
+		}
+		total += entry.Files
+		parts = append(parts, fmt.Sprintf("%s %d, %s", entry.Lang, entry.Files, notAnalyzedReason(entry.Type)))
+	}
+	if total == 0 {
+		return ""
+	}
+
+	noun := "files"
+	if total == 1 {
+		noun = "file"
+	}
+	return fmt.Sprintf("%d %s (%s)", total, noun, strings.Join(parts, "; "))
+}
+
+// notAnalyzedReason turns a coverage type such as FAILED_PARSING into text for people.
+func notAnalyzedReason(coverageType string) string {
+	if coverageType == "FAILED_PARSING" {
+		return "failed to parse"
+	}
+	return strings.ToLower(strings.ReplaceAll(coverageType, "_", " "))
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
