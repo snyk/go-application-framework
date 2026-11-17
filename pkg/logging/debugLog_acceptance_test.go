@@ -64,6 +64,10 @@ func fakeBearerToken() string {
 	return strings.Repeat("f8a1c2d3", 4)
 }
 
+func fakeLowercaseCredential() string {
+	return strings.Repeat("qwertyuiop", 2)
+}
+
 func fakeGitHubPATSuffix() string {
 	return strings.Repeat("Ab12Cd34Ef56", 3)
 }
@@ -334,4 +338,40 @@ func TestDebugLog_HyphenatedNamesSurviveEnvironmentTerms(t *testing.T) {
 	for _, visible := range []string{"--detection-depth=3", "--project-lifecycle=production", "Content-Security-Policy", "script-src", "login.example.com", "csp-report-group", "X-Content-Type-Options"} {
 		assert.Contains(t, shown, visible)
 	}
+}
+
+func TestDebugLog_ProseMentioningTokenOrBasicAuthenticationIsNotRedacted(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("Using token authentication and Basic authentication flow")
+
+	requireEventShown(t, out, "Using token authentication and Basic authentication flow")
+}
+
+func TestDebugLog_LowercaseWordAfterTokenOrBearerInProseIsNotRedacted(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("refreshing the token because the server rejected the Bearer request")
+
+	requireEventShown(t, out, "refreshing the token because the server rejected the Bearer request")
+}
+
+func TestDebugLog_UUIDShapedTokenInProseIsRedacted(t *testing.T) {
+	apiToken := fakeAPIToken()
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("using token " + apiToken + " for this request")
+
+	shown := requireEventShown(t, out, "using token *** for this request")
+	assert.NotContains(t, shown, apiToken)
+}
+
+func TestDebugLog_LowercaseBasicCredentialInAnAuthorizationHeaderIsRedacted(t *testing.T) {
+	credential := fakeLowercaseCredential()
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("> Authorization: Basic " + credential)
+
+	shown := requireEventShown(t, out, "> Authorization: Basic ***")
+	assert.NotContains(t, shown, credential)
 }

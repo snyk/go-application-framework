@@ -65,6 +65,8 @@ type scrubStruct struct {
 	groupToRedact int
 	// the regex pattern to scrub
 	regex *regexp.Regexp
+	// if set, a captured group is redacted only when this reports true for it
+	redactIf func(captured string) bool
 	// the exact term to replace
 	replace string
 	// whether `replace` must stand alone as a word/identifier to match
@@ -262,28 +264,21 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
+	s = `(?i)(authorization["']?\s*[:=]\s*[\["']*\s*(?:token|bearer|basic|negotiate)\s+)([a-zA-Z0-9-_:.=/+~]+)`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("([n|N]egotiate )(%s)", charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
+	// Outside an Authorization header these words also start ordinary prose, such as "token
+	// authentication", so only a value shaped like a credential is redacted.
+	for _, scheme := range []string{`[tT]oken[\\"\s]+`, `[bB]earer `, `[bB]asic `, `[nN]egotiate `} {
+		s = fmt.Sprintf(`(%s)(%s)`, scheme, charGroup)
+		dict[s] = scrubStruct{
+			groupToRedact: 2,
+			regex:         regexp.MustCompile(s),
+			redactIf:      looksLikeCredential,
+		}
 	}
 
 	s = fmt.Sprintf("(gh[ps])_(%s)", charGroup)
@@ -306,19 +301,20 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// github
-	s = fmt.Sprintf(`(access_token[\\="\s:]+)(%s)&?`, charGroup)
+	const assignment = `[\\"\s]*[=:][\\="\s:]*`
+	s = fmt.Sprintf(`(access_token%s)(%s)&?`, assignment, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`(refresh_token[\\="\s:]+)(%s)&?`, charGroup)
+	s = fmt.Sprintf(`(refresh_token%s)(%s)&?`, assignment, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`(token[\\="\s:]+)(%s)&?`, charGroup)
+	s = fmt.Sprintf(`(token%s)(%s)&?`, assignment, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -420,6 +416,25 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	return dict
 }
 
+// looksLikeCredential reports whether value contains a digit, a base64 character, or a lowercase
+// letter followed by an uppercase one, as digit-free base64 such as "dXNlcjpwYXNz" does. An
+// all-lowercase word without digits does not, so it is treated as prose.
+func looksLikeCredential(value string) bool {
+	if strings.ContainsAny(value, "0123456789=+/") {
+		return true
+	}
+	for i := 1; i < len(value); i++ {
+		if isASCIILower(value[i-1]) && isASCIIUpper(value[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isASCIILower(b byte) bool { return b >= 'a' && b <= 'z' }
+
+func isASCIIUpper(b byte) bool { return b >= 'A' && b <= 'Z' }
+
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
@@ -483,7 +498,7 @@ func applyRules(s string, rules []scrubStruct, includeWholeWordTerms bool) strin
 	for _, entry := range rules {
 		switch {
 		case entry.replace == "":
-			s = redactMatchedGroup(s, entry.regex, entry.groupToRedact)
+			s = redactMatchedGroup(s, entry.regex, entry.groupToRedact, entry.redactIf)
 		case !entry.wholeWord:
 			s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 		case includeWholeWordTerms:
@@ -842,7 +857,12 @@ func isJSONNumberChar(b byte) bool {
 // happens to be `{`, `,` or `"` — blank out identical text elsewhere in the same event, which
 // corrupts the surrounding payload (see CLI-1732). Matches returned by FindAll are non-overlapping
 // and in order, so the spans can be stitched back together in a single pass.
-func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) string {
+//
+// A match whose group redactIf rejects is left as it is, and the search resumes where that group
+// starts, so a rejected word such as the second "Bearer" in "Bearer Bearer <credential>" cannot
+// hide the credential after it. Resuming on a slice drops the context before it, so redactIf is
+// only set on rules that have no `\b` or `^`. A nil redactIf redacts every match.
+func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int, redactIf func(string) bool) string {
 	matches := regex.FindAllStringSubmatchIndex(s, -1)
 	if len(matches) == 0 {
 		return s
@@ -856,6 +876,11 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int) strin
 		// group out of range, or it did not participate in the match, or it matched empty
 		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
 			continue
+		}
+		if redactIf != nil && !redactIf(s[match[lo]:match[hi]]) {
+			builder.WriteString(s[end:match[lo]])
+			builder.WriteString(redactMatchedGroup(s[match[lo]:], regex, groupToRedact, redactIf))
+			return builder.String()
 		}
 		builder.WriteString(s[end:match[lo]])
 		builder.WriteString(SANITIZE_REPLACEMENT_STRING)

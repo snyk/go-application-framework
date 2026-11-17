@@ -119,6 +119,16 @@ func TestScrubbingWriter_NonSecretFieldsKeepTheirValues(t *testing.T) {
 			event:     `{"level":"debug","message":"args: --target-reference=main"}`,
 			preserved: map[string]any{"message": "args: --target-reference=main"},
 		},
+		{
+			name:      "prose mentioning token or basic authentication",
+			event:     `{"level":"debug","message":"Using token authentication and Basic authentication flow"}`,
+			preserved: map[string]any{"message": "Using token authentication and Basic authentication flow"},
+		},
+		{
+			name:      "lowercase word after token or bearer in prose",
+			event:     `{"level":"debug","message":"refreshing the token because the server rejected the Bearer request"}`,
+			preserved: map[string]any{"message": "refreshing the token because the server rejected the Bearer request"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -198,6 +208,18 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 			config: configuration.NewWithOpts(),
 			event:  `{"level":"debug","password":"correct-horse-battery","message":"proxy configured"}`,
 			secret: "correct-horse-battery",
+		},
+		{
+			name:   "UUID-shaped token after token in prose",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","message":"using token ` + apiToken + ` for this request"}`,
+			secret: apiToken,
+		},
+		{
+			name:   "lowercase basic credential in an authorization header",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","message":"> Authorization: Basic ` + fakeLowercaseCredential() + `"}`,
+			secret: fakeLowercaseCredential(),
 		},
 	}
 	for _, tt := range tests {

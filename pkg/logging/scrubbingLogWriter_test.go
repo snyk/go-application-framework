@@ -814,6 +814,74 @@ func TestSnykPATScrubbing(t *testing.T) {
 	}
 }
 
+func TestAuthSchemeAndTokenRules(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+	shaped := strings.Repeat("a1b2", 4)
+	lowercase := strings.Repeat("qwerty", 3)
+	digitFreeBase64 := base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	uuid := strings.Join([]string{"5f3c9a2e", "8d41", "4b7a", "9c2e", "1f6d3b8a0e57"}, "-")
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"bearer in an authorization header", "Authorization: Bearer " + shaped, "Authorization: Bearer ***"},
+		{"digit-free basic in an authorization header", "Authorization: Basic " + lowercase, "Authorization: Basic ***"},
+		{"negotiate in a proxy authorization header", "Proxy-Authorization: Negotiate " + lowercase, "Proxy-Authorization: Negotiate ***"},
+		{"token scheme in a lowercase header", "authorization: token " + lowercase, "authorization: token ***"},
+		{"go-printed header map", "map[Accept:[application/json] Authorization:[Bearer " + lowercase + "]]", "map[Accept:[application/json] Authorization:[Bearer ***]]"},
+		{"quoted header in embedded JSON", `{"Authorization": "Basic ` + lowercase + `"}`, `{"Authorization": "Basic ***"}`},
+		{"credential-shaped bearer outside a header", "retrying with Bearer " + shaped, "retrying with Bearer ***"},
+		{"digit-free base64 basic outside a header", "retrying with Basic " + digitFreeBase64, "retrying with Basic ***"},
+		{"basic with base64 padding outside a header", "retrying with Basic " + lowercase + "==", "retrying with Basic ***"},
+		{"uuid after token in prose", "using token " + uuid + " now", "using token *** now"},
+		{"credential after a repeated scheme word", "Bearer Bearer " + shaped, "Bearer Bearer ***"},
+		{"credential after a repeated long scheme word", "Negotiate Negotiate " + shaped, "Negotiate Negotiate ***"},
+		{"lowercase word after bearer in prose", "the Bearer request failed", "the Bearer request failed"},
+		{"lowercase word after basic in prose", "Basic authentication flow", "Basic authentication flow"},
+		{"lowercase word after negotiate in prose", "Negotiate handshake started", "Negotiate handshake started"},
+		{"lowercase word after token in prose", "token because it expired", "token because it expired"},
+		{"lowercase word after access_token in prose", "renewing access_token because it expired", "renewing access_token because it expired"},
+		{"token followed by equals", "token=" + lowercase, "token=***"},
+		{"token followed by colon", "token: " + lowercase, "token: ***"},
+		{"access_token followed by equals", "access_token=" + lowercase + "&expire", "access_token=***&expire"},
+		{"refresh_token followed by colon", "refresh_token: " + lowercase, "refresh_token: ***"},
+		{"escaped JSON token field in text", `{\"token\":\"` + lowercase + `\"}`, `{\"token\":\"***\"}`},
+		{"pipe before oken is not token", "a |oken " + shaped, "a |oken " + shaped},
+		{"pipe before earer is not bearer", "a |earer " + shaped, "a |earer " + shaped},
+		{"pipe before asic is not basic", "a |asic " + shaped, "a |asic " + shaped},
+		{"pipe before egotiate is not negotiate", "a |egotiate " + shaped, "a |egotiate " + shaped},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(ScrubValue([]byte(tt.input), dict)))
+		})
+	}
+}
+
+func TestLooksLikeCredential(t *testing.T) {
+	tests := []struct {
+		value    string
+		expected bool
+	}{
+		{"abcdef1", true},
+		{"abcdef=", true},
+		{"abc+def", true},
+		{"abc/def", true},
+		{"abcDef", true},
+		{"authentication", false},
+		{"Authentication", false},
+		{"ABCDEF", false},
+		{"snake_case-word.x", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			assert.Equal(t, tt.expected, looksLikeCredential(tt.value))
+		})
+	}
+}
+
 func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1737,7 +1805,7 @@ func TestScrub_JSONIsScrubbedValueByValue(t *testing.T) {
 	}{
 		{
 			name:     "nested objects and arrays",
-			input:    `{"a":{"b":[{"password":"x"},"Bearer abcdefghijk",[1,{"token":[2]}]]},"n":1}`,
+			input:    `{"a":{"b":[{"password":"x"},"Bearer abcdefghij1",[1,{"token":[2]}]]},"n":1}`,
 			expected: `{"a":{"b":[{"password":"***"},"Bearer ***",[1,{"token":"***"}]]},"n":1}`,
 		},
 		{
@@ -1747,7 +1815,7 @@ func TestScrub_JSONIsScrubbedValueByValue(t *testing.T) {
 		},
 		{
 			name:     "unicode escapes do not hide a credential",
-			input:    `{"m":"\u0042earer abcdefghijk"}`,
+			input:    `{"m":"\u0042earer abcdefghij1"}`,
 			expected: `{"m":"Bearer ***"}`,
 		},
 		{
@@ -1757,7 +1825,7 @@ func TestScrub_JSONIsScrubbedValueByValue(t *testing.T) {
 		},
 		{
 			name:     "string scalar as the whole document",
-			input:    `"Bearer abcdefghijk"`,
+			input:    `"Bearer abcdefghij1"`,
 			expected: `"Bearer ***"`,
 		},
 		{
@@ -1787,7 +1855,7 @@ func TestScrub_JSONIsScrubbedValueByValue(t *testing.T) {
 		},
 		{
 			name:     "html characters in a changed value are not escaped",
-			input:    `{"m":"<a href=\"x\">Bearer abcdefghijk</a>"}`,
+			input:    `{"m":"<a href=\"x\">Bearer abcdefghij1</a>"}`,
 			expected: `{"m":"<a href=\"x\">Bearer ***</a>"}`,
 		},
 	}
