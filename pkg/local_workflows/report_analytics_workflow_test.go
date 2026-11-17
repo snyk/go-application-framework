@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	testOrgID    = "orgId"
+	testOrgID    = "11111111-2222-4333-8444-555555555555"
 	testTenantID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 )
 
@@ -417,9 +417,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	orgId := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(configuration.INPUT_DIRECTORY, "/my/file")
 
 	requestPayload := testGetScanDonePayloadString()
@@ -456,9 +455,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	orgId := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -530,12 +528,14 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAV
 	orgErr := errors.New("org lookup failed")
 	tenantErr := errors.New("tenant lookup failed")
 	tests := map[string]struct {
+		org          string
 		orgErr       error
 		tenant       string
 		tenantErr    error
 		expectedErrs []error
 	}{
 		"neither org nor tenant":                  {},
+		"org that is not a UUID":                  {org: "my-org", tenant: testTenantID},
 		"org lookup fails and no tenant":          {orgErr: orgErr, expectedErrs: []error{orgErr}},
 		"tenant lookup fails":                     {tenantErr: tenantErr, expectedErrs: []error{tenantErr}},
 		"org and tenant lookups fail":             {orgErr: orgErr, tenantErr: tenantErr, expectedErrs: []error{orgErr, tenantErr}},
@@ -551,7 +551,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_sendsNothingWithoutAnOrgOrAV
 				return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody, Header: make(http.Header)}
 			})
 			invocationCtx := testReportAnalyticsInvocationContext(t, ctrl, client, nil)
-			testSetOrgAndTenant(invocationCtx.GetConfiguration(), "", tc.orgErr, tc.tenant, tc.tenantErr)
+			testSetOrgAndTenant(invocationCtx.GetConfiguration(), tc.org, tc.orgErr, tc.tenant, tc.tenantErr)
 
 			_, err := reportAnalyticsEntrypoint(invocationCtx, []workflow.Data{testPayload(testGetAnalyticsV2PayloadString())})
 
@@ -582,9 +582,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	orgId := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 
 	requestPayload := `{}`
 
@@ -645,9 +644,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	orgId := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	requestPayload := ""
 
 	input := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(requestPayload))

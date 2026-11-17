@@ -154,6 +154,14 @@ Tests live **next to their source files** (`foo.go` → `foo_test.go`).
 - **Tests always.** Write/update unit tests AND integration tests and iterate until they pass. Use
   `t.Setenv` (never `os.Setenv`). Use existing `gomock`-generated mocks; don't
   hand-roll new ones. Don't fix test data to make tests pass.
+- **Generate clients for versioned Snyk APIs.** A `/rest/` or `/hidden/`
+  endpoint called with `?version=YYYY-MM-DD` has an OpenAPI spec in the repo of
+  the service that owns it, at `internal/api/<rest|hidden>/versions/<version>/spec.yaml`.
+  Copy that spec into GAF, generate the client with `oapi-codegen`
+  (`client: true`, laid out like `internal/apiclients/contributors_ingest/`) and
+  call the generated client. If the copy here lacks the endpoint, refresh it.
+  Hand-write clients only for unversioned `/v1/` endpoints. If you cannot read
+  the spec, ask the user for it.
 - **Run the tooling before committing:** `make format`, `make lint`,
   `make test`, `make generate`. Then verify `git diff --name-only` is clean
   (stage anything the tools changed).
