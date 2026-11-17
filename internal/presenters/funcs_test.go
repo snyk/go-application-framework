@@ -451,6 +451,15 @@ func TestDescribeFilesNotAnalyzed(t *testing.T) {
 			want: "",
 		},
 		{
+			desc: "files skipped before analysis have no language",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "TypeScript", Files: 5, IsSupported: false, Type: "FAILED_PARSING"},
+				{Files: 2, IsSupported: false, Type: "FILE_TOO_LARGE"},
+				{Files: 1, IsSupported: false, Type: "PATH_TOO_LONG"},
+			},
+			want: "8 files (TypeScript 5, failed to parse; other files 2, over the file size limit; other files 1, path too long)",
+		},
+		{
 			desc: "an unknown reason is shown in readable lower case",
 			coverage: []local_models.TypesCoverage{
 				{Lang: "Go", Files: 3, IsSupported: false, Type: "TOO_LARGE"},

@@ -301,7 +301,11 @@ func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
 			continue
 		}
 		total += entry.Files
-		parts = append(parts, fmt.Sprintf("%s %d, %s", entry.Lang, entry.Files, notAnalyzedReason(entry.Type)))
+		lang := entry.Lang
+		if lang == "" {
+			lang = "other files" // the language of a skipped file is not known
+		}
+		parts = append(parts, fmt.Sprintf("%s %d, %s", lang, entry.Files, notAnalyzedReason(entry.Type)))
 	}
 	if total == 0 {
 		return ""
@@ -316,8 +320,13 @@ func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
 
 // notAnalyzedReason turns a coverage type such as FAILED_PARSING into text for people.
 func notAnalyzedReason(coverageType string) string {
-	if coverageType == "FAILED_PARSING" {
+	switch coverageType {
+	case "FAILED_PARSING":
 		return "failed to parse"
+	case "FILE_TOO_LARGE":
+		return "over the file size limit"
+	case "PATH_TOO_LONG":
+		return "path too long"
 	}
 	return strings.ToLower(strings.ReplaceAll(coverageType, "_", " "))
 }
