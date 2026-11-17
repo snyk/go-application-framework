@@ -65,8 +65,10 @@ type scrubStruct struct {
 	groupToRedact int
 	// the regex pattern to scrub
 	regex *regexp.Regexp
-	// if set, a captured group is redacted only when this reports true for it
-	redactIf func(captured string) bool
+	// if set, a captured group is redacted only when this reports true for it, or for capture group
+	// redactIfGroup when that is set
+	redactIf      func(captured string) bool
+	redactIfGroup int
 	// the exact term to replace
 	replace string
 	// whether `replace` must stand alone as a word/identifier to match
@@ -354,11 +356,12 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// JSON-formatted data, in general
-	kws := strings.Join(SENSITIVE_FIELD_NAMES, "|")
-	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>[^"]*)"`, kws)
+	s = `"(?<json_key>[^"]*)"\s*:\s*"(?<json_value>[^"]*)"`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
+		redactIf:      isSensitiveFieldName,
+		redactIfGroup: 1,
 	}
 
 	// Same as above, only with short form
@@ -499,7 +502,7 @@ func applyRules(s string, rules []scrubStruct, includeWholeWordTerms bool) strin
 	for _, entry := range rules {
 		switch {
 		case entry.replace == "":
-			s = redactMatchedGroup(s, entry.regex, entry.groupToRedact, entry.redactIf)
+			s = redactMatchedGroup(s, entry)
 		case !entry.wholeWord:
 			s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
 		case includeWholeWordTerms:
@@ -512,16 +515,76 @@ func applyRules(s string, rules []scrubStruct, includeWholeWordTerms bool) strin
 // shortFormFieldNames are single-letter field names used for credentials, e.g. 'p' for password.
 var shortFormFieldNames = []string{"p", "u"}
 
+var sensitiveFieldNameWords = []string{
+	"password", "passwd", "passphrase", "pwd", "secret", "token", "credential", "authorization", "cookie",
+}
+
+var keyQualifierWords = []string{
+	"api", "private", "access", "secret", "signing", "client", "fleet", "encryption", "license", "ssh",
+}
+
+var sensitiveLastFieldNameWords = []string{"headers", "user", "username"}
+
+var sensitiveWholeFieldNames = append([]string{"login"}, shortFormFieldNames...)
+
 // isSensitiveFieldName reports whether the value of a field with this name is redacted as a whole.
-// It matches SENSITIVE_FIELD_NAMES as case-insensitive substrings, and shortFormFieldNames exactly.
+// The name is split into case-insensitive words, so "cacheKey" or "monkey" do not count as a key and
+// "userAgent" does not count as a user. A name is sensitive when one of its words, or that word with
+// a trailing "s", names a password, secret, token, credential, authorization or cookie; when it ends
+// in "key" or "keys" alone or after a word such as "api" or "private"; when it ends in "headers",
+// "user", "username" or "user" "name"; or when the whole name is "login", "u" or "p".
 func isSensitiveFieldName(name string) bool {
-	lower := strings.ToLower(name)
-	for _, sensitive := range SENSITIVE_FIELD_NAMES {
-		if strings.Contains(lower, sensitive) {
+	words := fieldNameWords(name)
+	if len(words) == 0 {
+		return false
+	}
+	for _, word := range words {
+		if strings.HasPrefix(word, "passw") || slices.Contains(sensitiveFieldNameWords, singular(word)) {
 			return true
 		}
 	}
-	return slices.Contains(shortFormFieldNames, lower)
+	last := len(words) - 1
+	if singular(words[last]) == "key" && (last == 0 || slices.Contains(keyQualifierWords, words[last-1])) {
+		return true
+	}
+	if slices.Contains(sensitiveLastFieldNameWords, words[last]) || (last > 0 && words[last-1] == "user" && words[last] == "name") {
+		return true
+	}
+	return len(words) == 1 && slices.Contains(sensitiveWholeFieldNames, words[0])
+}
+
+func singular(word string) string {
+	return strings.TrimSuffix(word, "s")
+}
+
+// fieldNameWords splits name into lowercase words at camelCase boundaries and at every character that
+// is not a letter or digit. An uppercase run is one word, so "APIKey" splits into "api" and "key".
+func fieldNameWords(name string) []string {
+	var words []string
+	var word []rune
+	runes := []rune(name)
+	for i, r := range runes {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			words, word = appendWord(words, word), nil
+			continue
+		}
+		if unicode.IsUpper(r) && i > 0 {
+			previous := runes[i-1]
+			nextIsLower := i+1 < len(runes) && unicode.IsLower(runes[i+1])
+			if unicode.IsLower(previous) || unicode.IsDigit(previous) || (unicode.IsUpper(previous) && nextIsLower) {
+				words, word = appendWord(words, word), nil
+			}
+		}
+		word = append(word, unicode.ToLower(r))
+	}
+	return appendWord(words, word)
+}
+
+func appendWord(words []string, word []rune) []string {
+	if len(word) == 0 {
+		return words
+	}
+	return append(words, string(word))
 }
 
 type jsonFrame struct {
@@ -859,12 +922,14 @@ func isJSONNumberChar(b byte) bool {
 // corrupts the surrounding payload (see CLI-1732). Matches returned by FindAll are non-overlapping
 // and in order, so the spans can be stitched back together in a single pass.
 //
-// A match whose group redactIf rejects is left as it is, and the search resumes where that group
+// A match that redactIf rejects is left as it is, and the search resumes where the group to redact
 // starts, so a rejected word such as the second "Bearer" in "Bearer Bearer <credential>" cannot
 // hide the credential after it. Resuming on a slice drops the context before it, so redactIf is
-// only set on rules that have no `\b` or `^`. A nil redactIf redacts every match.
-func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int, redactIf func(string) bool) string {
-	matches := regex.FindAllStringSubmatchIndex(s, -1)
+// only set on rules that have no `\b` or `^`. A nil redactIf redacts every match. When redactIf
+// tests redactIfGroup instead, a rejected match is skipped whole: it is a complete name and value,
+// and resuming inside it would rescan the rest of s once per rejected match.
+func redactMatchedGroup(s string, entry scrubStruct) string {
+	matches := entry.regex.FindAllStringSubmatchIndex(s, -1)
 	if len(matches) == 0 {
 		return s
 	}
@@ -873,14 +938,17 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int, redac
 	builder.Grow(len(s))
 	end := 0
 	for _, match := range matches {
-		lo, hi := 2*groupToRedact, 2*groupToRedact+1
+		lo, hi := 2*entry.groupToRedact, 2*entry.groupToRedact+1
 		// group out of range, or it did not participate in the match, or it matched empty
 		if hi >= len(match) || match[lo] < 0 || match[hi] <= match[lo] {
 			continue
 		}
-		if redactIf != nil && !redactIf(s[match[lo]:match[hi]]) {
+		if entry.redactIf != nil && !entry.redactIf(conditionCapture(s, match, entry)) {
+			if entry.redactIfGroup > 0 {
+				continue
+			}
 			builder.WriteString(s[end:match[lo]])
-			builder.WriteString(redactMatchedGroup(s[match[lo]:], regex, groupToRedact, redactIf))
+			builder.WriteString(redactMatchedGroup(s[match[lo]:], entry))
 			return builder.String()
 		}
 		builder.WriteString(s[end:match[lo]])
@@ -889,6 +957,17 @@ func redactMatchedGroup(s string, regex *regexp.Regexp, groupToRedact int, redac
 	}
 	builder.WriteString(s[end:])
 	return builder.String()
+}
+
+func conditionCapture(s string, match []int, entry scrubStruct) string {
+	group := entry.groupToRedact
+	if entry.redactIfGroup > 0 {
+		group = entry.redactIfGroup
+	}
+	if match[2*group] < 0 {
+		return ""
+	}
+	return s[match[2*group]:match[2*group+1]]
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (int, error) {

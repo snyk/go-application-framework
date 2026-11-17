@@ -139,6 +139,16 @@ func TestScrubbingWriter_NonSecretFieldsKeepTheirValues(t *testing.T) {
 			event:     `{"level":"debug","message":"fields \"u\",\"region\":\"eu\" loaded"}`,
 			preserved: map[string]any{"message": `fields "u","region":"eu" loaded`},
 		},
+		{
+			name:      "field names merely containing key or user",
+			event:     `{"level":"debug","userAgent":"snyk-cli/1.0","cacheKey":"deps-lockfile","monkey":"banana","message":"cache lookup"}`,
+			preserved: map[string]any{"userAgent": "snyk-cli/1.0", "cacheKey": "deps-lockfile", "monkey": "banana"},
+		},
+		{
+			name:      "embedded JSON body with field names merely containing key or user",
+			event:     `{"level":"debug","message":"< body: {\"cacheKey\":\"deps-lockfile\",\"userAgent\":\"snyk-cli/1.0\"}"}`,
+			preserved: map[string]any{"message": `< body: {"cacheKey":"deps-lockfile","userAgent":"snyk-cli/1.0"}`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -244,6 +254,126 @@ func TestScrubbingWriter_SecretsAreStillRedacted(t *testing.T) {
 			config: configuration.NewWithOpts(),
 			event:  atSignPasswordEvent,
 			secret: after,
+		},
+		{
+			name:   "apiKey field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","apiKey":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "x-api-key field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","x-api-key":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "client_secret field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","client_secret":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "userName field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","userName":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "Authorization field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","Authorization":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "Set-Cookie field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","Set-Cookie":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "secrets field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","secrets":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "tokens field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","tokens":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "passwords field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","passwords":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "cookies field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","cookies":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "apiKeys field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","apiKeys":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "api_keys field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","api_keys":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "authorizations field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","authorizations":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "REGISTRY_USERNAME field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","REGISTRY_USERNAME":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "PROXY_USER field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","PROXY_USER":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "registryUserName field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","registryUserName":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "proxy-user field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","proxy-user":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "requestHeaders field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","requestHeaders":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "response_headers field",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","response_headers":"` + fakeLowercaseCredential() + `","message":"request prepared"}`,
+			secret: fakeLowercaseCredential(),
+		},
+		{
+			name:   "password field inside an embedded JSON body",
+			config: configuration.NewWithOpts(),
+			event:  `{"level":"debug","message":"> body: {\"login\":\"someone\",\"password\":\"` + fakeLowercaseCredential() + `\"}"}`,
+			secret: fakeLowercaseCredential(),
 		},
 	}
 	for _, tt := range tests {
