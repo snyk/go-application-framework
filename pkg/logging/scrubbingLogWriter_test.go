@@ -518,8 +518,14 @@ func TestScrub_RedactsOnlyTheMatchedSpan(t *testing.T) {
 		{
 			name:     "value is a comma that also separates fields",
 			input:    `{"level":"debug","userKind":",","message":"a,b,c"}`,
-			expected: `{"level":"debug","userKind":"***","message":"a,b,c"}`,
-			changed:  map[string]any{"userKind": SANITIZE_REPLACEMENT_STRING},
+			expected: `{"level":"debug","userKind":",","message":"a,b,c"}`,
+			changed:  map[string]any{},
+		},
+		{
+			name:     "sensitive value is a comma that also separates fields",
+			input:    `{"level":"debug","password":",","message":"a,b,c"}`,
+			expected: `{"level":"debug","password":"***","message":"a,b,c"}`,
+			changed:  map[string]any{"password": SANITIZE_REPLACEMENT_STRING},
 		},
 		{
 			name:     "value is a closing brace that also closes the event",
@@ -831,7 +837,7 @@ func TestAuthSchemeAndTokenRules(t *testing.T) {
 		{"negotiate in a proxy authorization header", "Proxy-Authorization: Negotiate " + lowercase, "Proxy-Authorization: Negotiate ***"},
 		{"token scheme in a lowercase header", "authorization: token " + lowercase, "authorization: token ***"},
 		{"go-printed header map", "map[Accept:[application/json] Authorization:[Bearer " + lowercase + "]]", "map[Accept:[application/json] Authorization:[Bearer ***]]"},
-		{"quoted header in embedded JSON", `{"Authorization": "Basic ` + lowercase + `"}`, `{"Authorization": "Basic ***"}`},
+		{"quoted header in embedded JSON", `{"Authorization": "Basic ` + lowercase + `"}`, `{"Authorization": "***"}`},
 		{"credential-shaped bearer outside a header", "retrying with Bearer " + shaped, "retrying with Bearer ***"},
 		{"digit-free base64 basic outside a header", "retrying with Basic " + digitFreeBase64, "retrying with Basic ***"},
 		{"basic with base64 padding outside a header", "retrying with Basic " + lowercase + "==", "retrying with Basic ***"},
@@ -878,6 +884,148 @@ func TestLooksLikeCredential(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
 			assert.Equal(t, tt.expected, looksLikeCredential(tt.value))
+		})
+	}
+}
+
+func TestIsSensitiveFieldName(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected bool
+	}{
+		{"password", true},
+		{"proxyPassword", true},
+		{"REGISTRY_PASSWORD", true},
+		{"passwd", true},
+		{"passphrase", true},
+		{"pwd", true},
+		{"passwordHash", true},
+		{"passwort", true},
+		{"secret", true},
+		{"client.secret", true},
+		{"client_secret", true},
+		{"token", true},
+		{"access_token", true},
+		{"refreshToken", true},
+		{"credential", true},
+		{"credentials", true},
+		{"awsCredentials", true},
+		{"authorization", true},
+		{"Authorization", true},
+		{"proxy-authorization", true},
+		{"cookie", true},
+		{"Set-Cookie", true},
+
+		{"key", true},
+		{"KEY", true},
+		{"apiKey", true},
+		{"APIKey", true},
+		{"API_KEY", true},
+		{"x-api-key", true},
+		{"privateKey", true},
+		{"access_key", true},
+		{"secretKey", true},
+		{"signingKey", true},
+		{"clientKey", true},
+		{"fleetKey", true},
+		{"encryptionKey", true},
+		{"licenseKey", true},
+		{"ssh-key", true},
+		{"cacheKey", false},
+		{"sortKey", false},
+		{"keyId", false},
+		{"apiKeyId", false},
+		{"monkey", false},
+		{"keyboard", false},
+
+		{"headers", true},
+		{"Headers", true},
+		{"user", true},
+		{"USER", true},
+		{"username", true},
+		{"userName", true},
+		{"user_name", true},
+		{"login", true},
+		{"u", true},
+		{"P", true},
+		{"userAgent", false},
+		{"userId", false},
+		{"userKind", false},
+		{"requestHeaders", true},
+		{"response_headers", true},
+		{"HTTP-HEADERS", true},
+		{"headersCount", false},
+		{"header", false},
+		{"REGISTRY_USERNAME", true},
+		{"PROXY_USER", true},
+		{"registryUserName", true},
+		{"registry_user_name", true},
+		{"proxy-user", true},
+		{"userNameHint", false},
+		{"nameUser", true},
+		{"loginUrl", false},
+		{"up", false},
+
+		{"tokenizer", false},
+		{"secrets", true},
+		{"tokens", true},
+		{"passwords", true},
+		{"cookies", true},
+		{"authorizations", true},
+		{"apiKeys", true},
+		{"api_keys", true},
+		{"keys", true},
+		{"cacheKeys", false},
+		{"monkeys", false},
+		{"secretss", false},
+		{"tokensFile", true},
+		{"command", false},
+		{"", false},
+		{"_-.", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isSensitiveFieldName(tt.name))
+		})
+	}
+}
+
+func TestScrubValue_EmbeddedJSONFieldsAreRedactedByFieldName(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"sensitive field after a non-sensitive one", `{"cacheKey":"a1","apiKey":"b2"}`, `{"cacheKey":"a1","apiKey":"***"}`},
+		{"non-sensitive field after a sensitive one", `{"API_KEY":"b2", "monkey":"c3"}`, `{"API_KEY":"***", "monkey":"c3"}`},
+		{"separators and case in the field name", `{"Client.Secret" : "d4"}`, `{"Client.Secret" : "***"}`},
+		{"only non-sensitive fields", `{"userAgent":"e5","userId":"f6"}`, `{"userAgent":"e5","userId":"f6"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(ScrubValue([]byte(tt.input), dict)))
+		})
+	}
+}
+
+func TestFieldNameWords(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected []string
+	}{
+		{"apiKey", []string{"api", "key"}},
+		{"APIKey", []string{"api", "key"}},
+		{"API_KEY", []string{"api", "key"}},
+		{"x-api-key", []string{"x", "api", "key"}},
+		{"client.secret", []string{"client", "secret"}},
+		{"oauth2Token", []string{"oauth2", "token"}},
+		{"userID", []string{"user", "id"}},
+		{"  ", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, fieldNameWords(tt.name))
 		})
 	}
 }
@@ -1898,6 +2046,22 @@ func BenchmarkScrubbingWriter_WriteEvent(b *testing.B) {
 	config.Set(REDACTION_TERMS, []string{"Content", "reference", "command"})
 	event := []byte(`{"level":"debug","ext":"main","separator":"-","method":"GET","url":"https://api.example.com/rest/orgs?version=2024-10-15","status":200,"durationMs":123,"time":"2026-11-16T12:00:00Z","message":"< Content-Type: application/json"}` + "\n")
 	writer := NewScrubbingIoWriter(io.Discard, GetScrubDictFromConfig(config))
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := writer.Write(event); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkScrubbingWriter_WriteEventWithEmbeddedJSONBody(b *testing.B) {
+	pairs := make([]string, 500)
+	for i := range pairs {
+		pairs[i] = fmt.Sprintf(`\"field%d\":\"value%d\"`, i, i)
+	}
+	event := []byte(`{"level":"debug","message":"< body: {` + strings.Join(pairs, ",") + `}"}` + "\n")
+	writer := NewScrubbingIoWriter(io.Discard, GetScrubDictFromConfig(configuration.NewInMemory()))
 
 	b.ReportAllocs()
 	for b.Loop() {

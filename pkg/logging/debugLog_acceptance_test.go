@@ -398,3 +398,14 @@ func TestDebugLog_URLPasswordContainingAnAtSignIsRedactedWhole(t *testing.T) {
 	assert.NotContains(t, shown, before)
 	assert.NotContains(t, shown, after)
 }
+
+func TestDebugLog_FieldsWhoseNamesMerelyContainKeyOrUserKeepTheirValues(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Str("userAgent", "snyk-cli/1.0").Str("cacheKey", "deps-lockfile").Str("monkey", "banana").Msg("cache lookup")
+
+	shown := requireEventShown(t, out, "cache lookup")
+	assert.Contains(t, shown, "userAgent=snyk-cli/1.0")
+	assert.Contains(t, shown, "cacheKey=deps-lockfile")
+	assert.Contains(t, shown, "monkey=banana")
+}
