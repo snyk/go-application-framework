@@ -303,6 +303,8 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
 - **No single-invocation assumptions.** An MCP or IDE host may invoke many
   workflows in the same process. Avoid package-level mutable state; prefer
   per-invocation state threaded via `InvocationContext` or `context.Context`.
+  Where shared state is unavoidable it must be synchronized (see
+  [Concurrency & thread safety](#concurrency--thread-safety)).
 - **Configuration, not hard-coding.** Behavior that might differ by consumer
   belongs in `Configuration` with a sensible default — not in a constant. If a
   CLI needs a flag and an IDE needs a settings key, both read the same config
@@ -317,6 +319,22 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
   for example in a CLI application from cmd arguments, environment variables, config files, remote configuration ...
 - **Configuration DefaultFunctions are multi purpose helper.** even if called default function, they can be used to provide a default value for a configuration key but also perform validation and translation logic 
 
+
+### Concurrency & thread safety
+
+GAF is called from many goroutines at once (IDE hosts, MCP servers, parallel
+workflows), so concurrent use is the default.
+
+- **Library functionality must be thread safe.** This covers (almost) every
+  exported symbol in `pkg/`. If something is intentionally not safe, say so in
+  its doc comment.
+- **Question whether state is needed at all.** Prefer stateless functions and
+  per-invocation state over caches, memoization, or package-level variables.
+- **Guard required state.** Protect every access, reads included, with a mutex,
+  `sync.Once`, atomics, or channels. Don't return internal maps/slices, and
+  don't hold a lock across callbacks, I/O, or other workflow invocations.
+- **Test concurrent access** of stateful code under the race detector
+  (`make test` runs with `-race`).
 
 ### Error Handling
 
