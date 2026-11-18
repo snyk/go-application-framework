@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,8 +16,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	gitignore "github.com/sabhiram/go-gitignore"
-	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/go-application-framework/internal/metrics"
@@ -284,8 +281,6 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	var filteredFilesCh = make(chan string)
 
 	go func() {
-		ctx := context.Background()
-		availableThreads := semaphore.NewWeighted(fw.max_threads)
 		variant := fw.metricVariant()
 		start := time.Now()
 		var resolvedFileCount atomic.Int64
@@ -299,34 +294,32 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
 		} else {
-			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+			globPatternMatcher := compileIgnoreMatcher(globs...)
 			isFileExcluded = func(filePath string) bool {
 				return globPatternMatcher.MatchesPath(filePath)
 			}
 		}
 
-		// iterate the filesToFilter channel
-		for file := range filesCh {
-			candidateFileCount++
-			err := availableThreads.Acquire(ctx, 1)
-			if err != nil {
-				fw.logger.Err(err).Msg("failed to limit threads")
-			}
-			go func(f string) {
-				defer availableThreads.Release(1)
-				// filesToFilter that do not match the glob pattern are filtered
-				if !isFileExcluded(f) {
-					filteredFilesCh <- f
-					resolvedFileCount.Add(1)
+		// a fixed pool of workers drains the channel; spawning a goroutine per file costs more
+		// scheduling than the exclusion check itself once matching is cheap
+		var wg sync.WaitGroup
+		var candidates atomic.Int64
+		for range fw.max_threads {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for f := range filesCh {
+					candidates.Add(1)
+					// filesToFilter that do not match the glob pattern are filtered
+					if !isFileExcluded(f) {
+						filteredFilesCh <- f
+						resolvedFileCount.Add(1)
+					}
 				}
-			}(file)
+			}()
 		}
-
-		// wait until the last thread is done
-		err := availableThreads.Acquire(ctx, fw.max_threads)
-		if err != nil {
-			fw.logger.Err(err).Msg("failed to wait for all threads")
-		}
+		wg.Wait()
+		candidateFileCount = int(candidates.Load())
 
 		// Record metrics
 		fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
@@ -416,9 +409,9 @@ func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string)
 		allGlobs = append(allGlobs, glob)
 	}
 
-	otherMatcher := gitignore.CompileIgnoreLines(globs...)
+	otherMatcher := compileIgnoreMatcher(globs...)
 
-	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
+	allMatcher := compileIgnoreMatcher(allGlobs...)
 	defaultPredicate := func(file string) bool {
 		return allMatcher.MatchesPath(filepath.ToSlash(file))
 	}
