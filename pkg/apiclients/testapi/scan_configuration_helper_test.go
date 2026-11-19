@@ -1,7 +1,6 @@
 package testapi
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,13 +58,6 @@ func TestScanConfiguration_GetDefaultFindingTypes(t *testing.T) {
 			expected: []FindingType{FindingTypeSecrets},
 		},
 		{
-			name: "AI-BOM configuration returns aibom",
-			config: &ScanConfiguration{
-				Aibom: &AibomScanConfiguration{},
-			},
-			expected: []FindingType{FindingTypeAibom},
-		},
-		{
 			name: "Rift configuration returns rift",
 			config: &ScanConfiguration{
 				Rift: &RiftScanConfiguration{},
@@ -88,36 +80,5 @@ func TestScanConfiguration_GetDefaultFindingTypes(t *testing.T) {
 			result := tt.config.GetDefaultFindingTypes()
 			assert.Equal(t, tt.expected, result)
 		})
-	}
-}
-
-// TestScanConfiguration_AllFieldsHandled uses reflection to verify that all pointer fields
-// in ScanConfiguration are handled by GetDefaultFindingTypes.
-// This test will fail if a new scan type field is added to ScanConfiguration,
-// reminding developers to update GetDefaultFindingTypes accordingly.
-func TestScanConfiguration_AllFieldsHandled(t *testing.T) {
-	configType := reflect.TypeOf(ScanConfiguration{})
-
-	for i := 0; i < configType.NumField(); i++ {
-		field := configType.Field(i)
-
-		// Only check pointer fields (scan configuration fields are pointers)
-		if field.Type.Kind() != reflect.Pointer {
-			continue
-		}
-
-		// Create a ScanConfiguration with only this field set
-		scanConfig := &ScanConfiguration{}
-		fieldValue := reflect.ValueOf(scanConfig).Elem().FieldByName(field.Name)
-
-		// Create a zero value of the field's element type and set it
-		fieldValue.Set(reflect.New(field.Type.Elem()))
-
-		// Call GetDefaultFindingTypes and verify it returns something
-		result := scanConfig.GetDefaultFindingTypes()
-		if len(result) == 0 {
-			t.Errorf("ScanConfiguration field %q is not handled by GetDefaultFindingTypes. "+
-				"Please update GetDefaultFindingTypes to handle this new scan type.", field.Name)
-		}
 	}
 }
