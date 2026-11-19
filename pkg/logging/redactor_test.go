@@ -51,6 +51,7 @@ func TestIsSensitiveFieldName(t *testing.T) {
 		{"tokens", true},
 		{"tokenValue", true},
 		{"tokensFile", true},
+		{"tokenHint", true},
 		{"access_token", true},
 		{"refreshToken", true},
 		{"oauth2Token", true},
