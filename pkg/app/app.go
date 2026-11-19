@@ -51,7 +51,8 @@ const (
 	orgLookupDefault            OrgLookup = "default"
 	orgLookupDefaultFailed      OrgLookup = "default_failed"
 
-	// defaultProfileDirName is the name of the profile directory in the default storage directory.
+	// defaultProfileDirName is the name of the default profile directory, inside the directory of the pinned config file or
+	// else the default storage directory.
 	defaultProfileDirName = "snyk_profiles"
 )
 
@@ -411,9 +412,12 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
-	// Without a known home directory there is no default profile directory. Profiles then fail closed (SNYK-CLI-0036)
-	// instead of using the working directory.
-	if storageDir, storageErr := configuration.DefaultStorageDir(); storageErr != nil {
+	// A pinned config file gives the default profile directory next to it. Otherwise the default storage directory is used.
+	// Without either there is no default profile directory. Profiles then fail closed (SNYK-CLI-0036) instead of using the
+	// working directory.
+	if pinned := configuration.PinnedFile(config); pinned != "" {
+		config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(filepath.Dir(pinned), defaultProfileDirName)))
+	} else if storageDir, storageErr := configuration.DefaultStorageDir(); storageErr != nil {
 		logger.Printf("no default profile directory: %v", storageErr)
 	} else {
 		config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(storageDir, defaultProfileDirName)))
