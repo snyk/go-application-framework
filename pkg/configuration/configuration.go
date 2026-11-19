@@ -136,12 +136,16 @@ func ImmutableDefaultValueFunction(defaultValue interface{}) DefaultValueFunctio
 }
 
 // basePath returns the configstore directory, which holds the configuration files and the default storage. It never
-// returns a relative path: when the home directory cannot be determined it returns an error, so nothing is read from or
-// written to the working directory instead.
+// returns a relative path: when the home directory cannot be determined, or is not an absolute path, it returns an error,
+// so nothing is read from or written to the working directory instead. os.UserHomeDir returns the HOME (or USERPROFILE)
+// variable as it is, which is why the absolute check is needed.
 func basePath() (string, error) {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("home directory could not be determined: %w", err)
+	}
+	if !filepath.IsAbs(homedir) {
+		return "", fmt.Errorf("home directory could not be determined: %q is not an absolute path", homedir)
 	}
 
 	return filepath.Join(homedir, ".config", "configstore"), nil
@@ -158,8 +162,8 @@ func determineBasePath() string {
 }
 
 // DefaultStorageDir returns the directory that holds the default configuration file. When the home directory cannot be
-// determined it returns an error and no directory, so a caller never joins a file name onto a relative path. The error
-// wraps the os.UserHomeDir error.
+// determined, or is not an absolute path, it returns an error and no directory, so a caller never joins a file name onto a
+// relative path. The error wraps the os.UserHomeDir error when there is one.
 func DefaultStorageDir() (string, error) {
 	dir, err := basePath()
 	if err != nil {
@@ -393,7 +397,10 @@ func validatePinnedFile(path string) error {
 func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	configPath, err := basePath()
 	if err != nil {
-		// The working directory is never a source of configuration (CLI-1124), so nothing is read or stored.
+		// The working directory is never a source of configuration (CLI-1124), so nothing is read or stored. Values set
+		// with PersistInStorage are then kept in memory only, and are lost when the process exits. The configuration has no
+		// injected logger here, so the standard logger reports it; it is repeated for each configuration created with
+		// WithFiles. A caller that persists values must check GetStorage() == nil and report an error instead.
 		log.Printf("configuration: continuing in memory without configuration files, %v", err)
 		config.configType = inMemory
 		return
