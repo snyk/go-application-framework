@@ -1,0 +1,33 @@
+[
+  {
+    "testId": "11111111-2222-3333-4444-555555555555",
+    "testConfiguration": {
+      "local_policy": {
+        "fail_on_upgradable": false,
+        "severity_threshold": "low",
+        "suppress_pending_ignores": false
+      },
+      "scan_config": {
+        "rift": {}
+      },
+      "timeout": {
+        "outcome": "fail",
+        "seconds": 1200
+      }
+    },
+    "createdAt": "2025-12-12T09:07:21.538667Z",
+    "executionState": "finished",
+    "passFail": "pass",
+    "effectiveSummary": {
+    },
+    "rawSummary": {
+    },
+    "findingsComplete": true,
+    "problemStore": {
+    },
+    "_problemRefs": {
+    },
+    "findings": [
+    ]
+  }
+]

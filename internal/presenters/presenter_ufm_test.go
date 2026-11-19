@@ -698,6 +698,18 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			testResultPath:     "testdata/ufm/secrets.with-report.testresult.json",
 			ignoreSuppressions: true,
 		},
+		{
+			name:               "rift",
+			expectedSarifPath:  "testdata/ufm/rift.sarif.json",
+			testResultPath:     "testdata/ufm/rift.testresult.json",
+			ignoreSuppressions: true,
+		},
+		{
+			name:               "rift_0findings",
+			expectedSarifPath:  "testdata/ufm/rift.0findings.sarif.json",
+			testResultPath:     "testdata/ufm/rift.0findings.testresult.json",
+			ignoreSuppressions: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1321,6 +1333,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			includeIgnores:    true,
 			severityThreshold: "",
 		},
+		{
+			name:              "rift",
+			expectedPath:      "testdata/ufm/rift.human.readable",
+			testResultPath:    "testdata/ufm/rift.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1403,6 +1422,19 @@ func Test_UfmPresenter_HTML(t *testing.T) {
 		{
 			name:           "secrets_0findings",
 			testResultPath: "testdata/ufm/secrets.0findings.testresult.json",
+			assertions: func(t *testing.T, output string) {
+				t.Helper()
+				assert.Contains(t, output, "Snyk Test Report")
+			},
+		},
+		{
+			name:           "rift",
+			testResultPath: "testdata/ufm/rift.testresult.json",
+			assertions:     assertRiftHTMLContent,
+		},
+		{
+			name:           "rift_0findings",
+			testResultPath: "testdata/ufm/rift.0findings.testresult.json",
 			assertions: func(t *testing.T, output string) {
 				t.Helper()
 				assert.Contains(t, output, "Snyk Test Report")
@@ -1501,6 +1533,13 @@ func Test_UfmPresenter_HTMLSnapshot(t *testing.T) {
 			name:              "secrets_with_report",
 			expectedPath:      "testdata/ufm/secrets.with-report.html",
 			testResultPath:    "testdata/ufm/secrets.with-report.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
+		{
+			name:              "rift",
+			expectedPath:      "testdata/ufm/rift.html",
+			testResultPath:    "testdata/ufm/rift.testresult.json",
 			includeIgnores:    true,
 			severityThreshold: "",
 		},
@@ -1634,6 +1673,21 @@ func assertSecretsHTMLContent(t *testing.T, output string) {
 	// Source locations (secrets have file paths, not dependency paths)
 	assert.Contains(t, output, "config.env")
 	assert.Contains(t, output, "aws_keys.txt")
+}
+
+func assertRiftHTMLContent(t *testing.T, output string) {
+	t.Helper()
+
+	assert.Contains(t, output, "Snyk Test Report")
+
+	// Rift finding titles
+	assert.Contains(t, output, "SQL injection in user lookup")
+	assert.Contains(t, output, "Reflected cross-site scripting in search page")
+
+	// Issue group and source locations
+	assert.Contains(t, output, "Rift")
+	assert.Contains(t, output, "src/handlers/users.go")
+	assert.Contains(t, output, "web/templates/search.html")
 }
 
 func assertMultiProjectHTMLContent(t *testing.T, output string) {

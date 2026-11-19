@@ -508,6 +508,7 @@ func (b *issueBuilder) processFindings(findings []*FindingData) {
 		b.processFinding(finding)
 	}
 	b.determineFallbackID()
+	b.determineFallbackProblemID()
 }
 
 // processFinding extracts data from a single finding
@@ -810,6 +811,14 @@ func (b *issueBuilder) determineFallbackID() {
 		} else if b.firstFinding.Id != nil {
 			b.id = b.firstFinding.Id.String()
 		}
+	}
+}
+
+// determineFallbackProblemID uses the first CWE as the problem ID for Rift
+// findings, which carry no rule problem of their own.
+func (b *issueBuilder) determineFallbackProblemID() {
+	if b.problemID == "" && b.findingType == FindingTypeRift && len(b.cwes) > 0 {
+		b.problemID = b.cwes[0]
 	}
 }
 
