@@ -318,7 +318,7 @@ func (ev *extendedViper) pinFile() error {
 	}
 
 	path := filepath.Clean(ev.pinnedFile)
-	ev.storage = NewJsonStorage(path, WithConfiguration(ev), withBlankFileAsEmpty(), withExactNumbers())
+	ev.storage = NewJsonStorage(path, WithConfiguration(ev), WithBlankFileAsEmpty(), WithExactNumbers())
 	ev.configType = jsonFile
 	ev.viper.SetConfigFile(path)
 	ev.viper.SetConfigType("json")
