@@ -89,7 +89,7 @@ func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
 }
 
 // WithConfiguration opts sanitizeExtensionData into shape-based secret redaction,
-// using the same scrub dictionary GAF's debug-log redaction already trusts.
+// using the same logging.Redactor as GAF's debug-log redaction.
 // Omitted, sanitizeExtensionData's behavior is unchanged from before this option existed.
 func WithConfiguration(cfg configuration.Configuration) serializeOptionFunc {
 	return func(o *serializeOptions) {
@@ -183,7 +183,7 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 		if cfg == nil {
 			cfg = configuration.NewWithOpts()
 		}
-		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.GetScrubDictFromConfig(cfg))
+		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.NewRedactor(cfg))
 		a.Interaction.Errors = &scrubbed
 	}
 
@@ -195,11 +195,11 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 	return ic.sanitizeExtensionData(options, d)
 }
 
-func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) []api.InteractionError {
+func scrubErrorUrls(errs []api.InteractionError, redactor *logging.Redactor) []api.InteractionError {
 	scrubbed := slices.Clone(errs)
 	for i, e := range scrubbed {
 		if e.Url != nil {
-			url := string(logging.ScrubValue([]byte(*e.Url), dict))
+			url := redactor.Redact(*e.Url)
 			scrubbed[i].Url = &url
 		}
 	}
@@ -212,16 +212,15 @@ func scrubErrorUrls(errs []api.InteractionError, dict logging.ScrubbingDict) []a
 func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serializeOptions, d api.AnalyticsData) *api.AnalyticsRequestBody {
 	logger := options.logger
 
-	// Scrub string leaf values before marshaling, never the marshaled JSON bytes: logging.ScrubValue
-	// does whole-string literal replacement, so running it over raw JSON would let a redacted
-	// value collide with an unrelated field that happens to contain the same substring.
+	// Redact string leaf values before marshaling, never the marshaled JSON bytes, so a redaction
+	// can't run past the value it matched in.
 	if options.cfg != nil {
-		dict := logging.GetScrubDictFromConfig(options.cfg)
+		redactor := logging.NewRedactor(options.cfg)
 		if d.Attributes.Interaction.Extension != nil {
-			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, dict)
+			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, redactor)
 			d.Attributes.Interaction.Extension = &scrubbed
 		}
-		scrubPersona(d.Attributes.Interaction.Persona, dict)
+		scrubPersona(d.Attributes.Interaction.Persona, redactor)
 	}
 
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
@@ -236,7 +235,7 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	}
 
 	var sanitized []byte
-	sanitized, err = SanitizeValuesByKey(logging.SENSITIVE_FIELD_NAMES, logging.SANITIZE_REPLACEMENT_STRING, extension)
+	sanitized, err = SanitizeValuesByKey(sensitiveFieldNames, logging.SANITIZE_REPLACEMENT_STRING, extension)
 	if err != nil {
 		logger.Printf("failed to sanitize extension, removing object from analytics payload as sanitzation was not possible: %v", err)
 		return result
@@ -266,15 +265,15 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 // scrubExtensionMap and scrubExtensionValue redact string leaves of an arbitrary
 // AddExtension payload without ever serializing it to JSON bytes first, so a redaction
 // can't run past the field it matched in and corrupt or bleed into a sibling field.
-func scrubExtensionMap(m map[string]interface{}, dict logging.ScrubbingDict) map[string]interface{} {
-	return scrubExtensionMapSeen(m, dict, map[uintptr]bool{})
+func scrubExtensionMap(m map[string]interface{}, redactor *logging.Redactor) map[string]interface{} {
+	return scrubExtensionMapSeen(m, redactor, map[uintptr]bool{})
 }
 
 // seen tracks map/slice pointers on the current recursion path, guarding against
 // cycles a caller of AddExtension could construct (e.g. a map containing itself).
 // It is deleted on the way back up so a value referenced from two non-cyclic
 // branches (a diamond, not a cycle) is still scrubbed both times.
-func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) map[string]interface{} {
+func scrubExtensionMapSeen(m map[string]interface{}, redactor *logging.Redactor, seen map[uintptr]bool) map[string]interface{} {
 	ptr := reflect.ValueOf(m).Pointer()
 	if seen[ptr] {
 		return nil
@@ -284,17 +283,17 @@ func scrubExtensionMapSeen(m map[string]interface{}, dict logging.ScrubbingDict,
 
 	scrubbed := make(map[string]interface{}, len(m))
 	for k, v := range m {
-		scrubbed[k] = scrubExtensionValueSeen(v, dict, seen)
+		scrubbed[k] = scrubExtensionValueSeen(v, redactor, seen)
 	}
 	return scrubbed
 }
 
-func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map[uintptr]bool) interface{} {
+func scrubExtensionValueSeen(v interface{}, redactor *logging.Redactor, seen map[uintptr]bool) interface{} {
 	switch val := v.(type) {
 	case string:
-		return string(logging.ScrubValue([]byte(val), dict))
+		return redactor.Redact(val)
 	case map[string]interface{}:
-		return scrubExtensionMapSeen(val, dict, seen)
+		return scrubExtensionMapSeen(val, redactor, seen)
 	case []interface{}:
 		ptr := reflect.ValueOf(val).Pointer()
 		if ptr != 0 && seen[ptr] {
@@ -306,7 +305,7 @@ func scrubExtensionValueSeen(v interface{}, dict logging.ScrubbingDict, seen map
 		}
 		scrubbed := make([]interface{}, len(val))
 		for i, item := range val {
-			scrubbed[i] = scrubExtensionValueSeen(item, dict, seen)
+			scrubbed[i] = scrubExtensionValueSeen(item, redactor, seen)
 		}
 		return scrubbed
 	default:

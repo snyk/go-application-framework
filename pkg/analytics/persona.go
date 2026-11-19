@@ -54,14 +54,14 @@ func toAPIPersona(p *Persona) *api.Persona {
 	return persona
 }
 
-func scrubPersona(p *api.Persona, dict logging.ScrubbingDict) {
+func scrubPersona(p *api.Persona, redactor *logging.Redactor) {
 	if p == nil {
 		return
 	}
 	if p.Agent != nil {
-		p.Agent = new(string(logging.ScrubValue([]byte(*p.Agent), dict)))
+		p.Agent = new(redactor.Redact(*p.Agent))
 	}
 	if p.AgentVersion != nil {
-		p.AgentVersion = new(string(logging.ScrubValue([]byte(*p.AgentVersion), dict)))
+		p.AgentVersion = new(redactor.Redact(*p.AgentVersion))
 	}
 }

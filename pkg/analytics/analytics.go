@@ -16,6 +16,7 @@ import (
 	"os/user"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -258,7 +259,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	outputJson, err = SanitizeValuesByKey(logging.SENSITIVE_FIELD_NAMES, logging.SANITIZE_REPLACEMENT_STRING, outputJson)
+	outputJson, err = SanitizeValuesByKey(sensitiveFieldNames, logging.SANITIZE_REPLACEMENT_STRING, outputJson)
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +325,16 @@ func (a *AnalyticsImpl) SetInstrumentation(ic InstrumentationCollector) {
 	a.instrumentor = ic
 }
 
+// sensitiveFieldNames are the parts of a field name whose values SanitizeValuesByKey replaces.
+var sensitiveFieldNames = []string{
+	"headers",
+	"user",
+	"passw",
+	"token",
+	"key",
+	"secret",
+}
+
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string
@@ -348,7 +359,7 @@ func SanitizeValuesByKey(keysToFilter []string, replacementValue string, content
 
 // SanitizeUsername sanitizes the given content by replacing the given username with the replacement string.
 func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue string, content []byte) ([]byte, error) {
-	valuesToSanitize := []string{rawUserName, strings.ReplaceAll(userHomeDir, "\\", "\\\\")}
+	valuesToSanitize := []string{rawUserName, userHomeDir, strings.ReplaceAll(userHomeDir, "\\", "\\\\")}
 
 	if strings.Contains(rawUserName, "\\") {
 		segments := strings.Split(rawUserName, "\\")
@@ -369,24 +380,54 @@ func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue s
 }
 
 // SanitizeStaticValues replaces every occurrence of each valuesToSanitize entry in content with
-// replacementValue. Replacement is JSON-aware (see logging.RedactStaticTerm) only when content is
-// itself valid JSON: the bare-value quoting that keeps a redacted JSON payload parseable would
-// otherwise inject stray quotes into a plain-text snippet -- something an exported function has to
-// tolerate, since it can't assume every caller passes valid JSON.
+// replacementValue. When content is valid JSON, only its decoded strings and field names are
+// changed, and a number only when it equals an entry, so the result stays valid JSON.
 func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, content []byte) ([]byte, error) {
-	contentStr := string(content)
-	jsonAware := json.Valid(content)
-
-	for _, valueToReplace := range valuesToSanitize {
-		if valueToReplace == "" {
-			continue // strings.ReplaceAll inserts replacementValue between every rune for an empty old string
+	values := slices.DeleteFunc(slices.Clone(valuesToSanitize), func(v string) bool { return v == "" })
+	replace := func(s string) string {
+		for _, v := range values {
+			s = strings.ReplaceAll(s, v, replacementValue)
 		}
-		if jsonAware {
-			contentStr = logging.RedactStaticTerm(contentStr, valueToReplace, replacementValue)
-		} else {
-			contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
-		}
+		return s
 	}
 
-	return []byte(contentStr), nil
+	if !json.Valid(content) {
+		return []byte(replace(string(content))), nil
+	}
+	var decoded interface{}
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	var sanitized bytes.Buffer
+	encoder := json.NewEncoder(&sanitized)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(sanitizeDecodedJSON(decoded, values, replace, replacementValue)); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(sanitized.Bytes(), []byte("\n")), nil
+}
+
+func sanitizeDecodedJSON(value interface{}, values []string, replace func(string) string, replacementValue string) interface{} {
+	switch v := value.(type) {
+	case string:
+		return replace(v)
+	case json.Number:
+		if slices.Contains(values, string(v)) {
+			return replacementValue
+		}
+	case []interface{}:
+		for i := range v {
+			v[i] = sanitizeDecodedJSON(v[i], values, replace, replacementValue)
+		}
+	case map[string]interface{}:
+		sanitized := make(map[string]interface{}, len(v))
+		for key, item := range v {
+			sanitized[replace(key)] = sanitizeDecodedJSON(item, values, replace, replacementValue)
+		}
+		return sanitized
+	}
+	return value
 }

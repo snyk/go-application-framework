@@ -120,7 +120,7 @@ func Test_SanitizeValuesByKey(t *testing.T) {
 	}
 
 	// test input
-	filter := logging.SENSITIVE_FIELD_NAMES
+	filter := sensitiveFieldNames
 	input, err := json.Marshal(inputStruct)
 	assert.NoError(t, err)
 
@@ -244,24 +244,15 @@ func Test_SanitizeUsername_NumericUsernameCollision(t *testing.T) {
 	output, err := SanitizeUsername("1000", "/home/1000", "***", input)
 	assert.NoError(t, err)
 
-	assert.True(t, json.Valid(output), "sanitizing produced invalid JSON: %s", output)
-	assert.Equal(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
+	assert.JSONEq(t, `{"durationMs":10001234,"count":"***","other":"x"}`, string(output))
 }
 
-// Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted covers SanitizeStaticValues being
-// called on a non-JSON snippet, not the full valid JSON its current callers always pass -- it's
-// exported API, so a future caller isn't bound to that. Without gating on content's own validity,
-// a term next to ": "/"," here would get RedactStaticTerm's bare-value quoting even though there's
-// no JSON to protect, injecting stray quotes into plain text.
 func Test_SanitizeStaticValues_NonJSONSnippetIsNotStrayQuoted(t *testing.T) {
 	output, err := SanitizeStaticValues([]string{"1000"}, "***", []byte("user: 1000, retry: 2000"))
 	assert.NoError(t, err)
 	assert.Equal(t, "user: ***, retry: 2000", string(output))
 }
 
-// Test_SanitizeStaticValues_EmptyValueIsNoop covers both branches of the jsonAware split: unlike
-// RedactStaticTerm, strings.ReplaceAll has no built-in guard against an empty old string -- it
-// inserts replacementValue between every rune instead of leaving the content untouched.
 func Test_SanitizeStaticValues_EmptyValueIsNoop(t *testing.T) {
 	t.Run("non-JSON content", func(t *testing.T) {
 		output, err := SanitizeStaticValues([]string{""}, "***", []byte("plain text"))

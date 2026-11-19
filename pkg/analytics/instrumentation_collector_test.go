@@ -280,7 +280,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		url := "/rest/token=abcdef123456"
 		input := []api.InteractionError{{Url: &url}}
 
-		scrubbed := scrubErrorUrls(input, logging.GetScrubDictFromConfig(configuration.NewWithOpts()))
+		scrubbed := scrubErrorUrls(input, logging.NewRedactor(configuration.NewWithOpts()))
 
 		assert.Equal(t, "/rest/token=***", *scrubbed[0].Url)
 		assert.Same(t, &url, input[0].Url)
@@ -401,10 +401,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 	})
 
 	t.Run("it should redact a static term embedded in freeform extension text without corrupting or under-redacting it", func(t *testing.T) {
-		// Extension leaves are scrubbed via ScrubValue, not Scrub: a term adjacent to `:`/`,` or
-		// fused to a digit must still be redacted verbatim, with no JSON-value quoting or digit-fusion skip.
-		// Uses AUTHENTICATION_TOKEN rather than REDACTION_TERMS because REDACTION_TERMS is now
-		// whole-word only and would no longer match "1000" fused inside "10001234".
+		// Uses AUTHENTICATION_TOKEN rather than REDACTION_TERMS because REDACTION_TERMS is
+		// whole-token only and would not match "1000" fused inside "10001234".
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 

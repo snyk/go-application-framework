@@ -246,7 +246,8 @@ func TestRedact_TakesLinearTime(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			start := time.Now()
 			rules.redact(input)
-			assert.Less(t, time.Since(start), 500*time.Millisecond)
+			// Linear work takes milliseconds; the bound leaves room for the race detector's slowdown.
+			assert.Less(t, time.Since(start), 2*time.Second)
 		})
 	}
 }
