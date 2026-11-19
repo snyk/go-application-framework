@@ -555,3 +555,13 @@ func TestDebugLog_TextAfterARedactedCredentialIsShown(t *testing.T) {
 	shown := requireEventShown(t, out, `<a href="x">Bearer ***</a> sent`)
 	assert.NotContains(t, shown, fakeBearerToken())
 }
+
+func TestDebugLog_QuotedPasswordContainingAQuoteIsRedactedWhole(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg(`proxy login password='it's-a-secret' p: "hun"ter2" done`)
+
+	shown := requireEventShown(t, out, `proxy login password='***' p: "***" done`)
+	assert.NotContains(t, shown, "secret")
+	assert.NotContains(t, shown, "ter2")
+}

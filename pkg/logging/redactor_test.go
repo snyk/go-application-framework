@@ -159,6 +159,9 @@ func TestRedact_StringRules(t *testing.T) {
 		{"unquoted key followed by a comma", `keys u, region: eu`, `keys u, region: eu`},
 		{"short key with a colon", `u: john.doe, region: eu`, `u: ***, region: eu`},
 		{"escaped quote in a quoted value", `'u': 'Nick\'s', 'other': 'keepme'`, `'u': '***', 'other': 'keepme'`},
+		{"double quote inside a double-quoted value", `u: "a"b" next`, `u: "***" next`},
+		{"apostrophe inside a single-quoted value", `{ 'p': 'Nick's', 'u': 'x' }`, `{ 'p': '***', 'u': '***' }`},
+		{"apostrophe inside a single-quoted password", `password='it's-a-secret'`, `password='***'`},
 		{"single-quoted key=value", `before 'u=john.doe' 'p=hunter2' after`, `before 'u=***' 'p=***' after`},
 		{"message that is a lone u", "u", "u"},
 		{"message ending in p colon", "p:", "p:"},
@@ -246,6 +249,8 @@ func TestRedact_TakesLinearTime(t *testing.T) {
 		"short flags":             strings.Repeat("-p ", 8000),
 		"one long key":            strings.Repeat("k", 160000),
 		"URL schemes":             strings.Repeat("https://", 8000),
+		"inner quotes":            strings.Repeat(`p: "x"y `, 8000),
+		"inner apostrophes":       strings.Repeat(`'p': 'a'b`, 8000),
 	}
 	for name, input := range inputs {
 		t.Run(name, func(t *testing.T) {

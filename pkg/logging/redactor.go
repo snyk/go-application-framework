@@ -240,7 +240,9 @@ func redactPairAt(r *spanWriter, i int) int {
 	return max(end, valueStart)
 }
 
-// valueSpan returns the span of the value starting at i. A quoted value ends at its closing quote, or at the end of s.
+// valueSpan returns the span of the value starting at i. A quoted value ends at the first closing quote followed by
+// whitespace, a delimiter such as "," or "}", or the end of s, so a quote inside the value doesn't end it, and it runs
+// to the end of s without one.
 // An unquoted value ends at whitespace or "&", without trailing punctuation. When it is an auth scheme, such as in
 // `Authorization: Bearer x`, the credential after it is the value.
 func valueSpan(s string, i int) (int, int) {
@@ -305,7 +307,9 @@ func closingQuote(s string, start int, quote string) int {
 		case '\\':
 			i++
 		case quote[0]:
-			return i
+			if i+1 == len(s) || isSpace(s[i+1]) || strings.IndexByte(",}];&", s[i+1]) >= 0 {
+				return i
+			}
 		}
 	}
 	return len(s)
