@@ -1,12 +1,14 @@
 package app
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
 	"runtime"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -39,12 +41,14 @@ func Test_HomeDirectoryUnknown_ProfilesAreNotInWorkingDirectory(t *testing.T) {
 	assert.Error(t, storageErr, "the default storage directory is unavailable without a home directory")
 	assert.Empty(t, config.GetString(profile.DirKey), "no default profile directory is set, so none is relative")
 
-	// Whatever the registry does with an empty or relative directory, nothing may land in the working directory.
-	if registry, err := workflow.GetProfileRegistry(engine); err == nil {
-		if p, err := registry.Profile("x"); err == nil {
-			p.Configuration().Set(profileKey, "written")
-		}
-	}
+	// Profiles fail closed: the registry is not built without a profile directory, and the error is the catalog error
+	// SNYK-CLI-0036, asserted on its code rather than its text.
+	_, err := workflow.GetProfileRegistry(engine)
+	require.Error(t, err, "profiles are unavailable without a default profile directory")
+	var snykErr snyk_errors.Error
+	require.True(t, errors.As(err, &snykErr), "expected a catalog error, got %v", err)
+	assert.Equal(t, "SNYK-CLI-0036", snykErr.ErrorCode)
+
 	entries, err := os.ReadDir(cwd)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "no profile file or directory is created in the working directory")
