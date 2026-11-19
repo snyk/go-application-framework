@@ -546,3 +546,12 @@ func TestDebugLog_ShortCredentialAfterAnAuthSchemeIsRedacted(t *testing.T) {
 	assert.NotContains(t, shown, "abc+def")
 	assert.NotContains(t, shown, "auth456")
 }
+
+func TestDebugLog_TextAfterARedactedCredentialIsShown(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg(`<a href="x">Bearer ` + fakeBearerToken() + `</a> sent`)
+
+	shown := requireEventShown(t, out, `<a href="x">Bearer ***</a> sent`)
+	assert.NotContains(t, shown, fakeBearerToken())
+}

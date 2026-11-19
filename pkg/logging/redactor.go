@@ -150,8 +150,10 @@ var (
 	urlUserinfo = regexp.MustCompile(`(?i)(https?://)[^\s/"'?#]+@`)
 	snykPAT     = regexp.MustCompile(auth.PAT_REGEX)
 	githubToken = regexp.MustCompile(`\b(gh[ps]_|github_pat_)\w+`)
-	authScheme  = regexp.MustCompile(`(?i)\b(bearer|basic|negotiate|token)\s+(\S+)`)
+	authScheme  = regexp.MustCompile(`(?i)\b(bearer|basic|negotiate|token)\s+([\w` + regexp.QuoteMeta(credentialPunctuation) + `]+)`)
 )
+
+const credentialPunctuation = "-:.=/+~"
 
 func (rl *rules) redact(s string) string {
 	s = rl.secrets.Replace(s)
@@ -252,7 +254,7 @@ func valueSpan(s string, i int) (int, int) {
 	end := unquotedEnd(s, i)
 	if authSchemes[strings.ToLower(s[i:end])] {
 		if credentialStart := skipSpaces(s, end); credentialStart > end {
-			return credentialStart, unquotedEnd(s, credentialStart)
+			return credentialStart, credentialEnd(s, credentialStart)
 		}
 	}
 	return i, end
@@ -266,6 +268,13 @@ func unquotedEnd(s string, i int) int {
 		end++
 	}
 	return trimPunctuation(s, i, end)
+}
+
+func credentialEnd(s string, i int) int {
+	for i < len(s) && (isWordChar(s[i]) || strings.IndexByte(credentialPunctuation, s[i]) >= 0) {
+		i++
+	}
+	return i
 }
 
 func trimPunctuation(s string, start, end int) int {
@@ -311,7 +320,7 @@ func redactAuthSchemes(s string) string {
 		if m == nil {
 			break
 		}
-		start, end := pos+m[4], trimPunctuation(s, pos+m[4], pos+m[5])
+		start, end := pos+m[4], pos+m[5]
 		if !looksLikeCredential(s[start:end]) {
 			pos += m[3]
 			continue

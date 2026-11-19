@@ -138,6 +138,8 @@ func TestRedact_StringRules(t *testing.T) {
 		{"short credential after bearer in prose", "retrying with Bearer abcdef1", "retrying with Bearer ***"},
 		{"short credential after basic in prose", "a token and Basic auth456", "a token and Basic ***"},
 		{"short credential after token in prose", "retrying with token abc123x", "retrying with token ***"},
+		{"credential in prose stops at markup", `<a href="x">Bearer abcdefghij1</a>`, `<a href="x">Bearer ***</a>`},
+		{"credential in a header stops at markup", "<b>Authorization: Bearer abcdefghij1</b>", "<b>Authorization: Bearer ***</b>"},
 
 		{"token followed by equals", "token=" + lowercase, "token=***"},
 		{"token followed by colon", "token: " + lowercase, "token: ***"},
