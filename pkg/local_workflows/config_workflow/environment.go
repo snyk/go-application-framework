@@ -1,4 +1,4 @@
-package localworkflows
+package config_workflow
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIden
 
 var lookupHost = net.LookupHost
 
-func InitConfigWorkflow(engine workflow.Engine) error {
+func initEnvironmentWorkflow(engine workflow.Engine) error {
 	// map environmentAlias to an existing value
 	engine.GetConfiguration().AddAlternativeKeys(environmentAlias, []string{configuration.INPUT_DIRECTORY})
 
