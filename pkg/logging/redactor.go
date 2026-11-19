@@ -323,7 +323,7 @@ func redactAuthSchemes(s string) string {
 }
 
 func looksLikeCredential(value string) bool {
-	if len(value) < 8 {
+	if len(value) < 6 {
 		return false
 	}
 	if strings.ContainsAny(value, "0123456789=+/") {

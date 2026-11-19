@@ -536,3 +536,13 @@ func blockFirstReadOfRedactionTerms(config configuration.Configuration) (started
 	})
 	return startedCh, releaseCh
 }
+
+func TestDebugLog_ShortCredentialAfterAnAuthSchemeIsRedacted(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("retrying with Bearer abc+def and Basic auth456")
+
+	shown := requireEventShown(t, out, "retrying with Bearer *** and Basic ***")
+	assert.NotContains(t, shown, "abc+def")
+	assert.NotContains(t, shown, "auth456")
+}

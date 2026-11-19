@@ -135,6 +135,9 @@ func TestRedact_StringRules(t *testing.T) {
 		{"lowercase word after token in prose", "token because it expired", "token because it expired"},
 		{"lowercase word after access_token in prose", "renewing access_token because it expired", "renewing access_token because it expired"},
 		{"pipe before oken is not token", "a |oken " + shaped, "a |oken " + shaped},
+		{"short credential after bearer in prose", "retrying with Bearer abcdef1", "retrying with Bearer ***"},
+		{"short credential after basic in prose", "a token and Basic auth456", "a token and Basic ***"},
+		{"short credential after token in prose", "retrying with token abc123x", "retrying with token ***"},
 
 		{"token followed by equals", "token=" + lowercase, "token=***"},
 		{"token followed by colon", "token: " + lowercase, "token: ***"},
@@ -216,15 +219,15 @@ func TestRedact_StringRules(t *testing.T) {
 
 func TestLooksLikeCredential(t *testing.T) {
 	for value, expected := range map[string]bool{
-		"abcdef12":          true,
-		"abcdefg=":          true,
-		"abc+defg":          true,
-		"abc/defg":          true,
-		"abcdEfgh":          true,
+		"abcdef1":           true,
+		"abcdef=":           true,
+		"abc+def":           true,
+		"abc/def":           true,
+		"abcDef":            true,
 		"abc1":              false,
 		"authentication":    false,
 		"Authentication":    false,
-		"ABCDEFGH":          false,
+		"ABCDEF":            false,
 		"snake_case-word.x": false,
 	} {
 		assert.Equal(t, expected, looksLikeCredential(value), value)
