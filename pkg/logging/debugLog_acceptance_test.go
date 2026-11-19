@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -461,4 +462,41 @@ func TestDebugLog_ConsumerFormattingOptionsKeepWorkingWithRedaction(t *testing.T
 	assert.Contains(t, shown, "TIMESTAMP")
 	assert.Contains(t, shown, "password=***")
 	assert.NotContains(t, shown, "added-by-consumer")
+}
+
+func TestDebugLog_TokenLoggedWhileAnotherEventReadsTheConfigurationIsRedacted(t *testing.T) {
+	config := configuration.NewWithOpts()
+	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(config)
+	logger, out := newDebugLog(t, config)
+	firstEventLogged := make(chan struct{})
+	go func() {
+		defer close(firstEventLogged)
+		logger.Debug().Msg("first event")
+	}()
+	<-firstReadStarted
+
+	apiToken := fakeAPIToken()
+	config.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
+	logger.Debug().Msgf("authenticating with %s", apiToken)
+	close(releaseFirstRead)
+	<-firstEventLogged
+
+	shown := requireEventShown(t, out, "authenticating with ***")
+	assert.Contains(t, shown, "first event")
+	assert.NotContains(t, shown, apiToken)
+}
+
+// blockFirstReadOfRedactionTerms holds the first reader of REDACTION_TERMS until release is closed, so a test can act
+// while a redaction is in the middle of reading the configuration.
+func blockFirstReadOfRedactionTerms(config configuration.Configuration) (started <-chan struct{}, release chan<- struct{}) {
+	startedCh, releaseCh := make(chan struct{}), make(chan struct{})
+	var first atomic.Bool
+	config.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
+		if first.CompareAndSwap(false, true) {
+			close(startedCh)
+			<-releaseCh
+		}
+		return existing, nil
+	})
+	return startedCh, releaseCh
 }

@@ -24,7 +24,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -152,19 +151,21 @@ func TestRedactor_ConcurrentRedactionsWhileTheTokenRotates(t *testing.T) {
 	assert.Equal(t, "***", redactor.Redact("rotated-token-7"))
 }
 
-func TestConsoleWriter_ReadingTheConfigurationMayLogThroughTheSameWriter(t *testing.T) {
+func TestRedactor_RedactionDuringAnotherRedactionsConfigurationReadSeesTheCurrentToken(t *testing.T) {
 	config := configuration.NewInMemory()
-	var logger zerolog.Logger
-	config.AddDefaultValue(configuration.AUTHENTICATION_TOKEN, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
-		logger.Debug().Msg("looking up the token")
-		return "default-token-value", nil
-	})
-	debugLog, out := newDebugLog(t, config)
-	logger = *debugLog
+	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(config)
+	redactor := logging.NewRedactor(config)
+	firstRedactionDone := make(chan struct{})
+	go func() {
+		defer close(firstRedactionDone)
+		redactor.Redact("first")
+	}()
+	<-firstReadStarted
 
-	logger.Debug().Msg("sending default-token-value")
+	config.Set(configuration.AUTHENTICATION_TOKEN, "set-during-read-1")
+	redacted := redactor.Redact("using set-during-read-1")
+	close(releaseFirstRead)
+	<-firstRedactionDone
 
-	shown := requireEventShown(t, out, "sending ***")
-	assert.Contains(t, shown, "looking up the token")
-	assert.NotContains(t, shown, "default-token-value")
+	assert.Equal(t, "using ***", redacted)
 }

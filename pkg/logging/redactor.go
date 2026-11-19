@@ -24,7 +24,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"unicode"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
@@ -44,11 +43,10 @@ const minDeviceTokenTermLength = 16
 // Redactor removes credentials from log text. It reads the credentials and REDACTION_TERMS of its configuration on
 // every redaction, so values set after it was created are covered, and it keeps redacting values that have since been
 // replaced, such as a rotated token. Redaction is a best effort on known shapes of credentials, not a guarantee.
-// A Redactor is safe for concurrent use; a redaction that runs while another goroutine reads the configuration uses
-// the values read before.
+// A Redactor is safe for concurrent use. Default functions of the configuration for the values it reads must not log
+// through a writer that redacts with this Redactor, because that redaction reads them again.
 type Redactor struct {
-	config     configuration.Configuration
-	refreshing atomic.Bool
+	config configuration.Configuration
 
 	mu      sync.Mutex
 	secrets map[string]struct{}
@@ -72,18 +70,11 @@ func (r *Redactor) Redact(s string) string {
 	return r.current().redact(s)
 }
 
-// current returns the rules for the configuration's present values. Reading the configuration can log, and so
-// re-enter the Redactor through a log writer. Go can't tell that call from one on another goroutine, so every call
-// made while a read is in progress uses the rules from before it.
+// current returns the rules for the configuration's present values. The configuration is read without holding the
+// lock, because its default functions are callbacks that can take arbitrarily long.
 func (r *Redactor) current() *rules {
-	if !r.refreshing.CompareAndSwap(false, true) {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		return r.rules
-	}
 	secrets := secretsFromConfig(r.config)
 	terms := r.config.GetStringSlice(REDACTION_TERMS)
-	r.refreshing.Store(false)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
