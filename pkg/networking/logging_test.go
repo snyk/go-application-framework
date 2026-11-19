@@ -384,3 +384,40 @@ func Test_logRoundTrip(t *testing.T) {
 		assert.Contains(t, actualLoggerContent, expectedResponseBodyError)
 	})
 }
+
+func Test_LogRequestAndResponse_hideSensitiveHeaderValues(t *testing.T) {
+	sensitive := map[string]string{
+		"Authorization":       "token request-auth-value",
+		"Proxy-Authorization": "Basic proxy-auth-value",
+		"Cookie":              "session=cookie-value",
+		"X-Api-Key":           "api-key-value",
+		"X-Refresh-Token-Id":  "token-id-value",
+		"X-Client-Secret-Ref": "secret-ref-value",
+		"X-Session-Key":       "session-key-value",
+	}
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/x", nil)
+	for name, value := range sensitive {
+		request.Header.Set(name, value)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response := &http.Response{Status: "200 OK", StatusCode: http.StatusOK, Request: request, Header: http.Header{}}
+	response.Header.Set("Set-Cookie", "session=set-cookie-value")
+	response.Header.Set("X-Request-Id", "request-id-value")
+	content := &bytes.Buffer{}
+	logger := zerolog.New(content).Level(defaultNetworkLogLevel)
+
+	LogRequest(request, &logger)
+	LogResponse(response, &logger)
+
+	logged := content.String()
+	for name, value := range sensitive {
+		assert.Contains(t, logged, name+":[***]")
+		assert.NotContains(t, logged, value)
+		assert.Equal(t, value, request.Header.Get(name), "the request keeps its header")
+	}
+	assert.Contains(t, logged, "Set-Cookie:[***]")
+	assert.NotContains(t, logged, "set-cookie-value")
+	assert.Equal(t, "session=set-cookie-value", response.Header.Get("Set-Cookie"), "the response keeps its header")
+	assert.Contains(t, logged, "Content-Type:[application/json]")
+	assert.Contains(t, logged, "X-Request-Id:[request-id-value]")
+}
