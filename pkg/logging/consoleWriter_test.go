@@ -37,11 +37,8 @@ import (
 
 func noColor(w *zerolog.ConsoleWriter) { w.NoColor = true }
 
-func withToken(token string, terms ...string) func(configuration.Configuration) {
-	return func(config configuration.Configuration) {
-		config.Set(configuration.AUTHENTICATION_TOKEN, token)
-		config.Set(logging.REDACTION_TERMS, terms)
-	}
+func withToken(token string) func(configuration.Configuration) {
+	return withValue(configuration.AUTHENTICATION_TOKEN, token)
 }
 
 func withTerms(terms ...string) func(configuration.Configuration) {
@@ -85,7 +82,7 @@ func TestConsoleWriter_ShowsEachEventWithoutItsSecrets(t *testing.T) {
 		{"token after an escaped newline", withToken("12345"), `{"a":"path\nnext","count":12345}`, []string{"path", "next", "count=***"}, []string{"12345"}},
 		{"token next to another number", withToken("8080"), `{"port":8080,"timeout":3000}`, []string{"port=***", "timeout=3000"}, []string{"8080"}},
 		{"token inside true", withToken("rue"), `{"enabled":true}`, []string{"enabled=true"}, nil},
-		{"token inside false", withToken("alse"), `{"enabled":false}`, []string{"enabled=false"}, nil},
+		{"token inside false", withToken("als"), `{"enabled":false}`, []string{"enabled=false"}, nil},
 		{"token inside null", withToken("ull"), `{"value":null}`, []string{"value=null"}, nil},
 		{"short token inside a number", withToken("1234"), `{"level":"info","x":12345678,"message":"call with 1234 now"}`, []string{"call with *** now"}, []string{"call with 1234"}},
 		{"token with an escaped letter", withToken(secret), `{"m":"s3cr3t\u0076alue99"}`, []string{"m=***"}, []string{secret}},
@@ -188,7 +185,9 @@ func BenchmarkConsoleWriter_Event(b *testing.B) {
 	event := []byte(`{"level":"debug","ext":"main","separator":"-","method":"GET","url":"https://api.example.com/rest/orgs?version=2024-10-15","status":200,"durationMs":123,"time":"2026-11-16T12:00:00Z","message":"< Content-Type: application/json"}` + "\n")
 	writer := logging.NewConsoleWriter(&bytes.Buffer{}, func() configuration.Configuration { return config }, noColor)
 	for b.Loop() {
-		_, _ = writer.Write(event)
+		if _, err := writer.Write(event); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -201,6 +200,8 @@ func BenchmarkConsoleWriter_EventWithEmbeddedJSONBody(b *testing.B) {
 	config := configuration.NewInMemory()
 	writer := logging.NewConsoleWriter(&bytes.Buffer{}, func() configuration.Configuration { return config }, noColor)
 	for b.Loop() {
-		_, _ = writer.Write(event)
+		if _, err := writer.Write(event); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

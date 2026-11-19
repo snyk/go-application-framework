@@ -236,10 +236,7 @@ func redactPairAt(r *spanWriter, i int) int {
 	default:
 		return keyEnd
 	}
-	start, end := valueSpan(s, valueStart)
-	if quoteAt(s, valueStart) == "" && strings.Contains(strings.ToLower(key), "cookie") {
-		end = cookieHeaderEnd(s, start, strings.HasPrefix(s[valueStart:], "["))
-	}
+	start, end := sensitiveValueSpan(s, key, valueStart)
 	if end > start {
 		r.replace(start, end)
 	}
@@ -267,8 +264,17 @@ func valueSpan(s string, i int) (int, int) {
 	return i, end
 }
 
-// cookieHeaderEnd returns the end of a cookie header's value starting at i: the end of the line, or the closing "]" of
-// a bracketed value, because every cookie in it is a credential.
+// sensitiveValueSpan returns the span of the value of key starting at i. The unquoted value of a cookie header runs to
+// the end of its line or its closing "]", because every cookie in it is a credential.
+func sensitiveValueSpan(s, key string, i int) (int, int) {
+	start, end := valueSpan(s, i)
+	if quoteAt(s, i) == "" && strings.Contains(strings.ToLower(key), "cookie") {
+		end = cookieHeaderEnd(s, start, strings.HasPrefix(s[i:], "["))
+	}
+	return start, end
+}
+
+// cookieHeaderEnd returns the end of the line starting at i, or of the bracketed value, at its closing "]".
 func cookieHeaderEnd(s string, i int, bracketed bool) int {
 	stops := "\r\n"
 	if bracketed {
