@@ -393,6 +393,16 @@ func Test_JsonStorage_Set_InvalidJsonLeavesTheFileUntouched(t *testing.T) {
 	}
 }
 
+func Test_JsonStorage_Set_KeyDeletedRemovesTheKey(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "config.json")
+	require.NoError(t, os.WriteFile(configFile, []byte(`{"a":"x","b":"y"}`), 0o600))
+
+	require.NoError(t, configuration.NewJsonStorage(configFile).Set("a", configuration.KeyDeleted))
+
+	assert.Equal(t, map[string]any{"b": "y"}, readStoredConfigFile(t, configFile))
+}
+
 func Test_JsonStorage_ReadAll(t *testing.T) {
 	t.Run("returns the keys of the file as stored, with the text of numbers", func(t *testing.T) {
 		configFile := filepath.Join(t.TempDir(), "config.json")
@@ -440,6 +450,31 @@ func Test_JsonStorage_ReadAll(t *testing.T) {
 		_, err := storageWithTempConfigFile(t, []byte(`{"a":`)).ReadAll()
 
 		assert.Error(t, err)
+	})
+}
+
+func Test_JsonStorage_Clear(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empties the file", func(t *testing.T) {
+		t.Parallel()
+		configFile := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(configFile, []byte(`{"a":"x"}`), 0o600))
+
+		require.NoError(t, configuration.NewJsonStorage(configFile).Clear())
+
+		content, err := os.ReadFile(configFile)
+		require.NoError(t, err)
+		assert.Equal(t, "{}", string(content))
+	})
+
+	t.Run("creates a missing file", func(t *testing.T) {
+		t.Parallel()
+		configFile := filepath.Join(t.TempDir(), "missing", "config.json")
+
+		require.NoError(t, configuration.NewJsonStorage(configFile).Clear())
+
+		assert.Empty(t, readStoredConfigFile(t, configFile))
 	})
 }
 

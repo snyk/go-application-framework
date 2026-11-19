@@ -51,13 +51,13 @@ func (*EmptyStorage) Unlock() error {
 	return nil
 }
 
-// keyDeleted is a marker value which, when set, causes a key to be deleted from
+// KeyDeleted is a marker value which, when set, causes a key to be deleted from
 // stored configuration.
-var keyDeleted = struct{}{}
+var KeyDeleted = struct{}{}
 
-// IsKeyDeleted reports whether val is the internal key-deleted marker used by Unset().
+// IsKeyDeleted reports whether val is the key-deleted marker used by Unset().
 func IsKeyDeleted(val any) bool {
-	return val == keyDeleted
+	return val == KeyDeleted
 }
 
 // WithBlankFileAsEmpty makes Set and ReadAll treat a file that holds only white space like an empty file. It is off by
@@ -197,6 +197,17 @@ func (s *JsonStorage) ReadAll() (map[string]any, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	return s.readFile()
+}
+
+// Clear replaces the content of the file with an empty JSON object.
+func (s *JsonStorage) Clear() error {
+	mu := fileMutex(s.path)
+	mu.Lock()
+	defer mu.Unlock()
+	if err := os.MkdirAll(filepath.Dir(s.path), fileperms.FILEPERM_755); err != nil {
+		return err
+	}
+	return writeConfigFile(s.path, []byte("{}"))
 }
 
 // Path returns the file of the storage.

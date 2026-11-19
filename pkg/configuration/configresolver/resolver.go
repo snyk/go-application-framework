@@ -118,7 +118,7 @@ func (r *Resolver) remoteKeyForName(name, effectiveOrg string) string {
 	return RemoteOrgKey(effectiveOrg, name)
 }
 
-// isUserSet returns true only when the key is explicitly set to a real value (not the keyDeleted marker).
+// isUserSet returns true only when the key is explicitly set to a real value (not the KeyDeleted marker).
 func (r *Resolver) isUserSet(key string) bool {
 	if !r.conf.IsSet(key) {
 		return false

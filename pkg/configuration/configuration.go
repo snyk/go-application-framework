@@ -633,12 +633,12 @@ func (ev *extendedViper) Unset(key string) {
 	ev.PersistInStorage(key)
 
 	// An empty struct marks the key for deletion in JsonStorage.
-	ev.Set(key, keyDeleted)
+	ev.Set(key, KeyDeleted)
 
 	// Do the same for all this key's alternatives
 	for _, otherKey := range ev.GetAlternativeKeys(key) {
 		ev.PersistInStorage(otherKey)
-		ev.Set(otherKey, keyDeleted)
+		ev.Set(otherKey, KeyDeleted)
 	}
 }
 
