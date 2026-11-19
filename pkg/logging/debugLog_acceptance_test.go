@@ -427,7 +427,11 @@ func TestDebugLog_EventsSurviveTermsCarryingJSONPunctuation(t *testing.T) {
 		{"multi-line analytics dump", "legacy:2", zerolog.DebugLevel, analyticsPayload, []string{`"metrics`, "true,"}, "network_time"},
 		{"output writers count", "output:4", zerolog.InfoLevel, "Available writers (count: 1):", []string{`info"`}, "Available writers"},
 		{"output writer map", "output:4", zerolog.InfoLevel, "WriterMap: (default -> text/cli) ", []string{`info"`}, "WriterMap"},
+		{"no unified findings", "output:4", zerolog.InfoLevel, "UFM - No data to process", []string{`info"`}, "UFM"},
+		{"no local findings", "output:4", zerolog.InfoLevel, "LFM - No findings to process", []string{`info"`}, "LFM"},
+		{"no other data", "output:4", zerolog.InfoLevel, "Other - No data to process", []string{`info"`}, "Other"},
 		{"sending analytics", "", zerolog.DebugLevel, "Sending Analytics", []string{`"Sending`}, "Sending Analytics"},
+		{"sending instrumentation", "", zerolog.DebugLevel, "Sending Instrumentation", []string{`"Sending`}, "Sending Instrumentation"},
 		{"analytics report data", "analytics.report:5", zerolog.DebugLevel, analyticsData, []string{`"name`, "true,"}, "example-app"},
 		{"authorization summary", "", zerolog.DebugLevel, "Authorization:         1a2b3c4d***9f8e7d6c  (type=token)", []string{`"Authorization:`}, "(type=token)"},
 	}

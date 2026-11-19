@@ -74,6 +74,54 @@ func TestRedactor_EachKindOfConfiguredSecretIsRedacted(t *testing.T) {
 	}
 }
 
+func TestRedactor_RedactsTheConfiguredTokenAndTermsInText(t *testing.T) {
+	longTerm := strings.Repeat("X", 1000)
+	tests := []struct {
+		name     string
+		token    string
+		terms    []string
+		input    string
+		expected string
+	}{
+		{"term before a comma", "", []string{"12345"}, "count:12345, retrying", "count:***, retrying"},
+		{"several terms", "", []string{"token", "secret"}, "secret for my account, including my token", "*** for my account, including my ***"},
+		{"term of several words", "", []string{"secret", "special", "be disclosed"}, "This is my secret message, which might not be special but definitely should not be disclosed.", "This is my *** message, which might not be *** but definitely should not ***."},
+		{"terms between words", "", []string{"token", "password"}, "this is a token test and also a password test", "this is a *** test and also a *** test"},
+		{"single term", "", []string{"secret123"}, "This is my secret123 value", "This is my *** value"},
+		{"terms at the start of clauses", "", []string{"password", "token", "key"}, "password is secret, token is hidden, key is protected", "*** is secret, *** is hidden, *** is protected"},
+		{"no terms", "", nil, "nothing should be replaced here", "nothing should be replaced here"},
+		{"terms with special characters", "", []string{"user@domain.com", "file.txt", "super=secret?password"}, "Email user@domain.com, file file.txt, and super=secret?password value", "Email ***, file ***, and *** value"},
+		{"terms with spaces", "", []string{"secret phrase", "multi word key"}, "The secret phrase is hidden and multi word key is protected", "The *** is hidden and *** is protected"},
+		{"terms with non-ASCII letters", "", []string{"café", "naïve"}, "The café is naïve about security", "The *** is *** about security"},
+		{"terms with a newline and a tab", "", []string{"line1\nline2", "tab\tseparated"}, "First line1\nline2 then tab\tseparated values", "First *** then *** values"},
+		{"very long term", "", []string{longTerm}, "Short text with " + longTerm + " long term", "Short text with *** long term"},
+		{"numeric terms", "", []string{"12345", "987.654"}, "ID 12345 and value 987.654 are sensitive", "ID *** and value *** are sensitive"},
+		{"empty term", "", []string{""}, "request", "request"},
+		{"empty token and empty term", "", []string{""}, `{"count":12345}`, `{"count":12345}`},
+		{"token inside a number", "12345", nil, "id: 123451234", "id: ***1234"},
+		{"token as a JSON number", "12345", nil, `{"count":12345,"ok":true}`, `{"count":***,"ok":true}`},
+		{"token at the start", "12345", nil, `12345,"b":2`, `***,"b":2`},
+		{"token at the end", "12345", nil, `{"a":1,"b":12345`, `{"a":1,"b":***`},
+		{"token that is all of the text", "12345", nil, "12345", "***"},
+		{"token next to another number", "8080", nil, `{"port":8080,"timeout":3000}`, `{"port":***,"timeout":3000}`},
+		{"token in a colon list", "8080", nil, "port:8080,timeout:3000", "port:***,timeout:3000"},
+		{"token containing a term", "abc-secret-xyz", []string{"secret"}, "abc-secret-xyz", "***"},
+		{"token that is also a term", "shared", []string{"shared"}, "xsharedy", "x***y"},
+		{"token before a newline", "io-writer-token-value", nil, "seen io-writer-token-value here\n", "seen *** here\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewInMemory()
+			config.Set(configuration.AUTHENTICATION_TOKEN, tt.token)
+			config.Set(logging.REDACTION_TERMS, tt.terms)
+
+			redacted := logging.NewRedactor(func() configuration.Configuration { return config }).Redact(tt.input)
+
+			assert.Equal(t, tt.expected, redacted)
+		})
+	}
+}
+
 func TestRedactor_MachineCredentialIsRedactedInEveryShape(t *testing.T) {
 	key, err := machineenrollment.GenerateKey()
 	require.NoError(t, err)
