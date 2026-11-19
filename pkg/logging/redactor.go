@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -350,8 +351,8 @@ func looksLikeCredential(value string) bool {
 	return false
 }
 
-// redactWholeToken redacts each occurrence of term in s that is a whole token: not next to a word character, nor joined to
-// one by a single "-" or ".", so the term "Content" leaves "Content-Type" alone.
+// redactWholeToken redacts each occurrence of term in s that is a whole token: not next to a letter, digit or "_" of any
+// script, nor joined to one by a single "-" or ".", so the term "Content" leaves "Content-Type" alone.
 func redactWholeToken(s, term string) string {
 	r := &spanWriter{s: s}
 	for from := 0; ; {
@@ -360,7 +361,7 @@ func redactWholeToken(s, term string) string {
 			break
 		}
 		start, end := from+n, from+n+len(term)
-		if joined(s, start-1, start-2) || joined(s, end, end+1) {
+		if joinedBefore(s[:start]) || joinedAfter(s[end:]) {
 			from = start + 1
 			continue
 		}
@@ -370,15 +371,34 @@ func redactWholeToken(s, term string) string {
 	return r.String()
 }
 
-// joined reports whether the character at i is a word character, or a "-" or "." followed, at beyond, by one.
-func joined(s string, i, beyond int) bool {
-	if i < 0 || i >= len(s) {
-		return false
-	}
-	if isWordChar(s[i]) {
+// joinedBefore reports whether before ends in a letter, digit or "_", or in a "-" or "." preceded by one.
+func joinedBefore(before string) bool {
+	r, n := utf8.DecodeLastRuneInString(before)
+	if isWordRune(r) {
 		return true
 	}
-	return (s[i] == '-' || s[i] == '.') && beyond >= 0 && beyond < len(s) && isWordChar(s[beyond])
+	if r != '-' && r != '.' {
+		return false
+	}
+	r, _ = utf8.DecodeLastRuneInString(before[:len(before)-n])
+	return isWordRune(r)
+}
+
+// joinedAfter reports whether after starts with a letter, digit or "_", or with a "-" or "." followed by one.
+func joinedAfter(after string) bool {
+	r, n := utf8.DecodeRuneInString(after)
+	if isWordRune(r) {
+		return true
+	}
+	if r != '-' && r != '.' {
+		return false
+	}
+	r, _ = utf8.DecodeRuneInString(after[n:])
+	return isWordRune(r)
+}
+
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 func isWordChar(c byte) bool {

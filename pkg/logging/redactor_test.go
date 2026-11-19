@@ -74,6 +74,9 @@ func TestRedact_TermsAreRedactedOnlyAsWholeTokens(t *testing.T) {
 		{"hyphenated term", "value a-b here", "a-b", "value *** here"},
 		{"hyphenated term joined to a word", "xa-a-a", "a-a", "xa-a-a"},
 		{"term with punctuation", "result: ok", "result:", "*** ok"},
+		{"after a non-ASCII letter", "préquest", "quest", "préquest"},
+		{"before a non-ASCII digit", "request١", "request", "request١"},
+		{"joined by a hyphen to a non-ASCII letter", "é-request", "request", "é-request"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

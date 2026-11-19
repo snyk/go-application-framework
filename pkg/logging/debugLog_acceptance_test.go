@@ -565,3 +565,11 @@ func TestDebugLog_QuotedPasswordContainingAQuoteIsRedactedWhole(t *testing.T) {
 	assert.NotContains(t, shown, "secret")
 	assert.NotContains(t, shown, "ter2")
 }
+
+func TestDebugLog_TermInsideANonASCIIWordIsShown(t *testing.T) {
+	logger, out := newDebugLog(t, configWithRedactionTerms("quest"))
+
+	logger.Debug().Msg("préquest and quest")
+
+	requireEventShown(t, out, "préquest and ***")
+}
