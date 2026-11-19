@@ -41,7 +41,8 @@ func fakeToken(n int) string {
 func TestTraceLog_CredentialsOfRequestsNeverShow(t *testing.T) {
 	sessionCookie := strings.Repeat("c00k1e", 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: sessionCookie})
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: sessionCookie, HttpOnly: true, Secure: true})
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fields := strings.Fields(r.Header.Get("Authorization"))
 		require.Len(t, fields, 2, "the request is authenticated")
 		_, err := fmt.Fprintf(w, "you sent %s", fields[1])
