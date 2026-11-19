@@ -209,6 +209,7 @@ func TestRedact_StringRules(t *testing.T) {
 		{"github classic token", "found ghp_" + strings.Repeat("0123456789", 4), "found ghp_***"},
 		{"github fine-grained token", "found github_pat_" + strings.Repeat("0123456789", 2) + "_abcdefghij", "found github_pat_***"},
 		{"snyk PAT", "found " + pat + " here", "found snyk_uat.*** here"},
+		{"snyk PAT after bearer in a header", "Authorization: Bearer " + pat, "Authorization: Bearer ***"},
 
 		{"bearer in an authorization header", "Authorization: Bearer " + shaped, "Authorization: Bearer ***"},
 		{"digit-free basic in an authorization header", "Authorization: Basic " + lowercase, "Authorization: Basic ***"},

@@ -154,7 +154,9 @@ var (
 	authScheme  = regexp.MustCompile(`(?i)\b(bearer|basic|negotiate|token)\s+([\w` + regexp.QuoteMeta(credentialPunctuation) + `]+)`)
 )
 
-const credentialPunctuation = "-:.=/+~"
+// credentialPunctuation includes "*" because an earlier rule can already have replaced part of a credential, such as
+// the payload of a Snyk PAT.
+const credentialPunctuation = "-:.=/+~*"
 
 func (rl *rules) redact(s string) string {
 	s = rl.secrets.Replace(s)
