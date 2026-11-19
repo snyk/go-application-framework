@@ -166,6 +166,11 @@ func TestRedact_StringRules(t *testing.T) {
 		{"apostrophe inside a single-quoted value", `{ 'p': 'Nick's', 'u': 'x' }`, `{ 'p': '***', 'u': '***' }`},
 		{"apostrophe inside a single-quoted password", `password='it's-a-secret'`, `password='***'`},
 		{"single-quoted key=value", `before 'u=john.doe' 'p=hunter2' after`, `before 'u=***' 'p=***' after`},
+		{"every cookie in a cookie header", "Cookie: session=abc123; other=1", "Cookie: ***"},
+		{"cookie header ends at the line end", "set-cookie: sid=abc123xyz; Path=/\nnext line", "set-cookie: ***\nnext line"},
+		{"cookies in a go-printed header map", "map[Cookie:[session=abc123; other=1] X-Id:[7]]", "map[Cookie:[***] X-Id:[7]]"},
+		{"cookie header without a value", "Cookie:", "Cookie:"},
+		{"quoted cookie header", `{"Cookie": "a=1; b=2", "x": 1}`, `{"Cookie": "***", "x": 1}`},
 		{"message that is a lone u", "u", "u"},
 		{"message ending in p colon", "p:", "p:"},
 

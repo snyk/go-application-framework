@@ -573,3 +573,13 @@ func TestDebugLog_TermInsideANonASCIIWordIsShown(t *testing.T) {
 
 	requireEventShown(t, out, "préquest and ***")
 }
+
+func TestDebugLog_EveryCookieInACookieHeaderIsRedacted(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("> Cookie: session=first-cookie-value; theme=second-cookie-value")
+
+	shown := requireEventShown(t, out, "> Cookie: ***")
+	assert.NotContains(t, shown, "first-cookie-value")
+	assert.NotContains(t, shown, "second-cookie-value")
+}

@@ -389,7 +389,7 @@ func Test_LogRequestAndResponse_hideSensitiveHeaderValues(t *testing.T) {
 	sensitive := map[string]string{
 		"Authorization":       "token request-auth-value",
 		"Proxy-Authorization": "Basic proxy-auth-value",
-		"Cookie":              "session=cookie-value",
+		"Cookie":              "session=cookie-value; other=other-cookie-value",
 		"X-Api-Key":           "api-key-value",
 		"X-Refresh-Token-Id":  "token-id-value",
 		"X-Client-Secret-Ref": "secret-ref-value",

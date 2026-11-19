@@ -235,6 +235,9 @@ func redactPairAt(r *spanWriter, i int) int {
 		return keyEnd
 	}
 	start, end := valueSpan(s, valueStart)
+	if quoteAt(s, valueStart) == "" && strings.Contains(strings.ToLower(key), "cookie") {
+		end = cookieHeaderEnd(s, start, strings.HasPrefix(s[valueStart:], "["))
+	}
 	if end > start {
 		r.replace(start, end)
 	}
@@ -243,9 +246,8 @@ func redactPairAt(r *spanWriter, i int) int {
 
 // valueSpan returns the span of the value starting at i. A quoted value ends at the first closing quote followed by
 // whitespace, a delimiter such as "," or "}", or the end of s, so a quote inside the value doesn't end it, and it runs
-// to the end of s without one.
-// An unquoted value ends at whitespace or "&", without trailing punctuation. When it is an auth scheme, such as in
-// `Authorization: Bearer x`, the credential after it is the value.
+// to the end of s without one. An unquoted value ends at whitespace or "&", without trailing punctuation. When it is an
+// auth scheme, such as in `Authorization: Bearer x`, the credential after it is the value.
 func valueSpan(s string, i int) (int, int) {
 	if quote := quoteAt(s, i); quote != "" {
 		start := i + len(quote)
@@ -261,6 +263,19 @@ func valueSpan(s string, i int) (int, int) {
 		}
 	}
 	return i, end
+}
+
+// cookieHeaderEnd returns the end of a cookie header's value starting at i: the end of the line, or the closing "]" of
+// a bracketed value, because every cookie in it is a credential.
+func cookieHeaderEnd(s string, i int, bracketed bool) int {
+	stops := "\r\n"
+	if bracketed {
+		stops += "]"
+	}
+	if n := strings.IndexAny(s[i:], stops); n >= 0 {
+		return i + n
+	}
+	return len(s)
 }
 
 var authSchemes = map[string]bool{"bearer": true, "basic": true, "negotiate": true, "token": true}
