@@ -1,6 +1,7 @@
-package envvars
+package subprocess
 
 import (
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -200,7 +202,11 @@ func TestSanitizeEnv_ReturnsErrorWhenDirCannotBeResolved(t *testing.T) {
 	got, err := SanitizeEnv([]string{"SNYK_TOKEN=secret", "PATH=/bin"}, "sub", "snyk_")
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "resolve working directory")
+	var snykErr snyk_errors.Error
+	require.ErrorAs(t, err, &snykErr)
+	assert.Equal(t, "SNYK-CLI-0039", snykErr.ErrorCode)
+	assert.Contains(t, snykErr.Detail, "resolve working directory")
+	assert.ErrorIs(t, err, fs.ErrNotExist)
 	assert.Nil(t, got)
 }
 
