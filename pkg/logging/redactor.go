@@ -40,13 +40,14 @@ const REDACTION_TERMS string = "internal_redaction_terms"
 // also redact unrelated text.
 const minDeviceTokenTermLength = 16
 
-// Redactor removes credentials from log text. It reads the credentials and REDACTION_TERMS of its configuration on
-// every redaction, so values set after it was created are covered, and it keeps redacting values that have since been
-// replaced, such as a rotated token. Redaction is a best effort on known shapes of credentials, not a guarantee.
-// A Redactor is safe for concurrent use. Default functions of the configuration for the values it reads must not log
-// through a writer that redacts with this Redactor, because that redaction reads them again.
+// Redactor removes credentials from log text. On every redaction it reads the credentials and REDACTION_TERMS of the
+// configuration its provider returns, so values set after it was created and a configuration the provider switches to
+// are covered, and it keeps redacting values that have since been replaced, such as a rotated token or the secrets of a
+// configuration the provider no longer returns. Redaction is a best effort on known shapes of credentials, not a
+// guarantee. A Redactor is safe for concurrent use. Default functions of the configuration for the values it reads must
+// not log through a writer that redacts with this Redactor, because that redaction reads them again.
 type Redactor struct {
-	config configuration.Configuration
+	config func() configuration.Configuration
 
 	mu      sync.Mutex
 	secrets map[string]struct{}
@@ -54,9 +55,10 @@ type Redactor struct {
 	rules   *rules
 }
 
-// NewRedactor returns a Redactor for the credentials and REDACTION_TERMS of config. The name of the current OS user is
-// redacted as a term, too.
-func NewRedactor(config configuration.Configuration) *Redactor {
+// NewRedactor returns a Redactor for the credentials and REDACTION_TERMS of the configuration config returns. config is
+// called on every redaction, from any goroutine, and a nil configuration adds nothing to redact. The name of the
+// current OS user is redacted as a term, too.
+func NewRedactor(config func() configuration.Configuration) *Redactor {
 	r := &Redactor{config: config, secrets: map[string]struct{}{}, terms: map[string]struct{}{}}
 	if u, err := user.Current(); err == nil {
 		addAll(r.terms, []string{u.Username})
@@ -73,8 +75,11 @@ func (r *Redactor) Redact(s string) string {
 // current returns the rules for the configuration's present values. The configuration is read without holding the
 // lock, because its default functions are callbacks that can take arbitrarily long.
 func (r *Redactor) current() *rules {
-	secrets := secretsFromConfig(r.config)
-	terms := r.config.GetStringSlice(REDACTION_TERMS)
+	var secrets, terms []string
+	if config := r.config(); config != nil {
+		secrets = secretsFromConfig(config)
+		terms = config.GetStringSlice(REDACTION_TERMS)
+	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

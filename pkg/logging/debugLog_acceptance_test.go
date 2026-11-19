@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -29,12 +31,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	"github.com/snyk/go-application-framework/pkg/logging"
 )
 
 // newDebugLog wires a logger the way a consumer prints human-readable debug output. Write failures are reported into
 // the same buffer, because a user sees them in the same stream.
 func newDebugLog(t *testing.T, config configuration.Configuration) (*zerolog.Logger, *bytes.Buffer) {
+	t.Helper()
+	return newDebugLogFor(t, func() configuration.Configuration { return config })
+}
+
+func newDebugLogFor(t *testing.T, config func() configuration.Configuration) (*zerolog.Logger, *bytes.Buffer) {
 	t.Helper()
 	out := &bytes.Buffer{}
 
@@ -446,7 +454,8 @@ func TestDebugLog_BareBooleanFieldSurvivesTermWithTrailingComma(t *testing.T) {
 
 func TestDebugLog_ConsumerFormattingOptionsKeepWorkingWithRedaction(t *testing.T) {
 	out := &bytes.Buffer{}
-	writer := logging.NewConsoleWriter(out, configuration.NewWithOpts(), func(w *zerolog.ConsoleWriter) {
+	config := configuration.NewWithOpts()
+	writer := logging.NewConsoleWriter(out, func() configuration.Configuration { return config }, func(w *zerolog.ConsoleWriter) {
 		w.NoColor = true
 		w.FormatTimestamp = func(interface{}) string { return "TIMESTAMP" }
 		w.FormatPrepare = func(event map[string]interface{}) error {
@@ -484,6 +493,33 @@ func TestDebugLog_TokenLoggedWhileAnotherEventReadsTheConfigurationIsRedacted(t 
 	shown := requireEventShown(t, out, "authenticating with ***")
 	assert.Contains(t, shown, "first event")
 	assert.NotContains(t, shown, apiToken)
+}
+
+func TestDebugLog_SecretsOfTheSelectedProfileAreRedacted(t *testing.T) {
+	baseToken := fakeBearerToken()
+	base := configuration.NewWithOpts(configuration.WithPinnedFile(filepath.Join(t.TempDir(), "snyk.json")))
+	base.Set(configuration.AUTHENTICATION_TOKEN, baseToken)
+	var current atomic.Pointer[configuration.Configuration]
+	current.Store(&base)
+	logger, out := newDebugLogFor(t, func() configuration.Configuration { return *current.Load() })
+	logger.Debug().Msg("starting")
+
+	profileToken := fakeAPIToken()
+	profileDir := t.TempDir()
+	content := fmt.Sprintf(`{%q: %q, %q: ["profile-only-term"]}`, configuration.AUTHENTICATION_TOKEN, profileToken, logging.REDACTION_TERMS)
+	require.NoError(t, os.WriteFile(filepath.Join(profileDir, "work.json"), []byte(content), 0o600))
+	registry, err := profile.NewFileRegistry(profileDir, base)
+	require.NoError(t, err)
+	selected, err := registry.Profile("work")
+	require.NoError(t, err)
+	profileConfig := selected.Configuration()
+	current.Store(&profileConfig)
+
+	logger.Debug().Msgf("profile has %s, base had %s, term profile-only-term", profileToken, baseToken)
+
+	shown := requireEventShown(t, out, "profile has ***, base had ***, term ***")
+	assert.NotContains(t, shown, profileToken)
+	assert.NotContains(t, shown, baseToken)
 }
 
 // blockFirstReadOfRedactionTerms holds the first reader of REDACTION_TERMS until release is closed, so a test can act

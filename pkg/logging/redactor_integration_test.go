@@ -67,7 +67,7 @@ func TestRedactor_EachKindOfConfiguredSecretIsRedacted(t *testing.T) {
 			config := configuration.NewInMemory()
 			config.Set(tt.key, tt.value)
 
-			redacted := logging.NewRedactor(config).Redact("seen " + tt.secret + " here")
+			redacted := logging.NewRedactor(func() configuration.Configuration { return config }).Redact("seen " + tt.secret + " here")
 
 			assert.Equal(t, "seen *** here", redacted)
 		})
@@ -84,7 +84,7 @@ func TestRedactor_MachineCredentialIsRedactedInEveryShape(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON))
 	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
-	redactor := logging.NewRedactor(config)
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 
 	for name, line := range map[string]string{
 		"pem as is":        "pem: " + string(keyPEM),
@@ -104,12 +104,12 @@ func TestRedactor_ShortDeviceTokenAndFleetKeyAreNotSecrets(t *testing.T) {
 	config.Set(machinecredential.CONFIG_KEY_DEVICE_TOKEN, "short-token")
 	config.Set(machinecredential.CONFIG_KEY_FLEET_KEY, "short-key")
 
-	assert.Equal(t, "short-token short-key", logging.NewRedactor(config).Redact("short-token short-key"))
+	assert.Equal(t, "short-token short-key", logging.NewRedactor(func() configuration.Configuration { return config }).Redact("short-token short-key"))
 }
 
 func TestRedactor_ReadsTheConfigurationOnEveryRedaction(t *testing.T) {
 	config := configuration.NewInMemory()
-	redactor := logging.NewRedactor(config)
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 	require.Equal(t, "first-token-value", redactor.Redact("first-token-value"))
 
 	config.Set(configuration.AUTHENTICATION_TOKEN, "first-token-value")
@@ -122,17 +122,28 @@ func TestRedactor_ReadsTheConfigurationOnEveryRedaction(t *testing.T) {
 	assert.Equal(t, "see ***", redactor.Redact("see internal-name"))
 }
 
+func TestRedactor_KeepsRedactingKnownSecretsWhileTheProviderReturnsNoConfiguration(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "known-token-value")
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
+	require.Equal(t, "***", redactor.Redact("known-token-value"))
+
+	config = nil
+
+	assert.Equal(t, "*** password=***", redactor.Redact("known-token-value password=hunter22"))
+}
+
 func TestRedactor_TokenFromAnEnvironmentVariableIsRedacted(t *testing.T) {
 	t.Setenv("EXAMPLE_TOKEN", "env-token-value-1")
 	config := configuration.NewWithOpts(configuration.WithSupportedEnvVars("EXAMPLE_TOKEN"))
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"example_token"})
 
-	assert.Equal(t, "using ***", logging.NewRedactor(config).Redact("using env-token-value-1"))
+	assert.Equal(t, "using ***", logging.NewRedactor(func() configuration.Configuration { return config }).Redact("using env-token-value-1"))
 }
 
 func TestRedactor_ConcurrentRedactionsWhileTheTokenRotates(t *testing.T) {
 	config := configuration.NewInMemory()
-	redactor := logging.NewRedactor(config)
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
@@ -154,7 +165,7 @@ func TestRedactor_ConcurrentRedactionsWhileTheTokenRotates(t *testing.T) {
 func TestRedactor_RedactionDuringAnotherRedactionsConfigurationReadSeesTheCurrentToken(t *testing.T) {
 	config := configuration.NewInMemory()
 	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(config)
-	redactor := logging.NewRedactor(config)
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 	firstRedactionDone := make(chan struct{})
 	go func() {
 		defer close(firstRedactionDone)

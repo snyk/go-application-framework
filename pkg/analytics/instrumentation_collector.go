@@ -183,7 +183,7 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(options *seri
 		if cfg == nil {
 			cfg = configuration.NewWithOpts()
 		}
-		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.NewRedactor(cfg))
+		scrubbed := scrubErrorUrls(*a.Interaction.Errors, logging.NewRedactor(func() configuration.Configuration { return cfg }))
 		a.Interaction.Errors = &scrubbed
 	}
 
@@ -215,7 +215,7 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(options *serialize
 	// Redact string leaf values before marshaling, never the marshaled JSON bytes, so a redaction
 	// can't run past the value it matched in.
 	if options.cfg != nil {
-		redactor := logging.NewRedactor(options.cfg)
+		redactor := logging.NewRedactor(func() configuration.Configuration { return options.cfg })
 		if d.Attributes.Interaction.Extension != nil {
 			scrubbed := scrubExtensionMap(*d.Attributes.Interaction.Extension, redactor)
 			d.Attributes.Interaction.Extension = &scrubbed

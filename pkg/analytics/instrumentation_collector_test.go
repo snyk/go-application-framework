@@ -280,7 +280,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		url := "/rest/token=abcdef123456"
 		input := []api.InteractionError{{Url: &url}}
 
-		scrubbed := scrubErrorUrls(input, logging.NewRedactor(configuration.NewWithOpts()))
+		scrubbed := scrubErrorUrls(input, logging.NewRedactor(func() configuration.Configuration { return configuration.NewWithOpts() }))
 
 		assert.Equal(t, "/rest/token=***", *scrubbed[0].Url)
 		assert.Same(t, &url, input[0].Url)

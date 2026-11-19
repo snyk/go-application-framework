@@ -25,9 +25,10 @@ import (
 )
 
 // NewConsoleWriter returns a zerolog.ConsoleWriter writing to out that redacts each decoded event with a Redactor for
-// config before formatting it. opts configure the writer like zerolog.NewConsoleWriter's options. A FormatPrepare set
-// by opts runs before the redaction; replacing FormatPrepare on the returned writer removes the redaction.
-func NewConsoleWriter(out io.Writer, config configuration.Configuration, opts ...func(w *zerolog.ConsoleWriter)) zerolog.ConsoleWriter {
+// config before formatting it. config is called for every event, from any goroutine. opts configure the writer like
+// zerolog.NewConsoleWriter's options. A FormatPrepare set by opts runs before the redaction; replacing FormatPrepare on
+// the returned writer removes the redaction.
+func NewConsoleWriter(out io.Writer, config func() configuration.Configuration, opts ...func(w *zerolog.ConsoleWriter)) zerolog.ConsoleWriter {
 	redactor := NewRedactor(config)
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) { w.Out = out })
 	for _, opt := range opts {

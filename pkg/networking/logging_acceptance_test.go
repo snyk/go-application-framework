@@ -54,7 +54,7 @@ func TestTraceLog_CredentialsOfRequestsNeverShow(t *testing.T) {
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.AUTHENTICATION_TOKEN, fakeToken(1))
 	out := &bytes.Buffer{}
-	logger := zerolog.New(logging.NewConsoleWriter(out, config, func(w *zerolog.ConsoleWriter) { w.NoColor = true })).Level(zerolog.TraceLevel)
+	logger := zerolog.New(logging.NewConsoleWriter(out, func() configuration.Configuration { return config }, func(w *zerolog.ConsoleWriter) { w.NoColor = true })).Level(zerolog.TraceLevel)
 	network := networking.NewNetworkAccess(config)
 	network.SetLogger(&logger)
 

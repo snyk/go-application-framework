@@ -226,6 +226,6 @@ func Test_auth_positionalArgumentOfAnotherCommandIsNoSecret(t *testing.T) {
 
 	assert.Equal(t, []string{"user-access-token"}, env.server.BearerTokens(), "the request carries the stored login")
 	assert.Equal(t, 0, env.server.TokenAttempts())
-	redacted := logging.NewRedactor(env.engine.GetConfiguration()).Redact("scanning ./dir")
+	redacted := logging.NewRedactor(env.engine.GetConfiguration).Redact("scanning ./dir")
 	assert.Equal(t, "scanning ./dir", redacted, "the argument is not redacted as a secret")
 }
