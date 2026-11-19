@@ -472,8 +472,17 @@ func (rl *rules) redactValue(value interface{}) interface{} {
 }
 
 // IsSensitiveFieldName reports whether a field or header of this name holds a credential or personal data, such as
-// apiKey, client_secret, Set-Cookie or userName. Case and the separators "-", "_", "." and space are ignored.
+// apiKey, client_secret, Set-Cookie, userName or passwordHash. The name is sensitive when one of its words, split at
+// case changes and the separators "-", "_", "." and space, is a credential word such as password or token, or a
+// qualified key such as "signing key", or when the name without separators ends in one, such as apikey.
 func IsSensitiveFieldName(name string) bool {
+	words := fieldNameWords(name)
+	for i, word := range words {
+		word = singular(word)
+		if sensitiveNameWords[word] || word == "key" && i > 0 && sensitiveKeyQualifiers[words[i-1]] {
+			return true
+		}
+	}
 	n := strings.Map(func(r rune) rune {
 		if strings.ContainsRune("-_. ", r) {
 			return -1
@@ -495,6 +504,49 @@ func IsSensitiveFieldName(name string) bool {
 		}
 	}
 	return false
+}
+
+// fieldNameWords splits a name into lowercase words at separators and case changes, so that both apiKey and APIKey
+// are "api" and "key".
+func fieldNameWords(name string) []string {
+	var words []string
+	var word []rune
+	runes := []rune(name)
+	for i, r := range runes {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			words, word = appendWord(words, word), nil
+			continue
+		}
+		if unicode.IsUpper(r) && len(word) > 0 && (!unicode.IsUpper(runes[i-1]) || i+1 < len(runes) && unicode.IsLower(runes[i+1])) {
+			words, word = appendWord(words, word), nil
+		}
+		word = append(word, unicode.ToLower(r))
+	}
+	return appendWord(words, word)
+}
+
+func appendWord(words []string, word []rune) []string {
+	if len(word) == 0 {
+		return words
+	}
+	return append(words, string(word))
+}
+
+func singular(word string) string {
+	if len(word) > 2 {
+		return strings.TrimSuffix(word, "s")
+	}
+	return word
+}
+
+var sensitiveNameWords = map[string]bool{
+	"secret": true, "password": true, "passwd": true, "passwort": true, "passcode": true, "passphrase": true, "pwd": true,
+	"token": true, "credential": true, "authorization": true, "cookie": true,
+}
+
+var sensitiveKeyQualifiers = map[string]bool{
+	"private": true, "signing": true, "encryption": true, "api": true, "access": true, "session": true, "client": true,
+	"fleet": true, "license": true, "ssh": true, "secret": true,
 }
 
 var sensitiveNameSuffixes = []string{

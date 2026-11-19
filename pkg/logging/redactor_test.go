@@ -26,24 +26,115 @@ import (
 )
 
 func TestIsSensitiveFieldName(t *testing.T) {
-	sensitive := []string{
-		"password", "apiKey", "x-api-key", "client_secret", "userName", "secrets", "tokens", "apikey", "accesskey",
-		"authtoken", "clientsecret", "sessionKey", "passcode", "Authorization", "Set-Cookie", "cookies",
-		"authorizations", "REGISTRY_USERNAME", "PROXY_USER", "requestHeaders", "response_headers", "privateKey",
-		"fleetKey", "licenseKey", "ssh-key", "key", "u", "P", "login", "pwd", "passphrase", "client.secret",
-		"Proxy-Authorization", "HTTP-HEADERS", "credentials", "keys",
+	tests := []struct {
+		name      string
+		sensitive bool
+	}{
+		{"password", true},
+		{"proxyPassword", true},
+		{"REGISTRY_PASSWORD", true},
+		{"passwd", true},
+		{"passwort", true},
+		{"passcode", true},
+		{"passphrase", true},
+		{"pwd", true},
+		{"passwordHash", true},
+		{"passwordPlain", true},
+		{"passwords", true},
+		{"secret", true},
+		{"secrets", true},
+		{"secretValue", true},
+		{"client_secret", true},
+		{"client.secret", true},
+		{"clientsecret", true},
+		{"token", true},
+		{"tokens", true},
+		{"tokenValue", true},
+		{"tokensFile", true},
+		{"access_token", true},
+		{"refreshToken", true},
+		{"oauth2Token", true},
+		{"authtoken", true},
+		{"credential", true},
+		{"credentials", true},
+		{"awsCredentials", true},
+		{"authorization", true},
+		{"Authorization", true},
+		{"authorizations", true},
+		{"proxy-authorization", true},
+		{"Proxy-Authorization", true},
+		{"cookie", true},
+		{"cookies", true},
+		{"Set-Cookie", true},
+		{"key", true},
+		{"KEY", true},
+		{"keys", true},
+		{"apiKey", true},
+		{"apikey", true},
+		{"APIKey", true},
+		{"API_KEY", true},
+		{"x-api-key", true},
+		{"apiKeyValue", true},
+		{"apiKeyId", true},
+		{"accesskey", true},
+		{"access_key", true},
+		{"secretKey", true},
+		{"sessionKey", true},
+		{"privateKey", true},
+		{"privateKeyPem", true},
+		{"encryptionKey", true},
+		{"signingKey", true},
+		{"clientKey", true},
+		{"fleetKey", true},
+		{"licenseKey", true},
+		{"ssh-key", true},
+		{"headers", true},
+		{"Headers", true},
+		{"requestHeaders", true},
+		{"response_headers", true},
+		{"HTTP-HEADERS", true},
+		{"user", true},
+		{"USER", true},
+		{"username", true},
+		{"userName", true},
+		{"user_name", true},
+		{"nameUser", true},
+		{"REGISTRY_USERNAME", true},
+		{"registry_user_name", true},
+		{"PROXY_USER", true},
+		{"login", true},
+		{"u", true},
+		{"P", true},
+
+		{"cacheKey", false},
+		{"cacheKeys", false},
+		{"keyId", false},
+		{"sortKey", false},
+		{"monkey", false},
+		{"monkeys", false},
+		{"keyboard", false},
+		{"userAgent", false},
+		{"userId", false},
+		{"userID", false},
+		{"userKind", false},
+		{"userNameHint", false},
+		{"tokenizer", false},
+		{"secretss", false},
+		{"header", false},
+		{"headersCount", false},
+		{"loginUrl", false},
+		{"up", false},
+		{"command", false},
+		{"ps", false},
+		{"us", false},
+		{"", false},
+		{"  ", false},
+		{"_-.", false},
 	}
-	notSensitive := []string{
-		"userAgent", "cacheKey", "cacheKeys", "monkey", "monkeys", "keyboard", "userId", "userKind", "sortKey", "keyId",
-		"apiKeyId", "tokenizer", "header", "headersCount", "loginUrl", "up", "command", "", "tokensFile", "ps", "us",
-		// A hash of a password is not the password.
-		"passwordHash",
-	}
-	for _, name := range sensitive {
-		assert.True(t, IsSensitiveFieldName(name), name)
-	}
-	for _, name := range notSensitive {
-		assert.False(t, IsSensitiveFieldName(name), name)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.sensitive, IsSensitiveFieldName(tt.name))
+		})
 	}
 }
 

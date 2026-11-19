@@ -393,7 +393,8 @@ func TestDebugLog_SensitiveFieldsAreRedacted(t *testing.T) {
 		"apiKey", "x-api-key", "client_secret", "userName", "Authorization", "Set-Cookie", "secrets", "tokens",
 		"passwords", "cookies", "apiKeys", "api_keys", "authorizations", "REGISTRY_USERNAME", "PROXY_USER",
 		"registryUserName", "proxy-user", "requestHeaders", "response_headers", "apikey", "accesskey", "authtoken",
-		"clientsecret", "sessionKey", "passcode",
+		"clientsecret", "sessionKey", "passcode", "secretValue", "tokenValue", "privateKeyPem", "passwordHash",
+		"signingKey", "apiKeyId",
 	} {
 		t.Run(name, func(t *testing.T) {
 			logger, out := newDebugLog(t, configuration.NewWithOpts())
