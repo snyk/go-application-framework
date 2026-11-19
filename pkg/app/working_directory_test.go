@@ -4,7 +4,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -36,8 +35,9 @@ func Test_HomeDirectoryUnknown_ProfilesAreNotInWorkingDirectory(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(log.New(io.Discard, "", 0)))
 	require.NoError(t, engine.Init())
 
-	dir := config.GetString(profile.DirKey)
-	assert.True(t, dir == "" || filepath.IsAbs(dir), "the profile directory must be empty or absolute, got %q", dir)
+	_, storageErr := configuration.DefaultStorageDir()
+	assert.Error(t, storageErr, "the default storage directory is unavailable without a home directory")
+	assert.Empty(t, config.GetString(profile.DirKey), "no default profile directory is set, so none is relative")
 
 	// Whatever the registry does with an empty or relative directory, nothing may land in the working directory.
 	if registry, err := workflow.GetProfileRegistry(engine); err == nil {

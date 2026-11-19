@@ -141,7 +141,7 @@ func ImmutableDefaultValueFunction(defaultValue interface{}) DefaultValueFunctio
 func basePath() (string, error) {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("cannot determine the home directory: %w", err)
+		return "", fmt.Errorf("home directory could not be determined: %w", err)
 	}
 
 	return filepath.Join(homedir, ".config", "configstore"), nil
@@ -157,10 +157,15 @@ func determineBasePath() string {
 	return result
 }
 
-// DefaultStorageDir returns the directory that holds the default configuration file. It returns "" when the home
-// directory cannot be determined. Check for "" before joining a file name onto the result.
-func DefaultStorageDir() string {
-	return determineBasePath()
+// DefaultStorageDir returns the directory that holds the default configuration file. When the home directory cannot be
+// determined it returns an error and no directory, so a caller never joins a file name onto a relative path. The error
+// wraps the os.UserHomeDir error.
+func DefaultStorageDir() (string, error) {
+	dir, err := basePath()
+	if err != nil {
+		return "", fmt.Errorf("configuration storage unavailable: %w", err)
+	}
+	return dir, nil
 }
 
 // CreateConfigurationFile creates a configuration file with the given name. It returns an error, and creates nothing,

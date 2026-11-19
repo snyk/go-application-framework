@@ -84,5 +84,6 @@ func Test_HomeDirectoryUnknown_NothingIsReadOrWrittenInWorkingDirectory(t *testi
 	require.NoError(t, err)
 	assert.Len(t, entries, 1, "no other file is created in the working directory")
 
-	assert.Empty(t, DefaultStorageDir(), "an unknown home directory is not reported as the working directory")
+	_, err = DefaultStorageDir()
+	assert.ErrorContains(t, err, "home directory could not be determined", "an unknown home directory is an error, not the working directory")
 }
