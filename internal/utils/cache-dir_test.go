@@ -58,15 +58,29 @@ func Test_SnykCacheDir(t *testing.T) {
 		assert.Equal(t, expectedDir, cacheDir)
 	})
 
-	t.Run("fall back to sub dir based cache dir", func(t *testing.T) {
-		expectedDir := path.Join("snyk", "snyk-cli")
+	t.Run("never use a relative dir when the user cache dir is unknown", func(t *testing.T) {
+		// Without a home directory the user cache dir is "". A relative candidate would be in the working directory,
+		// so only the temp dir based cache dir may be created.
+		expectedDir := path.Join("/tmp", "snyk", "snyk-cli")
+
+		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
+		osutil.EXPECT().UserCacheDir().Return("", fmt.Errorf("$HOME is not defined"))
+		osutil.EXPECT().TempDir().Return("/tmp")
+		osutil.EXPECT().MkdirAll(expectedDir, gomock.Any()).Return(nil)
+
+		cacheDir, err := SnykCacheDirImpl(osutil)
+		assert.Error(t, err)
+		assert.Equal(t, expectedDir, cacheDir)
+	})
+
+	t.Run("fall back to the temp dir and never to a relative dir", func(t *testing.T) {
+		expectedDir := path.Join("/tmp", "snyk", "snyk-cli")
 
 		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
 		osutil.EXPECT().UserCacheDir().Return("/.cache", fmt.Errorf("something went wrong"))
 		osutil.EXPECT().TempDir().Return("/tmp")
 		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
-		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
-		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(nil)
+		osutil.EXPECT().MkdirAll(expectedDir, gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
 
 		cacheDir, err := SnykCacheDirImpl(osutil)
 		assert.Error(t, err)
