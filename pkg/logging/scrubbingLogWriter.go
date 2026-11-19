@@ -22,7 +22,6 @@ import (
 	"io"
 	"os/user"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -32,13 +31,11 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const MAX_WRITE_RETRIES = 10
-const SANITIZE_REPLACEMENT_STRING string = "***"
 
 // SENSITIVE_FIELD_NAMES is a list of field names that should be sanitized.
 var SENSITIVE_FIELD_NAMES = []string{
@@ -145,13 +142,6 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 	delete(w.scrubDict, term)
 }
 
-// REDACTION_TERMS configures literal terms redacted only as whole words.
-const REDACTION_TERMS string = "internal_redaction_terms"
-
-// minDeviceTokenTermLength mirrors machinecredential's floor for secret terms: a shorter value would
-// also redact unrelated text.
-const minDeviceTokenTermLength = 16
-
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	for _, secret := range secretsFromConfig(config) {
@@ -192,27 +182,6 @@ func addSecretTerms(writer ScrubbingLogWriter, secrets []string) {
 	for _, secret := range secrets {
 		addStaticTermToDict(secret, dict)
 	}
-}
-
-// secretsFromConfig returns the credentials a configuration holds.
-func secretsFromConfig(config configuration.Configuration) []string {
-	secrets := []string{
-		config.GetString(configuration.AUTHENTICATION_TOKEN),
-		config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN),
-		config.GetString(auth.PARAMETER_CLIENT_SECRET),
-		config.GetString(auth.PARAMETER_CLIENT_ID),
-	}
-	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
-		secrets = append(secrets, token)
-	}
-	if fleetKey := config.GetString(machinecredential.CONFIG_KEY_FLEET_KEY); len(fleetKey) >= minDeviceTokenTermLength {
-		secrets = append(secrets, fleetKey)
-	}
-	secrets = append(secrets, machinecredential.SecretTerms(config)...)
-	if token, err := auth.GetOAuthToken(config); err == nil && token != nil {
-		secrets = append(secrets, token.AccessToken, token.RefreshToken)
-	}
-	return slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })
 }
 
 func getDefaultDict() ScrubbingDict {
