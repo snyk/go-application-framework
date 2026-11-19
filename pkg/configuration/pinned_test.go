@@ -230,3 +230,33 @@ func Test_WithPinnedFile_UncheckablePathIsNotRead(t *testing.T) {
 	assert.Nil(t, c.GetStorage())
 	assert.Contains(t, logs.String(), "cannot be checked")
 }
+
+func Test_PinnedFile_ReturnsTheCleanAbsolutePath(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "profile")
+	assert.Equal(t, file, PinnedFile(NewWithOpts(WithPinnedFile(file))))
+	assert.Equal(t, file, PinnedFile(NewWithOpts(WithPinnedFile(filepath.Join(dir, ".", "profile")))))
+}
+
+func Test_PinnedFile_EmptyWhenNothingIsPinned(t *testing.T) {
+	isolateHome(t)
+	assert.Empty(t, PinnedFile(nil))
+	assert.Empty(t, PinnedFile(NewInMemory()))
+	assert.Empty(t, PinnedFile(NewWithOpts(WithFiles(filepath.Join(t.TempDir(), "snyk.json")))))
+	assert.Empty(t, PinnedFile(foreignConfiguration{Configuration: NewInMemory()}))
+}
+
+func Test_PinnedFile_EmptyForARelativePath(t *testing.T) {
+	isolateHome(t)
+	assert.Empty(t, PinnedFile(NewWithOpts(WithPinnedFile("profile.json"))))
+}
+
+func Test_PinnedFile_KeepsThePathOfAFileThatIsNotUsed(t *testing.T) {
+	isolateHome(t)
+	file := filepath.Join(t.TempDir(), "profile")
+	require.NoError(t, os.WriteFile(file, []byte("{corrupt"), 0o644))
+	c := NewWithOpts(WithPinnedFile(file))
+	assert.Nil(t, c.GetStorage(), "the corrupt file is not used")
+	assert.Equal(t, file, PinnedFile(c), "the directory of the pinned file still names the profile directory")
+}

@@ -234,6 +234,17 @@ func WithPinnedFile(path string) Opts {
 	}
 }
 
+// PinnedFile returns the cleaned path that WithPinnedFile pinned config to. It returns empty when config is not pinned or
+// the path is not absolute, which WithPinnedFile reports. It reports the path even when the file is not used, so a default
+// that sits next to the file, such as the profile directory, does not depend on whether the file could be read.
+func PinnedFile(config Configuration) string {
+	ev, ok := config.(*extendedViper)
+	if !ok || !filepath.IsAbs(ev.pinnedFile) {
+		return ""
+	}
+	return filepath.Clean(ev.pinnedFile)
+}
+
 // WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
 func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
