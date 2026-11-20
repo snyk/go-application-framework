@@ -60,14 +60,15 @@ func IsKeyDeleted(val any) bool {
 	return val == keyDeleted
 }
 
-// withBlankFileAsEmpty makes Set treat a file that holds only white space like an empty file. It is off by default.
-func withBlankFileAsEmpty() JsonOption {
+// WithBlankFileAsEmpty makes Set and ReadAll treat a file that holds only white space like an empty file. It is off by
+// default.
+func WithBlankFileAsEmpty() JsonOption {
 	return func(s *JsonStorage) { s.blankFileAsEmpty = true }
 }
 
-// withExactNumbers makes Set keep the text of every number of the file, instead of rounding it to float64. Data after the
+// WithExactNumbers makes Set and ReadAll keep the text of every number of the file, instead of rounding it to float64. Data after the
 // document is rejected in both modes, as json.Unmarshal does. It is off by default.
-func withExactNumbers() JsonOption {
+func WithExactNumbers() JsonOption {
 	return func(s *JsonStorage) { s.exactNumbers = true }
 }
 
@@ -166,22 +167,9 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 
-	fileBytes, err := os.ReadFile(s.path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	if len(fileBytes) == 0 || (s.blankFileAsEmpty && isBlankJSON(fileBytes)) {
-		const emptyJson = "{}"
-		fileBytes = []byte(emptyJson)
-	}
-
-	config := make(map[string]any)
-	err = decodeConfig(fileBytes, &config, s.exactNumbers)
+	config, err := s.readFile()
 	if err != nil {
 		return err
-	}
-	if config == nil { // the file holds the JSON literal null
-		config = make(map[string]any)
 	}
 
 	if tmpKey := s.getNonEnvVarKey(key); len(tmpKey) > 0 {
@@ -200,6 +188,40 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 	return writeConfigFile(s.path, configJson)
+}
+
+// ReadAll returns the top-level values of the file as stored, without environment variables or alternative keys. A
+// missing file is empty.
+func (s *JsonStorage) ReadAll() (map[string]any, error) {
+	mu := fileMutex(s.path)
+	mu.Lock()
+	defer mu.Unlock()
+	return s.readFile()
+}
+
+// Path returns the file of the storage.
+func (s *JsonStorage) Path() string {
+	return s.path
+}
+
+func (s *JsonStorage) readFile() (map[string]any, error) {
+	fileBytes, err := os.ReadFile(s.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	if len(fileBytes) == 0 || (s.blankFileAsEmpty && isBlankJSON(fileBytes)) {
+		const emptyJson = "{}"
+		fileBytes = []byte(emptyJson)
+	}
+
+	config := make(map[string]any)
+	if err = decodeConfig(fileBytes, &config, s.exactNumbers); err != nil {
+		return nil, err
+	}
+	if config == nil { // the file holds the JSON literal null
+		config = make(map[string]any)
+	}
+	return config, nil
 }
 
 // decodeConfig decodes a configuration file. With exact numbers, a number keeps its text, and data after the top-level
