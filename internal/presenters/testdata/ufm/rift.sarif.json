@@ -12,21 +12,35 @@
 						"informationUri" : "https://docs.snyk.io/",
 						"rules" : [
 							{
-								"id": "CWE-89",
+								"id": "CWE-79",
 								"shortDescription": {
-									"text": "Rift findings classified as CWE-89"
+									"text": "Medium severity - Reflected cross-site scripting in search page"
+								},
+								"help": {
+									"text": "",
+									"markdown": "The search term is written into the HTML response without escaping."
 								},
 								"properties": {
-									"tags": ["security", "CWE-89"]
+									"tags": [
+										"security",
+										"CWE-79"
+									]
 								}
 							},
 							{
-								"id": "CWE-79",
+								"id": "CWE-89",
 								"shortDescription": {
-									"text": "Rift findings classified as CWE-79"
+									"text": "High severity - SQL injection in user lookup"
+								},
+								"help": {
+									"text": "",
+									"markdown": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows."
 								},
 								"properties": {
-									"tags": ["security", "CWE-79"]
+									"tags": [
+										"security",
+										"CWE-89"
+									]
 								}
 							}
 						]
@@ -34,12 +48,34 @@
 				},
 			"results": [
 				{
+					"ruleId": "CWE-79",
+					"level": "warning",
+					"message": {
+						"text": "This file contains a medium severity Reflected cross-site scripting in search page vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "web/templates/search.html"
+								},
+								"region": {
+									"startLine": 12
+								}
+							}
+						}
+						
+					],
+					"fingerprints": {
+						"identity": "rift-finding-0002",
+						"snyk/asset/finding/v1": "rift-finding-0002"
+					}
+				},
+				{
 					"ruleId": "CWE-89",
-					"ruleIndex": 0,
 					"level": "error",
 					"message": {
-						"text": "SQL injection in user lookup",
-						"markdown": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows."
+						"text": "This file contains a high severity SQL injection in user lookup vulnerability."
 					},
 					"locations": [
 						{
@@ -61,36 +97,10 @@
 						"identity": "rift-finding-0001",
 						"snyk/asset/finding/v1": "rift-finding-0001"
 					}
-				},
-				{
-					"ruleId": "CWE-79",
-					"ruleIndex": 1,
-					"level": "warning",
-					"message": {
-						"text": "Reflected cross-site scripting in search page",
-						"markdown": "The search term is written into the HTML response without escaping."
-					},
-					"locations": [
-						{
-							"physicalLocation": {
-								"artifactLocation": {
-									"uri": "web/templates/search.html"
-								},
-								"region": {
-									"startLine": 12
-								}
-							}
-						}
-						
-					],
-					"fingerprints": {
-						"identity": "rift-finding-0002",
-						"snyk/asset/finding/v1": "rift-finding-0002"
-					}
 				}
 			],
 				"automationDetails": {
-					"id":"Snyk/Rift/0/2026-11-20T15:42:53Z"
+					"id":"Snyk/Rift/0/2026-11-19T16:59:46Z"
 				}
 			}
 		]

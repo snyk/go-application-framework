@@ -508,6 +508,7 @@ func (b *issueBuilder) processFindings(findings []*FindingData) {
 		b.processFinding(finding)
 	}
 	b.determineFallbackID()
+	b.determineFallbackProblemID()
 }
 
 // processFinding extracts data from a single finding
@@ -810,6 +811,16 @@ func (b *issueBuilder) determineFallbackID() {
 		} else if b.firstFinding.Id != nil {
 			b.id = b.firstFinding.Id.String()
 		}
+	}
+}
+
+// determineFallbackProblemID uses the first CWE for Rift issues that have no
+// problem ID. The builder collects IDs from "cwe" entries in b.cwes and leaves
+// b.problemID empty. SARIF uses GetProblemID() for ruleId and skips rules with
+// empty IDs, so this fallback lets each Rift result reference a rule.
+func (b *issueBuilder) determineFallbackProblemID() {
+	if b.problemID == "" && b.findingType == FindingTypeRift && len(b.cwes) > 0 {
+		b.problemID = b.cwes[0]
 	}
 }
 

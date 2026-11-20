@@ -283,7 +283,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	// UFM data access helpers
 	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	fnMap["buildRuleIndexes"] = buildRuleIndexes
-	fnMap["getSARIFRule"] = sarifRuleForIssue
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
 	fnMap["getFingerprints"] = getFingerprints
@@ -351,11 +350,11 @@ func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvid
 	return flows
 }
 
-// buildRuleIndexes maps each emitted rule ID to its position in uniqueRules.
+// buildRuleIndexes maps each problem ID to its position in uniqueRules.
 func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
 	indexes := make(map[string]int, len(uniqueRules))
 	for index, issue := range uniqueRules {
-		indexes[sarifRuleForIssue(issue).ID] = index
+		indexes[issue.GetProblemID()] = index
 	}
 	return indexes
 }
@@ -992,7 +991,6 @@ type issueDedupeKey string
 const (
 	DedupeByProblemID issueDedupeKey = "problemID"
 	DedupeByID        issueDedupeKey = "id"
-	dedupeBySARIFID   issueDedupeKey = "sarifRuleID"
 )
 
 // deduplicateIssues returns a subset of issues with unique keys, preserving order (first-wins).
@@ -1006,8 +1004,6 @@ func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Iss
 			field = issue.GetProblemID()
 		case DedupeByID:
 			field = issue.GetID()
-		case dedupeBySARIFID:
-			field = sarifRuleForIssue(issue).ID
 		default:
 			fmt.Fprintf(os.Stderr, "warning: unsupported issueDedupeKey %q, skipping deduplication for issue\n", key)
 		}
@@ -1017,6 +1013,26 @@ func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Iss
 		}
 	}
 	return result
+}
+
+func convertTypeToIssueName(findingType testapi.FindingType) string {
+	// Map backend finding types to human-friendly issue group names
+	switch findingType {
+	case testapi.FindingTypeSca:
+		return "Security"
+	case testapi.FindingTypeLicense:
+		return "License"
+	case testapi.FindingTypeSast:
+		return "Code"
+	case testapi.FindingTypeDast:
+		return "DAST"
+	case testapi.FindingTypeSecrets:
+		return "Secrets"
+	case testapi.FindingTypeRift:
+		return "Rift"
+	default:
+		return string(findingType)
+	}
 }
 
 func sortAndFilterIssues(config configuration.Configuration) func(issues []testapi.Issue, isActive bool) []testapi.Issue {
@@ -1055,6 +1071,30 @@ func toInt(v interface{}) int {
 		}
 	}
 	return 0
+}
+
+func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) string {
+	if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
+		return "Software Composition Analysis"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeSast) {
+		return "Static Code Analysis"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeSecrets) {
+		return "Secret Detection"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeRift) {
+		return "Rift"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeDast) {
+		return "Dynamic Application Security Testing"
+	}
+
+	return "Other"
 }
 
 func reverse(v interface{}) []interface{} {
