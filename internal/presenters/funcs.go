@@ -253,13 +253,6 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
-func sarifDriverName(findingType string) string {
-	if findingType == string(testapi.FindingTypeRift) {
-		return "Snyk Rift"
-	}
-	return sarif.ConvertTypeToDriverName(findingType)
-}
-
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
@@ -267,7 +260,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
 	fnMap["getAutomationDetailsId"] = func(projectName string, testType string) string {
-		driverName := sarifDriverName(testType)
+		driverName := sarif.ConvertTypeToDriverName(testType)
 		driverName = strings.TrimSpace(strings.Replace(driverName, "Snyk", "", 1))
 
 		if projectName != "" {
@@ -275,7 +268,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		}
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
-	fnMap["convertTypeToDriverName"] = sarifDriverName
+	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
 	// severityToSarifLevel is for string types (ufm.sarif.tmpl)
 	fnMap["severityToSarifLevel"] = sarif.SeverityToSarifLevel
 	// SARIF building functions
@@ -290,7 +283,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	// UFM data access helpers
 	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	fnMap["buildRuleIndexes"] = buildRuleIndexes
-	fnMap["deduplicateSARIFRules"] = deduplicateSARIFRules
 	fnMap["sarifRuleID"] = sarifRuleID
 	fnMap["riftCWERuleID"] = riftCWERuleID
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
@@ -991,6 +983,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getTargetId"] = func(path string) (string, error) {
 		return target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 	}
+	defaultMap["deduplicateIssues"] = deduplicateIssues
 
 	return defaultMap
 }
@@ -1016,17 +1009,36 @@ func sarifRuleID(issue testapi.Issue) string {
 	return riftCWERuleID(issue)
 }
 
-func deduplicateSARIFRules(issues []testapi.Issue) []testapi.Issue {
+type issueDedupeKey string
+
+const (
+	DedupeByProblemID issueDedupeKey = "problemID"
+	DedupeByID        issueDedupeKey = "id"
+	dedupeBySARIFID   issueDedupeKey = "sarifRuleID"
+)
+
+// deduplicateIssues returns a subset of issues with unique keys, preserving order (first-wins).
+func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Issue {
 	seen := make(map[string]bool)
-	rules := make([]testapi.Issue, 0, len(issues))
+	result := make([]testapi.Issue, 0, len(issues))
 	for _, issue := range issues {
-		id := sarifRuleID(issue)
-		if id != "" && !seen[id] {
-			seen[id] = true
-			rules = append(rules, issue)
+		var field string
+		switch key {
+		case DedupeByProblemID:
+			field = issue.GetProblemID()
+		case DedupeByID:
+			field = issue.GetID()
+		case dedupeBySARIFID:
+			field = sarifRuleID(issue)
+		default:
+			fmt.Fprintf(os.Stderr, "warning: unsupported issueDedupeKey %q, skipping deduplication for issue\n", key)
+		}
+		if field != "" && !seen[field] {
+			seen[field] = true
+			result = append(result, issue)
 		}
 	}
-	return rules
+	return result
 }
 
 func convertTypeToIssueName(findingType testapi.FindingType) string {
