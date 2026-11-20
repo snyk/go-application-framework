@@ -1028,6 +1028,8 @@ func convertTypeToIssueName(findingType testapi.FindingType) string {
 		return "DAST"
 	case testapi.FindingTypeSecrets:
 		return "Secrets"
+	case testapi.FindingTypeRift:
+		return "Rift"
 	default:
 		return string(findingType)
 	}
@@ -1082,6 +1084,10 @@ func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) st
 
 	if slices.Contains(findingTypes, testapi.FindingTypeSecrets) {
 		return "Secret Detection"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeRift) {
+		return "Rift"
 	}
 
 	if slices.Contains(findingTypes, testapi.FindingTypeDast) {

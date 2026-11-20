@@ -1,0 +1,26 @@
+[1mTesting  () ...[0m
+
+[1mOpen Rift issues: 2[0m
+
+ ✗ [33m[MEDIUM][0m [1mReflected cross-site scripting in search page[0m
+   Finding ID: rift-finding-0002
+   Info: The search term is written into the HTML response without escaping.
+   Path: web/templates/search.html, line 12
+
+ ✗ [31m[HIGH][0m [1mSQL injection in user lookup[0m
+   Finding ID: rift-finding-0001
+   Info: The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.
+   Path: src/handlers/users.go, line 42 to 47
+
+╭─────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                            │
+│                                                         │
+│   Organization:      My Org                             │
+│   Test type:         Rift                               │
+│   Project path:                                         │
+│                                                         │
+│   Total rift issues: 2                                  │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]    │
+│   Open   : [1m2[0m [[35m 0 CRITICAL [0m[31m 1 HIGH [0m[33m 1 MEDIUM [0m 0 LOW ]    │
+╰─────────────────────────────────────────────────────────╯
+
