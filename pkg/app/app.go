@@ -411,7 +411,13 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
-	config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(configuration.DefaultStorageDir(), defaultProfileDirName)))
+	// Without a known home directory there is no default profile directory. Profiles then fail closed (SNYK-CLI-0036)
+	// instead of using the working directory.
+	if storageDir, storageErr := configuration.DefaultStorageDir(); storageErr != nil {
+		logger.Printf("no default profile directory: %v", storageErr)
+	} else {
+		config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(storageDir, defaultProfileDirName)))
+	}
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
