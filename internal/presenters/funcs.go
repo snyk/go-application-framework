@@ -283,8 +283,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	// UFM data access helpers
 	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	fnMap["buildRuleIndexes"] = buildRuleIndexes
-	fnMap["sarifRuleID"] = sarifRuleID
-	fnMap["riftCWERuleID"] = riftCWERuleID
+	fnMap["getSARIFRule"] = sarifRuleForIssue
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
 	fnMap["getFingerprints"] = getFingerprints
@@ -356,7 +355,7 @@ func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvid
 func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
 	indexes := make(map[string]int, len(uniqueRules))
 	for index, issue := range uniqueRules {
-		indexes[sarifRuleID(issue)] = index
+		indexes[sarifRuleForIssue(issue).ID] = index
 	}
 	return indexes
 }
@@ -988,27 +987,6 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	return defaultMap
 }
 
-// Rift returns problem entries with source "cwe". The issue builder exposes
-// those IDs through GetCWEs() and leaves GetProblemID() empty. Use the CWE ID
-// here so the SARIF result can reference a rule.
-func riftCWERuleID(issue testapi.Issue) string {
-	if issue.GetFindingType() != testapi.FindingTypeRift || issue.GetProblemID() != "" {
-		return ""
-	}
-	cwes := issue.GetCWEs()
-	if len(cwes) == 0 {
-		return ""
-	}
-	return cwes[0]
-}
-
-func sarifRuleID(issue testapi.Issue) string {
-	if id := issue.GetProblemID(); id != "" {
-		return id
-	}
-	return riftCWERuleID(issue)
-}
-
 type issueDedupeKey string
 
 const (
@@ -1029,7 +1007,7 @@ func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Iss
 		case DedupeByID:
 			field = issue.GetID()
 		case dedupeBySARIFID:
-			field = sarifRuleID(issue)
+			field = sarifRuleForIssue(issue).ID
 		default:
 			fmt.Fprintf(os.Stderr, "warning: unsupported issueDedupeKey %q, skipping deduplication for issue\n", key)
 		}
@@ -1039,26 +1017,6 @@ func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Iss
 		}
 	}
 	return result
-}
-
-func convertTypeToIssueName(findingType testapi.FindingType) string {
-	// Map backend finding types to human-friendly issue group names
-	switch findingType {
-	case testapi.FindingTypeSca:
-		return "Security"
-	case testapi.FindingTypeLicense:
-		return "License"
-	case testapi.FindingTypeSast:
-		return "Code"
-	case testapi.FindingTypeDast:
-		return "DAST"
-	case testapi.FindingTypeSecrets:
-		return "Secrets"
-	case testapi.FindingTypeRift:
-		return "Rift"
-	default:
-		return string(findingType)
-	}
 }
 
 func sortAndFilterIssues(config configuration.Configuration) func(issues []testapi.Issue, isActive bool) []testapi.Issue {
@@ -1097,30 +1055,6 @@ func toInt(v interface{}) int {
 		}
 	}
 	return 0
-}
-
-func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) string {
-	if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
-		return "Software Composition Analysis"
-	}
-
-	if slices.Contains(findingTypes, testapi.FindingTypeSast) {
-		return "Static Code Analysis"
-	}
-
-	if slices.Contains(findingTypes, testapi.FindingTypeSecrets) {
-		return "Secret Detection"
-	}
-
-	if slices.Contains(findingTypes, testapi.FindingTypeRift) {
-		return "Rift"
-	}
-
-	if slices.Contains(findingTypes, testapi.FindingTypeDast) {
-		return "Dynamic Application Security Testing"
-	}
-
-	return "Other"
 }
 
 func reverse(v interface{}) []interface{} {

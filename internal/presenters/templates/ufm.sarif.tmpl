@@ -23,16 +23,16 @@
 							{{- range $index, $issue := $uniqueRules }}
 							{{- $tags := buildRuleTags $issue }}
 							{{- $cvssScore := getRuleCVSSScore $issue }}
-							{{- $problemID := sarifRuleID $issue }}
+							{{- $rule := getSARIFRule $issue }}
 							{{- $codeRule := getSnykCodeRuleFromIssue $issue }}
 							{
-								"id": {{ getQuotedString $problemID }},
-								{{- if riftCWERuleID $issue }}
+								"id": {{ getQuotedString $rule.ID }},
+								{{- if $rule.FromCWE }}
 								"shortDescription": {
-									"text": {{ getQuotedString (printf "Rift findings classified as %s" $problemID) }}
+									"text": {{ getQuotedString (printf "Rift findings classified as %s" $rule.ID) }}
 								},
 								"properties": {
-									"tags": ["security", {{ getQuotedString $problemID }}]
+									"tags": ["security", {{ getQuotedString $rule.ID }}]
 								}
 								{{- else }}
 								{{- if $codeRule }}
@@ -140,14 +140,14 @@
 				{{- $locations := buildLocationsFromIssue $issue $targetFile }}
 				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
-				{{- $problemID := sarifRuleID $issue }}
+				{{- $rule := getSARIFRule $issue }}
 				{{- $fingerPrintID := $issue.GetID }}
 				{{- $findingExtra := getFindingExtraFromIssue $issue $result }}
 				{{- $execFlows := getExecutionFlowsFromIssue $issue }}
 				{
-					"ruleId": {{ getQuotedString $problemID }},
-					{{- if or $findingExtra (riftCWERuleID $issue) }}
-					"ruleIndex": {{ index $ruleIndexes $problemID }},
+					"ruleId": {{ getQuotedString $rule.ID }},
+					{{- if or $findingExtra ($rule.FromCWE) }}
+					"ruleIndex": {{ index $ruleIndexes $rule.ID }},
 					{{- end }}
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
 					"message": {
