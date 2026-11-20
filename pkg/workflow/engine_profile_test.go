@@ -789,3 +789,74 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
 	assert.Nil(t, registry)
 }
+
+// Test_Engine_ProfileConfigEnrichmentSurvivesSetConfiguration checks that the enrichment callback is kept across
+// SetConfiguration and applied when a named profile loads.
+func Test_Engine_ProfileConfigEnrichmentSurvivesSetConfiguration(t *testing.T) {
+	env := newProfileEnv(t)
+	env.writeProfile("machine", "machine-value")
+
+	var enriched atomic.Int32
+	require.NoError(t, SetProfileConfigEnrichment(env.engine, func(name string, config configuration.Configuration) error {
+		assert.Equal(t, "machine", name)
+		assert.True(t, profile.IsProfile(config))
+		enriched.Add(1)
+		return nil
+	}))
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	_, err = registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), enriched.Load())
+
+	replacement := newProfileBase(t.TempDir())
+	replacement.Set(profile.DirKey, env.dir)
+	env.engine.SetConfiguration(replacement)
+
+	registry, err = GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	_, err = registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), enriched.Load(), "enrichment must survive SetConfiguration")
+}
+
+// Test_Engine_ProfileDeriveOptsSurvivesSetConfiguration checks that Derive options are kept across
+// SetConfiguration and applied when a named profile loads.
+func Test_Engine_ProfileDeriveOptsSurvivesSetConfiguration(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "ambient")
+
+	dir := t.TempDir()
+	baseDir := t.TempDir()
+	base := configuration.NewWithOpts(
+		configuration.WithFiles(filepath.Join(baseDir, "snyk.json")),
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+	)
+	base.Set(profile.DirKey, dir)
+	env := newProfileEnvWithBase(t, dir, base)
+	env.writeProfile("machine", "machine-value")
+
+	require.NoError(t, SetProfileDeriveOpts(env.engine, configuration.WithIgnoredEnvVars("SNYK_TOKEN")))
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	p, err := registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"SNYK_TOKEN"}, configuration.GetIgnoredEnvVars(p.Configuration()))
+	assert.Empty(t, p.Configuration().GetString("snyk_token"))
+
+	replacement := configuration.NewWithOpts(
+		configuration.WithFiles(filepath.Join(t.TempDir(), "snyk.json")),
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+	)
+	replacement.Set(profile.DirKey, env.dir)
+	env.engine.SetConfiguration(replacement)
+
+	registry, err = GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	p, err = registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"SNYK_TOKEN"}, configuration.GetIgnoredEnvVars(p.Configuration()),
+		"derive opts must survive SetConfiguration")
+	assert.Empty(t, p.Configuration().GetString("snyk_token"))
+}

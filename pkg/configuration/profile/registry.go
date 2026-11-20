@@ -22,10 +22,20 @@ const profileExt = ".json"
 
 var namePattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
+// ConfigEnrichment runs after a named profile is derived, so a host can apply registrations that
+// depend on the derived configuration (for example setting additional markers). The default
+// profile is never enriched. A nil enrichment is a no-op.
+//
+// Environment-variable isolation that must take effect before the first read belongs in
+// WithDeriveOpts (for example configuration.WithIgnoredEnvVars), not in enrichment.
+type ConfigEnrichment func(name string, config configuration.Configuration) error
+
 type fileRegistry struct {
-	dir    string
-	base   configuration.Configuration
-	logger zerolog.Logger
+	dir        string
+	base       configuration.Configuration
+	logger     zerolog.Logger
+	enrichment ConfigEnrichment
+	deriveOpts []configuration.Opts
 
 	mu       sync.Mutex
 	profiles map[string]*profileImpl
@@ -43,6 +53,22 @@ func WithLogger(logger *zerolog.Logger) FileRegistryOption {
 		if logger != nil {
 			r.logger = *logger
 		}
+	}
+}
+
+// WithConfigEnrichment sets the callback that runs after each named profile is derived.
+func WithConfigEnrichment(fn ConfigEnrichment) FileRegistryOption {
+	return func(r *fileRegistry) {
+		r.enrichment = fn
+	}
+}
+
+// WithDeriveOpts appends options that are passed to configuration.Derive for every named profile.
+// Use this for construction-time settings such as configuration.WithIgnoredEnvVars, which must be
+// applied before the first configuration read. Options are appended after WithPinnedFile.
+func WithDeriveOpts(opts ...configuration.Opts) FileRegistryOption {
+	return func(r *fileRegistry) {
+		r.deriveOpts = append(r.deriveOpts, opts...)
 	}
 }
 
@@ -118,9 +144,20 @@ func (r *fileRegistry) load(name string) (*profileImpl, error) {
 		}
 	}
 
-	config, err := configuration.Derive(r.base, configuration.WithPinnedFile(path))
+	deriveOpts := make([]configuration.Opts, 0, 1+len(r.deriveOpts))
+	deriveOpts = append(deriveOpts, configuration.WithPinnedFile(path))
+	deriveOpts = append(deriveOpts, r.deriveOpts...)
+	config, err := configuration.Derive(r.base, deriveOpts...)
 	if err != nil {
 		return nil, cli.NewConfigProfilesUnavailableError(fmt.Sprintf("Profile %q cannot be loaded.", name))
+	}
+	SetMarker(config, name)
+	if r.enrichment != nil {
+		if err = r.enrichment(name, config); err != nil {
+			return nil, cli.NewConfigProfilesUnavailableError(
+				fmt.Sprintf("Profile %q cannot be loaded: %s.", name, err.Error()),
+			)
+		}
 	}
 	return &profileImpl{name: name, config: config}, nil
 }
