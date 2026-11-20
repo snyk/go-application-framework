@@ -10,9 +10,6 @@
  ✗ [31m[HIGH][0m [1mSQL injection in user lookup[0m
    Finding ID: rift-finding-0001
    Info: The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.
-
-## Suggested fix
-Use a parameterized query and pass `id` as a bound argument.
    Path: src/handlers/users.go, line 42 to 47
 
 ╭─────────────────────────────────────────────────────────╮

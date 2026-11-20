@@ -34,7 +34,7 @@
 								},
 								"help": {
 									"text": "",
-									"markdown": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.\n\n# Suggested fix\nUse a parameterized query and pass `id` as a bound argument."
+									"markdown": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows."
 								},
 								"properties": {
 									"tags": [

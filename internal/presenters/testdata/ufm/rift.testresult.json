@@ -82,7 +82,7 @@
       {
         "attributes": {
           "cause_of_failure": false,
-          "description": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.\n\n## Suggested fix\nUse a parameterized query and pass `id` as a bound argument.",
+          "description": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.",
           "evidence": [],
           "finding_type": "rift",
           "key": "rift-finding-0001",
