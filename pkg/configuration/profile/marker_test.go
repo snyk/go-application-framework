@@ -67,14 +67,11 @@ func Test_WithConfigEnrichment(t *testing.T) {
 			configuration.WithSupportedEnvVarPrefixes("snyk_"),
 			configuration.WithPinnedFile(filepath.Join(t.TempDir(), "base.json")),
 		)
-		t.Setenv("SNYK_TOKEN", "from-env")
 
 		var seenName string
 		reg, err := NewFileRegistry(dir, base, WithConfigEnrichment(func(name string, config configuration.Configuration) error {
 			seenName = name
-			ev, ok := config.(interface{ SetIgnoredEnvVars(...string) })
-			require.True(t, ok)
-			ev.SetIgnoredEnvVars("SNYK_TOKEN")
+			config.Set("enrichment_ran", true)
 			return nil
 		}))
 		require.NoError(t, err)
@@ -85,8 +82,7 @@ func Test_WithConfigEnrichment(t *testing.T) {
 
 		assert.Equal(t, "work", seenName)
 		assert.True(t, IsProfile(p.Configuration()))
-		assert.Empty(t, p.Configuration().GetString("snyk_token"))
-		assert.Equal(t, []string{"SNYK_TOKEN"}, configuration.GetIgnoredEnvVars(p.Configuration()))
+		assert.True(t, p.Configuration().GetBool("enrichment_ran"))
 	})
 
 	t.Run("does not run for the default profile", func(t *testing.T) {
@@ -110,5 +106,50 @@ func Test_WithConfigEnrichment(t *testing.T) {
 
 		_, err = reg.Profile("work")
 		assertCatalogError(t, err, codeUnavailable, `Profile "work" cannot be loaded: enrichment failed.`)
+	})
+}
+
+func Test_WithDeriveOpts(t *testing.T) {
+	t.Run("applies ignored env vars at Derive before any read", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "ambient")
+
+		dir := t.TempDir()
+		base := configuration.NewWithOpts(
+			configuration.WithSupportedEnvVarPrefixes("snyk_"),
+			configuration.WithPinnedFile(filepath.Join(t.TempDir(), "base.json")),
+		)
+		reg, err := NewFileRegistry(dir, base, WithDeriveOpts(configuration.WithIgnoredEnvVars("SNYK_TOKEN")))
+		require.NoError(t, err)
+
+		writeProfile(t, dir, "work", `{}`)
+		p, err := reg.Profile("work")
+		require.NoError(t, err)
+
+		cfg := p.Configuration()
+		assert.Equal(t, []string{"SNYK_TOKEN"}, configuration.GetIgnoredEnvVars(cfg))
+		assert.Empty(t, cfg.GetString("snyk_token"))
+		assert.True(t, IsProfile(cfg))
+	})
+
+	t.Run("does not apply to the default profile", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "ambient")
+
+		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+		reg, err := NewFileRegistry(t.TempDir(), base, WithDeriveOpts(configuration.WithIgnoredEnvVars("SNYK_TOKEN")))
+		require.NoError(t, err)
+
+		p, err := reg.Profile(DefaultName)
+		require.NoError(t, err)
+		assert.Empty(t, configuration.GetIgnoredEnvVars(p.Configuration()))
+		assert.Equal(t, "ambient", p.Configuration().GetString("snyk_token"))
+	})
+
+	t.Run("AutomaticEnv with ignored opts makes the profile unavailable", func(t *testing.T) {
+		base := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		reg, err := NewFileRegistry(t.TempDir(), base, WithDeriveOpts(configuration.WithIgnoredEnvVars("SNYK_TOKEN")))
+		require.NoError(t, err)
+
+		_, err = reg.Profile("work")
+		assertCatalogError(t, err, codeUnavailable, `Profile "work" cannot be loaded.`)
 	})
 }

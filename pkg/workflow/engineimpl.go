@@ -48,8 +48,10 @@ type EngineImpl struct {
 	// profile directory that it was built with.
 	profiles    profile.Registry
 	profilesDir string
-	// profileConfigEnrichment survives SetConfiguration and is passed into each rebuilt file registry.
+	// profileConfigEnrichment and profileDeriveOpts survive SetConfiguration and are passed into
+	// each rebuilt file registry.
 	profileConfigEnrichment profile.ConfigEnrichment
+	profileDeriveOpts       []configuration.Opts
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -181,6 +183,34 @@ func SetProfileConfigEnrichment(engine Engine, fn profile.ConfigEnrichment) erro
 		return nil
 	}
 	return fmt.Errorf("engine does not support profile config enrichment")
+}
+
+// SetProfileDeriveOpts stores options that are passed to configuration.Derive for every named
+// profile. The options survive SetConfiguration. Passing no options clears them. Changing the
+// options rebuilds the profile registry on the next use.
+func (e *EngineImpl) SetProfileDeriveOpts(opts ...configuration.Opts) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(opts) == 0 {
+		e.profileDeriveOpts = nil
+	} else {
+		e.profileDeriveOpts = append([]configuration.Opts(nil), opts...)
+	}
+	e.profiles, e.profilesDir = nil, ""
+}
+
+// SetProfileDeriveOpts stores Derive options on engines that support profile registries.
+// Prefer this helper over asserting the concrete engine type. Use it for construction-time
+// settings such as configuration.WithIgnoredEnvVars.
+func SetProfileDeriveOpts(engine Engine, opts ...configuration.Opts) error {
+	type deriveOptsSetter interface {
+		SetProfileDeriveOpts(opts ...configuration.Opts)
+	}
+	if setter, ok := engine.(deriveOptsSetter); ok {
+		setter.SetProfileDeriveOpts(opts...)
+		return nil
+	}
+	return fmt.Errorf("engine does not support profile derive options")
 }
 
 // NewWorkflowIdentifier creates a new workflow identifier represented in parsed URL format.
@@ -813,6 +843,9 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 		return e.profiles, nil
 	}
 	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
+	if len(e.profileDeriveOpts) > 0 {
+		opts = append(opts, profile.WithDeriveOpts(e.profileDeriveOpts...))
+	}
 	if e.profileConfigEnrichment != nil {
 		opts = append(opts, profile.WithConfigEnrichment(e.profileConfigEnrichment))
 	}

@@ -3,7 +3,6 @@ package app
 import (
 	"io"
 	"log"
-	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 )
@@ -28,71 +29,71 @@ func Test_IdentityEnvVars_Snapshot(t *testing.T) {
 }
 
 func Test_IgnoreIdentityEnvVarsForProfile(t *testing.T) {
-	t.Run("applies ignores and marker", func(t *testing.T) {
-		t.Setenv("SNYK_TOKEN", "from-env")
-
+	t.Run("sets marker only", func(t *testing.T) {
 		config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"))
 		require.NoError(t, IgnoreIdentityEnvVarsForProfile("work", config))
 
-		assert.Equal(t, IdentityEnvVars(), configuration.GetIgnoredEnvVars(config))
+		assert.Empty(t, configuration.GetIgnoredEnvVars(config), "ignores belong in IdentityIgnoreDeriveOpts")
 		assert.True(t, profile.IsProfile(config))
 		assert.Equal(t, "work", profile.Name(config))
-		assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN))
 	})
 
 	t.Run("nil config is a no-op", func(t *testing.T) {
 		require.NoError(t, IgnoreIdentityEnvVarsForProfile("work", nil))
 	})
-
-	t.Run("errors when AutomaticEnv is enabled", func(t *testing.T) {
-		config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		err := IgnoreIdentityEnvVarsForProfile("work", config)
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "AutomaticEnv")
-		assert.False(t, profile.IsProfile(config))
-		assert.Empty(t, configuration.GetIgnoredEnvVars(config))
-	})
-
-	t.Run("errors for a foreign configuration without SetIgnoredEnvVars", func(t *testing.T) {
-		config := foreignConfiguration{Configuration: configuration.NewWithOpts()}
-		err := IgnoreIdentityEnvVarsForProfile("work", config)
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "does not support ignoring environment variables")
-		assert.False(t, profile.IsProfile(config))
-	})
 }
 
-func Test_IgnoreIdentityEnvVarsForProfile_EnrichmentFailsWithAutomaticEnv(t *testing.T) {
+func Test_IdentityIgnoreDeriveOpts_AppliedAtDerive(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "ambient")
+
+	dir := t.TempDir()
+	base := configuration.NewWithOpts(
+		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+	)
+	reg, err := profile.NewFileRegistry(dir, base,
+		profile.WithDeriveOpts(IdentityIgnoreDeriveOpts()...),
+		profile.WithConfigEnrichment(IgnoreIdentityEnvVarsForProfile),
+	)
+	require.NoError(t, err)
+
+	p, err := reg.Profile("work")
+	require.NoError(t, err)
+
+	cfg := p.Configuration()
+	assert.True(t, profile.IsProfile(cfg))
+	assert.Equal(t, IdentityEnvVars(), configuration.GetIgnoredEnvVars(cfg))
+	assert.Empty(t, cfg.GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Empty(t, cfg.GetString("snyk_token"))
+}
+
+func Test_IdentityIgnoreDeriveOpts_FailsWithAutomaticEnv(t *testing.T) {
 	dir := t.TempDir()
 	base := configuration.NewWithOpts(
 		configuration.WithAutomaticEnv(),
 		configuration.WithSupportedEnvVarPrefixes("snyk_"),
 	)
-	reg, err := profile.NewFileRegistry(dir, base, profile.WithConfigEnrichment(IgnoreIdentityEnvVarsForProfile))
+	reg, err := profile.NewFileRegistry(dir, base, profile.WithDeriveOpts(IdentityIgnoreDeriveOpts()...))
 	require.NoError(t, err)
 
 	_, err = reg.Profile("work")
 	require.Error(t, err)
-	require.IsType(t, snyk_errors.Error{}, err)
 	var catalogErr snyk_errors.Error
 	require.ErrorAs(t, err, &catalogErr)
-	assert.Contains(t, catalogErr.Detail, "AutomaticEnv")
+	assert.Equal(t, "SNYK-CLI-0037", catalogErr.ErrorCode)
+	assert.Equal(t, `Profile "work" cannot be loaded.`, catalogErr.Detail)
 }
 
-// foreignConfiguration embeds Configuration but does not expose SetIgnoredEnvVars.
-type foreignConfiguration struct {
-	configuration.Configuration
+// tenantCredentialAncestors are the credential-related keys that defaultFuncTenantId depends on.
+// API_URL, ORGANIZATION, and FF_OAUTH_AUTH_FLOW_ENABLED are intentionally excluded: they are not
+// identity credentials for named-profile isolation.
+var tenantCredentialAncestors = []string{
+	configuration.AUTHENTICATION_TOKEN,
+	configuration.AUTHENTICATION_BEARER_TOKEN,
+	auth.CONFIG_KEY_OAUTH_TOKEN,
+	machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE,
 }
 
-// tenantEnvAncestorExclusions are environment-typed TENANT ancestors that are not identity
-// credentials: API endpoint, organization selection, and the OAuth feature flag.
-var tenantEnvAncestorExclusions = []string{
-	configuration.API_URL,
-	configuration.ORGANIZATION,
-	configuration.FF_OAUTH_AUTH_FLOW_ENABLED,
-}
-
-func Test_IdentityEnvVars_CoverTenantEnvAncestors(t *testing.T) {
+func Test_IdentityEnvVars_CoverTenantCredentialAncestors(t *testing.T) {
 	config := configuration.NewWithOpts(
 		configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"),
 	)
@@ -105,18 +106,9 @@ func Test_IdentityEnvVars_CoverTenantEnvAncestors(t *testing.T) {
 	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(log.New(io.Discard, "", 0)))
 	require.NotNil(t, engine)
 
-	ancestors := configuration.KeyDependencies(config, configuration.TENANT)
-	require.NotEmpty(t, ancestors)
-
-	for _, ancestor := range ancestors {
-		if config.GetKeyType(ancestor) != configuration.EnvVarKeyType {
-			continue
-		}
-		if slices.Contains(tenantEnvAncestorExclusions, ancestor) {
-			continue
-		}
+	for _, ancestor := range tenantCredentialAncestors {
 		assert.Truef(t, identityEnvContains(ancestor),
-			"environment-typed TENANT ancestor %q must be in IdentityEnvVars or an explicit exclusion", ancestor)
+			"TENANT credential ancestor %q must be covered by IdentityEnvVars", ancestor)
 	}
 }
 

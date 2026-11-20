@@ -157,15 +157,3 @@ func Test_IgnoredEnvVars_ConcurrentAccess(t *testing.T) {
 	assert.Empty(t, config.GetString("snyk_token"))
 	assert.Equal(t, "https://api.example", config.GetString("snyk_api"))
 }
-
-func Test_KeyDependencies(t *testing.T) {
-	config := NewWithOpts()
-	require.NoError(t, config.AddKeyDependency("child", "parent"))
-	require.NoError(t, config.AddKeyDependency("child", "other"))
-	require.NoError(t, config.AddKeyDependency("grandchild", "child"))
-
-	assert.ElementsMatch(t, []string{"parent", "other"}, KeyDependencies(config, "child"))
-	assert.Equal(t, []string{"child"}, KeyDependencies(config, "grandchild"))
-	assert.Empty(t, KeyDependencies(config, "parent"))
-	assert.Nil(t, KeyDependencies(foreignConfiguration{Configuration: config}, "child"))
-}

@@ -198,9 +198,11 @@ func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
 
 // WithIgnoredEnvVars marks the given environment variable names as ignored. Ignored names win over supported
 // names and prefixes: they are not bound from the environment and are not reported as set by
-// GetAllKeysThatContainValues. Matching is case-insensitive. The Configuration interface is unchanged; use
-// SetIgnoredEnvVars / GetIgnoredEnvVars on a configuration created by this package, or the package-level
-// GetIgnoredEnvVars helper. Combining ignored env vars with AutomaticEnv is rejected by Derive.
+// GetAllKeysThatContainValues. Matching is case-insensitive. Apply ignores at construction
+// (NewWithOpts / Derive); setting them after a key has already been read and bound has no effect on
+// that binding. The Configuration interface is unchanged; use SetIgnoredEnvVars / GetIgnoredEnvVars
+// on a configuration created by this package, or the package-level GetIgnoredEnvVars helper.
+// Combining ignored env vars with AutomaticEnv is rejected by Derive.
 func WithIgnoredEnvVars(names ...string) Opts {
 	return func(c Configuration) {
 		ev, ok := c.(*extendedViper)
@@ -1060,7 +1062,9 @@ func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
 }
 
 // SetIgnoredEnvVars replaces the list of environment variable names that must not be read.
-// Matching is case-insensitive. This method is on the concrete configuration type only.
+// Matching is case-insensitive. Prefer WithIgnoredEnvVars at construction or Derive time:
+// names added after a key has already been read and bound stay bound. This method is on the
+// concrete configuration type only.
 func (ev *extendedViper) SetIgnoredEnvVars(names ...string) {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
@@ -1084,25 +1088,6 @@ func GetIgnoredEnvVars(config Configuration) []string {
 		return nil
 	}
 	return ev.GetIgnoredEnvVars()
-}
-
-// KeyDependencies returns the keys that key depends on, as registered with AddKeyDependency.
-// It returns nil when config is not a configuration created by this package.
-func KeyDependencies(config Configuration, key string) []string {
-	ev, ok := config.(*extendedViper)
-	if !ok {
-		return nil
-	}
-	ev.mutex.RLock()
-	defer ev.mutex.RUnlock()
-
-	var deps []string
-	for dependencyKey, dependents := range ev.interkeyDependencies {
-		if slices.Contains(dependents, key) {
-			deps = append(deps, dependencyKey)
-		}
-	}
-	return deps
 }
 
 // isEnvVarIgnored reports whether key is in the ignored set. It takes the read lock.

@@ -1,8 +1,6 @@
 package app
 
 import (
-	"errors"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 )
@@ -21,24 +19,20 @@ func IdentityEnvVars() []string {
 	}
 }
 
-// IgnoreIdentityEnvVarsForProfile applies the identity environment ignore list and records the
-// profile marker on a derived named-profile configuration. It is intended as a
-// profile.ConfigEnrichment for hosts that opt in.
+// IdentityIgnoreDeriveOpts returns Derive options that ignore identity environment variables.
+// Pass them to workflow.SetProfileDeriveOpts so named profiles apply the ignores at construction
+// time, before any configuration read can bind ambient values.
+func IdentityIgnoreDeriveOpts() []configuration.Opts {
+	return []configuration.Opts{configuration.WithIgnoredEnvVars(IdentityEnvVars()...)}
+}
+
+// IgnoreIdentityEnvVarsForProfile records the profile marker on a derived named-profile
+// configuration. It is intended as a profile.ConfigEnrichment for hosts that opt in.
 //
-// It fails closed when ignores cannot be honored: AutomaticEnv bypasses ignore checks, and
-// configurations that do not implement SetIgnoredEnvVars would otherwise only set the marker.
+// Identity environment ignores must be applied at Derive time via IdentityIgnoreDeriveOpts and
+// workflow.SetProfileDeriveOpts (or profile.WithDeriveOpts). Applying them here after Derive would
+// be too late once a key has already been read and bound.
 func IgnoreIdentityEnvVarsForProfile(name string, config configuration.Configuration) error {
-	if config == nil {
-		return nil
-	}
-	if config.GetAutomaticEnv() {
-		return errors.New("ignored environment variables cannot be applied when AutomaticEnv is enabled")
-	}
-	setter, ok := config.(interface{ SetIgnoredEnvVars(...string) })
-	if !ok {
-		return errors.New("configuration does not support ignoring environment variables")
-	}
-	setter.SetIgnoredEnvVars(IdentityEnvVars()...)
 	profile.SetMarker(config, name)
 	return nil
 }
