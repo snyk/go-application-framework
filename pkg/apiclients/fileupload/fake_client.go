@@ -64,3 +64,37 @@ func (f *FakeClient) GetUploadCount() int {
 func (f *FakeClient) GetLastRevisionID() RevisionID {
 	return f.lastRevision
 }
+
+// FakeLargeFileClient is a fake LargeFileClient for consumers' tests.
+type FakeLargeFileClient struct {
+	err   error
+	paths []string
+}
+
+var _ LargeFileClient = (*FakeLargeFileClient)(nil)
+
+// NewFakeLargeFileClient creates a new fake large file client.
+func NewFakeLargeFileClient() *FakeLargeFileClient {
+	return &FakeLargeFileClient{}
+}
+
+// WithError configures the fake to return an error.
+func (f *FakeLargeFileClient) WithError(err error) *FakeLargeFileClient {
+	f.err = err
+	return f
+}
+
+func (f *FakeLargeFileClient) CreateRevisionFromLargeFile(_ context.Context, path string) (LargeFileUploadResult, error) {
+	if f.err != nil {
+		return LargeFileUploadResult{}, f.err
+	}
+
+	f.paths = append(f.paths, path)
+
+	return LargeFileUploadResult{RevisionID: uuid.New(), ChunkCount: 1}, nil
+}
+
+// GetUploadedPaths returns the paths passed to CreateRevisionFromLargeFile.
+func (f *FakeLargeFileClient) GetUploadedPaths() []string {
+	return f.paths
+}
