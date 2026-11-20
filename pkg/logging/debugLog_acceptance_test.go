@@ -23,8 +23,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -223,6 +225,47 @@ func TestDebugLog_ShortFormCredentialsContainingAQuoteAreRedactedWhole(t *testin
 	assert.NotContains(t, shown, "ter2")
 }
 
+func TestDebugLog_ProseWithShortWordsBeforeASeparatorIsShown(t *testing.T) {
+	for _, message := range []string{
+		`opening P:\projects\foo\file.go`,
+		"GET /items?p=3",
+		"cache key: abc",
+	} {
+		t.Run(message, func(t *testing.T) {
+			logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+			logger.Debug().Msg(message)
+
+			requireEventShown(t, out, message)
+		})
+	}
+}
+
+func TestDebugLog_OrdinaryCommandsWithShortFlagsAreShown(t *testing.T) {
+	for _, command := range []string{
+		"mkdir -p /tmp/x",
+		"ps -p 123",
+		"docker run -p 8080:80 img",
+	} {
+		t.Run(command, func(t *testing.T) {
+			logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+			logger.Debug().Msg("running " + command)
+
+			requireEventShown(t, out, "running "+command)
+		})
+	}
+}
+
+func TestDebugLog_LongCredentialFlagsAreRedacted(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Msg("container test img --username jdoe --password hunter2 --password=hunter3 --token tkn-value --org=acme")
+
+	shown := requireEventShown(t, out, "container test img --username *** --password *** --password=*** --token *** --org=acme")
+	assert.NotContains(t, shown, "hunter")
+}
+
 func TestDebugLog_BearerTokenInAnAuthorizationHeaderIsRedacted(t *testing.T) {
 	logger, out := newDebugLog(t, configuration.NewWithOpts())
 
@@ -289,6 +332,19 @@ func TestDebugLog_GitHubPersonalAccessTokenIsRedacted(t *testing.T) {
 	assert.NotContains(t, shown, fakeGitHubPATSuffix())
 }
 
+func TestDebugLog_EveryKindOfGitHubTokenIsRedacted(t *testing.T) {
+	for _, prefix := range []string{"gho_", "ghu_", "ghs_", "ghr_"} {
+		t.Run(prefix, func(t *testing.T) {
+			logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+			logger.Debug().Msg("using credential " + prefix + fakeGitHubPATSuffix())
+
+			shown := requireEventShown(t, out, "using credential "+prefix+"***")
+			assert.NotContains(t, shown, fakeGitHubPATSuffix())
+		})
+	}
+}
+
 func TestDebugLog_ConfiguredAPITokenIsRedactedWhereverItAppears(t *testing.T) {
 	apiToken := fakeAPIToken()
 	config := configuration.NewWithOpts()
@@ -326,10 +382,12 @@ func TestDebugLog_SecretsStayRedactedNextToEnvironmentTerms(t *testing.T) {
 	base.Debug().Msgf("> request [0x1]: header: map[Authorization:[token %s] Content-Type:[application/json] Session-Token:[token %s] User-Agent:[example-app/1.0.0 (linux;amd64)] X-App-Version:[1.0.0]]", apiToken, apiToken)
 	legacy.Debug().Msgf("HTTPS_PROXY = http://proxyuser:%s@127.0.0.1:41234", proxyPassword)
 	legacy.Debug().Msgf("client using proxy: http://proxyuser:%s@127.0.0.1:41234", proxyPassword)
+	base.Debug().Msgf("cached %s for this session", apiToken)
 
-	shown := requireEventShown(t, out, "Content-Type:[application/json]")
-	assert.Contains(t, shown, "X-App-Version:[1.0.0]")
-	assert.Contains(t, shown, "@127.0.0.1:41234")
+	shown := requireEventShown(t, out, "> request [0x1]: header: map[Authorization:[*** ***] Content-Type:[application/json] Session-Token:[*** ***] User-Agent:[example-app/1.0.0 (linux;amd64)] X-App-Version:[1.0.0]]")
+	assert.Contains(t, shown, "legacy:2 - HTTPS_PROXY = http://***@127.0.0.1:41234\n")
+	assert.Contains(t, shown, "legacy:2 - client *** proxy: http://***@127.0.0.1:41234\n")
+	assert.Contains(t, shown, "main - cached *** for this session\n")
 	assert.NotContains(t, shown, apiToken)
 	assert.NotContains(t, shown, proxyPassword)
 }
@@ -379,6 +437,28 @@ func TestDebugLog_FieldsWhoseNamesMerelyContainKeyOrUserKeepTheirValues(t *testi
 	assert.Contains(t, shown, "keyId=k-1")
 }
 
+func TestDebugLog_CountOfUsersIsShown(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Int("users", 3).Msg("org loaded")
+
+	shown := requireEventShown(t, out, "org loaded")
+	assert.Contains(t, shown, "users=3")
+}
+
+func TestDebugLog_FieldsDescribingTokensKeepTheirValues(t *testing.T) {
+	logger, out := newDebugLog(t, configuration.NewWithOpts())
+
+	logger.Debug().Int("tokenCount", 42).Int("max_tokens", 4096).Str("token_type", "bearer").Int("token_expiry", 3600).Int("tokenLength", 40).Msg("completion received")
+
+	shown := requireEventShown(t, out, "completion received")
+	assert.Contains(t, shown, "tokenCount=42")
+	assert.Contains(t, shown, "max_tokens=4096")
+	assert.Contains(t, shown, "token_type=bearer")
+	assert.Contains(t, shown, "token_expiry=3600")
+	assert.Contains(t, shown, "tokenLength=40")
+}
+
 func TestDebugLog_EmbeddedJSONBodyIsRedactedByFieldName(t *testing.T) {
 	logger, out := newDebugLog(t, configuration.NewWithOpts())
 
@@ -408,32 +488,34 @@ func TestDebugLog_SensitiveFieldsAreRedacted(t *testing.T) {
 }
 
 // Redaction terms are tokens of the environment and the command line, so a term can carry a quote or
-// a trailing comma from a quoted or JSON-shaped value. Each case pairs a debug event with such a term.
+// a trailing comma from a quoted or JSON-shaped value. Each case logs a debug event containing such a term.
 func TestDebugLog_EventsSurviveTermsCarryingJSONPunctuation(t *testing.T) {
 	analyticsPayload := "{\n  \"standalone\": true,\n  \"ci\": true,\n  \"durationMs\": 1234,\n  \"metrics\": {\n    \"network_time\": {\n      \"type\": \"timer\",\n      \"values\": [\n        12,\n        34\n      ]\n    }\n  }\n}"
+	redactedAnalyticsPayload := "{\n  \"standalone\": ***\n  \"ci\": ***\n  \"durationMs\": 1234,\n  ***\": {\n    \"network_time\": {\n      \"type\": \"timer\",\n      \"values\": [\n        12,\n        34\n      ]\n    }\n  }\n}"
 	analyticsData := `[0] Data: {"data":{"attributes":{"runtime":{"application":{"name":"example-app","version":"1.0.0-example"}},"interaction":{"extension":{"legacy::metadata__depGraph":true,"legacy::metadata__isDocker":false}}}}}`
+	redactedAnalyticsData := `[0] Data: {"data":{"attributes":{"runtime":{"application":{***":"example-app","version":"1.0.0-example"}},"interaction":{"extension":{"legacy::metadata__depGraph":***"legacy::metadata__isDocker":false}}}}}`
 
 	cases := []struct {
-		name    string
-		ext     string
-		level   zerolog.Level
-		message string
-		terms   []string
-		visible string
+		name     string
+		ext      string
+		level    zerolog.Level
+		message  string
+		terms    []string
+		expected string
 	}{
-		{"running command", "", zerolog.DebugLevel, "Running monitor", []string{`"Running`}, "Running monitor"},
-		{"extra CA file", "legacy:2", zerolog.DebugLevel, "Using additional CAs from file: /opt/ci/certs/extra-ca.pem", []string{`"Using`}, "additional CAs"},
-		{"proxy connect result", "legacy:2", zerolog.DebugLevel, "HandleConnect - basic authentication result: &{0 <nil> 0x1a2b3c0}api.example.com:443", []string{`"Handle`, "result:"}, "HandleConnect"},
-		{"multi-line analytics dump", "legacy:2", zerolog.DebugLevel, analyticsPayload, []string{`"metrics`, "true,"}, "network_time"},
-		{"output writers count", "output:4", zerolog.InfoLevel, "Available writers (count: 1):", []string{`info"`}, "Available writers"},
-		{"output writer map", "output:4", zerolog.InfoLevel, "WriterMap: (default -> text/cli) ", []string{`info"`}, "WriterMap"},
-		{"no unified findings", "output:4", zerolog.InfoLevel, "UFM - No data to process", []string{`info"`}, "UFM"},
-		{"no local findings", "output:4", zerolog.InfoLevel, "LFM - No findings to process", []string{`info"`}, "LFM"},
-		{"no other data", "output:4", zerolog.InfoLevel, "Other - No data to process", []string{`info"`}, "Other"},
-		{"sending analytics", "", zerolog.DebugLevel, "Sending Analytics", []string{`"Sending`}, "Sending Analytics"},
-		{"sending instrumentation", "", zerolog.DebugLevel, "Sending Instrumentation", []string{`"Sending`}, "Sending Instrumentation"},
-		{"analytics report data", "analytics.report:5", zerolog.DebugLevel, analyticsData, []string{`"name`, "true,"}, "example-app"},
-		{"authorization summary", "", zerolog.DebugLevel, "Authorization:         1a2b3c4d***9f8e7d6c  (type=token)", []string{`"Authorization:`}, "(type=token)"},
+		{"running command", "", zerolog.DebugLevel, `Running monitor with args "Running test"`, []string{`"Running`}, `Running monitor with args *** test"`},
+		{"extra CA file", "legacy:2", zerolog.DebugLevel, `Using additional CAs from file: "Using /opt/ci/certs/extra-ca.pem`, []string{`"Using`}, "Using additional CAs from file: *** /opt/ci/certs/extra-ca.pem"},
+		{"proxy connect result", "legacy:2", zerolog.DebugLevel, `"HandleConnect - basic authentication result: &{0 <nil> 0x1a2b3c0}api.example.com:443`, []string{`"Handle`, "result:"}, `"HandleConnect - basic authentication *** &{0 <nil> 0x1a2b3c0}api.example.com:443`},
+		{"multi-line analytics dump", "legacy:2", zerolog.DebugLevel, analyticsPayload, []string{`"metrics`, "true,"}, redactedAnalyticsPayload},
+		{"output writers count", "output:4", zerolog.InfoLevel, `Available writers (count: 1): info" text/cli`, []string{`info"`}, "Available writers (count: 1): *** text/cli"},
+		{"output writer map", "output:4", zerolog.InfoLevel, `WriterMap: (default -> text/cli) info"`, []string{`info"`}, "WriterMap: (default -> text/cli) ***"},
+		{"no unified findings", "output:4", zerolog.InfoLevel, `UFM - No data to process at info"`, []string{`info"`}, "UFM - No data to process at ***"},
+		{"no local findings", "output:4", zerolog.InfoLevel, `LFM - No findings to process at info"`, []string{`info"`}, "LFM - No findings to process at ***"},
+		{"no other data", "output:4", zerolog.InfoLevel, `Other - No data to process at info"`, []string{`info"`}, "Other - No data to process at ***"},
+		{"sending analytics", "", zerolog.DebugLevel, `Sending Analytics for "Sending`, []string{`"Sending`}, "Sending Analytics for ***"},
+		{"sending instrumentation", "", zerolog.DebugLevel, `Sending Instrumentation for "Sending`, []string{`"Sending`}, "Sending Instrumentation for ***"},
+		{"analytics report data", "analytics.report:5", zerolog.DebugLevel, analyticsData, []string{`"name`, "true,"}, redactedAnalyticsData},
+		{"authorization summary", "", zerolog.DebugLevel, `"Authorization: summary  (type=token)`, []string{`"Authorization:`}, "***  (type=token)"},
 	}
 
 	for _, tc := range cases {
@@ -443,7 +525,7 @@ func TestDebugLog_EventsSurviveTermsCarryingJSONPunctuation(t *testing.T) {
 
 			logger.WithLevel(tc.level).Msg(tc.message)
 
-			requireEventShown(t, out, tc.visible)
+			requireEventShown(t, out, tc.expected)
 		})
 	}
 }
@@ -451,10 +533,11 @@ func TestDebugLog_EventsSurviveTermsCarryingJSONPunctuation(t *testing.T) {
 func TestDebugLog_BareBooleanFieldSurvivesTermWithTrailingComma(t *testing.T) {
 	logger, out := newDebugLog(t, configWithRedactionTerms("true,"))
 
-	logger.Debug().Bool("cached", true).Str("source", "example").Msg("feature flag evaluated")
+	logger.Debug().Bool("cached", true).Str("flags", "cached=true, source=example").Msg("feature flag evaluated")
 
 	shown := requireEventShown(t, out, "feature flag evaluated")
-	assert.Contains(t, shown, "cached=true")
+	assert.Contains(t, shown, "cached=true ")
+	assert.Contains(t, shown, `flags="cached=*** source=example"`)
 }
 
 func TestDebugLog_ConsumerFormattingOptionsKeepWorkingWithRedaction(t *testing.T) {
@@ -480,23 +563,25 @@ func TestDebugLog_ConsumerFormattingOptionsKeepWorkingWithRedaction(t *testing.T
 
 func TestDebugLog_TokenLoggedWhileAnotherEventReadsTheConfigurationIsRedacted(t *testing.T) {
 	config := configuration.NewWithOpts()
-	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(config)
+	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(t, config)
 	logger, out := newDebugLog(t, config)
 	firstEventLogged := make(chan struct{})
 	go func() {
 		defer close(firstEventLogged)
 		logger.Debug().Msg("first event")
 	}()
-	<-firstReadStarted
+	waitFor(t, firstReadStarted, "the first event to read the configuration")
 
 	apiToken := fakeAPIToken()
 	config.Set(configuration.AUTHENTICATION_TOKEN, apiToken)
 	logger.Debug().Msgf("authenticating with %s", apiToken)
-	close(releaseFirstRead)
-	<-firstEventLogged
+	releaseFirstRead()
+	waitFor(t, firstEventLogged, "the first event to be logged")
+	logger.Debug().Msgf("still authenticating with %s", apiToken)
 
 	shown := requireEventShown(t, out, "authenticating with ***")
 	assert.Contains(t, shown, "first event")
+	assert.Contains(t, shown, "still authenticating with ***")
 	assert.NotContains(t, shown, apiToken)
 }
 
@@ -527,10 +612,14 @@ func TestDebugLog_SecretsOfTheSelectedProfileAreRedacted(t *testing.T) {
 	assert.NotContains(t, shown, baseToken)
 }
 
-// blockFirstReadOfRedactionTerms holds the first reader of REDACTION_TERMS until release is closed, so a test can act
-// while a redaction is in the middle of reading the configuration.
-func blockFirstReadOfRedactionTerms(config configuration.Configuration) (started <-chan struct{}, release chan<- struct{}) {
+// blockFirstReadOfRedactionTerms holds the first reader of REDACTION_TERMS until release is called, so a test can act
+// while a redaction is in the middle of reading the configuration. The reader is released when the test ends, too.
+func blockFirstReadOfRedactionTerms(t *testing.T, config configuration.Configuration) (started <-chan struct{}, release func()) {
+	t.Helper()
 	startedCh, releaseCh := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	release = func() { once.Do(func() { close(releaseCh) }) }
+	t.Cleanup(release)
 	var first atomic.Bool
 	config.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
 		if first.CompareAndSwap(false, true) {
@@ -539,7 +628,16 @@ func blockFirstReadOfRedactionTerms(config configuration.Configuration) (started
 		}
 		return existing, nil
 	})
-	return startedCh, releaseCh
+	return startedCh, release
+}
+
+func waitFor(t *testing.T, ch <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+	}
 }
 
 func TestDebugLog_ShortCredentialAfterAnAuthSchemeIsRedacted(t *testing.T) {

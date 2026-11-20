@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,13 +36,6 @@ import (
 )
 
 func TestRedactor_EachKindOfConfiguredSecretIsRedacted(t *testing.T) {
-	key, err := machineenrollment.GenerateKey()
-	require.NoError(t, err)
-	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
-	require.NoError(t, err)
-	storedJSON, err := json.Marshal(map[string]string{"client_id": "machine-client-id", "private_key_pem": string(keyPEM)})
-	require.NoError(t, err)
-	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
 	fleetKey := base64.StdEncoding.EncodeToString([]byte("example-fleet-key-value"))
 	const oauthToken = `{"access_token":"oauth-access-value-1","refresh_token":"oauth-refresh-value-2"}`
 
@@ -59,7 +53,6 @@ func TestRedactor_EachKindOfConfiguredSecretIsRedacted(t *testing.T) {
 		{"fleet key", machinecredential.CONFIG_KEY_FLEET_KEY, fleetKey, fleetKey},
 		{"oauth access token", auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken, "oauth-access-value-1"},
 		{"oauth refresh token", auth.CONFIG_KEY_OAUTH_TOKEN, oauthToken, "oauth-refresh-value-2"},
-		{"machine credential pem line", machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON), pemBody},
 		{"special characters", configuration.AUTHENTICATION_TOKEN, "a.b+c(d)[e]*?$^|{1}", "a.b+c(d)[e]*?$^|{1}"},
 	}
 	for _, tt := range tests {
@@ -122,6 +115,29 @@ func TestRedactor_RedactsTheConfiguredTokenAndTermsInText(t *testing.T) {
 	}
 }
 
+func TestRedactor_EveryLineOfAConfiguredMachineCredentialIsRedacted(t *testing.T) {
+	key, err := machineenrollment.GenerateKey()
+	require.NoError(t, err)
+	keyPEM, err := machineenrollment.EncodeKeyPEM(key)
+	require.NoError(t, err)
+	storedJSON, err := json.Marshal(map[string]string{"client_id": "machine-client-id", "private_key_pem": string(keyPEM)})
+	require.NoError(t, err)
+	config := configuration.NewInMemory()
+	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON))
+	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
+
+	for _, line := range pemBodyLines(t, keyPEM) {
+		assert.Equal(t, "seen *** here", redactor.Redact("seen "+line+" here"))
+	}
+}
+
+func pemBodyLines(t *testing.T, keyPEM []byte) []string {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")
+	require.Greater(t, len(lines), 3, "the PEM has several body lines")
+	return lines[1 : len(lines)-1]
+}
+
 func TestRedactor_MachineCredentialIsRedactedInEveryShape(t *testing.T) {
 	key, err := machineenrollment.GenerateKey()
 	require.NoError(t, err)
@@ -131,17 +147,20 @@ func TestRedactor_MachineCredentialIsRedactedInEveryShape(t *testing.T) {
 	require.NoError(t, err)
 	config := configuration.NewInMemory()
 	config.Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, string(storedJSON))
-	pemBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+	bodyLines := pemBodyLines(t, keyPEM)
 	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 
 	for name, line := range map[string]string{
 		"pem as is":        "pem: " + string(keyPEM),
 		"stored value":     "value: " + string(storedJSON),
-		"one pem line":     "line: " + pemBody,
+		"pem lines":        "lines: " + strings.Join(bodyLines, " "),
 		"escaped newlines": "value: " + strings.ReplaceAll(string(keyPEM), "\n", `\n`),
 	} {
 		t.Run(name, func(t *testing.T) {
-			assert.NotContains(t, redactor.Redact(line), pemBody)
+			redacted := redactor.Redact(line)
+			for _, bodyLine := range bodyLines {
+				assert.NotContains(t, redacted, bodyLine)
+			}
 		})
 	}
 	assert.Equal(t, "client: machine-client-id", redactor.Redact("client: machine-client-id"))
@@ -212,19 +231,36 @@ func TestRedactor_ConcurrentRedactionsWhileTheTokenRotates(t *testing.T) {
 
 func TestRedactor_RedactionDuringAnotherRedactionsConfigurationReadSeesTheCurrentToken(t *testing.T) {
 	config := configuration.NewInMemory()
-	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(config)
+	firstReadStarted, releaseFirstRead := blockFirstReadOfRedactionTerms(t, config)
 	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
 	firstRedactionDone := make(chan struct{})
 	go func() {
 		defer close(firstRedactionDone)
 		redactor.Redact("first")
 	}()
-	<-firstReadStarted
+	waitFor(t, firstReadStarted, "the first redaction to read the configuration")
 
 	config.Set(configuration.AUTHENTICATION_TOKEN, "set-during-read-1")
 	redacted := redactor.Redact("using set-during-read-1")
-	close(releaseFirstRead)
-	<-firstRedactionDone
+	releaseFirstRead()
+	waitFor(t, firstRedactionDone, "the first redaction to finish")
 
 	assert.Equal(t, "using ***", redacted)
+	assert.Equal(t, "still using ***", redactor.Redact("still using set-during-read-1"), "the blocked read does not undo the newer token")
+}
+
+func TestRedactor_SnapshotReadsTheConfigurationOnceForEveryStringItRedacts(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "snapshot-token-1")
+	var reads atomic.Int32
+	config.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
+		reads.Add(1)
+		return existing, nil
+	})
+	redact := logging.NewRedactor(func() configuration.Configuration { return config }).Snapshot()
+
+	for i := range 10 {
+		assert.Equal(t, fmt.Sprintf("leaf %d ***", i), redact(fmt.Sprintf("leaf %d snapshot-token-1", i)))
+	}
+	assert.Equal(t, int32(1), reads.Load())
 }

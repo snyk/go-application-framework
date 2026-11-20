@@ -18,6 +18,7 @@ package logging
 
 import (
 	"encoding/base64"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,14 @@ func TestIsSensitiveFieldName(t *testing.T) {
 		{"refreshToken", true},
 		{"oauth2Token", true},
 		{"authtoken", true},
+		{"apiToken", true},
+		{"authToken", true},
+		{"accessToken", true},
+		{"refresh_token", true},
+		{"session-token", true},
+		{"x-auth-token", true},
+		{"SNYK_TOKEN", true},
+		{"tokenTypeValue", true},
 		{"credential", true},
 		{"credentials", true},
 		{"awsCredentials", true},
@@ -116,10 +125,20 @@ func TestIsSensitiveFieldName(t *testing.T) {
 		{"keyboard", false},
 		{"userAgent", false},
 		{"userId", false},
+		{"users", false},
 		{"userID", false},
 		{"userKind", false},
 		{"userNameHint", false},
 		{"tokenizer", false},
+		{"tokenCount", false},
+		{"max_tokens", false},
+		{"token_type", false},
+		{"token_expiry", false},
+		{"tokenExpires", false},
+		{"tokenLength", false},
+		{"tokenLimit", false},
+		{"tokenSize", false},
+		{"token_usage", false},
 		{"secretss", false},
 		{"header", false},
 		{"headersCount", false},
@@ -219,6 +238,10 @@ func TestRedact_StringRules(t *testing.T) {
 		{"URL followed by whitespace and an at sign", "https://host.com:8443 a@b", "https://host.com:8443 a@b"},
 
 		{"github classic token", "found ghp_" + strings.Repeat("0123456789", 4), "found ghp_***"},
+		{"github oauth token", "found gho_" + strings.Repeat("0123456789", 4), "found gho_***"},
+		{"github user-to-server token", "found ghu_" + strings.Repeat("0123456789", 4), "found ghu_***"},
+		{"github refresh token", "found ghr_" + strings.Repeat("0123456789", 4), "found ghr_***"},
+		{"github server-to-server token", "found ghs_" + strings.Repeat("0123456789", 4), "found ghs_***"},
 		{"github fine-grained token", "found github_pat_" + strings.Repeat("0123456789", 2) + "_abcdefghij", "found github_pat_***"},
 		{"snyk PAT", "found " + pat + " here", "found snyk_uat.*** here"},
 		{"snyk PAT after bearer in a header", "Authorization: Bearer " + pat, "Authorization: Bearer ***"},
@@ -303,12 +326,19 @@ func TestRedact_StringRules(t *testing.T) {
 		{"cookies in a go-printed header map", "map[Cookie:[session=abc123; other=1] X-Id:[7]]", "map[Cookie:[***] X-Id:[7]]"},
 		{"cookie header without a value", "Cookie:", "Cookie:"},
 		{"quoted cookie header", `{"Cookie": "a=1; b=2", "x": 1}`, `{"Cookie": "***", "x": 1}`},
+		{"windows drive letter", `opening P:\projects\foo\file.go`, `opening P:\projects\foo\file.go`},
+		{"short name in a URL query", "GET /items?p=3&u=7", "GET /items?p=3&u=7"},
+		{"key in prose", "cache key: abc", "cache key: abc"},
+		{"quoted key", `{"key": "abc"}`, `{"key": "***"}`},
 		{"message that is a lone u", "u", "u"},
 		{"message ending in p colon", "p:", "p:"},
 
 		{"short flags", "-u john.doe -p hunter2 and more text", "-u *** -p *** and more text"},
 		{"short flags with equals", "-u=john.doe -p=hunter2 --log-level=trace", "-u=*** -p=*** --log-level=trace"},
 		{"long flags", "--username john --password=hunter2 --org=acme", "--username *** --password=*** --org=acme"},
+		{"parents flag before a path", "mkdir -p /tmp/x", "mkdir -p /tmp/x"},
+		{"process flag before a number", "ps -p 123", "ps -p 123"},
+		{"publish flag before a port mapping", "docker run -p 8080:80 -p 127.0.0.1:53:53 img", "docker run -p 8080:80 -p 127.0.0.1:53:53 img"},
 		{"flag at the end", "flags -u 5 and -p", "flags -u *** and -p"},
 		{"flag argument with an escaped quote", `-p hun\"ter2 next`, `-p *** next`},
 		{
@@ -393,23 +423,33 @@ func TestLooksLikeCredential(t *testing.T) {
 
 func TestRedact_TakesLinearTime(t *testing.T) {
 	rules := newRules(map[string]struct{}{"a-secret-value": {}}, map[string]struct{}{"token": {}})
-	inputs := map[string]string{
-		"auth scheme words":       strings.Repeat("token authentication ", 8000),
-		"keys without separators": strings.Repeat("password ", 8000),
-		"nested pairs":            strings.Repeat(`a="`, 8000),
-		"unclosed sensitive keys": strings.Repeat(`"token":"`, 8000),
-		"short flags":             strings.Repeat("-p ", 8000),
-		"one long key":            strings.Repeat("k", 160000),
-		"URL schemes":             strings.Repeat("https://", 8000),
-		"inner quotes":            strings.Repeat(`p: "x"y `, 8000),
-		"inner apostrophes":       strings.Repeat(`'p': 'a'b`, 8000),
+	units := map[string]string{
+		"auth scheme words":       "token authentication ",
+		"keys without separators": "password ",
+		"nested pairs":            `a="`,
+		"unclosed sensitive keys": `"token":"`,
+		"short flags":             "-p ",
+		"one long key":            "kkkkkkkkkkkkkkkkkkkk",
+		"URL schemes":             "https://",
+		"inner quotes":            `p: "x"y `,
+		"inner apostrophes":       `'p': 'a'b`,
 	}
-	for name, input := range inputs {
-		t.Run(name, func(t *testing.T) {
+	const n = 2000
+	fastest := func(input string) time.Duration {
+		best := time.Duration(math.MaxInt64)
+		for range 5 {
 			start := time.Now()
 			rules.redact(input)
-			// Linear work takes milliseconds; the bound leaves room for the race detector's slowdown.
-			assert.Less(t, time.Since(start), 2*time.Second)
+			best = min(best, time.Since(start))
+		}
+		return best
+	}
+	for name, unit := range units {
+		t.Run(name, func(t *testing.T) {
+			small := fastest(strings.Repeat(unit, n))
+			large := fastest(strings.Repeat(unit, 4*n))
+			// Four times the input takes about four times as long when linear and sixteen times when quadratic.
+			assert.Less(t, float64(large)/float64(max(small, time.Microsecond)), 8.0, "%v for n, %v for 4n", small, large)
 		})
 	}
 }

@@ -41,11 +41,11 @@ func failureCauses(failures []catalog.StepFailure) error {
 // configuration, and both the ID and the message are flattened onto one line and truncated last. Redacting before
 // truncating keeps a secret that straddles the limit from showing as a prefix.
 func failureDetail(config configuration.Configuration, failures []catalog.StepFailure) string {
-	redactor := logging.NewRedactor(func() configuration.Configuration { return config })
+	redact := logging.NewRedactor(func() configuration.Configuration { return config }).Snapshot()
 	lines := make([]string, 0, len(failures))
 	for _, failure := range failures {
 		id := truncateRunes(flatten(cleanText(failure.ID.String())), maxStepTextRunes)
-		message := redactor.Redact(cleanText(causeText(failure.Err)))
+		message := redact(cleanText(causeText(failure.Err)))
 		lines = append(lines, id+": "+truncateRunes(flatten(message), maxStepTextRunes))
 	}
 	return strings.Join(lines, "\n")

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -280,7 +281,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		url := "/rest/token=abcdef123456"
 		input := []api.InteractionError{{Url: &url}}
 
-		scrubbed := scrubErrorUrls(input, logging.NewRedactor(func() configuration.Configuration { return configuration.NewWithOpts() }))
+		scrubbed := scrubErrorUrls(input, logging.NewRedactor(func() configuration.Configuration { return configuration.NewWithOpts() }).Snapshot())
 
 		assert.Equal(t, "/rest/token=***", *scrubbed[0].Url)
 		assert.Same(t, &url, input[0].Url)
@@ -604,4 +605,23 @@ func buildExpectedBaseObject(t *testing.T) api.AnalyticsRequestBody {
 	}
 
 	return expected
+}
+
+func TestGetV2InstrumentationObject_ReadsTheRedactionConfigurationOncePerPayload(t *testing.T) {
+	cfg := configuration.NewInMemory()
+	var reads atomic.Int32
+	cfg.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
+		reads.Add(1)
+		return existing, nil
+	})
+	ic := setupBaseCollector(t)
+	for i := range 20 {
+		ic.AddExtension(fmt.Sprintf("leaf-%d", i), fmt.Sprintf("value %d", i))
+	}
+	ic.AddError(snyk.NewBadRequestError("", snyk_errors.WithMeta(constants.ERROR_META_KEY_REQUEST_PATH, "/rest/orgs/x/projects")))
+
+	_, err := GetV2InstrumentationObject(ic, WithConfiguration(cfg))
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), reads.Load())
 }

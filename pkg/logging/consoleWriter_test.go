@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -204,4 +205,19 @@ func BenchmarkConsoleWriter_EventWithEmbeddedJSONBody(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func TestConsoleWriter_ReadsTheConfigurationOncePerEvent(t *testing.T) {
+	config := configuration.NewInMemory()
+	var reads atomic.Int32
+	config.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
+		reads.Add(1)
+		return existing, nil
+	})
+	logger := zerolog.New(logging.NewConsoleWriter(&bytes.Buffer{}, func() configuration.Configuration { return config }, noColor))
+
+	logger.Info().Str("a", "x").Str("b", "y").Strs("c", []string{"1", "2"}).Msg("first")
+	logger.Info().Str("a", "x").Msg("second")
+
+	assert.Equal(t, int32(2), reads.Load())
 }

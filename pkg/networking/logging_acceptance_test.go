@@ -44,7 +44,10 @@ func TestTraceLog_CredentialsOfRequestsNeverShow(t *testing.T) {
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: sessionCookie, HttpOnly: true, Secure: true})
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fields := strings.Fields(r.Header.Get("Authorization"))
-		require.Len(t, fields, 2, "the request is authenticated")
+		if !assert.Len(t, fields, 2, "the request is authenticated") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		_, err := fmt.Fprintf(w, "you sent %s", fields[1])
 		assert.NoError(t, err)
 	}))

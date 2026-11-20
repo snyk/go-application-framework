@@ -73,6 +73,13 @@ func (r *Redactor) Redact(s string) string {
 	return r.current().redact(s)
 }
 
+// Snapshot reads the configuration once and returns a function that redacts like Redact with the credentials known at
+// that moment, so the strings of one payload are redacted without reading the configuration for each of them. The
+// function is safe for concurrent use.
+func (r *Redactor) Snapshot() func(string) string {
+	return r.current().redact
+}
+
 // current returns the rules for the configuration's present values. The configuration is read without holding the
 // lock, because its default functions are callbacks that can take arbitrarily long.
 func (r *Redactor) current() *rules {
@@ -150,7 +157,7 @@ func newRules(secrets, terms map[string]struct{}) *rules {
 var (
 	urlUserinfo = regexp.MustCompile(`(?i)(https?://)[^\s/"'?#]+@`)
 	snykPAT     = regexp.MustCompile(auth.PAT_REGEX)
-	githubToken = regexp.MustCompile(`\b(gh[ps]_|github_pat_)\w+`)
+	githubToken = regexp.MustCompile(`\b(gh[pousr]_|github_pat_)\w+`)
 	authScheme  = regexp.MustCompile(`(?i)\b(bearer|basic|negotiate|token)\s+([\w` + regexp.QuoteMeta(credentialPunctuation) + `]+)`)
 )
 
@@ -228,7 +235,7 @@ func redactPairAt(r *spanWriter, i int) int {
 	valueStart := skipSpaces(s, next)
 	switch {
 	case valueStart < len(s) && (s[valueStart] == ':' || s[valueStart] == '='):
-		if !IsSensitiveFieldName(key) {
+		if !isSensitivePairKey(s, i, quote, key, valueStart) {
 			return valueStart + 1
 		}
 		valueStart = skipSpaces(s, valueStart+1)
@@ -241,6 +248,27 @@ func redactPairAt(r *spanWriter, i int) int {
 		r.replace(start, end)
 	}
 	return max(end, valueStart)
+}
+
+// isSensitivePairKey reports whether key, which starts at i and is followed by the separator ":" or "=" at separator, is
+// a sensitive key of a pair. The short sensitive names u, p and key also occur in prose, paths and URL queries, such as
+// `cache key: x`, `P:\dir` and `?p=3`, so such a name is a key only when it is quoted, follows a quote or is a flag,
+// and u or p also when ":" and whitespace follow it.
+func isSensitivePairKey(s string, i int, quote, key string, separator int) bool {
+	if !IsSensitiveFieldName(key) {
+		return false
+	}
+	n := joinedName(key)
+	if !isShortSensitiveName(n) || quote != "" || key[0] == '-' || i > 0 && (s[i-1] == '"' || s[i-1] == '\'') {
+		return true
+	}
+	return len(n) == 1 && s[separator] == ':' && separator+1 < len(s) && isSpace(s[separator+1])
+}
+
+// isPortOrPath reports whether the argument of a -p flag is a path, number or port mapping, as in `mkdir -p /tmp/x`,
+// `ps -p 123` or `docker run -p 8080:80`, rather than a password.
+func isPortOrPath(value string) bool {
+	return strings.HasPrefix(value, "/") || value != "" && strings.Trim(value, "0123456789.:") == ""
 }
 
 // valueSpan returns the span of the value starting at i. A quoted value ends at the first closing quote followed by
@@ -265,9 +293,13 @@ func valueSpan(s string, i int) (int, int) {
 }
 
 // sensitiveValueSpan returns the span of the value of key starting at i. The unquoted value of a cookie header runs to
-// the end of its line or its closing "]", because every cookie in it is a credential.
+// the end of its line or its closing "]", because every cookie in it is a credential. The span is empty for the
+// argument of a -p flag that is a path, number or port mapping.
 func sensitiveValueSpan(s, key string, i int) (int, int) {
 	start, end := valueSpan(s, i)
+	if key == "-p" && isPortOrPath(s[start:end]) {
+		return start, start
+	}
 	if quoteAt(s, i) == "" && strings.Contains(strings.ToLower(key), "cookie") {
 		end = cookieHeaderEnd(s, start, strings.HasPrefix(s[i:], "["))
 	}
@@ -482,36 +514,54 @@ func (rl *rules) redactValue(value interface{}) interface{} {
 // IsSensitiveFieldName reports whether a field or header of this name holds a credential or personal data, such as
 // apiKey, client_secret, Set-Cookie, userName or passwordHash. The name is sensitive when one of its words, split at
 // case changes and the separators "-", "_", "." and space, is a credential word such as password or token, or a
-// qualified key such as "signing key", or when the name without separators ends in one, such as apikey.
+// qualified key such as "signing key", or when the name without separators ends in one, such as apikey. A name made
+// of token and words describing tokens, such as tokenCount or max_tokens, is not sensitive.
 func IsSensitiveFieldName(name string) bool {
 	words := fieldNameWords(name)
+	if describesTokens(words) {
+		return false
+	}
 	for i, word := range words {
 		word = singular(word)
 		if sensitiveNameWords[word] || word == "key" && i > 0 && sensitiveKeyQualifiers[words[i-1]] {
 			return true
 		}
 	}
-	n := strings.Map(func(r rune) rune {
+	n := joinedName(name)
+	if strings.HasSuffix(n, "headers") || isShortSensitiveName(n) {
+		return true
+	}
+	// A plural such as users names a collection or a count rather than a person.
+	if hasAnySuffix(n, personalNameSuffixes) {
+		return true
+	}
+	return hasAnySuffix(singular(n), sensitiveNameSuffixes)
+}
+
+func hasAnySuffix(s string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(s, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// joinedName returns name in lowercase without the separators "-", "_", "." and space.
+func joinedName(name string) string {
+	return strings.Map(func(r rune) rune {
 		if strings.ContainsRune("-_. ", r) {
 			return -1
 		}
 		return unicode.ToLower(r)
 	}, name)
-	if strings.HasSuffix(n, "headers") {
-		return true
-	}
-	if len(n) > 2 {
-		n = strings.TrimSuffix(n, "s")
-	}
-	if n == "u" || n == "p" || n == "key" {
-		return true
-	}
-	for _, suffix := range sensitiveNameSuffixes {
-		if strings.HasSuffix(n, suffix) {
-			return true
-		}
-	}
-	return false
+}
+
+// isShortSensitiveName reports whether a joined name is u, p or key, which are sensitive as field names but also
+// occur in prose, paths and URL queries.
+func isShortSensitiveName(n string) bool {
+	n = singular(n)
+	return n == "u" || n == "p" || n == "key"
 }
 
 // fieldNameWords splits a name into lowercase words at separators and case changes, so that both apiKey and APIKey
@@ -552,6 +602,28 @@ var sensitiveNameWords = map[string]bool{
 	"token": true, "credential": true, "authorization": true, "cookie": true,
 }
 
+// describesTokens reports whether words are token and at least one word describing tokens rather than holding one,
+// such as tokenCount.
+func describesTokens(words []string) bool {
+	tokens, descriptions := 0, 0
+	for _, word := range words {
+		switch {
+		case singular(word) == "token":
+			tokens++
+		case tokenDescriptions[word]:
+			descriptions++
+		default:
+			return false
+		}
+	}
+	return tokens > 0 && descriptions > 0
+}
+
+var tokenDescriptions = map[string]bool{
+	"count": true, "type": true, "expiry": true, "expires": true, "length": true, "limit": true, "size": true,
+	"usage": true, "max": true,
+}
+
 var sensitiveKeyQualifiers = map[string]bool{
 	"private": true, "signing": true, "encryption": true, "api": true, "access": true, "session": true, "client": true,
 	"fleet": true, "license": true, "ssh": true, "secret": true,
@@ -561,5 +633,6 @@ var sensitiveNameSuffixes = []string{
 	"password", "passwd", "passwort", "passphrase", "passcode", "pwd",
 	"secret", "token", "credential", "authorization", "cookie",
 	"apikey", "accesskey", "privatekey", "secretkey", "sessionkey", "fleetkey", "licensekey", "sshkey",
-	"username", "user", "login",
 }
+
+var personalNameSuffixes = []string{"username", "user", "login"}
