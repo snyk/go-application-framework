@@ -789,3 +789,34 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
 	assert.Nil(t, registry)
 }
+
+// Test_Engine_ProfileConfigEnrichmentSurvivesSetConfiguration checks that the enrichment callback is kept across
+// SetConfiguration and applied when a named profile loads.
+func Test_Engine_ProfileConfigEnrichmentSurvivesSetConfiguration(t *testing.T) {
+	env := newProfileEnv(t)
+	env.writeProfile("machine", "machine-value")
+
+	var enriched atomic.Int32
+	require.NoError(t, SetProfileConfigEnrichment(env.engine, func(name string, config configuration.Configuration) error {
+		assert.Equal(t, "machine", name)
+		assert.True(t, profile.IsProfile(config))
+		enriched.Add(1)
+		return nil
+	}))
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	_, err = registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), enriched.Load())
+
+	replacement := newProfileBase(t.TempDir())
+	replacement.Set(profile.DirKey, env.dir)
+	env.engine.SetConfiguration(replacement)
+
+	registry, err = GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	_, err = registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), enriched.Load(), "enrichment must survive SetConfiguration")
+}

@@ -48,6 +48,8 @@ type EngineImpl struct {
 	// profile directory that it was built with.
 	profiles    profile.Registry
 	profilesDir string
+	// profileConfigEnrichment survives SetConfiguration and is passed into each rebuilt file registry.
+	profileConfigEnrichment profile.ConfigEnrichment
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -156,6 +158,29 @@ func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	if e.networkAccess != nil {
 		e.networkAccess.SetConfiguration(config)
 	}
+}
+
+// SetProfileConfigEnrichment stores a callback that runs after each named profile is derived.
+// The callback survives SetConfiguration. A nil enrichment clears it. Changing the enrichment
+// rebuilds the profile registry on the next use.
+func (e *EngineImpl) SetProfileConfigEnrichment(fn profile.ConfigEnrichment) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.profileConfigEnrichment = fn
+	e.profiles, e.profilesDir = nil, ""
+}
+
+// SetProfileConfigEnrichment stores the enrichment callback on engines that support profile registries.
+// Prefer this helper over asserting the concrete engine type.
+func SetProfileConfigEnrichment(engine Engine, fn profile.ConfigEnrichment) error {
+	type enrichmentSetter interface {
+		SetProfileConfigEnrichment(fn profile.ConfigEnrichment)
+	}
+	if setter, ok := engine.(enrichmentSetter); ok {
+		setter.SetProfileConfigEnrichment(fn)
+		return nil
+	}
+	return fmt.Errorf("engine does not support profile config enrichment")
 }
 
 // NewWorkflowIdentifier creates a new workflow identifier represented in parsed URL format.
@@ -787,7 +812,11 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
+	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
+	if e.profileConfigEnrichment != nil {
+		opts = append(opts, profile.WithConfigEnrichment(e.profileConfigEnrichment))
+	}
+	registry, err := profile.NewFileRegistry(dir, e.config, opts...)
 	if err != nil {
 		return nil, err
 	}
