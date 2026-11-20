@@ -787,7 +787,8 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
+	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
+	registry, err := profile.NewFileRegistry(dir, e.config, opts...)
 	if err != nil {
 		return nil, err
 	}

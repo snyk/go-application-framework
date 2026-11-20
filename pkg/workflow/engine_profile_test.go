@@ -789,3 +789,29 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
 	assert.Nil(t, registry)
 }
+
+// Test_Engine_ProfileIgnoredEnvVarsFromBaseConfiguration checks that names recorded on the engine configuration with
+// profile.SetIgnoredEnvVars apply to named profiles only.
+func Test_Engine_ProfileIgnoredEnvVarsFromBaseConfiguration(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "ambient")
+
+	dir := t.TempDir()
+	base := configuration.NewWithOpts(
+		configuration.WithFiles(filepath.Join(t.TempDir(), "snyk.json")),
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+	)
+	base.Set(profile.DirKey, dir)
+	profile.SetIgnoredEnvVars(base, "SNYK_TOKEN")
+	env := newProfileEnvWithBase(t, dir, base)
+	env.writeProfile("machine", "machine-value")
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	named, err := registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Empty(t, named.Configuration().GetString("snyk_token"))
+
+	def, err := registry.Profile(profile.DefaultName)
+	require.NoError(t, err)
+	assert.Equal(t, "ambient", def.Configuration().GetString("snyk_token"))
+}
