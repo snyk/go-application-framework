@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -52,6 +53,30 @@ func Test_EngineImpl_Invoke_CallerConfigurationIsUsedAsGiven(t *testing.T) {
 	_, err := engine.Invoke(id, WithConfig(custom))
 	require.NoError(t, err)
 	assert.Same(t, custom, seen)
+}
+
+// Test_EngineImpl_Invoke_WithConfigBindsPostInvokeHooks ensures hooks see the
+// caller-supplied configuration rather than the engine's, so credential-bearing
+// hook work does not fall back to the default profile's token.
+func Test_EngineImpl_Invoke_WithConfigBindsPostInvokeHooks(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	engine.GetConfiguration().Set(configuration.AUTHENTICATION_TOKEN, "engine-token")
+	id := NewWorkflowIdentifier("hook.config")
+	_, err := engine.Register(id, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
+		func(InvocationContext, []Data) ([]Data, error) { return nil, nil })
+	require.NoError(t, err)
+
+	var hookToken string
+	require.NoError(t, AddPostInvokeHook(engine, func(_ context.Context, e Engine, _ InvokeOutput) {
+		hookToken = e.GetConfiguration().GetString(configuration.AUTHENTICATION_TOKEN)
+	}))
+	require.NoError(t, engine.Init())
+
+	custom := configuration.NewInMemory()
+	custom.Set(configuration.AUTHENTICATION_TOKEN, "caller-token")
+	_, err = engine.Invoke(id, WithConfig(custom))
+	require.NoError(t, err)
+	assert.Equal(t, "caller-token", hookToken)
 }
 
 func Test_EngineImpl_Invoke_StringPanicIsReraisedAsIs(t *testing.T) {

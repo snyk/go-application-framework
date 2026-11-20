@@ -71,6 +71,9 @@ type engineRuntimeConfig struct {
 	// invocationProfile is the configuration and network access of the profile the invocation runs on, nil for the
 	// engine's own.
 	invocationProfile *engineWrapper
+	// configFromCaller is true when WithConfig set the configuration, so post-invoke hooks can bind to it instead of
+	// falling back to the engine's credentials.
+	configFromCaller bool
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -78,6 +81,7 @@ type EngineInvokeOption func(*engineRuntimeConfig)
 func WithConfig(config configuration.Configuration) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
 		e.config = config
+		e.configFromCaller = true
 	}
 }
 
@@ -573,8 +577,14 @@ func (e *EngineImpl) firePostInvokeHooks(
 
 	// Nested invocations made through hookEngine must be bound by the same timeout.
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: options.ic}
-	if options.invocationProfile != nil {
+	switch {
+	case options.invocationProfile != nil:
 		hookEngine.config, hookEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
+	case options.configFromCaller && options.config != nil:
+		// WithConfig skips profile selection; bind hooks to that configuration so they do not use the engine's
+		// credentials (for example the default profile's token while a host reports with another profile).
+		hookEngine.config = options.config
+		hookEngine.networkAccess = CreateNetworkAccess(e.GetNetworkAccess(), options.config)
 	}
 
 	var wg sync.WaitGroup
