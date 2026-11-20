@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	api "github.com/snyk/go-application-framework/internal/api/analytics/2024-10-15"
-	"github.com/snyk/go-application-framework/pkg/logging"
 )
 
 // Persona describes who or what drives an interaction. The producer detects it, since only the producer
@@ -54,14 +53,14 @@ func toAPIPersona(p *Persona) *api.Persona {
 	return persona
 }
 
-func scrubPersona(p *api.Persona, dict logging.ScrubbingDict) {
+func scrubPersona(p *api.Persona, redact func(string) string) {
 	if p == nil {
 		return
 	}
 	if p.Agent != nil {
-		p.Agent = new(string(logging.ScrubValue([]byte(*p.Agent), dict)))
+		p.Agent = new(redact(*p.Agent))
 	}
 	if p.AgentVersion != nil {
-		p.AgentVersion = new(string(logging.ScrubValue([]byte(*p.AgentVersion), dict)))
+		p.AgentVersion = new(redact(*p.AgentVersion))
 	}
 }

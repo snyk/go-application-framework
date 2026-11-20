@@ -448,7 +448,7 @@ func Test_machineEnroll_secondEnrollmentReplacesAndLogsTheOldClient(t *testing.T
 	require.NoError(t, err)
 	env.config = openFileBackedConfig()
 	env.config.Set(configuration.API_URL, env.server.URL)
-	logger := zerolog.New(logging.NewScrubbingWriter(zerolog.MultiLevelWriter(logs), logging.GetScrubDictFromConfig(env.config)))
+	logger := zerolog.New(logging.NewConsoleWriter(logs, func() configuration.Configuration { return env.config }, func(w *zerolog.ConsoleWriter) { w.NoColor = true }))
 	env.engine.SetLogger(&logger)
 
 	require.NoError(t, env.enroll(map[string]string{flagDeviceToken: env.server.IssueDeviceToken(machineID)}))

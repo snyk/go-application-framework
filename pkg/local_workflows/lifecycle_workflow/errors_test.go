@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow/catalog"
 )
@@ -166,4 +168,23 @@ func Test_failureDetail_UsesTitleAndDetailOfCatalogError(t *testing.T) {
 	assert.True(t, strings.HasPrefix(lines[1], "flw://wrapped: Access expired: the access for "))
 	assert.Equal(t, "flw://no-detail: Only title", lines[2])
 	assert.NotContains(t, detail, secret)
+}
+
+// Unit: the configuration is read once for all failures rather than once per failure.
+func Test_failureDetail_ReadsTheRedactionConfigurationOnce(t *testing.T) {
+	config := configuration.NewWithOpts()
+	var reads atomic.Int32
+	config.AddDefaultValue(logging.REDACTION_TERMS, func(_ configuration.Configuration, existing interface{}) (interface{}, error) {
+		reads.Add(1)
+		return existing, nil
+	})
+	failures := []catalog.StepFailure{
+		{ID: workflow.NewWorkflowIdentifier("first"), Err: errors.New("first failed")},
+		{ID: workflow.NewWorkflowIdentifier("second"), Err: errors.New("second failed")},
+		{ID: workflow.NewWorkflowIdentifier("third"), Err: errors.New("third failed")},
+	}
+
+	failureDetail(config, failures)
+
+	assert.Equal(t, int32(1), reads.Load())
 }

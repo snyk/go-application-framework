@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/go-application-framework/pkg/logging"
 )
 
 const defaultNetworkLogLevel = zerolog.DebugLevel
@@ -135,6 +138,19 @@ func isBinaryContent(contentType string) bool {
 	return false
 }
 
+// loggableHeader returns a copy of header with the values of credential headers, such as Authorization or Set-Cookie,
+// replaced.
+func loggableHeader(header http.Header) http.Header {
+	loggable := header.Clone()
+	for name, values := range loggable {
+		lower := strings.ToLower(name)
+		if logging.IsSensitiveFieldName(name) || strings.Contains(lower, "token") || strings.Contains(lower, "secret") {
+			loggable[name] = slices.Repeat([]string{logging.SANITIZE_REPLACEMENT_STRING}, len(values))
+		}
+	}
+	return loggable
+}
+
 func LogRequest(r *http.Request, logger *zerolog.Logger) {
 	if shouldNotLog(logger.GetLevel(), defaultNetworkLogLevel) { // Don't log if logger level is above the threshold
 		return
@@ -142,7 +158,7 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 
 	logPrefixRequest := fmt.Sprintf("> request [%p]:", r)
 	logger.WithLevel(defaultNetworkLogLevel).Msgf("%s %s %s", logPrefixRequest, r.Method, r.URL.String())
-	logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixRequest, r.Header)
+	logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixRequest, loggableHeader(r.Header))
 
 	// additional logs for trace level logging
 	if shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel) {
@@ -160,7 +176,7 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 	if response != nil {
 		logPrefixResponse := fmt.Sprintf("< response [%p]:", response.Request)
 		logger.WithLevel(defaultNetworkLogLevel).Msgf("%s %s", logPrefixResponse, response.Status)
-		logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixResponse, response.Header)
+		logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixResponse, loggableHeader(response.Header))
 
 		// additional logs for trace level logging and error responses
 		if !(response.StatusCode >= 400 || !shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel)) {
