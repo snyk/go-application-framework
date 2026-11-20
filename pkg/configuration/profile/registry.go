@@ -22,10 +22,16 @@ const profileExt = ".json"
 
 var namePattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
+// ConfigEnrichment runs after a named profile is derived, so a host can apply registrations that
+// depend on the derived configuration (for example ignoring identity environment variables).
+// The default profile is never enriched. A nil enrichment is a no-op.
+type ConfigEnrichment func(name string, config configuration.Configuration) error
+
 type fileRegistry struct {
-	dir    string
-	base   configuration.Configuration
-	logger zerolog.Logger
+	dir        string
+	base       configuration.Configuration
+	logger     zerolog.Logger
+	enrichment ConfigEnrichment
 
 	mu       sync.Mutex
 	profiles map[string]*profileImpl
@@ -43,6 +49,13 @@ func WithLogger(logger *zerolog.Logger) FileRegistryOption {
 		if logger != nil {
 			r.logger = *logger
 		}
+	}
+}
+
+// WithConfigEnrichment sets the callback that runs after each named profile is derived.
+func WithConfigEnrichment(fn ConfigEnrichment) FileRegistryOption {
+	return func(r *fileRegistry) {
+		r.enrichment = fn
 	}
 }
 
@@ -121,6 +134,14 @@ func (r *fileRegistry) load(name string) (*profileImpl, error) {
 	config, err := configuration.Derive(r.base, configuration.WithPinnedFile(path))
 	if err != nil {
 		return nil, cli.NewConfigProfilesUnavailableError(fmt.Sprintf("Profile %q cannot be loaded.", name))
+	}
+	SetMarker(config, name)
+	if r.enrichment != nil {
+		if err = r.enrichment(name, config); err != nil {
+			return nil, cli.NewConfigProfilesUnavailableError(
+				fmt.Sprintf("Profile %q cannot be loaded: %s.", name, err.Error()),
+			)
+		}
 	}
 	return &profileImpl{name: name, config: config}, nil
 }
