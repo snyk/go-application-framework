@@ -780,6 +780,45 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 	}
 }
 
+func Test_UfmPresenter_RiftSARIFSharedCWE(t *testing.T) {
+	raw, err := os.ReadFile("testdata/ufm/rift.testresult.json")
+	require.NoError(t, err)
+	raw = bytes.ReplaceAll(raw, []byte(`["CWE-79"]`), []byte(`["CWE-89"]`))
+	testResult, err := ufm.NewSerializableTestResultFromBytes(raw)
+	require.NoError(t, err)
+
+	var output bytes.Buffer
+	renderer := presenters.NewUfmRenderer(testResult, configuration.NewWithOpts(), &output)
+	require.NoError(t, renderer.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType))
+	validateSarifData(t, output.Bytes())
+
+	var document map[string]interface{}
+	require.NoError(t, json.Unmarshal(output.Bytes(), &document))
+	run := requireStringMap(t, requireInterfaceSlice(t, document["runs"])[0])
+	driver := requireStringMap(t, requireStringMap(t, run["tool"])["driver"])
+	rules := requireInterfaceSlice(t, driver["rules"])
+	require.Len(t, rules, 1)
+	rule := requireStringMap(t, rules[0])
+	assert.Equal(t, "CWE-89", rule["id"])
+	assert.Equal(t, "Rift findings classified as CWE-89", requireStringMap(t, rule["shortDescription"])["text"])
+	assert.NotContains(t, rule, "help")
+
+	results := requireInterfaceSlice(t, run["results"])
+	require.Len(t, results, 2)
+	var titles []string
+	for _, rawResult := range results {
+		result := requireStringMap(t, rawResult)
+		assert.Equal(t, "CWE-89", result["ruleId"])
+		assert.Equal(t, float64(0), result["ruleIndex"])
+		message := requireStringMap(t, result["message"])
+		assert.NotEmpty(t, message["markdown"])
+		title, ok := message["text"].(string)
+		require.True(t, ok)
+		titles = append(titles, title)
+	}
+	assert.ElementsMatch(t, []string{"SQL injection in user lookup", "Reflected cross-site scripting in search page"}, titles)
+}
+
 // BenchmarkUfmPresenter_Sarif_MemoryUsage benchmarks SARIF rendering with large test API responses
 // to measure memory usage and performance when processing many issues.
 func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {

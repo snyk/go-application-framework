@@ -7,7 +7,7 @@
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
 			{{- $findingType := index $findingTypes 0 }}
 			{{- $issues := getIssuesFromTestResult $result }}
-			{{- $uniqueRules := deduplicateIssues $issues "problemID" }}
+			{{- $uniqueRules := deduplicateSARIFRules $issues }}
 			{{- $ruleIndexes := buildRuleIndexes $uniqueRules }}
 			{{- $issuesSize := sub (len $issues) 1 }}
 			{{- $metadata := $result.Get "metadata" }}
@@ -23,10 +23,18 @@
 							{{- range $index, $issue := $uniqueRules }}
 							{{- $tags := buildRuleTags $issue }}
 							{{- $cvssScore := getRuleCVSSScore $issue }}
-							{{- $problemID := $issue.GetProblemID }}
+							{{- $problemID := sarifRuleID $issue }}
 							{{- $codeRule := getSnykCodeRuleFromIssue $issue }}
 							{
 								"id": {{ getQuotedString $problemID }},
+								{{- if riftCWERuleID $issue }}
+								"shortDescription": {
+									"text": {{ getQuotedString (printf "Rift findings classified as %s" $problemID) }}
+								},
+								"properties": {
+									"tags": ["security", {{ getQuotedString $problemID }}]
+								}
+								{{- else }}
 								{{- if $codeRule }}
 								"name": {{ getQuotedString $codeRule.Name }},
 								{{- else }}
@@ -112,6 +120,7 @@
 									"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
 									{{- end }}
 								}
+								{{- end }}
 							}{{if lt $index $rulesSize}},{{end}}
 							{{- end }}
 						]
@@ -131,13 +140,13 @@
 				{{- $locations := buildLocationsFromIssue $issue $targetFile }}
 				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
-				{{- $problemID := $issue.GetProblemID }}
+				{{- $problemID := sarifRuleID $issue }}
 				{{- $fingerPrintID := $issue.GetID }}
 				{{- $findingExtra := getFindingExtraFromIssue $issue $result }}
 				{{- $execFlows := getExecutionFlowsFromIssue $issue }}
 				{
 					"ruleId": {{ getQuotedString $problemID }},
-					{{- if $findingExtra }}
+					{{- if or $findingExtra (riftCWERuleID $issue) }}
 					"ruleIndex": {{ index $ruleIndexes $problemID }},
 					{{- end }}
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
@@ -156,6 +165,11 @@
 							{{- end }}
 							{{- end }}
 						]
+						{{- else if eq $issue.GetFindingType "rift" }}
+						"text": {{ getQuotedString $issue.GetTitle }}
+						{{- with $issue.GetDescription }},
+						"markdown": {{ getQuotedString . }}
+						{{- end }}
 						{{- else }}
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}
 						{{- if and $findingExtra $findingExtra.Arguments }},

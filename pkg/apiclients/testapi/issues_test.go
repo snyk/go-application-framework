@@ -176,41 +176,6 @@ func TestNewIssueFromFindings(t *testing.T) {
 		assert.NotEmpty(t, issue.GetTitle())
 	})
 
-	t.Run("uses the CWE as problem ID for rift findings", func(t *testing.T) {
-		var finding testapi.FindingData
-		require.NoError(t, json.Unmarshal([]byte(`{
-			"attributes": {
-				"finding_type": "rift",
-				"key": "rift-key-1",
-				"problems": [{"source": "cwe", "id": "CWE-89"}]
-			}
-		}`), &finding))
-
-		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-		require.NoError(t, err)
-
-		assert.Equal(t, testapi.FindingTypeRift, issue.GetFindingType())
-		assert.Equal(t, "CWE-89", issue.GetProblemID())
-		assert.Equal(t, []string{"CWE-89"}, issue.GetCWEs())
-		assert.Equal(t, "rift-key-1", issue.GetID())
-	})
-
-	t.Run("does not use the CWE as problem ID for other finding types", func(t *testing.T) {
-		var finding testapi.FindingData
-		require.NoError(t, json.Unmarshal([]byte(`{
-			"attributes": {
-				"finding_type": "dast",
-				"key": "dast-key-1",
-				"problems": [{"source": "cwe", "id": "CWE-89"}]
-			}
-		}`), &finding))
-
-		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-		require.NoError(t, err)
-
-		assert.Empty(t, issue.GetProblemID())
-	})
-
 	t.Run("returns error when findings is empty", func(t *testing.T) {
 		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{})
 		assert.Error(t, err)

@@ -42,8 +42,6 @@ func TestConvertTypeToDriverName(t *testing.T) {
 		"iac":       "Snyk IaC",
 		"container": "Snyk Container",
 		"sca":       "Snyk Open Source",
-		"secrets":   "Snyk Secrets",
-		"rift":      "Snyk Rift",
 		"random":    "Snyk Open Source",
 	}
 

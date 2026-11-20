@@ -253,6 +253,13 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
+func sarifDriverName(findingType string) string {
+	if findingType == string(testapi.FindingTypeRift) {
+		return "Snyk Rift"
+	}
+	return sarif.ConvertTypeToDriverName(findingType)
+}
+
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
@@ -260,7 +267,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
 	fnMap["getAutomationDetailsId"] = func(projectName string, testType string) string {
-		driverName := sarif.ConvertTypeToDriverName(testType)
+		driverName := sarifDriverName(testType)
 		driverName = strings.TrimSpace(strings.Replace(driverName, "Snyk", "", 1))
 
 		if projectName != "" {
@@ -268,7 +275,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		}
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
-	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
+	fnMap["convertTypeToDriverName"] = sarifDriverName
 	// severityToSarifLevel is for string types (ufm.sarif.tmpl)
 	fnMap["severityToSarifLevel"] = sarif.SeverityToSarifLevel
 	// SARIF building functions
@@ -283,6 +290,9 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	// UFM data access helpers
 	fnMap["getExecutionFlowsFromIssue"] = getExecutionFlowsFromIssue
 	fnMap["buildRuleIndexes"] = buildRuleIndexes
+	fnMap["deduplicateSARIFRules"] = deduplicateSARIFRules
+	fnMap["sarifRuleID"] = sarifRuleID
+	fnMap["riftCWERuleID"] = riftCWERuleID
 	fnMap["getFindingExtraFromIssue"] = getFindingExtraFromIssue
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
 	fnMap["getFingerprints"] = getFingerprints
@@ -350,11 +360,11 @@ func getExecutionFlowsFromIssue(issue testapi.Issue) []testapi.ExecutionFlowEvid
 	return flows
 }
 
-// buildRuleIndexes maps each problem ID to its position in uniqueRules.
+// buildRuleIndexes maps each emitted rule ID to its position in uniqueRules.
 func buildRuleIndexes(uniqueRules []testapi.Issue) map[string]int {
 	indexes := make(map[string]int, len(uniqueRules))
 	for index, issue := range uniqueRules {
-		indexes[issue.GetProblemID()] = index
+		indexes[sarifRuleID(issue)] = index
 	}
 	return indexes
 }
@@ -981,38 +991,42 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getTargetId"] = func(path string) (string, error) {
 		return target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 	}
-	defaultMap["deduplicateIssues"] = deduplicateIssues
 
 	return defaultMap
 }
 
-type issueDedupeKey string
+// Rift returns problem entries with source "cwe". The issue builder exposes
+// those IDs through GetCWEs() and leaves GetProblemID() empty. Use the CWE ID
+// here so the SARIF result can reference a rule.
+func riftCWERuleID(issue testapi.Issue) string {
+	if issue.GetFindingType() != testapi.FindingTypeRift || issue.GetProblemID() != "" {
+		return ""
+	}
+	cwes := issue.GetCWEs()
+	if len(cwes) == 0 {
+		return ""
+	}
+	return cwes[0]
+}
 
-const (
-	DedupeByProblemID issueDedupeKey = "problemID"
-	DedupeByID        issueDedupeKey = "id"
-)
+func sarifRuleID(issue testapi.Issue) string {
+	if id := issue.GetProblemID(); id != "" {
+		return id
+	}
+	return riftCWERuleID(issue)
+}
 
-// deduplicateIssues returns a subset of issues with unique keys, preserving order (first-wins).
-func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Issue {
+func deduplicateSARIFRules(issues []testapi.Issue) []testapi.Issue {
 	seen := make(map[string]bool)
-	result := make([]testapi.Issue, 0, len(issues))
+	rules := make([]testapi.Issue, 0, len(issues))
 	for _, issue := range issues {
-		var field string
-		switch key {
-		case DedupeByProblemID:
-			field = issue.GetProblemID()
-		case DedupeByID:
-			field = issue.GetID()
-		default:
-			fmt.Fprintf(os.Stderr, "warning: unsupported issueDedupeKey %q, skipping deduplication for issue\n", key)
-		}
-		if field != "" && !seen[field] {
-			seen[field] = true
-			result = append(result, issue)
+		id := sarifRuleID(issue)
+		if id != "" && !seen[id] {
+			seen[id] = true
+			rules = append(rules, issue)
 		}
 	}
-	return result
+	return rules
 }
 
 func convertTypeToIssueName(findingType testapi.FindingType) string {
