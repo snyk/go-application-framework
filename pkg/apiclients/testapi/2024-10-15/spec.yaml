@@ -50,6 +50,23 @@ components:
         example: ga
         type: string
   parameters:
+    ComponentIdParam:
+      description: |-
+        Component ID whose Findings should be listed or converted into a
+        document.
+      in: path
+      name: component_id
+      required: true
+      schema:
+        type: string
+    DocumentIdParam:
+      description: ID of a completed Findings document.
+      in: path
+      name: document_id
+      required: true
+      schema:
+        format: uuid
+        type: string
     JobIdParam:
       description: Job ID returned from the Test API to query.
       in: path
@@ -215,6 +232,39 @@ components:
       description: Resolved API version
       pattern: ^((([0-9]{4})-([0-1][0-9]))-((3[01])|(0[1-9])|([12][0-9]))(~(wip|work-in-progress|experimental|beta))?)$
       type: string
+    AibomPolicyProblem:
+      description: An organization's AI-BOM policy, violated by an AI component.
+      properties:
+        id:
+          description: The AI-BOM policy ID.
+          type: string
+        remediation_advice:
+          description: The policy's advice on resolving the finding.
+          type: string
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/Severity'
+          description: Severity level of the finding.
+        source:
+          enum:
+          - aibom_policy
+          type: string
+      required:
+      - source
+      - id
+      - severity
+      type: object
+    AibomScanConfiguration:
+      description: |-
+        Scan configuration parameters for the AI-BOM scanner, which tests the AI
+        components of the Resources (models, agents, MCP servers) against the
+        organization's AI-BOM policies.
+      properties:
+        enriched:
+          description: Run AI enrichment on the discovered components before testing
+            them.
+          type: boolean
+      type: object
     AppliedPolicy:
       anyOf:
       - $ref: '#/components/schemas/SeverityChange'
@@ -438,6 +488,24 @@ components:
     ContainerScanConfiguration:
       description: Scan configuration parameters for the Container scanner.
       type: object
+    CreateFindingsDocumentRequestBody:
+      description: Request body for creating a new findings document.
+      properties:
+        data:
+          properties:
+            attributes:
+              $ref: '#/components/schemas/FindingsDocumentAttributes'
+            type:
+              enum:
+              - findings_document_requests
+              type: string
+          required:
+          - type
+          - attributes
+          type: object
+      required:
+      - data
+      type: object
     CveProblem:
       description: |-
         CVE designation according to the public Common Vulnerability Exposure
@@ -597,7 +665,9 @@ components:
       - locator
       type: object
     DependencyCountFact:
-      description: DependencyCountFact represents a dependency count fact.
+      description: |-
+        A Fact containing the count of dependencies scanned during
+        the Test.
       properties:
         total_dependency_count:
           format: int64
@@ -776,6 +846,13 @@ components:
       required:
       - diff
       type: object
+    DocumentFormat:
+      description: Available formats findings can be converted into.
+      enum:
+      - sarif
+      - cyclonedx
+      - snyk_schema
+      type: string
     Error:
       additionalProperties: false
       example:
@@ -1276,7 +1353,82 @@ components:
       - config
       - secret
       - secrets
+      - aibom
+      - rift
       type: string
+    FindingsDocumentAttributes:
+      description: Attributes for creating a new findings document.
+      properties:
+        component_id:
+          description: The ID of the component to generate a document for.
+          type: string
+        format:
+          allOf:
+          - $ref: '#/components/schemas/DocumentFormat'
+          description: Desired output format for the generated Findings document.
+        test_id:
+          description: The ID of the test to generate a document for.
+          format: uuid
+          type: string
+      required:
+      - format
+      - test_id
+      type: object
+    FindingsDocumentJobAttributes:
+      description: |-
+        FindingsDocumentJobAttributes represents the attributes of a
+        Findings-document-generation Job resource.
+      properties:
+        component_id:
+          description: The ID of the component to generate a document for.
+          type: string
+        created_at:
+          description: Creation time of the job resource.
+          format: date-time
+          type: string
+        error:
+          description: |-
+            An error message to inform the customer of any issues that
+            happened while processing the job.
+          type: string
+        format:
+          allOf:
+          - $ref: '#/components/schemas/DocumentFormat'
+          description: The format requested for the generated document.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TestExecutionStates'
+          description: State of the document conversion job, whether it is pending,
+            running, complete or errored.
+        test_id:
+          description: The ID of the test to generate a document for.
+          format: uuid
+          type: string
+      required:
+      - status
+      - format
+      - created_at
+      - test_id
+      type: object
+    FindingsDocumentJobData:
+      description: |-
+        FindingsDocumentJobData represents a Findings-document Job resource
+        object.
+      properties:
+        attributes:
+          $ref: '#/components/schemas/FindingsDocumentJobAttributes'
+        id:
+          format: uuid
+          type: string
+        type:
+          enum:
+          - findings_document_jobs
+          type: string
+      required:
+      - id
+      - attributes
+      - type
+      type: object
     FixAction:
       description: |-
         Different fix formats in which the fix action is represented. We distinguish between advice and diff formats.
@@ -1540,7 +1692,9 @@ components:
       - content
       type: object
     JobAttributes:
-      description: JobAttributes represents the attributes of a Job resource
+      description: |-
+        JobAttributes represents the attributes of a Job resource,
+        tracking the status of a Test in-flight.
       properties:
         created_at:
           description: Creation time of the job resource
@@ -1549,14 +1703,14 @@ components:
         status:
           allOf:
           - $ref: '#/components/schemas/TestExecutionStates'
-          description: State of the test, whether it is pending, running, complete
+          description: State of the test, whether it is pending, started, finished
             or errored.
       required:
       - status
       - created_at
       type: object
     JobData:
-      description: JobData represents a Job resource object.
+      description: JobData encapsulates a Job resource object.
       properties:
         attributes:
           $ref: '#/components/schemas/JobAttributes'
@@ -1634,6 +1788,10 @@ components:
         - href
         type: object
     LocalIgnore:
+      description: |-
+        A .snyk-style Ignore to apply to the Test.
+        Used to ignore known issues that should not be included
+        in determining the Test's Outcome.
       properties:
         created_at:
           description: When the ignore was first created.
@@ -2025,6 +2183,7 @@ components:
         - Secret leaks
       discriminator:
         mapping:
+          aibom_policy: '#/components/schemas/AibomPolicyProblem'
           cve: '#/components/schemas/CveProblem'
           cwe: '#/components/schemas/CweProblem'
           ghsa: '#/components/schemas/GithubSecurityAdvisoryProblem'
@@ -2044,6 +2203,7 @@ components:
       - $ref: '#/components/schemas/SnykCloudRuleProblem'
       - $ref: '#/components/schemas/GithubSecurityAdvisoryProblem'
       - $ref: '#/components/schemas/SecretsRuleProblem'
+      - $ref: '#/components/schemas/AibomPolicyProblem'
       - $ref: '#/components/schemas/OtherProblem'
     ProjectEntityLocator:
       description: ProjectEntityLocator locates a Snyk Project by its public ID.
@@ -2152,6 +2312,22 @@ components:
       required:
       - function_name
       - call_paths
+      type: object
+    RiftFocus:
+      enum:
+      - default
+      - all
+      type: string
+    RiftScanConfiguration:
+      description: Scan configuration parameters for the Rift scanner.
+      properties:
+        focus:
+          allOf:
+          - $ref: '#/components/schemas/RiftFocus'
+          description: |-
+            Scope of the security review. Use `default` for a review focused on business
+            logic, authentication and authorization, or `all` for a broad vulnerability
+            review. Omit to let Rift select its default focus.
       type: object
     Risk:
       description: Risk represents Snyk's risk assessment of a finding.
@@ -2270,10 +2446,18 @@ components:
       example:
         secrets: {}
       properties:
+        aibom:
+          allOf:
+          - $ref: '#/components/schemas/AibomScanConfiguration'
+          description: Cannot be combined with other scanners in the same Test.
         container:
           $ref: '#/components/schemas/ContainerScanConfiguration'
         iac:
           $ref: '#/components/schemas/IacScanConfiguration'
+        rift:
+          allOf:
+          - $ref: '#/components/schemas/RiftScanConfiguration'
+          description: Cannot be combined with other scanners in the same Test.
         sast:
           $ref: '#/components/schemas/SastScanConfiguration'
         sca:
@@ -2288,12 +2472,17 @@ components:
         ScmResource does not use this; it identifies SCM via its own fields.
       properties:
         branch:
+          description: Branch within SCM repo that will be tested.
           maxLength: 256
           type: string
         commit_ref:
+          description: |-
+            Commit hash within the SCM repo containing the
+            tested content.
           maxLength: 1024
           type: string
         repo_url:
+          description: URL at which the repository can be found in the SCM.
           maxLength: 1024
           type: string
       type: object
@@ -3258,7 +3447,12 @@ components:
           type: string
       type: object
     TestComponent:
-      description: TestComponent represents a Test Component.
+      description: |-
+        TestComponents are discrete units of content within the
+        testable resources provided that were scanned individually.
+
+        E.g. in SCA scans, individual package manifests within a repo
+        or an aggregated SBOM will be flagged as their own TestComponents.
       properties:
         asset_id:
           allOf:
@@ -3276,8 +3470,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/FindingType'
           description: |-
-            Type of Scanner producing Findings associated with this
+            Class of Scanner used to discover Findings associated with this
             Component.
+        tool:
+          allOf:
+          - $ref: '#/components/schemas/String256'
+          description: Tool used to perform the scan.
       required:
       - key
       - scan_type
@@ -3387,7 +3585,12 @@ components:
     TestFact:
       allOf:
       - $ref: '#/components/schemas/DependencyCountFact'
-      description: TestFact represents a test fact union.
+      description: |-
+        TestFacts provide information about what occured during the Test.
+
+        Note that Facts are separate from Findings in that they do not
+        represent vulnerabilities or issues with the tested content, but instead
+        describe what the scanners did during the Test.
       type: object
     TestOutcome:
       description: Outcome of a test; pass or fail.
@@ -4327,6 +4530,394 @@ paths:
           $ref: '#/components/responses/500'
       tags:
       - OpenAPI
+  /orgs/{org_id}/document_jobs/{job_id}:
+    get:
+      description: |-
+        Get a Document Conversion job.
+
+        The Findings API is Asynchronous, and Document conversions begun through the API
+        are assigned a Job ID which references the in-progress document conversion. The
+        Job ID is provided in a successful response from the CreateTestFindingsDoc or CreateComponentFindingsDoc
+        endpoint.
+
+        This endpoint is used to poll for the status of a document conversion using its
+        associated Job ID.
+
+        When the Job is Finished and the Document is ready for consumption,
+        a Related link will be populated in the response with a link to the finished document along
+        with its id that can be used to call the getDocument endpoint.
+      operationId: getFindingsDocumentJob
+      parameters:
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+      - $ref: '#/components/parameters/OrgIdParam'
+      - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        "200":
+          content:
+            application/vnd.api+json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FindingsDocumentJobData'
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    additionalProperties:
+                      $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    properties:
+                      related:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                      self:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    type: object
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                - data
+                - jsonapi
+                - links
+                type: object
+          description: Successful API response with a single resource
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+        "303":
+          content:
+            application/vnd.api+json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FindingsDocumentJobData'
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    additionalProperties:
+                      $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    properties:
+                      related:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                      self:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    type: object
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                - data
+                - jsonapi
+                - links
+                type: object
+          description: Redirect to another resource after async processing.
+          headers:
+            deprecation:
+              schema:
+                type: string
+            location:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+        "400":
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+          description: Invalid input
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+      summary: Get a findings-document job.
+      tags:
+      - Findings
+      x-cerberus:
+        authorization:
+          resource:
+            pathId: org_id
+            permissions:
+            - read
+            type: org
+          skip: false
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
+      - '@snyk/product-unification_devsec-governance-platform'
+      - '@dbroudy'
+      - '@kfiles-snyk'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      - 2026-09-09~beta
+      x-snyk-api-resource: tests
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
+      x-stability-level: beta
+  /orgs/{org_id}/documents/{document_id}:
+    get:
+      description: |-
+        Get a completed findings document.
+
+        A Document returned through this endpoint is intended to
+        be findings converted to a specified document type using the
+        Document ID returned from the getFindingsDocumentJob endpoint.
+
+        The document's raw bytes are streamed back directly in the response body.
+      operationId: getDocument
+      parameters:
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+      - $ref: '#/components/parameters/OrgIdParam'
+      - $ref: '#/components/parameters/DocumentIdParam'
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: Response from the Findings API to download a completed document.
+        "400":
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+          description: Invalid input
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+      summary: Get a completed findings document.
+      tags:
+      - Findings
+      x-cerberus:
+        authorization:
+          resource:
+            pathId: org_id
+            permissions:
+            - read
+            type: org
+          skip: false
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
+      - '@snyk/product-unification_devsec-governance-platform'
+      - '@dbroudy'
+      - '@kfiles-snyk'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      - 2026-09-09~beta
+      x-snyk-api-resource: tests
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
+      x-stability-level: beta
+  /orgs/{org_id}/findings/documents:
+    post:
+      description: |-
+        Create a new findings document using a TestID and non-required ComponentID.
+
+        Provide a test ID to start the process for converting this test's
+        findings (or a component's findings with an additional component ID)into a document of a given
+        format (SARIF or CycloneDX). A Job ID is returned that can be used to poll for the completion of the
+        document conversion via GetFindingsDocumentJob.
+      operationId: createTestFindingsDoc
+      parameters:
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+      - $ref: '#/components/parameters/OrgIdParam'
+      requestBody:
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/CreateFindingsDocumentRequestBody'
+        required: true
+      responses:
+        "202":
+          content:
+            application/vnd.api+json:
+              schema:
+                properties:
+                  data:
+                    properties:
+                      attributes:
+                        $ref: '#/components/schemas/FindingsDocumentJobAttributes'
+                      id:
+                        format: uuid
+                        type: string
+                      type:
+                        enum:
+                        - findings_document_jobs
+                        type: string
+                    required:
+                    - type
+                    - id
+                    - attributes
+                    type: object
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    additionalProperties:
+                      $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    properties:
+                      related:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                      self:
+                        $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
+                    type: object
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                - data
+                - jsonapi
+                - links
+                type: object
+          description: The request has been accepted for processing, but processing
+            has not yet completed.
+          headers:
+            content-location:
+              description: A pointer to the newly created Test resource
+              required: true
+              schema:
+                format: string
+                type: string
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+        "400":
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+          description: Invalid input
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+      summary: Create a new findings document.
+      tags:
+      - Findings
+      x-cerberus:
+        authorization:
+          resource:
+            pathId: org_id
+            permissions:
+            - read
+            - package.test
+            type: org
+          skip: false
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
+      - '@snyk/product-unification_devsec-governance-platform'
+      - '@dbroudy'
+      - '@kfiles-snyk'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      - 2026-09-09~beta
+      x-snyk-api-resource: tests
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
+      x-stability-level: beta
   /orgs/{org_id}/test_jobs/{job_id}:
     get:
       description: |-
@@ -4490,9 +5081,12 @@ paths:
       - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-09-09~beta
       x-snyk-api-resource: tests
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
       x-stability-level: beta
   /orgs/{org_id}/tests:
     post:
@@ -4635,9 +5229,12 @@ paths:
       - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-09-09~beta
       x-snyk-api-resource: tests
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
       x-stability-level: beta
   /orgs/{org_id}/tests/{test_id}:
     get:
@@ -4759,9 +5356,137 @@ paths:
       - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-09-09~beta
       x-snyk-api-resource: tests
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
+      x-stability-level: beta
+  /orgs/{org_id}/tests/{test_id}/components/{component_id}/findings:
+    get:
+      description: |-
+        List findings for a Component.
+
+        Test Findings are scanner-agnostic representations of
+        vulnerabilities and organization-level policy breaches.
+        When Snyk runs a Test, the results of that Test are
+        formatted into Findings.
+
+        This endpoint returns pages of Findings associated with
+        a given Component ID. Findings are returned in sorted order by
+        ID, with page size equal to the provided Limit query parameter.
+        Page size is 10 Findings by default if no parameter is provided.
+
+        Note that the Findings returned from this endpoint are only the
+        Findings that are _not_ suppressed by policy and are _not_
+        in violation of a set Test threshold (like Severity or Risk Score).
+
+        To retrieve the next (or previous) page of Findings, utilize the
+        Next and Prev links returned in the response.
+      operationId: listComponentFindings
+      parameters:
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+      - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.starting_after'
+      - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.ending_before'
+      - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.limit'
+      - $ref: '#/components/parameters/OrgIdParam'
+      - $ref: '#/components/parameters/TestIdParam'
+      - $ref: '#/components/parameters/ComponentIdParam'
+      responses:
+        "200":
+          content:
+            application/vnd.api+json:
+              schema:
+                properties:
+                  data:
+                    items:
+                      $ref: '#/components/schemas/FindingData'
+                    type: array
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    $ref: '#/components/schemas/io.snyk.api.common.PaginatedLinks'
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                - data
+                - jsonapi
+                - links
+                type: object
+          description: Successful API response for a paginated collection.
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+        "400":
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+          description: Invalid input
+          headers:
+            deprecation:
+              schema:
+                type: string
+            snyk-request-id:
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              schema:
+                type: string
+            snyk-version-requested:
+              schema:
+                type: string
+            snyk-version-served:
+              schema:
+                type: string
+            sunset:
+              schema:
+                type: string
+      summary: List findings for a component.
+      tags:
+      - Findings
+      x-cerberus:
+        authorization:
+          resource:
+            pathId: org_id
+            permissions:
+            - read
+            type: org
+          skip: false
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
+      - '@snyk/product-unification_devsec-governance-platform'
+      - '@dbroudy'
+      - '@kfiles-snyk'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      - 2026-09-09~beta
+      x-snyk-api-resource: tests
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
       x-stability-level: beta
   /orgs/{org_id}/tests/{test_id}/findings:
     get:
@@ -4880,9 +5605,12 @@ paths:
       - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-09-09~beta
       x-snyk-api-resource: tests
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
+      x-snyk-deprecated-by: 2026-09-09~beta
+      x-snyk-sunset-eligible: "2026-12-09"
       x-stability-level: beta
 servers:
 - description: test-api-shim
