@@ -291,8 +291,49 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	return fnMap
 }
 
+// describeFilesNotAnalyzed summarises the coverage entries that were not analyzed
+// (unsupported or failed parsing) for the human-readable test summary.
+func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
+	total := 0
+	parts := make([]string, 0, len(coverage))
+	for _, entry := range coverage {
+		if entry.IsSupported || entry.Files <= 0 {
+			continue
+		}
+		total += entry.Files
+		lang := entry.Lang
+		if lang == "" {
+			lang = "other files" // the language of a skipped file is not known
+		}
+		parts = append(parts, fmt.Sprintf("%s %d, %s", lang, entry.Files, notAnalyzedReason(entry.Type)))
+	}
+	if total == 0 {
+		return ""
+	}
+
+	noun := "files"
+	if total == 1 {
+		noun = "file"
+	}
+	return fmt.Sprintf("%d %s (%s)", total, noun, strings.Join(parts, "; "))
+}
+
+// notAnalyzedReason turns a coverage type such as FAILED_PARSING into text for people.
+func notAnalyzedReason(coverageType string) string {
+	switch coverageType {
+	case "FAILED_PARSING":
+		return "failed to parse"
+	case "FILE_TOO_LARGE":
+		return "over the file size limit"
+	case "PATH_TOO_LONG":
+		return "path too long"
+	}
+	return strings.ToLower(strings.ReplaceAll(coverageType, "_", " "))
+}
+
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
+	fnMap["describeFilesNotAnalyzed"] = describeFilesNotAnalyzed
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
 	fnMap["toLowerCase"] = strings.ToLower
