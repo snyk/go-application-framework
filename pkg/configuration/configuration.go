@@ -114,6 +114,11 @@ type extendedViper struct {
 	// supportedEnvVars store the env vars that should be supported REGARDLESS of its prefix. e.g. NODE_EXTRA_CA_CERTS
 	supportedEnvVars []string
 
+	// ignoredEnvVars are environment variable names that must not be read, even when they match a supported
+	// name or prefix. Matching is case-insensitive. The list is consulted only when binding env vars and when
+	// listing keys that hold values; GetKeyType is unchanged.
+	ignoredEnvVars []string
+
 	interkeyDependencies map[string][]string
 }
 
@@ -188,6 +193,21 @@ func WithSupportedEnvVars(envVars ...string) Opts {
 func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
 	return func(c Configuration) {
 		c.SetSupportedEnvVarPrefixes(prefixes...)
+	}
+}
+
+// WithIgnoredEnvVars marks the given environment variable names as ignored. Ignored names win over supported
+// names and prefixes: they are not bound from the environment and are not reported as set by
+// GetAllKeysThatContainValues. Matching is case-insensitive. The Configuration interface is unchanged; use
+// SetIgnoredEnvVars / GetIgnoredEnvVars on a configuration created by this package, or the package-level
+// GetIgnoredEnvVars helper. Combining ignored env vars with AutomaticEnv is rejected by Derive.
+func WithIgnoredEnvVars(names ...string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithIgnoredEnvVars()")
+		}
+		ev.SetIgnoredEnvVars(names...)
 	}
 }
 
@@ -403,6 +423,8 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 // carried over, so a cache that base has turned off with its CONFIG_CACHE_DISABLED value is enabled on the result.
 //
 // WithFiles works as in NewWithOpts. WithPinnedFile makes Derive return an error for a file that cannot be used.
+// Derive returns an error when automatic environment mode is enabled and ignored env vars are set, because
+// AutomaticEnv bypasses the ignore checks that apply when binding supported env vars.
 func Derive(base Configuration, opts ...Opts) (Configuration, error) {
 	src, ok := base.(*extendedViper)
 	if !ok {
@@ -414,6 +436,10 @@ func Derive(base Configuration, opts ...Opts) (Configuration, error) {
 		opt(derived)
 	}
 	hasCache, cacheTTL := src.copyRegistrationsTo(derived)
+
+	if derived.GetAutomaticEnv() && len(GetIgnoredEnvVars(derived)) > 0 {
+		return nil, errors.New("cannot derive configuration: AutomaticEnv is incompatible with ignored environment variables")
+	}
 
 	if err := derived.loadFiles(); err != nil {
 		return nil, fmt.Errorf("cannot derive configuration: %w", err)
@@ -453,6 +479,7 @@ func (ev *extendedViper) copyRegistrationsTo(dst *extendedViper) (bool, time.Dur
 	}
 	dst.supportedEnvVars = appendMissing(dst.supportedEnvVars, ev.supportedEnvVars...)
 	dst.supportedEnvVarPrefixes = appendMissing(dst.supportedEnvVarPrefixes, ev.supportedEnvVarPrefixes...)
+	dst.ignoredEnvVars = appendMissing(dst.ignoredEnvVars, ev.ignoredEnvVars...)
 	for _, flagset := range ev.flagsets {
 		//nolint:errcheck // viper's BindPFlags returns nil for a non-nil flag set
 		_ = dst.AddFlagSet(flagset)
@@ -516,6 +543,12 @@ func (ev *extendedViper) Clone() Configuration {
 	clone.SetSupportedEnvVarPrefixes(ev.supportedEnvVarPrefixes...)
 	clone.SetFiles(ev.configFiles...)
 
+	evClone, ok := clone.(*extendedViper)
+	if !ok {
+		panic("cloned configuration is of different type")
+	}
+	evClone.SetIgnoredEnvVars(ev.ignoredEnvVars...)
+
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
 	}
@@ -526,11 +559,6 @@ func (ev *extendedViper) Clone() Configuration {
 	}
 
 	if ev.defaultCache != nil {
-		evClone, ok := clone.(*extendedViper)
-		if !ok {
-			panic("cloned configuration is of different type")
-		}
-
 		items := ev.defaultCache.Items()
 		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
 		evClone.setCache(clonedCache)
@@ -589,9 +617,10 @@ func (ev *extendedViper) get(key string) (result interface{}, err error) {
 
 // bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var.
 // Short-circuits before calling AllKeys() when the key cannot be an env var, avoiding
-// Viper's expensive internal map rebuild on every lookup.
+// Viper's expensive internal map rebuild on every lookup. Ignored env var names are never bound.
+// The caller holds the mutex.
 func (ev *extendedViper) bindEnv(key string) error {
-	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType {
+	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType || ev.isIgnoredEnvVar(key) {
 		return nil
 	}
 
@@ -928,6 +957,9 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	foundKeys := []string{}
 	for _, ak := range alternativeKeys {
 		if ev.GetKeyType(ak) == EnvVarKeyType {
+			if ev.isEnvVarIgnored(ak) {
+				continue
+			}
 			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
 				foundKeys = append(foundKeys, ak)
 			}
@@ -1025,6 +1057,70 @@ func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
 	defer ev.mutex.RUnlock()
 
 	return ev.supportedEnvVarPrefixes
+}
+
+// SetIgnoredEnvVars replaces the list of environment variable names that must not be read.
+// Matching is case-insensitive. This method is on the concrete configuration type only.
+func (ev *extendedViper) SetIgnoredEnvVars(names ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	ev.ignoredEnvVars = slices.Clone(names)
+}
+
+// GetIgnoredEnvVars returns a copy of the ignored environment variable names.
+func (ev *extendedViper) GetIgnoredEnvVars() []string {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	return slices.Clone(ev.ignoredEnvVars)
+}
+
+// GetIgnoredEnvVars returns the ignored environment variable names of config when it is a configuration
+// created by this package, and nil otherwise.
+func GetIgnoredEnvVars(config Configuration) []string {
+	ev, ok := config.(*extendedViper)
+	if !ok {
+		return nil
+	}
+	return ev.GetIgnoredEnvVars()
+}
+
+// KeyDependencies returns the keys that key depends on, as registered with AddKeyDependency.
+// It returns nil when config is not a configuration created by this package.
+func KeyDependencies(config Configuration, key string) []string {
+	ev, ok := config.(*extendedViper)
+	if !ok {
+		return nil
+	}
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	var deps []string
+	for dependencyKey, dependents := range ev.interkeyDependencies {
+		if slices.Contains(dependents, key) {
+			deps = append(deps, dependencyKey)
+		}
+	}
+	return deps
+}
+
+// isEnvVarIgnored reports whether key is in the ignored set. It takes the read lock.
+func (ev *extendedViper) isEnvVarIgnored(key string) bool {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return ev.isIgnoredEnvVar(key)
+}
+
+// isIgnoredEnvVar reports whether key matches an ignored env var name. Matching is case-insensitive.
+// The caller holds the mutex.
+func (ev *extendedViper) isIgnoredEnvVar(key string) bool {
+	for _, ignored := range ev.ignoredEnvVars {
+		if strings.EqualFold(key, ignored) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetFiles sets the files from which the Configuration instance uses
