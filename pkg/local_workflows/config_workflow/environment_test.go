@@ -1,4 +1,4 @@
-package localworkflows
+package config_workflow
 
 import (
 	"errors"
@@ -88,7 +88,7 @@ func Test_ConfigEnvironment_entryPoint_changeEnv(t *testing.T) {
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger)
 	invocationCtx.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	err := InitConfigWorkflow(engine)
+	err := InitConfigWorkflows(engine)
 	assert.NoError(t, err)
 
 	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, inputData)
@@ -115,7 +115,7 @@ func Test_ConfigEnvironment_entryPoint_NoChangeEnv(t *testing.T) {
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger)
 	invocationCtx.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	err := InitConfigWorkflow(engine)
+	err := InitConfigWorkflows(engine)
 	assert.NoError(t, err)
 
 	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, inputData)
@@ -143,7 +143,7 @@ func Test_ConfigEnvironment_entryPoint_tenantFromEnvVarBlocksChange(t *testing.T
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger)
 	invocationCtx.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	err := InitConfigWorkflow(engine)
+	err := InitConfigWorkflows(engine)
 	assert.NoError(t, err)
 
 	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, nil)
@@ -172,7 +172,7 @@ func Test_ConfigEnvironment_entryPoint_Failed(t *testing.T) {
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger)
 	invocationCtx.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	err := InitConfigWorkflow(engine)
+	err := InitConfigWorkflows(engine)
 	assert.NoError(t, err)
 
 	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, inputData)
