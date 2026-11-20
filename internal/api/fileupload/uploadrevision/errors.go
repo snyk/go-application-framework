@@ -105,6 +105,31 @@ func (e *SpecialFileError) Error() string {
 	return fmt.Sprintf("path %s is not a regular file (mode: %s)", e.FilePath, e.Mode)
 }
 
+// InvalidChunkSizeError indicates the size chunks are uploaded in is below the minimum.
+// The chunk size is the file size limit of the upload service.
+type InvalidChunkSizeError struct {
+	ChunkSize int64
+	MinSize   int64
+}
+
+func (e *InvalidChunkSizeError) Error() string {
+	return fmt.Sprintf("invalid chunk size %d bytes: must be at least %d bytes", e.ChunkSize, e.MinSize)
+}
+
+// ChunkCountLimitError indicates a file would need more chunks than the maximum.
+type ChunkCountLimitError struct {
+	FilePath   string
+	FileSize   int64
+	ChunkSize  int64
+	ChunkCount int64
+	Limit      int64
+}
+
+func (e *ChunkCountLimitError) Error() string {
+	return fmt.Sprintf("file %s of %d bytes needs %d chunks of %d bytes, exceeding the maximum of %d chunks",
+		e.FilePath, e.FileSize, e.ChunkCount, e.ChunkSize, e.Limit)
+}
+
 // NewFileSizeLimitError creates a new FileSizeLimitError with the given parameters.
 func NewFileSizeLimitError(filePath string, fileSize, limit int64) *FileSizeLimitError {
 	return &FileSizeLimitError{
@@ -170,5 +195,24 @@ func NewFilePathLengthLimitError(filePath string, length, limit int) *FilePathLe
 		FilePath: filePath,
 		Length:   length,
 		Limit:    limit,
+	}
+}
+
+// NewInvalidChunkSizeError creates a new InvalidChunkSizeError with the given parameters.
+func NewInvalidChunkSizeError(chunkSize, minSize int64) *InvalidChunkSizeError {
+	return &InvalidChunkSizeError{
+		ChunkSize: chunkSize,
+		MinSize:   minSize,
+	}
+}
+
+// NewChunkCountLimitError creates a new ChunkCountLimitError with the given parameters.
+func NewChunkCountLimitError(filePath string, fileSize, chunkSize, chunkCount, limit int64) *ChunkCountLimitError {
+	return &ChunkCountLimitError{
+		FilePath:   filePath,
+		FileSize:   fileSize,
+		ChunkSize:  chunkSize,
+		ChunkCount: chunkCount,
+		Limit:      limit,
 	}
 }
