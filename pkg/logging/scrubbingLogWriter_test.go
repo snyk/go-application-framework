@@ -846,14 +846,14 @@ func TestStaticTermReplacementPreservesJSONValidity(t *testing.T) {
 			expected: `{"ids":[67890,"***"]}`,
 		},
 		{
-			name:     "static term fused to a decimal point is left alone",
+			name:     "static term fused to a decimal point is redacted and the number becomes a string",
 			input:    `{"ratio":123.12345}`,
-			expected: `{"ratio":123.12345}`,
+			expected: `{"ratio":"123.***"}`,
 		},
 		{
-			name:     "static term fused to a leading minus sign is left alone",
+			name:     "static term fused to a leading minus sign is redacted and the number becomes a string",
 			input:    `{"delta":-12345}`,
-			expected: `{"delta":-12345}`,
+			expected: `{"delta":"-***"}`,
 		},
 		{
 			name:     "digit-adjacent term inside a quoted string is still redacted",
@@ -1596,4 +1596,213 @@ func Test_AddSecretsFromConfig_IoWriter(t *testing.T) {
 
 	assert.NotContains(t, output.String(), "io-writer-token-value")
 	assert.Contains(t, output.String(), "seen")
+}
+
+func TestScrub_MandatoryRulesKeepValidJSONValid(t *testing.T) {
+	dict := getDefaultDict()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"bare number under short-form key", `{"p":5}`, `{"p":"***"}`},
+		{"bare true under short-form key", `{"level":"debug","u":true,"m":1}`, `{"level":"debug","u":"***","m":1}`},
+		{"bare null under short-form key", `{"p":null,"m":1}`, `{"p":"***","m":1}`},
+		{"exponent number under short-form key", `{"time":"t","p":1.5e3}`, `{"time":"t","p":"***"}`},
+		{"object under short-form key", `{"p":{"a":1},"m":2}`, `{"p":"***","m":2}`},
+		{"array under short-form key", `{"p":[1,2],"m":2}`, `{"p":"***","m":2}`},
+		{"nested object under short-form key", `{"a":{"p":"x"},"u":{"k":1}}`, `{"a":{"p":"***"},"u":"***"}`},
+		{"bare number under token key", `{"token":1234567,"m":1}`, `{"token":"***","m":1}`},
+		{"message ending in a lone u", `{"message":"ends -u"}`, `{"message":"ends -u"}`},
+		{"message that is a lone u", `{"message":"u"}`, `{"message":"u"}`},
+		{"message ending in p colon", `{"message":"p:"}`, `{"message":"p:"}`},
+		{"message ending in -p", `{"level":"debug","message":"flags -u 5 and -p"}`, `{"level":"debug","message":"flags -u *** and -p"}`},
+		{"string value is still redacted", `{"p":"hunter2","m":1}`, `{"p":"***","m":1}`},
+		{"value in message is still redacted", `{"message":"u: john.doe"}`, `{"message":"u: ***"}`},
+		{"escaped quote in value does not break the string", `{"message":"u: a\"b"}`, `{"message":"u: ***"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, json.Valid([]byte(tc.input)), "test input must be valid JSON")
+			actual := Scrub([]byte(tc.input), dict)
+			assert.True(t, json.Valid(actual), "output is not valid JSON: %s", actual)
+			assert.Equal(t, tc.expected, string(actual))
+		})
+	}
+}
+
+func TestScrub_ValidJSONInValidJSONOut(t *testing.T) {
+	const secret = "s3cr3tvalue99"
+	dict := getDefaultDict()
+	addStaticTermToDict(secret, dict)
+	addWholeWordTermToDict("Content", dict)
+
+	keys := []string{"p", "u", "P", "token", "user", "key", "level", "message", "count", "ok"}
+	values := []string{
+		`5`, `-1.5e3`, `true`, `null`, `"x"`, `""`, `"p:"`, `"u"`, `"ends -u"`, `"-p"`, `"a\"b"`, `"a\\"`,
+		`"Content-Type"`, `"token ` + secret + `"`, `"u: ` + secret + `"`, `{"p":1,"u":{"a":[1,2]}}`, `[1,"p",null]`,
+		`1234567`, `"` + secret + `"`,
+	}
+
+	type member struct{ key, text string }
+	var members []member
+	for _, key := range keys {
+		for _, value := range values {
+			members = append(members, member{key, fmt.Sprintf(`"%s":%s`, key, value)})
+		}
+	}
+
+	for _, first := range members {
+		for _, second := range members {
+			if first.key == second.key {
+				continue
+			}
+			input := fmt.Sprintf(`{%s,%s}`, first.text, second.text)
+			if !json.Valid([]byte(input)) {
+				continue
+			}
+			actual := Scrub([]byte(input), dict)
+			require.True(t, json.Valid(actual), "input %s produced invalid JSON: %s", input, actual)
+			require.NotContains(t, string(actual), secret, "input %s leaked the secret: %s", input, actual)
+		}
+	}
+}
+
+func TestScrub_JSONIsScrubbedValueByValue(t *testing.T) {
+	const secret = "s3cr3tvalue99"
+	dict := getDefaultDict()
+	addStaticTermToDict(secret, dict)
+	addWholeWordTermToDict("reference", dict)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "nested objects and arrays",
+			input:    `{"a":{"b":[{"password":"x"},"Bearer abcdefghijk",[1,{"token":[2]}]]},"n":1}`,
+			expected: `{"a":{"b":[{"password":"***"},"Bearer ***",[1,{"token":"***"}]]},"n":1}`,
+		},
+		{
+			name:     "unicode escapes in an unchanged value are kept as they were",
+			input:    `{"m":"caf\u00e9 \u003cok\u003e"}`,
+			expected: `{"m":"caf\u00e9 \u003cok\u003e"}`,
+		},
+		{
+			name:     "unicode escapes do not hide a credential",
+			input:    `{"m":"\u0042earer abcdefghijk"}`,
+			expected: `{"m":"Bearer ***"}`,
+		},
+		{
+			name:     "unicode escapes do not hide a configured secret",
+			input:    `{"m":"s3cr3t\u0076alue99"}`,
+			expected: `{"m":"***"}`,
+		},
+		{
+			name:     "string scalar as the whole document",
+			input:    `"Bearer abcdefghijk"`,
+			expected: `"Bearer ***"`,
+		},
+		{
+			name:     "number scalar as the whole document is kept",
+			input:    `42`,
+			expected: `42`,
+		},
+		{
+			name:     "field name matching a redaction term is kept, its value is not",
+			input:    `{"reference":"reference"}`,
+			expected: `{"reference":"***"}`,
+		},
+		{
+			name:     "configured secret in a field name is redacted",
+			input:    `{"` + secret + `":"y"}`,
+			expected: `{"***":"y"}`,
+		},
+		{
+			name:     "credential in JSON embedded in a message is redacted",
+			input:    `{"message":"response body: {\"access_token\":\"abcdef123456\",\"password\":\"hunter22\"}"}`,
+			expected: `{"message":"response body: {\"access_token\":\"***\",\"password\":\"***\"}"}`,
+		},
+		{
+			name:     "secret in an HTTP body embedded in a message is redacted",
+			input:    `{"message":"< HTTP/1.1 200 OK\n< Content-Type: application/json\n\n{\"token\":\"abcdef123456\",\"expires_in\":3600}"}`,
+			expected: `{"message":"< HTTP/1.1 200 OK\n< Content-Type: application/json\n\n{\"token\":\"***\",\"expires_in\":3600}"}`,
+		},
+		{
+			name:     "html characters in a changed value are not escaped",
+			input:    `{"m":"<a href=\"x\">Bearer abcdefghijk</a>"}`,
+			expected: `{"m":"<a href=\"x\">Bearer ***</a>"}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, json.Valid([]byte(tc.input)), "test input must be valid JSON")
+			actual := Scrub([]byte(tc.input), dict)
+			assert.True(t, json.Valid(actual), "output is not valid JSON: %s", actual)
+			assert.Equal(t, tc.expected, string(actual))
+		})
+	}
+}
+
+func TestScrubbingWriter_UnchangedEventIsWrittenByteIdentical(t *testing.T) {
+	event := "{ \"level\" : \"debug\",\n\t\"ratio\":1.50e+03, \"zero\":-0.0, \"big\":12345678901234567890,\"ok\":true,\"none\":null," +
+		"\"path\":\"C:\\\\dir\\/file\",\"text\":\"caf\\u00e9\",\"list\":[ 1 , \"two\" ],\"message\":\"cache hit\"}\n"
+	require.True(t, json.Valid([]byte(event)), "test input must be valid JSON")
+	var output bytes.Buffer
+	writer := NewScrubbingIoWriter(&output, getDefaultDict())
+
+	_, err := writer.Write([]byte(event))
+	require.NoError(t, err)
+
+	assert.Equal(t, event, output.String())
+}
+
+func TestScrub_NonJSONInputFallsBackToTheTextRules(t *testing.T) {
+	dict := getDefaultDict()
+	input := []byte(`{"token":"abcdefgh`)
+
+	actual := Scrub(input, dict)
+
+	assert.Equal(t, `{"token":"***`, string(actual))
+	assert.Equal(t, string(ScrubValue(input, dict)), string(actual))
+}
+
+func BenchmarkScrubbingWriter_WriteEvent(b *testing.B) {
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, strings.Join([]string{"3f9c2b7e", "41d8", "4a6b", "9e2f", "0c5d8a1b7e64"}, "-"))
+	config.Set(REDACTION_TERMS, []string{"Content", "reference", "command"})
+	event := []byte(`{"level":"debug","ext":"main","separator":"-","method":"GET","url":"https://api.example.com/rest/orgs?version=2024-10-15","status":200,"durationMs":123,"time":"2026-11-16T12:00:00Z","message":"< Content-Type: application/json"}` + "\n")
+	writer := NewScrubbingIoWriter(io.Discard, GetScrubDictFromConfig(config))
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := writer.Write(event); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestScrubValue_ShortFormValuesKeepAnEmbeddedQuote(t *testing.T) {
+	dict := getDefaultDict()
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"unquoted value with a quote inside", `u: a"b and p: hun'ter2`, `u: *** and p: ***`},
+		{"unquoted value keeps a closing quote", `cfg="u: john" next`, `cfg="u: ***" next`},
+		{"unquoted value does not cross a comma", `u: a"b, next: keep`, `u: ***, next: keep`},
+		{"double-quoted value with a quote inside", `u: "a"b" next`, `u: "***" next`},
+		{"single-quoted value with a quote inside", `{ 'p': 'Nick's', 'u': 'x' }`, `{ 'p': '***', 'u': '***' }`},
+		{"quoted value ends at the quote before a separator", `{ 'u': 'john', 'other': 'keep' }`, `{ 'u': '***', 'other': 'keep' }`},
+		{"already redacted value keeps its quotes", `'u':'***'`, `'u':'***'`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, string(ScrubValue([]byte(tc.input), dict)))
+		})
+	}
 }
