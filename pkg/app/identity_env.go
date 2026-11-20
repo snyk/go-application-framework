@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 )
@@ -22,13 +24,21 @@ func IdentityEnvVars() []string {
 // IgnoreIdentityEnvVarsForProfile applies the identity environment ignore list and records the
 // profile marker on a derived named-profile configuration. It is intended as a
 // profile.ConfigEnrichment for hosts that opt in.
+//
+// It fails closed when ignores cannot be honored: AutomaticEnv bypasses ignore checks, and
+// configurations that do not implement SetIgnoredEnvVars would otherwise only set the marker.
 func IgnoreIdentityEnvVarsForProfile(name string, config configuration.Configuration) error {
 	if config == nil {
 		return nil
 	}
-	if setter, ok := config.(interface{ SetIgnoredEnvVars(...string) }); ok {
-		setter.SetIgnoredEnvVars(IdentityEnvVars()...)
+	if config.GetAutomaticEnv() {
+		return errors.New("ignored environment variables cannot be applied when AutomaticEnv is enabled")
 	}
+	setter, ok := config.(interface{ SetIgnoredEnvVars(...string) })
+	if !ok {
+		return errors.New("configuration does not support ignoring environment variables")
+	}
+	setter.SetIgnoredEnvVars(IdentityEnvVars()...)
 	profile.SetMarker(config, name)
 	return nil
 }
