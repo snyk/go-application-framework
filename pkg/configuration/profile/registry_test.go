@@ -474,3 +474,23 @@ func Test_Registry_DirectoryThatIsASymbolicLinkToADirectoryIsUsed(t *testing.T) 
 	require.NoError(t, err)
 	assert.Empty(t, absent.Configuration().GetString("own"))
 }
+
+// Test_Registry_LogsIgnoredEnvVarNamesOnly checks that the names, and never a value, of the ignored environment variables
+// are logged at debug level when a named profile is derived.
+func Test_Registry_LogsIgnoredEnvVarNamesOnly(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "secret-value")
+	dir := t.TempDir()
+	writeProfile(t, dir, "work", `{}`)
+	base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	reg, err := NewFileRegistry(dir, base, WithLogger(&logger))
+	require.NoError(t, err)
+	require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN", "SNYK_OAUTH_TOKEN"))
+
+	_, err = reg.Profile("work")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{`profile "work" ignores the environment variables SNYK_TOKEN, SNYK_OAUTH_TOKEN`}, debugMessagesOf(t, logs.String()))
+	assert.NotContains(t, logs.String(), "secret-value")
+}

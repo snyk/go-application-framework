@@ -492,12 +492,16 @@ type nilProfileRegistry struct{}
 //nolint:nilnil // the registry breaks its contract on purpose: the engine must fail the invocation, not run it
 func (nilProfileRegistry) Profile(string) (profile.Profile, error) { return nil, nil }
 
+func (nilProfileRegistry) SetIgnoredEnvVars(...string) error { return nil }
+
 // nilConfigRegistry finds profiles that have no configuration.
 type nilConfigRegistry struct{}
 
 func (nilConfigRegistry) Profile(name string) (profile.Profile, error) {
 	return nilConfigProfile{name: name}, nil
 }
+
+func (nilConfigRegistry) SetIgnoredEnvVars(...string) error { return nil }
 
 type nilConfigProfile struct{ name string }
 
@@ -788,4 +792,57 @@ func Test_GetProfileRegistry_FailsForAnEngineWithoutProfiles(t *testing.T) {
 	registry, err := GetProfileRegistry(foreignEngine{Engine: env.engine})
 	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
 	assert.Nil(t, registry)
+}
+
+// Test_Engine_ProfileIgnoredEnvVarsAreSetOnTheRegistry checks that names set with SetIgnoredEnvVars on the registry of
+// the engine apply to named profiles only.
+func Test_Engine_ProfileIgnoredEnvVarsAreSetOnTheRegistry(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "ambient")
+
+	dir := t.TempDir()
+	base := configuration.NewWithOpts(
+		configuration.WithFiles(filepath.Join(t.TempDir(), "snyk.json")),
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+	)
+	base.Set(profile.DirKey, dir)
+	env := newProfileEnvWithBase(t, dir, base)
+	env.writeProfile("machine", "machine-value")
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	require.NoError(t, registry.SetIgnoredEnvVars("SNYK_TOKEN"))
+	named, err := registry.Profile("machine")
+	require.NoError(t, err)
+	assert.Empty(t, named.Configuration().GetString("snyk_token"))
+
+	def, err := registry.Profile(profile.DefaultName)
+	require.NoError(t, err)
+	assert.Equal(t, "ambient", def.Configuration().GetString("snyk_token"))
+}
+
+// Test_Engine_ProfileIgnoredEnvVarsAreDroppedWhenTheRegistryIsRebuilt checks the contract of GetProfileRegistry: a
+// registry that the engine rebuilds on SetConfiguration no longer has the names, so the caller sets them again.
+func Test_Engine_ProfileIgnoredEnvVarsAreDroppedWhenTheRegistryIsRebuilt(t *testing.T) {
+	t.Setenv("SNYK_TOKEN", "ambient")
+
+	dir := t.TempDir()
+	base := configuration.NewWithOpts(
+		configuration.WithFiles(filepath.Join(t.TempDir(), "snyk.json")),
+		configuration.WithSupportedEnvVarPrefixes("snyk_"),
+	)
+	base.Set(profile.DirKey, dir)
+	env := newProfileEnvWithBase(t, dir, base)
+	env.writeProfile("machine", "machine-value")
+
+	registry, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	require.NoError(t, registry.SetIgnoredEnvVars("SNYK_TOKEN"))
+
+	env.impl().SetConfiguration(base)
+	rebuilt, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	assert.NotSame(t, registry, rebuilt)
+	named, err := rebuilt.Profile("machine")
+	require.NoError(t, err)
+	assert.Equal(t, "ambient", named.Configuration().GetString("snyk_token"))
 }
