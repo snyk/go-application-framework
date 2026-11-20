@@ -50,6 +50,19 @@ func Test_JsonStorage_Permissions(t *testing.T) {
 	}
 }
 
+func Test_JsonStorage_Clear_Permissions(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "config.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{"existing":"value"}`), 0600))
+	require.NoError(t, os.Chmod(file, 0644))
+
+	require.NoError(t, configuration.NewJsonStorage(file).Clear())
+
+	info, err := os.Stat(file)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
+
 func Test_Configuration_Load_DoesNotChangePermissions(t *testing.T) {
 	tests := []struct {
 		name   string

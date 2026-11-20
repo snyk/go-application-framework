@@ -1,11 +1,13 @@
 package config_workflow
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -15,8 +17,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// argsAlias reads the positional arguments without the default of INPUT_DIRECTORY, which is the working directory.
-const argsAlias = "internal_config_args"
+const (
+	// argsAlias reads the positional arguments without the default of INPUT_DIRECTORY, which is the working directory.
+	argsAlias      = "internal_config_args"
+	lockTimeout    = 30 * time.Second
+	lockRetryDelay = 100 * time.Millisecond
+)
 
 var WORKFLOWID_CONFIG workflow.Identifier = workflow.NewWorkflowIdentifier("config")
 
@@ -73,10 +79,31 @@ func readConfigFile(config configuration.Configuration) (map[string]any, error) 
 		return nil, err
 	}
 	values, err := storage.ReadAll()
+	return values, fileError(err)
+}
+
+// writeLocked runs write under the file lock, which a token refresh in another process takes too.
+func writeLocked(ctx context.Context, config configuration.Configuration, write func(*configuration.JsonStorage) error) error {
+	storage, err := fileStorage(config)
 	if err != nil {
-		return nil, cli.NewGeneralCLIFailureError(err.Error(), snyk_errors.WithCause(err))
+		return err
 	}
-	return values, nil
+	ctx, cancel := context.WithTimeout(ctx, lockTimeout)
+	defer cancel()
+	if err = storage.Lock(ctx, lockRetryDelay); err != nil {
+		return fileError(err)
+	}
+	defer func() { _ = storage.Unlock() }() //nolint:errcheck // nothing to do about a failed unlock
+	return fileError(write(storage))
+}
+
+// fileError wraps a failed access to the file in a catalog error. The OS error text goes to the detail, never to
+// Error().
+func fileError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return cli.NewGeneralCLIFailureError(err.Error(), snyk_errors.WithCause(err))
 }
 
 // displayValue formats a value as JavaScript's String() does.

@@ -587,7 +587,7 @@ func TestResolve_WrongTypeStoredAtLocalKey(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// isUserSet — keyDeleted marker treated as not set
+// isUserSet — KeyDeleted marker treated as not set
 // ---------------------------------------------------------------------------
 
 func TestResolve_LocalFieldNilValue(t *testing.T) {
@@ -829,7 +829,7 @@ func TestResolve_DeserializedMap(t *testing.T) {
 func TestResolve_UserGlobalKeyDeleted(t *testing.T) {
 	fs := newTestFlagSet()
 	conf := configuration.NewWithOpts()
-	// Unset marks with keyDeleted internally; simulate by using Unset
+	// Unset marks with KeyDeleted internally; simulate by using Unset
 	conf.Set(configresolver.UserGlobalKey("api_endpoint"), "val")
 	conf.Unset(configresolver.UserGlobalKey("api_endpoint"))
 
