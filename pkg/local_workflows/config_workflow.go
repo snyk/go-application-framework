@@ -51,14 +51,18 @@ type SnykRegion struct {
 	url   string
 }
 
-func DetermineRegionFromUrl(url string) (string, error) {
-	if len(url) == 0 {
+func DetermineRegionFromUrl(input string) (string, error) {
+	if len(input) == 0 {
 		return "", fmt.Errorf("url must not be empty")
 	}
 
-	// Loop through each region and check for a match in the URL host
+	parsedInput, err := url.Parse(input)
+	if err != nil {
+		return "", fmt.Errorf("no region found for the given URL")
+	}
+
 	for _, region := range regions {
-		if strings.HasPrefix(url, region.url) {
+		if regionUrl, regionErr := url.Parse(region.url); regionErr == nil && api.MatchesOrigin(parsedInput, regionUrl) {
 			return region.alias, nil
 		}
 	}

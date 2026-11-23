@@ -155,44 +155,13 @@ func stringHasApiSubdomain(lowerNormalized string) bool {
 // registrable domains on a DNS-label boundary, with at least the "api" label
 // ahead of it.
 func urlHasAllowedDomain(parsed *url.URL, allowedDomains []string) bool {
-	labels := strings.Split(strings.ToLower(parsed.Hostname()), ".")
+	host := strings.ToLower(parsed.Hostname())
 	for _, domain := range allowedDomains {
-		domainLabels, ok := domainToLabels(domain)
-		if !ok {
-			continue
-		}
-		// Require at least one label (the "api" label) ahead of the domain, and
-		// match on label boundaries rather than as a raw suffix.
-		if len(labels) > len(domainLabels) && hasLabelSuffix(labels, domainLabels) {
+		if api.IsSubdomainOf(host, domain) {
 			return true
 		}
 	}
 	return false
-}
-
-// domainToLabels normalizes an allowlist entry and splits it into DNS labels,
-// reporting ok=false for empty/whitespace-only entries so callers skip them.
-func domainToLabels(domain string) ([]string, bool) {
-	domain = strings.ToLower(strings.TrimSpace(domain))
-	if domain == "" {
-		return nil, false
-	}
-	return strings.Split(domain, "."), true
-}
-
-// hasLabelSuffix reports whether labels ends with suffix, comparing whole DNS
-// labels (not characters), so "snykXsnyk.io" is not a suffix of "snyk.io".
-func hasLabelSuffix(labels, suffix []string) bool {
-	if len(suffix) > len(labels) {
-		return false
-	}
-	offset := len(labels) - len(suffix)
-	for i, s := range suffix {
-		if labels[offset+i] != s {
-			return false
-		}
-	}
-	return true
 }
 
 // stringHasAllowedDomain cross-checks, from the raw normalized string, that it

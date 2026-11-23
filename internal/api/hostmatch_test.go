@@ -75,3 +75,35 @@ func TestHasPathPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestIsSubdomainOf(t *testing.T) {
+	cases := []struct {
+		name   string
+		host   string
+		domain string
+		want   bool
+	}{
+		{name: "one label ahead of the domain", host: "api.snyk.io", domain: "snyk.io", want: true},
+		{name: "domain is trimmed and lowercased", host: "api.snyk.io", domain: "  SNYK.IO  ", want: true},
+		{name: "single-label domain", host: "api.snyk.io", domain: "io", want: true},
+		{name: "several labels ahead of the domain", host: "a.b.c.snyk.io", domain: "snyk.io", want: true},
+		{name: "empty domain never matches", host: "api.snyk.io", domain: "", want: false},
+		{name: "whitespace-only domain never matches", host: "api.snyk.io", domain: "  ", want: false},
+		{name: "domain must match whole labels", host: "api.snykxsnyk.io", domain: "snyk.io", want: false},
+		{name: "domain label must match exactly", host: "api.snyk.io", domain: "x.io", want: false},
+		{name: "domain must be a suffix of the host", host: "api.snyk.io.evil.example", domain: "snyk.io", want: false},
+		{name: "host equal to the domain is not a subdomain", host: "snyk.io", domain: "snyk.io", want: false},
+		{name: "host shorter than the domain", host: "io", domain: "snyk.io", want: false},
+		{name: "uppercase host is lowercased", host: "API.SNYK.IO", domain: "snyk.io", want: true},
+		{name: "empty label in host is kept as in the label split", host: "api..snyk.io", domain: "snyk.io", want: true},
+		{name: "trailing dot on host is not ignored", host: "api.snyk.io.", domain: "snyk.io", want: false},
+		{name: "dot domain never matches", host: "api.snyk.io", domain: ".", want: false},
+		{name: "double-dot domain never matches", host: "api.snyk.io", domain: "..", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, IsSubdomainOf(tc.host, tc.domain), "IsSubdomainOf(%q, %q)", tc.host, tc.domain)
+		})
+	}
+}

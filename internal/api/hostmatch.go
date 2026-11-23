@@ -23,6 +23,28 @@ func HasPathPrefix(u, base *url.URL) bool {
 	return prefix == "" || u.Path == prefix || strings.HasPrefix(u.Path, prefix+"/")
 }
 
+// IsSubdomainOf reports whether host is below domain on DNS-label boundaries, with at least one extra label.
+// Both are lowercased, and the domain is also trimmed of surrounding space.
+func IsSubdomainOf(host, domain string) bool {
+	host = strings.ToLower(host)
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return false
+	}
+	hostLabels := strings.Split(host, ".")
+	domainLabels := strings.Split(domain, ".")
+	if len(hostLabels) <= len(domainLabels) {
+		return false
+	}
+	offset := len(hostLabels) - len(domainLabels)
+	for i, label := range domainLabels {
+		if hostLabels[offset+i] != label {
+			return false
+		}
+	}
+	return true
+}
+
 func effectivePort(u *url.URL) string {
 	if port := u.Port(); port != "" {
 		return port
