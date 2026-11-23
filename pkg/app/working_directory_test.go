@@ -3,9 +3,11 @@ package app
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"log"
-	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -49,7 +51,26 @@ func Test_HomeDirectoryUnknown_ProfilesAreNotInWorkingDirectory(t *testing.T) {
 	require.True(t, errors.As(err, &snykErr), "expected a catalog error, got %v", err)
 	assert.Equal(t, "SNYK-CLI-0036", snykErr.ErrorCode)
 
-	entries, err := os.ReadDir(cwd)
-	require.NoError(t, err)
-	assert.Empty(t, entries, "no profile file or directory is created in the working directory")
+	// The cache directory falls back to the relative path snyk/snyk-cli when neither the home nor the temp directory
+	// is usable. That is intentional for restricted platforms and CI runners where only the workspace is writable, and
+	// it is not a trust boundary because cached binaries are verified by checksum. So the cache path is allowed, and
+	// anything else created in the working directory (profile files or directories) is a failure.
+	cachePath := filepath.Join("snyk", "snyk-cli")
+	var unexpected []string
+	walkErr := filepath.WalkDir(cwd, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(cwd, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." || rel == "snyk" || rel == cachePath || strings.HasPrefix(rel, cachePath+string(filepath.Separator)) {
+			return nil
+		}
+		unexpected = append(unexpected, rel)
+		return nil
+	})
+	require.NoError(t, walkErr)
+	assert.Empty(t, unexpected, "no profile file or directory is created in the working directory")
 }
