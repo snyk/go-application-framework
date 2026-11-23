@@ -313,7 +313,47 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["isPendingFinding"] = isPendingFinding
 	fnMap["isIgnoredFinding"] = isIgnoredFinding
 	fnMap["hasSuppression"] = hasSuppression
+	fnMap["describeFilesNotAnalyzed"] = describeFilesNotAnalyzed
 	return fnMap
+}
+
+// describeFilesNotAnalyzed formats unsupported coverage entries for the human summary.
+// Returns empty when every file was analyzed or coverage is absent.
+func describeFilesNotAnalyzed(coverage []local_models.TypesCoverage) string {
+	var parts []string
+	total := 0
+	for _, entry := range coverage {
+		if entry.IsSupported || entry.Files <= 0 {
+			continue
+		}
+		total += entry.Files
+		lang := entry.Lang
+		if lang == "" {
+			lang = "other files"
+		}
+		parts = append(parts, fmt.Sprintf("%s %d, %s", lang, entry.Files, describeCoverageSkipReason(entry.Type)))
+	}
+	if total == 0 {
+		return ""
+	}
+	noun := "files"
+	if total == 1 {
+		noun = "file"
+	}
+	return fmt.Sprintf("%d %s (%s)", total, noun, strings.Join(parts, "; "))
+}
+
+func describeCoverageSkipReason(reason string) string {
+	switch reason {
+	case "FAILED_PARSING":
+		return "failed to parse"
+	case "FILE_TOO_LARGE":
+		return "over the file size limit"
+	case "PATH_TOO_LONG":
+		return "path too long"
+	default:
+		return strings.ToLower(strings.ReplaceAll(reason, "_", " "))
+	}
 }
 
 func getUnionValue(input interface{}) interface{} {
