@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/ufm_helpers"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 func intPtr(v int) *int {
@@ -377,6 +378,78 @@ func TestDerefStr(t *testing.T) {
 	value := "help"
 	assert.Equal(t, "help", derefStr(&value))
 	assert.Equal(t, "", derefStr(nil))
+}
+
+func TestDescribeFilesNotAnalyzed(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		coverage []local_models.TypesCoverage
+		want     string
+	}{
+		{
+			desc: "all analyzed",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Go", Files: 10, IsSupported: true, Type: "SUPPORTED"},
+			},
+			want: "",
+		},
+		{
+			desc:     "no coverage",
+			coverage: nil,
+			want:     "",
+		},
+		{
+			desc: "one failed-parsing entry",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "TypeScript", Files: 5, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "5 files (TypeScript 5, failed to parse)",
+		},
+		{
+			desc: "several languages and reasons",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "TypeScript", Files: 2, IsSupported: false, Type: "FAILED_PARSING"},
+				{Lang: "Java", Files: 3, IsSupported: false, Type: "FILE_TOO_LARGE"},
+				{Lang: "Go", Files: 1, IsSupported: false, Type: "PATH_TOO_LONG"},
+			},
+			want: "6 files (TypeScript 2, failed to parse; Java 3, over the file size limit; Go 1, path too long)",
+		},
+		{
+			desc: "singular",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Go", Files: 1, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "1 file (Go 1, failed to parse)",
+		},
+		{
+			desc: "zero-file entries are ignored",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Go", Files: 0, IsSupported: false, Type: "FAILED_PARSING"},
+				{Lang: "Java", Files: 2, IsSupported: false, Type: "FILE_TOO_LARGE"},
+			},
+			want: "2 files (Java 2, over the file size limit)",
+		},
+		{
+			desc: "empty language",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "", Files: 4, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "4 files (other files 4, failed to parse)",
+		},
+		{
+			desc: "unknown reason",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Python", Files: 2, IsSupported: false, Type: "UNSUPPORTED_ENCODING"},
+			},
+			want: "2 files (Python 2, unsupported encoding)",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.want, describeFilesNotAnalyzed(tc.coverage))
+		})
+	}
 }
 
 func TestGetFingerprints(t *testing.T) {
