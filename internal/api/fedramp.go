@@ -14,6 +14,6 @@ func IsFedramp(canonicalUrl string) bool {
 	if err != nil {
 		return false
 	}
-	hostname := strings.ToLower(parsedUrl.Host)
-	return strings.HasSuffix(hostname, fedRampHostSuffix)
+	hostname := strings.TrimSuffix(strings.ToLower(parsedUrl.Hostname()), ".")
+	return hostname == fedRampHostSuffix || IsSubdomainOf(hostname, fedRampHostSuffix)
 }

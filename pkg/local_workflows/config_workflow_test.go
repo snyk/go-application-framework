@@ -235,6 +235,42 @@ func Test_DetermineRegionFromUrl(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name:    "Look-alike host with an extra suffix label",
+			url:     "https://api.snyk.io.evil.example/x",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "Look-alike host sharing only a string prefix",
+			url:     "https://api.snyk.iomalicious.example/",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "Userinfo before a region host",
+			url:     "https://api.snyk.io@evil.example/x",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "Unparseable URL with a region host prefix",
+			url:     "https://api.snyk.io/%zz",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "Region host with a trailing dot",
+			url:     "https://api.snyk.io./x",
+			want:    "snyk-us-01",
+			wantErr: false,
+		},
+		{
+			name:    "Region host with a non-default port",
+			url:     "https://api.snyk.io:8443/x",
+			want:    "snyk-us-01",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
