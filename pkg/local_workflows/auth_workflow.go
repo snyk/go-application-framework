@@ -1,13 +1,16 @@
 package localworkflows
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -68,13 +71,14 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	defer globalConfig.ClearCache()
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-		config,
+	authenticatorOpts := []auth.OAuth2AuthenticatorOption{
 		auth.WithHttpClient(httpClient),
 		auth.WithOpenBrowserFunc(OpenBrowser),
 		auth.WithShutdownServerFunc(auth.ShutdownServer),
 		auth.WithLogger(logger),
-	)
+	}
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
@@ -102,6 +106,46 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return auth.AUTH_TYPE_OAUTH
 }
 
+// clearCredentialTimeout bounds the wait for the storage lock held by another process.
+const clearCredentialTimeout = 10 * time.Second
+
+func hideMachineCredentials(configs map[string]configuration.Configuration) (map[string]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), clearCredentialTimeout)
+	defer cancel()
+	hidden := map[string]string{}
+	for name, c := range configs {
+		if c.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE) == "" {
+			continue
+		}
+		if err := machinecredential.CheckStorage(ctx, c); err != nil {
+			return nil, fmt.Errorf("the storage of the %s configuration, which holds the machine credential, cannot be used: %w", name, err)
+		}
+		hidden[name] = c.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE)
+	}
+	for name := range hidden {
+		// Not Unset: it writes a deletion to storage.
+		configs[name].Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, "")
+	}
+	return hidden, nil
+}
+
+func deleteOrRestoreMachineCredentials(configs map[string]configuration.Configuration, hidden map[string]string, loggedIn bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), clearCredentialTimeout)
+	defer cancel()
+	var err error
+	for name, value := range hidden {
+		if loggedIn && err == nil {
+			clearErr := machinecredential.Clear(ctx, configs[name])
+			if clearErr == nil {
+				continue
+			}
+			err = fmt.Errorf("the login succeeded, but the machine credential is still stored in the %s configuration and will be used: %w", name, clearErr)
+		}
+		configs[name].Set(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, value)
+	}
+	return err
+}
+
 func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
@@ -114,6 +158,20 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
+
+	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
+	// stored credential until the login succeeds.
+	credentialConfigs := map[string]configuration.Configuration{"local": config, "global": globalConfig}
+	hiddenCredentials, err := hideMachineCredentials(credentialConfigs)
+	if err != nil {
+		return err
+	}
+	loggedIn := false
+	defer func() {
+		if deleteErr := deleteOrRestoreMachineCredentials(credentialConfigs, hiddenCredentials, loggedIn); deleteErr != nil {
+			err = deleteErr
+		}
+	}()
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
@@ -134,6 +192,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 		newToken := config.Get(auth.CONFIG_KEY_OAUTH_TOKEN)
 		globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newToken)
+		loggedIn = true
 
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
 		if err != nil {
@@ -162,6 +221,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 		// we don't want to use the cache here, so this is a workaround
 		globalConfig.ClearCache()
 		globalConfig.Set(auth.CONFIG_KEY_TOKEN, pat)
+		loggedIn = true
 
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
 		if err != nil {
@@ -176,6 +236,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 		if legacyCLIError != nil {
 			return legacyCLIError
 		}
+		loggedIn = true
 	}
 
 	return err

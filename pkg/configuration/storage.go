@@ -3,9 +3,12 @@ package configuration
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -117,7 +120,10 @@ func (s *JsonStorage) Set(key string, value any) error {
 	}
 
 	fileBytes, err := os.ReadFile(s.path)
-	if len(fileBytes) == 0 || err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if len(fileBytes) == 0 {
 		const emptyJson = "{}"
 		fileBytes = []byte(emptyJson)
 	}
@@ -126,6 +132,9 @@ func (s *JsonStorage) Set(key string, value any) error {
 	err = json.Unmarshal(fileBytes, &config)
 	if err != nil {
 		return err
+	}
+	if config == nil { // the file holds the JSON literal null
+		config = make(map[string]any)
 	}
 
 	if tmpKey := s.getNonEnvVarKey(key); len(tmpKey) > 0 {
@@ -143,12 +152,126 @@ func (s *JsonStorage) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(s.path, configJson, fileperms.FILEPERM_666)
+	return writeConfigFile(s.path, configJson)
+}
 
+// ensureFilePermissions removes non-owner permissions without failing reads if repair fails.
+func (s *JsonStorage) ensureFilePermissions() {
+	info, err := os.Stat(s.path)
+	if err != nil {
+		return
+	}
+	if mode := info.Mode().Perm() & fileperms.FILEPERM_600; mode != info.Mode().Perm() {
+		_ = os.Chmod(s.path, mode) //nolint:errcheck // Permission repair is best effort when reading.
+	}
+}
+
+var renameConfigFile = os.Rename
+
+// writeConfigFile replaces the file in one step, so a crash or a full disk never leaves it truncated.
+// An existing regular file that may not be replaced, such as a bind-mounted file, one in a read-only
+// directory or one another process holds open on Windows, is written in place instead; see canFallBack.
+func writeConfigFile(path string, contents []byte) error {
+	path, err := resolveConfigPath(path)
+	if err != nil {
+		return err
+	}
+	existing, statErr := os.Stat(path)
+	canOverwrite := statErr == nil && existing.Mode().IsRegular()
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		if canOverwrite && canFallBack(err) {
+			return overwriteConfigFile(path, contents)
+		}
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err = tmp.Chmod(fileperms.FILEPERM_600); err == nil {
+		_, err = tmp.Write(contents)
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if canOverwrite {
+		matchOwner(tmp.Name(), existing)
+	}
+	if err = renameConfigFile(tmp.Name(), path); err != nil && canOverwrite && canFallBack(err) {
+		return overwriteConfigFile(path, contents)
+	}
+	return err
+}
+
+// maxSymlinkHops is a generous bound; the OS applies its own limit when Set reads the file first.
+const maxSymlinkHops = 40
+
+// resolveConfigPath follows a symlinked configuration file, which a rename would otherwise replace,
+// up to the first missing target so the write creates it as an in-place write does. A loop or too
+// many hops is an error, as it would be for any other access.
+func resolveConfigPath(path string) (string, error) {
+	resolved := path
+	seen := map[string]bool{}
+	for !seen[resolved] && len(seen) <= maxSymlinkHops {
+		if !isSymlink(resolved) {
+			return resolved, nil
+		}
+		seen[resolved] = true
+		target, err := os.Readlink(resolved)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			linkDir, _ := filepath.Split(resolved)
+			target = linkDir + osResolveTarget(target)
+		}
+		if resolved, err = physicalPath(target); err != nil {
+			return "", err
+		}
+	}
+	return "", &fs.PathError{Op: "readlink", Path: path, Err: syscall.ELOOP}
+}
+
+func isSymlink(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode()&fs.ModeSymlink != 0
+}
+
+// physicalPath resolves every component but the last, which may not exist yet, as the kernel does.
+// filepath.Join and Clean would drop ".." lexically and so misplace it after a symlinked directory.
+func physicalPath(path string) (string, error) {
+	parent, name := filepath.Split(path)
+	parent, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(parent, name), nil
+}
+
+func overwriteConfigFile(path string, contents []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, fileperms.FILEPERM_600)
+	if err != nil {
+		return err
+	}
+	// Restrict existing files before truncating or writing credentials.
+	if err = file.Chmod(fileperms.FILEPERM_600); err == nil {
+		err = file.Truncate(0)
+	}
+	if err == nil {
+		_, err = file.Write(contents)
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
 	return err
 }
 
 func (s *JsonStorage) Refresh(config Configuration, key string) error {
+	s.ensureFilePermissions()
 	contents, err := os.ReadFile(s.path)
 	if err != nil {
 		return err
@@ -169,7 +292,11 @@ func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error 
 		return err
 	}
 
-	_, err := s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
+	// The lock file lives next to the config file, whose directory may not exist yet.
+	err := os.MkdirAll(filepath.Dir(s.path), fileperms.FILEPERM_755)
+	if err == nil {
+		_, err = s.fileInterProcessLock.TryLockContext(ctx, retryDelay)
+	}
 	if err != nil {
 		s.fileInProcessLock.Release(1)
 		return err

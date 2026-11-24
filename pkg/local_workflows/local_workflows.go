@@ -15,6 +15,7 @@ func Init(engine workflow.Engine) error {
 		InitOutputWorkflow,
 		InitWhoAmIWorkflow,
 		InitAuth,
+		InitMachineEnrollWorkflow,
 		InitReportAnalyticsWorkflow,
 		InitConfigWorkflow,
 		InitDataTransformationWorkflow,

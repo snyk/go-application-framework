@@ -1,14 +1,46 @@
 package machineid
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
+
+// errorChain renders err and every error beneath it, so a failure shows the operating system error
+// behind a wrapper's title.
+func errorChain(err error) string {
+	if err == nil {
+		return ""
+	}
+	var parts []string
+	var walk func(error)
+	walk = func(e error) {
+		parts = append(parts, fmt.Sprintf("%v", e))
+		if many, ok := e.(interface{ Unwrap() []error }); ok {
+			for _, next := range many.Unwrap() {
+				walk(next)
+			}
+			return
+		}
+		if next := errors.Unwrap(e); next != nil {
+			walk(next)
+		}
+	}
+	walk(err)
+	return strings.Join(parts, "\n  caused by: ")
+}
 
 func TestIntegration_InMemoryConfigurationResolvesThroughTheSharedFile(t *testing.T) {
 	m := newIsolatedMachine(t)
@@ -19,6 +51,17 @@ func TestIntegration_InMemoryConfigurationResolvesThroughTheSharedFile(t *testin
 
 	require.True(t, valid(id))
 	require.Equal(t, id, readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestErrorChainListsEveryCause(t *testing.T) {
+	cause := &fs.PathError{Op: "open", Path: "machine-id.json", Err: syscall.ENOENT}
+	err := errors.Join(cli.NewMachineIDFileUnreadableError("unreadable", snyk_errors.WithCause(cause)))
+
+	chain := errorChain(err)
+
+	require.Contains(t, chain, "unreadable")
+	require.Contains(t, chain, "open machine-id.json")
+	require.Contains(t, chain, syscall.ENOENT.Error())
 }
 
 func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
@@ -33,9 +76,11 @@ func TestIntegration_ConcurrentRunsOnOneMachineConvergeOnOneID(t *testing.T) {
 			defer wg.Done()
 			config := configuration.NewWithOpts(configuration.WithFiles("snyk"), configuration.WithAutomaticEnv())
 			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
-			value, err := config.GetStringWithError(configuration.MACHINE_ID)
-			assert.NoError(t, err)
-			results[i] = value
+			value, err := config.GetWithError(configuration.MACHINE_ID)
+			assert.NoError(t, err, errorChain(err))
+			machine, ok := value.(runtimeinfo.Machine)
+			assert.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+			results[i] = machine.ID
 		}(i)
 	}
 	wg.Wait()

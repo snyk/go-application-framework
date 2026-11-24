@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"runtime/debug"
@@ -17,6 +18,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -374,9 +376,14 @@ func (e *EngineImpl) Invoke(
 				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
 			}
 
-			// prepare networkAccess
-			localNetworkAccess := e.networkAccess.Clone()
-			localNetworkAccess.SetConfiguration(options.config)
+			// prepare networkAccess; always a clone, the invocation mutates it
+			localNetworkAccess := CreateNetworkAccess(e.networkAccess, options.config)
+			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
+				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
+				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
+					return hostErrorHandler(withExtensionName(err, id.Host), ctx)
+				})
+			}
 
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,
@@ -399,6 +406,7 @@ func (e *EngineImpl) Invoke(
 				}()
 				output, err = callback(invocationCtx, options.input)
 			}()
+			err = withExtensionName(err, id.Host)
 			localLogger.Printf("Workflow End")
 
 			if callbackPanic != nil {
@@ -423,6 +431,20 @@ func (e *EngineImpl) Invoke(
 	}
 
 	return output, err
+}
+
+// withExtensionName keeps an extension name that is already set, so a nested workflow's attribution survives the outer one.
+func withExtensionName(err error, extensionName string) error {
+	catalogErr, ok := err.(snyk_errors.Error) //nolint:errorlint // replacing a wrapped catalog error would drop the wrappers callers type-assert on
+	if !ok {
+		return err
+	}
+	if _, set := catalogErr.Meta[constants.ERROR_META_KEY_EXTENSION_NAME]; set {
+		return err
+	}
+	catalogErr.Meta = maps.Clone(catalogErr.Meta)
+	snyk_errors.WithMeta(constants.ERROR_META_KEY_EXTENSION_NAME, extensionName)(&catalogErr)
+	return catalogErr
 }
 
 func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector, cfg configuration.Configuration) {
@@ -565,20 +587,23 @@ type engineRuntimeInfo struct {
 
 // GetMachineID reads through GetWithError rather than GetStringWithError, which drops the value
 // whenever there is an error, because resolution can return a usable id together with an error.
-func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
+func (ri *engineRuntimeInfo) GetMachineID() (runtimeinfo.Machine, error) {
 	value, err := ri.engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
-	id, _ := value.(string) //nolint:errcheck // a non-string value counts as no machine id
+	var machine runtimeinfo.Machine
+	if m, isMachine := value.(runtimeinfo.Machine); isMachine {
+		machine = m
+	}
 	var details snyk_errors.Error
 	if errors.Is(err, runtimeinfo.ErrNoMachineID) && errors.As(err, &details) {
-		return "", err
+		return runtimeinfo.Machine{}, err
 	}
-	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
-		return "", runtimeinfo.ErrNoMachineID
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && machine.ID == "") {
+		return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 	}
-	if err != nil && id == "" {
-		return "", fmt.Errorf("failed to read machine id: %w", err)
+	if err != nil && machine.ID == "" {
+		return runtimeinfo.Machine{}, fmt.Errorf("failed to read machine id: %w", err)
 	}
-	return id, err
+	return machine, err
 }
 
 // GetGlobalConfiguration returns the global configuration options.

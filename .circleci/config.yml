@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   prodsec: snyk/prodsec-orb@1
   win: circleci/windows@5.0
+  go: circleci/go@4.0.3
 
 
 base_image: &base_image
@@ -12,7 +13,7 @@ base_image: &base_image
 
 # Define the jobs we want to run for this project
 jobs:
-  unit_test:
+  unit_test_linux:
     <<: *base_image
     resource_class: medium
     steps:
@@ -21,19 +22,54 @@ jobs:
           name: Run unit tests
           command: make test
 
-  windows_test:
+  unit_test_macos:
+    macos:
+      xcode: "15.3.0"
+    resource_class: m4pro.medium
+    environment:
+      GAF_MACHINEID_HARDWARE_TESTS: "1"
+    steps:
+      - checkout
+      - run:
+          name: Show preinstalled Go
+          command: command -v go || echo "no go on PATH"; go version || true
+      - go/install
+      - go/load-mod-cache
+      - run:
+          name: Show Go toolchain
+          command: go version && go env GOTOOLCHAIN
+      - run:
+          name: Run unit tests
+          command: make test
+      - go/save-mod-cache
+
+  unit_test_windows:
     executor:
       name: win/server-2022
       version: "current"
-
+      size: large
+    environment:
+      GAF_MACHINEID_HARDWARE_TESTS: "1"
+      CGO_ENABLED: "1"
     steps:
       - run:
           name: Configure git to translate line terminators locally
           command: git config --global core.autocrlf input
       - checkout
       - run:
+          name: Install make
+          command: choco install make -y
+      - run:
+          name: Install C toolchain
+          command: choco install mingw -y
+      - run:
           name: Run unit tests
-          command: go test ./...
+          shell: bash.exe
+          command: |
+            set -euo pipefail
+            export PATH="/c/ProgramData/mingw64/mingw64/bin:$PATH"
+            gcc --version
+            make test
 
   build:
     <<: *base_image
@@ -93,12 +129,15 @@ workflows:
             - devex_cli
             - endpoint-experience
             - prodsec-orb-runtime
-      - unit_test:
-          name: Unit tests
-      - windows_test:
-          name: Windows tests
+      - unit_test_linux:
+          name: Unit tests (Linux)
+      - unit_test_macos:
+          name: Unit tests (macOS)
+      - unit_test_windows:
+          name: Unit tests (Windows)
       - build:
           name: Build
           requires:
-            - Unit tests
-            - Windows tests
+            - Unit tests (Linux)
+            - Unit tests (macOS)
+            - Unit tests (Windows)
