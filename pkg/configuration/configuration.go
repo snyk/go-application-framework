@@ -120,6 +120,13 @@ type extendedViper struct {
 	ignoredEnvVars []string
 
 	interkeyDependencies map[string][]string
+
+	// derivationParent is the configuration this one was Derive'd from, if any. It is immutable after Derive.
+	derivationParent *extendedViper
+	// derivedChildren are configurations Derive created from this one. Registrations added here after Derive are
+	// copied to them. Only the derivation root accumulates children; a configuration derived from a derived one
+	// is listed on its immediate parent.
+	derivedChildren []*extendedViper
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -423,6 +430,9 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 // apply first, so a registration in opts wins over the one of base for the same key. Values set on base, such as an
 // explicit MACHINE_ID, are not visible; Set what is needed.
 //
+// Registrations added to base after Derive are also applied to the result (and to further configurations derived from
+// it), unless the result already has a registration for that key. Registrations added on the result do not reach base.
+//
 // Persisted keys are copied, so a Set of one of them writes to the storage of the result. Without a storage, for example
 // without WithPinnedFile, Set changes memory only; check GetStorage() != nil.
 //
@@ -456,7 +466,37 @@ func Derive(base Configuration, opts ...Opts) (Configuration, error) {
 	if hasCache && derived.defaultCache == nil {
 		WithCachingEnabled(cacheTTL)(derived)
 	}
+
+	derived.derivationParent = src
+	src.mutex.Lock()
+	src.derivedChildren = append(src.derivedChildren, derived)
+	src.mutex.Unlock()
+
 	return derived, nil
+}
+
+// IsDerivedFrom reports whether config is base or was produced from base by one or more Derive calls.
+func IsDerivedFrom(config, base Configuration) bool {
+	if config == nil || base == nil {
+		return false
+	}
+	if config == base {
+		return true
+	}
+	c, ok := config.(*extendedViper)
+	if !ok {
+		return false
+	}
+	b, ok := base.(*extendedViper)
+	if !ok {
+		return false
+	}
+	for p := c.derivationParent; p != nil; p = p.derivationParent {
+		if p == b {
+			return true
+		}
+	}
+	return false
 }
 
 // copyRegistrationsTo copies the registrations of ev to dst, where registrations already in dst win. It reports whether ev
@@ -881,12 +921,20 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 	}
 }
 
-// AddFlagSet adds a flag set to the configuration.
+// AddFlagSet adds a flag set to the configuration. Configurations derived from
+// this one also receive the flag set.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
 	ev.flagsets = append(ev.flagsets, flagset)
-	return ev.viper.BindPFlags(flagset)
+	err := ev.viper.BindPFlags(flagset)
+	ev.mutex.Unlock()
+	if err != nil {
+		return err
+	}
+	for _, child := range ev.snapshotDerivedChildren() {
+		_ = child.AddFlagSet(flagset)
+	}
+	return nil
 }
 
 // GetStringSlice returns a configuration value as []string.
@@ -931,19 +979,58 @@ func (ev *extendedViper) AllKeys() []string {
 	return keys
 }
 
-// AddDefaultValue adds a default value to the configuration.
+// AddDefaultValue adds a default value to the configuration. Configurations
+// derived from this one also receive the registration when they do not already
+// have one for key.
 func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFunction) {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
-
 	ev.defaultValues[key] = defaultValue
+	ev.mutex.Unlock()
+	for _, child := range ev.snapshotDerivedChildren() {
+		child.propagateDefaultValue(key, defaultValue)
+	}
 }
 
-// AddAlternativeKeys adds alternative keys to the configuration.
+func (ev *extendedViper) propagateDefaultValue(key string, defaultValue DefaultValueFunction) {
+	ev.mutex.Lock()
+	_, exists := ev.defaultValues[key]
+	if !exists {
+		ev.defaultValues[key] = defaultValue
+	}
+	ev.mutex.Unlock()
+	if exists {
+		return
+	}
+	for _, child := range ev.snapshotDerivedChildren() {
+		child.propagateDefaultValue(key, defaultValue)
+	}
+}
+
+// AddAlternativeKeys adds alternative keys to the configuration. Configurations
+// derived from this one also receive the registration when they do not already
+// have alternative keys for key.
 func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
-	ev.alternativeKeys[key] = altKeys
+	ev.alternativeKeys[key] = slices.Clone(altKeys)
+	ev.mutex.Unlock()
+	for _, child := range ev.snapshotDerivedChildren() {
+		child.propagateAlternativeKeys(key, altKeys)
+	}
+}
+
+func (ev *extendedViper) propagateAlternativeKeys(key string, altKeys []string) {
+	ev.mutex.Lock()
+	_, exists := ev.alternativeKeys[key]
+	if !exists {
+		ev.alternativeKeys[key] = slices.Clone(altKeys)
+	}
+	ev.mutex.Unlock()
+	if exists {
+		return
+	}
+	for _, child := range ev.snapshotDerivedChildren() {
+		child.propagateAlternativeKeys(key, altKeys)
+	}
 }
 
 // GetAlternativeKeys returns alternative keys from the configuration.
@@ -954,9 +1041,23 @@ func (ev *extendedViper) GetAlternativeKeys(key string) []string {
 }
 
 func (ev *extendedViper) PersistInStorage(key string) {
+	ev.persistInStorageLocal(key)
+	for _, child := range ev.snapshotDerivedChildren() {
+		child.PersistInStorage(key)
+	}
+}
+
+func (ev *extendedViper) persistInStorageLocal(key string) {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 	ev.persistedKeys[key] = true
+}
+
+// snapshotDerivedChildren returns a copy of the derived-children slice.
+func (ev *extendedViper) snapshotDerivedChildren() []*extendedViper {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return slices.Clone(ev.derivedChildren)
 }
 
 func (ev *extendedViper) SetStorage(storage Storage) {
@@ -1194,14 +1295,33 @@ func (ev *extendedViper) detectCircularDependency(key string, dependencyKey stri
 
 func (ev *extendedViper) AddKeyDependency(key string, dependencyKey string) error {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
-
-	// detect circular dependencies
 	if err := ev.detectCircularDependency(key, dependencyKey); err != nil {
+		ev.mutex.Unlock()
 		return err
 	}
-
 	ev.interkeyDependencies[dependencyKey] = append(ev.interkeyDependencies[dependencyKey], key)
+	ev.mutex.Unlock()
+
+	for _, child := range ev.snapshotDerivedChildren() {
+		_ = child.propagateKeyDependency(key, dependencyKey)
+	}
+	return nil
+}
+
+func (ev *extendedViper) propagateKeyDependency(key string, dependencyKey string) error {
+	ev.mutex.Lock()
+	if err := ev.detectCircularDependency(key, dependencyKey); err != nil {
+		ev.mutex.Unlock()
+		return err
+	}
+	if !slices.Contains(ev.interkeyDependencies[dependencyKey], key) {
+		ev.interkeyDependencies[dependencyKey] = append(ev.interkeyDependencies[dependencyKey], key)
+	}
+	ev.mutex.Unlock()
+
+	for _, child := range ev.snapshotDerivedChildren() {
+		_ = child.propagateKeyDependency(key, dependencyKey)
+	}
 	return nil
 }
 

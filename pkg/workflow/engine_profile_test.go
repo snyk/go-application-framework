@@ -689,7 +689,7 @@ func Test_Engine_Profile_InvocationChangesStayInItsConfiguration(t *testing.T) {
 }
 
 // Test_Engine_Profile_RegistryFollowsSetConfiguration checks that the registry is kept while the configuration stays the
-// same, and that SetConfiguration replaces it with one that derives from the new configuration.
+// same, that selecting a derived profile keeps it, and that SetConfiguration of an unrelated configuration replaces it.
 func Test_Engine_Profile_RegistryFollowsSetConfiguration(t *testing.T) {
 	env := newProfileEnv(t)
 	env.writeProfile("machine", "machine-value")
@@ -709,6 +709,13 @@ func Test_Engine_Profile_RegistryFollowsSetConfiguration(t *testing.T) {
 	output, err := env.engine.Invoke(NewWorkflowIdentifier("probe"))
 	assert.Equal(t, "machine-value|", report(t, output, err), "the first configuration has no registration for the key")
 
+	selected, err := first.Profile("machine")
+	require.NoError(t, err)
+	env.engine.SetConfiguration(selected.Configuration())
+	kept, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	assert.Same(t, first, kept, "selecting a derived profile must keep the registry")
+
 	configB := newProfileBase(t.TempDir())
 	configB.Set(profile.DirKey, env.dir)
 	configB.Set(profile.ConfigKey, "machine")
@@ -717,7 +724,7 @@ func Test_Engine_Profile_RegistryFollowsSetConfiguration(t *testing.T) {
 
 	third, err := GetProfileRegistry(env.engine)
 	require.NoError(t, err)
-	assert.NotSame(t, first, third, "SetConfiguration must replace the registry")
+	assert.NotSame(t, first, third, "SetConfiguration of an unrelated configuration must replace the registry")
 	p, err := third.Profile("machine")
 	require.NoError(t, err)
 	assert.Equal(t, "from-b", p.Configuration().GetString(profileTestAltKey), "the profiles must derive from the new configuration")

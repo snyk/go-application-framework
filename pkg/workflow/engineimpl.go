@@ -44,10 +44,12 @@ type EngineImpl struct {
 	workflowsMu       sync.RWMutex // guards workflows; separate from mu so registry access never waits on config or hooks
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
-	// profiles is built on first use from the configuration of the engine, see profileRegistry. profilesDir is the
-	// profile directory that it was built with.
-	profiles    profile.Registry
-	profilesDir string
+	// profiles is built on first use from profilesBase, see profileRegistry. profilesDir is the profile directory that
+	// it was built with. profilesBase is the configuration the profiles derive from; it stays the default when the
+	// engine's active configuration is replaced with a selected profile.
+	profiles     profile.Registry
+	profilesDir  string
+	profilesBase configuration.Configuration
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -154,8 +156,13 @@ func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
 func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// Keep the profile registry when the new configuration is derived from the registry's base, so selecting a
+	// profile before Init does not rebuild the registry from that profile. Any other replacement clears it.
+	keepProfiles := e.profiles != nil && e.profilesBase != nil && configuration.IsDerivedFrom(config, e.profilesBase)
 	e.config = config
-	e.profiles, e.profilesDir = nil, "" // profiles derive from the engine configuration, so they are rebuilt from the new one
+	if !keepProfiles {
+		e.profiles, e.profilesDir, e.profilesBase = nil, "", nil
+	}
 
 	if e.networkAccess != nil {
 		e.networkAccess.SetConfiguration(config)
@@ -777,10 +784,10 @@ func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invo
 
 // GetProfileRegistry returns the registry of configuration profiles that the engine selects from. Its profile files are
 // read from the directory set with profile.DirKey. The engine rebuilds the registry when SetConfiguration replaces its
-// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. A registry that is
-// rebuilt loses the names set with profile.Registry.SetIgnoredEnvVars, so call it on each registry obtained here,
-// before the first profile is loaded. It fails if the directory is not set or not absolute, or if the engine does not
-// support profiles.
+// configuration with one that is not derived from the registry's base, or when profile.DirKey changes, so ask for it on
+// every use and do not keep it. A registry that is rebuilt loses the names set with profile.Registry.SetIgnoredEnvVars,
+// so call it on each registry obtained here, before the first profile is loaded. It fails if the directory is not set or
+// not absolute, or if the engine does not support profiles.
 func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 	provider, ok := engine.(profileRegistryProvider)
 	if !ok {
@@ -790,21 +797,31 @@ func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 }
 
 // profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration
-// of the engine, and built again when profile.DirKey resolves to another directory than the one it was built with. A
-// failed build is not kept, so the next use retries it. The caller must not hold the engine lock.
+// of the engine (the default), and built again when profile.DirKey resolves to another directory than the one it was
+// built with. Selecting a derived profile with SetConfiguration keeps this registry. A failed build is not kept, so the
+// next use retries it. The caller must not hold the engine lock.
 func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	dir := e.config.GetString(profile.DirKey)
+	// DirKey is often set only on the default configuration. A selected profile is derived without that value, so read
+	// the directory from the registry base when the active configuration is one of its profiles.
+	dirConfig := e.config
+	if e.profilesBase != nil && configuration.IsDerivedFrom(e.config, e.profilesBase) {
+		dirConfig = e.profilesBase
+	}
+	dir := dirConfig.GetString(profile.DirKey)
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
-	registry, err := profile.NewFileRegistry(dir, e.config, opts...)
+	base := e.profilesBase
+	if base == nil {
+		base = e.config
+	}
+	registry, err := profile.NewFileRegistry(dir, base, profile.WithLogger(e.logger))
 	if err != nil {
 		return nil, err
 	}
-	e.profiles, e.profilesDir = registry, dir
+	e.profiles, e.profilesDir, e.profilesBase = registry, dir, base
 	return registry, nil
 }
 
