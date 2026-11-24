@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/fips140"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -20,12 +21,14 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -47,6 +50,9 @@ const (
 	orgLookupProvidedSlugFailed OrgLookup = "provided_slug_failed"
 	orgLookupDefault            OrgLookup = "default"
 	orgLookupDefaultFailed      OrgLookup = "default_failed"
+
+	// defaultProfileDirName is the name of the profile directory in the default storage directory.
+	defaultProfileDirName = "snyk_profiles"
 )
 
 type instrumentationRecorder struct {
@@ -149,6 +155,51 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		return orgId, err
 	}
 	return callback
+}
+
+func defaultFuncTenantId(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	// the tenant is looked up with these credentials and for this org, so a clone changing them must not reuse a cached value
+	for _, key := range []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ORGANIZATION} {
+		if err := config.AddKeyDependency(configuration.TENANT, key); err != nil {
+			logger.Print("Failed to add dependency for TENANT:", err)
+		}
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		if existing, ok := existingValue.(string); ok && len(existing) > 0 {
+			return existing, nil
+		}
+
+		tenantId, err := lookupTenantId(engine, c, apiClientFactory)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"TENANT\":", err)
+		}
+		return tenantId, err
+	}
+	return callback
+}
+
+func lookupTenantId(engine workflow.Engine, c configuration.Configuration, apiClientFactory func(url string, client *http.Client) api.ApiClient) (string, error) {
+	_, err := machinecredential.Load(c)
+	if err != nil && !errors.Is(err, machinecredential.ErrNotEnrolled) {
+		return "", err
+	}
+	client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
+	apiClient := apiClientFactory(c.GetString(configuration.API_URL), client)
+
+	// only a machine can read its own record, and requests go out as the machine only when the OAuth flow is on
+	if err == nil && c.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
+		return apiClient.GetMachineTenantId(context.Background())
+	}
+
+	orgId, err := c.GetStringWithError(configuration.ORGANIZATION)
+	if err != nil {
+		return "", err
+	}
+	if orgId == "" {
+		return "", errors.New("no organization to look up the tenant of")
+	}
+	return apiClient.GetTenantIdFromOrgId(context.Background(), orgId)
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
@@ -360,6 +411,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
+	config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(configuration.DefaultStorageDir(), defaultProfileDirName)))
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
@@ -398,6 +450,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.TENANT, defaultFuncTenantId(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {

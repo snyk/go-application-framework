@@ -1,7 +1,8 @@
-// Package enrollmenttest provides a test double for the enrollment service: a fake API server
-// that implements the enrollment (by device token and by fleet key) and token endpoints as the
-// service's enrollment spec defines them, and independently verifies everything the client signs.
-package enrollmenttest
+// Package fakeapi provides a fake Snyk API server for tests. It serves machine enrollment, tokens,
+// whoami, the machine's and the authenticated principal's own records, and organizations. It
+// independently verifies everything the client signs, so a client bug cannot pass by agreeing with
+// itself.
+package fakeapi
 
 import (
 	"crypto"
@@ -18,7 +19,9 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -72,6 +75,7 @@ type Server struct {
 	mu sync.Mutex
 	// TokenRequests counts accepted token requests.
 	TokenRequests     int
+	tokenAttempts     int
 	credentialHeaders []string
 	bearerTokens      []string
 	enrollAttempts    int
@@ -82,8 +86,15 @@ type Server struct {
 	clients           map[string]client
 	jtis              map[string]bool
 	tokens            map[string]string // access token -> client id
+	pats              map[string]bool
 	next              int
 	errorTitles       atomic.Bool
+	tenantID          string
+	machineSelfStatus int
+	machineSelfCalls  int
+	defaultOrgID      string
+	orgTenants        map[string]string // org id -> tenant id, "" for an org whose record names no tenant
+	orgCalls          int
 }
 
 type fleetKey struct {
@@ -92,8 +103,9 @@ type fleetKey struct {
 }
 
 type client struct {
-	key *rsa.PublicKey
-	kid string // the RFC 7638 thumbprint of key
+	key    *rsa.PublicKey
+	kid    string // the RFC 7638 thumbprint of key
+	secret string
 }
 
 // signs reports whether a JWS with header can be the client's: RS256, by the key kid names.
@@ -111,11 +123,16 @@ func NewServer(t *testing.T) *Server {
 		clients:      map[string]client{},
 		jtis:         map[string]bool{},
 		tokens:       map[string]string{},
+		orgTenants:   map[string]string{},
+		pats:         map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hidden/machines/enrollments", s.enroll)
 	mux.HandleFunc("POST /oauth2/token", s.token)
 	mux.HandleFunc("GET /rest/whoami", s.whoami)
+	mux.HandleFunc("GET /rest/machines/self", s.machineSelf)
+	mux.HandleFunc("GET /rest/self", s.self)
+	mux.HandleFunc("GET /rest/orgs/{org_id}", s.org)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.recordCredentialHeaders(r)
 		mux.ServeHTTP(w, r)
@@ -158,11 +175,69 @@ func (s *Server) SetErrorTitles(on bool) {
 	s.errorTitles.Store(on)
 }
 
+// SetTenantID sets the tenant the machine's own record names.
+func (s *Server) SetTenantID(tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tenantID = tenantID
+}
+
+// FailMachineSelf makes the machine's own record answer with status and a JSON:API error, whoever asks.
+func (s *Server) FailMachineSelf(status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.machineSelfStatus = status
+}
+
+// MachineSelfRequests returns how many requests reached the machine's own record, answered or not.
+func (s *Server) MachineSelfRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.machineSelfCalls
+}
+
+// SetDefaultOrg sets the organization the principal's own record names as its default.
+func (s *Server) SetDefaultOrg(orgID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultOrgID = orgID
+}
+
+// AddOrg makes the organization record for orgID exist, naming tenantID as its tenant, or no
+// tenant if tenantID is empty.
+func (s *Server) AddOrg(orgID, tenantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orgTenants[orgID] = tenantID
+}
+
+// OrgRequests returns how many requests reached an organization record, answered or not.
+func (s *Server) OrgRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.orgCalls
+}
+
 // RegisterClient makes the token endpoint accept client assertions for clientID signed by key.
 func (s *Server) RegisterClient(clientID string, key *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clients[clientID] = client{key: key, kid: thumbprintRSA(key)}
+}
+
+// RegisterPAT makes GET /rest/self accept pat, sent as the API sends a token: "Authorization: token <pat>".
+func (s *Server) RegisterPAT(pat string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pats[pat] = true
+}
+
+// RegisterClientSecret makes the token endpoint accept the shared secret for clientID, in the
+// Authorization header or in the request body.
+func (s *Server) RegisterClientSecret(clientID, secret string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients[clientID] = client{secret: secret}
 }
 
 // RevokeClient makes the token endpoint reject clientID and invalidates the access tokens issued to
@@ -237,6 +312,13 @@ func (s *Server) ClientCount() int {
 	return len(s.clients)
 }
 
+// TokenAttempts returns how many requests reached the token endpoint, accepted or not.
+func (s *Server) TokenAttempts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenAttempts
+}
+
 // EnrollmentRequests returns how many requests reached the enrollment endpoint, accepted or not.
 func (s *Server) EnrollmentRequests() int {
 	s.mu.Lock()
@@ -250,7 +332,7 @@ func (s *Server) machineByID(id string) *machine {
 			return m
 		}
 	}
-	panic("enrollmenttest: unknown machine " + id)
+	panic("fakeapi: unknown machine " + id)
 }
 
 // parseRequest checks the request against the spec and returns its attributes, or writes the error
@@ -490,12 +572,16 @@ func (s *Server) verifyAssertion(token, audience string) (*rsa.PublicKey, string
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	s.countTokenAttempt()
+	if err := r.ParseForm(); err != nil || r.PostForm.Get("grant_type") != "client_credentials" {
 		writeOAuthError(w, "invalid_request")
 		return
 	}
-	if r.PostForm.Get("grant_type") != "client_credentials" ||
-		r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
+	if !r.PostForm.Has("client_assertion_type") {
+		s.tokenForSecret(w, r)
+		return
+	}
+	if r.PostForm.Get("client_assertion_type") != machineenrollment.ClientAssertionType ||
 		r.PostForm.Has("client_secret") {
 		writeOAuthError(w, "invalid_request")
 		return
@@ -521,22 +607,148 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.jtis[jti] = true
+	s.issueToken(w, clientID)
+}
+
+// tokenForSecret authenticates a client by its shared secret, sent in a Basic Authorization header or
+// as client_id and client_secret in the form body.
+func (s *Server) tokenForSecret(w http.ResponseWriter, r *http.Request) {
+	clientID, secret, inHeader := r.BasicAuth()
+	if inHeader {
+		var errID, errSecret error
+		clientID, errID = url.QueryUnescape(clientID)
+		secret, errSecret = url.QueryUnescape(secret)
+		if errID != nil || errSecret != nil {
+			writeOAuthError(w, "invalid_request")
+			return
+		}
+	} else {
+		clientID, secret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+	}
+	s.issueTokenForSecret(w, clientID, secret)
+}
+
+func (s *Server) countTokenAttempt() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenAttempts++
+}
+
+func (s *Server) issueTokenForSecret(w http.ResponseWriter, clientID, secret string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.clients[clientID]
+	if c.secret == "" || c.secret != secret {
+		writeOAuthError(w, "invalid_client")
+		return
+	}
+	s.issueToken(w, clientID)
+}
+
+func (s *Server) issueToken(w http.ResponseWriter, clientID string) {
 	s.TokenRequests++
-	accessToken := fmt.Sprintf("token-%s-%d", clientID, s.TokenRequests)
+	accessToken := s.accessToken(clientID)
 	s.tokens[accessToken] = clientID
 	writeJSON(w, http.StatusOK, map[string]any{"access_token": accessToken, "token_type": "bearer", "expires_in": 3600})
 }
 
+// accessToken returns an unsigned JWT: clients only decode its claims, for the API URL in aud.
+func (s *Server) accessToken(clientID string) string {
+	claims, err := json.Marshal(map[string]any{"sub": clientID, "aud": []string{s.URL}, "jti": strconv.Itoa(s.TokenRequests)})
+	if err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`)) + "." + base64.RawURLEncoding.EncodeToString(claims) + "."
+}
+
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	s.mu.Lock()
-	_, issued := s.tokens[bearer]
-	s.mu.Unlock()
-	if !found || !issued {
+	if !found || !s.hasIssued(bearer) {
 		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing or not valid.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": map[string]any{}})
+}
+
+func (s *Server) machineSelf(w http.ResponseWriter, r *http.Request) {
+	bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	s.mu.Lock()
+	s.machineSelfCalls++
+	clientID, issued := s.tokens[bearer]
+	tenantID, failStatus := s.tenantID, s.machineSelfStatus
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-10-15":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case failStatus != 0:
+		s.writeError(w, failStatus, "", http.StatusText(failStatus))
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !found || !issued:
+		s.writeError(w, http.StatusBadRequest, "", "Only a machine can read its own record.")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"jsonapi": map[string]any{"version": "1.0"},
+			"links":   map[string]any{"self": r.URL.Path},
+			"data": map[string]any{
+				"id": clientID, "type": "machine",
+				"attributes": map[string]any{"tenant_id": tenantID, "status": "active", "enrolled": true},
+			},
+		})
+	}
+}
+
+func (s *Server) self(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	if pat, isPAT := strings.CutPrefix(auth, "token "); auth == "" || isPAT && !s.knowsPAT(pat) {
+		s.writeError(w, http.StatusUnauthorized, "", "The token is missing or not valid.")
+		return
+	}
+	s.mu.Lock()
+	defaultOrgID := s.defaultOrgID
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonapi": map[string]any{"version": "1.0"},
+		"data": map[string]any{
+			"id": "self", "type": "user",
+			"attributes": map[string]any{"username": "pat-user", "default_org_context": defaultOrgID},
+		},
+	})
+}
+
+func (s *Server) org(w http.ResponseWriter, r *http.Request) {
+	orgID := r.PathValue("org_id")
+	s.mu.Lock()
+	s.orgCalls++
+	tenantID, exists := s.orgTenants[orgID]
+	s.mu.Unlock()
+	switch {
+	case r.URL.Query().Get("version") != "2024-03-12":
+		s.writeError(w, http.StatusBadRequest, "", "version is missing or unsupported")
+	case r.Header.Get("Authorization") == "":
+		s.writeError(w, http.StatusUnauthorized, "", "The access token is missing.")
+	case !exists:
+		s.writeError(w, http.StatusNotFound, "", "The organization was not found.")
+	default:
+		data := map[string]any{"id": orgID, "type": "org", "attributes": map[string]any{"slug": orgID}}
+		if tenantID != "" {
+			data["relationships"] = map[string]any{"tenant": map[string]any{"data": map[string]any{"id": tenantID, "type": "tenant"}}}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"jsonapi": map[string]any{"version": "1.0"}, "data": data})
+	}
+}
+
+func (s *Server) hasIssued(accessToken string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, issued := s.tokens[accessToken]
+	return issued
+}
+
+func (s *Server) knowsPAT(pat string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pats[pat]
 }
 
 // VerifyJWT verifies a compact JWS signed with ES256 or RS256 by pub.
@@ -648,7 +860,7 @@ func thumbprintRSA(pub *rsa.PublicKey) string {
 func thumbprintEC(pub *ecdsa.PublicKey) string {
 	b, err := pub.Bytes()
 	if err != nil || pub.Curve != elliptic.P256() {
-		panic("enrollmenttest: not a P-256 key")
+		panic("fakeapi: not a P-256 key")
 	}
 	canonical := fmt.Sprintf(`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`,
 		base64.RawURLEncoding.EncodeToString(b[1:33]), base64.RawURLEncoding.EncodeToString(b[33:]))

@@ -2,15 +2,20 @@ package localworkflows
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/authstdin"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -22,6 +27,7 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	AuthTypeParameter = "auth-type"
+	stdinFlag         = "stdin"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
@@ -41,13 +47,20 @@ var ConfigurationNewAuthenticationToken = "internal_new_snyk_token"
 
 // InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
+	return initAuth(engine, os.Stdin)
+}
+
+func initAuth(engine workflow.Engine, stdin *os.File) error {
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
 	config.String(AuthTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
+	config.Bool(stdinFlag, false, "Read the secret (PAT, client secret or private key) from stdin")
 
-	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
+	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), func(invocationCtx workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		return authEntryPoint(invocationCtx, input, stdin)
+	})
 	return err
 }
 
@@ -57,7 +70,7 @@ func OpenBrowser(authUrl string) {
 }
 
 // authEntryPoint is the entry point for the auth workflow.
-func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
+func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data, stdin *os.File) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
@@ -78,23 +91,98 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	}
 
+	// The grant type is fixed when the authenticator is built.
+	if err = resolveSecret(config, stdin); err != nil {
+		return nil, err
+	}
+
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(config, authenticatorOpts...)
 
 	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
-func autoDetectAuthType(config configuration.Configuration) string {
-	// testing if an API token was specified
-	token := config.GetString(ConfigurationNewAuthenticationToken)
-	if len(token) > 0 && auth.IsAuthTypeToken(token) {
-		return auth.AUTH_TYPE_TOKEN
+// resolveSecret makes the secret given as the argument, which the host passes in
+// ConfigurationNewAuthenticationToken, or on stdin the client secret.
+func resolveSecret(config configuration.Configuration, stdin *os.File) error {
+	fromStdin := config.GetBool(stdinFlag)
+	inArgument := config.GetString(ConfigurationNewAuthenticationToken) != ""
+	// Before the alternative key below, which IsSet follows.
+	inClientSecret := config.IsSet(auth.PARAMETER_CLIENT_SECRET)
+	switch {
+	case fromStdin && inArgument:
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both with --%s and as an argument; give it in only one of them", stdinFlag))
+	case fromStdin && inClientSecret:
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both with --%s and in --%s; give it in only one of them", stdinFlag, auth.PARAMETER_CLIENT_SECRET))
+	case inArgument && inClientSecret:
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("the secret is given both as an argument and in --%s; give it in only one of them", auth.PARAMETER_CLIENT_SECRET))
 	}
 
+	config.AddDefaultValue(ConfigurationNewAuthenticationToken, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if argument, ok := existingValue.(string); ok && argument != "" {
+			return argument, nil
+		}
+		if c.GetBool(stdinFlag) {
+			return authstdin.ReadSecret(stdin)
+		}
+		return "", nil
+	})
+	config.AddAlternativeKeys(auth.PARAMETER_CLIENT_SECRET, []string{ConfigurationNewAuthenticationToken})
+	// Values cached before the registrations would hide them; a clone inherits its parent's cache.
+	config.ClearCache()
+
+	secret, err := config.GetStringWithError(ConfigurationNewAuthenticationToken)
+	if err != nil {
+		return err
+	}
+	// An empty value would count as set and switch a lone --client-id to the client credentials grant.
+	if secret != "" {
+		config.Set(ConfigurationNewAuthenticationToken, secret)
+	}
+	if fromStdin {
+		return checkStdinAuthType(config)
+	}
+	return nil
+}
+
+// checkStdinAuthType fails when the authentication that would run ignores the secret on stdin.
+func checkStdinAuthType(config configuration.Configuration) error {
+	authType := authTypeOf(config)
+	switch {
+	case strings.EqualFold(authType, auth.AUTH_TYPE_TOKEN):
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("token authentication doesn't read stdin: give the API token as an argument instead of --%s; --%s takes a PAT, or a client secret or private key with --%s",
+			stdinFlag, stdinFlag, auth.PARAMETER_CLIENT_ID))
+	case strings.EqualFold(authType, auth.AUTH_TYPE_PAT), config.GetString(auth.PARAMETER_CLIENT_ID) != "":
+		return nil
+	default:
+		return cli.NewInvalidFlagOptionError(fmt.Sprintf("--%s needs --%s=<id> to log in with a client secret or private key: without it, %s authentication opens a browser login, which ignores stdin; to log in with a PAT, pipe it without --%s",
+			stdinFlag, auth.PARAMETER_CLIENT_ID, authType, AuthTypeParameter))
+	}
+}
+
+func authTypeOf(config configuration.Configuration) string {
+	if authType := config.GetString(AuthTypeParameter); authType != "" {
+		return authType
+	}
+	return autoDetectAuthType(config)
+}
+
+func autoDetectAuthType(config configuration.Configuration) string {
 	// currently the auth workflow defaults to traditional token auth when an IDE environment is detected
 	// this will need to change if IDEs want to invoke this workflow for oauth/PAT
 	integration := config.GetString(configuration.INTEGRATION_NAME)
 	if pgk_utils.IsSnykIde(integration) {
+		return auth.AUTH_TYPE_TOKEN
+	}
+
+	// A client secret can look like an API token or a PAT.
+	if config.GetString(auth.PARAMETER_CLIENT_ID) != "" {
+		return auth.AUTH_TYPE_OAUTH
+	}
+
+	// testing if an API token was specified
+	token := config.GetString(ConfigurationNewAuthenticationToken)
+	if len(token) > 0 && auth.IsAuthTypeToken(token) {
 		return auth.AUTH_TYPE_TOKEN
 	}
 
@@ -151,13 +239,22 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
-	authType := config.GetString(AuthTypeParameter)
-	if len(authType) == 0 {
-		authType = autoDetectAuthType(config)
-	}
+	authType := authTypeOf(config)
 
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
+
+	// Before any stored machine credential is hidden: the deferred cleanup would delete the one this
+	// login saves.
+	if secret := config.GetString(auth.PARAMETER_CLIENT_SECRET); isPEM(secret) {
+		source := secretSource(config)
+		// The other flows would ignore the key or forward it to the legacy CLI in its arguments.
+		if !strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) {
+			return fmt.Errorf("a private key in %s needs --%s=%s, but the authentication type is %s",
+				source, AuthTypeParameter, auth.AUTH_TYPE_OAUTH, authType)
+		}
+		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret, source)
+	}
 
 	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
 	// stored credential until the login succeeds.
@@ -175,11 +272,7 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
-	logger.Print("Unset existing auth keys")
-	config.Unset(configuration.AUTHENTICATION_TOKEN)
-	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
-	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	clearUserTokens(logger, config, globalConfig)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
@@ -240,4 +333,105 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 	}
 
 	return err
+}
+
+func clearUserTokens(logger *zerolog.Logger, config, globalConfig configuration.Configuration) {
+	logger.Print("Unset existing auth keys")
+	config.Unset(configuration.AUTHENTICATION_TOKEN)
+	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+}
+
+func isPEM(secret string) bool {
+	return strings.HasPrefix(strings.TrimSpace(secret), "-----BEGIN")
+}
+
+// secretSource names, for error messages, where the user gave the secret that --client-secret
+// returns.
+func secretSource(config configuration.Configuration) string {
+	if config.GetBool(stdinFlag) {
+		return "the --" + stdinFlag + " input"
+	}
+	if config.GetString(ConfigurationNewAuthenticationToken) != "" {
+		return "the argument"
+	}
+	return "--" + auth.PARAMETER_CLIENT_SECRET
+}
+
+// authenticateWithPrivateKey logs in with the client credentials grant and a private_key_jwt client
+// assertion signed by keyPEM, then stores the key so that later processes can mint their own tokens.
+func authenticateWithPrivateKey(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, config, globalConfig configuration.Configuration, keyPEM, source string) error {
+	clientID := config.GetString(auth.PARAMETER_CLIENT_ID)
+	if clientID == "" {
+		return fmt.Errorf("a private key in %s needs --%s", source, auth.PARAMETER_CLIENT_ID)
+	}
+	key, err := machineenrollment.ParseKeyPEM([]byte(keyPEM))
+	if err != nil {
+		return fmt.Errorf("%s looks like a PEM private key but cannot be used: %w. "+
+			"It must be an unencrypted PKCS#8 RSA or P-256 key (BEGIN PRIVATE KEY) with real line breaks; "+
+			"convert other formats with `openssl pkcs8 -topk8 -nocrypt -in <key file>`", source, err)
+	}
+	credential := machinecredential.Credential{ClientID: clientID, Key: key}
+	if err = checkPrivateKeyStorage(invocationCtx.Context(), config); err != nil {
+		return err
+	}
+	token, err := mintToken(invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), apiURLWithoutUserLogin(config), credential)
+	if err != nil {
+		return err
+	}
+	saveCtx, cancel := context.WithTimeout(invocationCtx.Context(), storeTimeout)
+	defer cancel()
+	if err = machinecredential.Save(saveCtx, config, credential); err != nil {
+		return err
+	}
+	if globalConfig != config {
+		if err = machinecredential.Publish(globalConfig, credential); err != nil {
+			return err
+		}
+	}
+	clearUserTokens(logger, config, globalConfig)
+	// Later processes derive the API URL from this token's audience.
+	config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	if err = invocationCtx.GetUserInterface().Output(auth.AUTHENTICATED_MESSAGE); err != nil {
+		logger.Debug().Err(err).Msg("Failed to output authenticated message")
+	}
+	return nil
+}
+
+// apiURLWithoutUserLogin hides the stored user tokens, whose region would win over the configured API
+// URL, on a clone: a clone does not inherit the persisted keys, so its Sets never reach the storage.
+func apiURLWithoutUserLogin(config configuration.Configuration) string {
+	urlConfig := config.Clone()
+	urlConfig.Set(configuration.AUTHENTICATION_TOKEN, "")
+	urlConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	return urlConfig.GetString(configuration.API_URL)
+}
+
+func checkPrivateKeyStorage(ctx context.Context, config configuration.Configuration) error {
+	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
+		return errors.New("the private key cannot be stored: the configuration has no storage")
+	}
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	if err := machinecredential.CheckStorage(ctx, config); err != nil {
+		return fmt.Errorf("the private key cannot be stored: %w", err)
+	}
+	return nil
+}
+
+// mintToken works on a throwaway configuration, because the authenticator persists the token it
+// mints, and nothing may be stored before the key is.
+func mintToken(httpClient *http.Client, apiURL string, credential machinecredential.Credential) (string, error) {
+	mintConfig := configuration.NewWithOpts()
+	mintConfig.Set(configuration.API_URL, apiURL)
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(mintConfig,
+		auth.WithHttpClient(httpClient),
+		auth.WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
+	if err := authenticator.Authenticate(); err != nil {
+		return "", fmt.Errorf("failed authenticating as client %s, so nothing was stored: %w", credential.ClientID, err)
+	}
+	return mintConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), nil
 }

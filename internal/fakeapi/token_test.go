@@ -1,4 +1,4 @@
-package enrollmenttest_test
+package fakeapi_test
 
 import (
 	"crypto"
@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 )
 
 // signRS256 returns a compact JWS with the given header, signed with RS256 whatever the header claims.
@@ -33,7 +33,7 @@ func signRS256(t *testing.T, key *rsa.PrivateKey, header, claims map[string]any)
 	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 
-func postAssertion(t *testing.T, srv *enrollmenttest.Server, clientID, assertion string) int {
+func postAssertion(t *testing.T, srv *fakeapi.Server, clientID, assertion string) int {
 	t.Helper()
 	resp, err := http.PostForm(srv.URL+"/oauth2/token", url.Values{
 		"grant_type":            {"client_credentials"},
@@ -47,7 +47,7 @@ func postAssertion(t *testing.T, srv *enrollmenttest.Server, clientID, assertion
 }
 
 func TestTokenEndpointChecksTheAssertionHeader(t *testing.T) {
-	srv := enrollmenttest.NewServer(t)
+	srv := fakeapi.NewServer(t)
 	e := enrolled(t, srv)
 
 	for name, tt := range map[string]struct {

@@ -1,6 +1,8 @@
 package fileupload
 
 import (
+	"errors"
+
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
@@ -11,6 +13,9 @@ var (
 	ErrNoFilesProvided = uploadrevision.ErrNoFilesUploaded
 	ErrEmptyOrgID      = uploadrevision.ErrEmptyOrgID
 	ErrEmptyRevisionID = uploadrevision.ErrEmptyRevisionID
+	// ErrContentTranscoderWithLargeFileUpload is returned when WithContentTranscoder and WithLargeFileUpload
+	// are combined: chunks are raw byte ranges of the file on disk, so its content cannot be transcoded.
+	ErrContentTranscoderWithLargeFileUpload = errors.New("content transcoder cannot be combined with large file upload")
 )
 
 // FileSizeLimitError indicates a file exceeds the maximum allowed size.
@@ -24,6 +29,12 @@ type FileCountLimitError = uploadrevision.FileCountLimitError
 
 // TotalPayloadSizeLimitError indicates the total size of all files exceeds the maximum allowed payload size.
 type TotalPayloadSizeLimitError = uploadrevision.TotalPayloadSizeLimitError
+
+// InvalidChunkSizeError indicates the size chunks are uploaded in is below the minimum.
+type InvalidChunkSizeError = uploadrevision.InvalidChunkSizeError
+
+// ChunkCountLimitError indicates a file would need more chunks than the maximum.
+type ChunkCountLimitError = uploadrevision.ChunkCountLimitError
 
 // FileAccessError indicates a file access permission issue.
 type FileAccessError = uploadrevision.FileAccessError

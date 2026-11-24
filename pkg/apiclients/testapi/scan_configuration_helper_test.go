@@ -59,6 +59,20 @@ func TestScanConfiguration_GetDefaultFindingTypes(t *testing.T) {
 			expected: []FindingType{FindingTypeSecrets},
 		},
 		{
+			name: "AI-BOM configuration returns aibom",
+			config: &ScanConfiguration{
+				Aibom: &AibomScanConfiguration{},
+			},
+			expected: []FindingType{FindingTypeAibom},
+		},
+		{
+			name: "Rift configuration returns rift",
+			config: &ScanConfiguration{
+				Rift: &RiftScanConfiguration{},
+			},
+			expected: []FindingType{FindingTypeRift},
+		},
+		{
 			name: "multiple configurations returns multiple types",
 			config: &ScanConfiguration{
 				Sca:     &ScaScanConfiguration{},

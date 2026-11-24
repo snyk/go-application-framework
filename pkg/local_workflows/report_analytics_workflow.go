@@ -2,9 +2,11 @@ package localworkflows
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -79,7 +81,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), reportAnalyticsAPIVersion)
+	send, sendErr := analyticsEndpoint(config)
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
@@ -142,19 +144,52 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 
 		input = enrichV2Event(invocationCtx, input)
-		// shortcut: the machine id is withheld until sending it is approved; to send it, call addMachineID in enrichV2Event and drop this call
-		input = withoutMachineID(input, logger)
 
 		logger.Printf("[%d] Data: %s", i, input.GetPayload())
 
+		if sendErr != nil {
+			return nil, sendErr
+		}
+
 		// send to V2 analytics endpoint
-		callErr := callEndpoint(invocationCtx, input, url)
+		callErr := callEndpoint(invocationCtx, input, send)
 		if callErr != nil {
 			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
 			return nil, err
 		}
 	}
 	return nil, nil
+}
+
+// sendAnalytics posts one event with the generated analytics client.
+type sendAnalytics func(ctx context.Context, client *api.Client, contentType string, body io.Reader) (*http.Response, error)
+
+// analyticsEndpoint returns the analytics endpoint of the organization, or of the tenant when there is no organization.
+func analyticsEndpoint(config configuration.Configuration) (sendAnalytics, error) {
+	orgID, orgErr := config.GetStringWithError(configuration.ORGANIZATION)
+	if orgErr == nil && orgID != "" {
+		orgUUID, err := uuid.Parse(orgID)
+		if err != nil {
+			return nil, fmt.Errorf("the organization to send analytics to is not a UUID: %w", err)
+		}
+		return func(ctx context.Context, client *api.Client, contentType string, body io.Reader) (*http.Response, error) {
+			return client.CreateAnalyticsWithBody(ctx, orgUUID, &api.CreateAnalyticsParams{Version: reportAnalyticsAPIVersion}, contentType, body)
+		}, nil
+	}
+
+	// unlike GetStringWithError, GetWithError reports no error for an unset tenant
+	tenantValue, tenantErr := config.GetWithError(configuration.TENANT)
+	tenantID, isString := tenantValue.(string)
+	if tenantErr != nil || !isString || tenantID == "" {
+		return nil, errors.Join(errors.New("no organization or tenant to send analytics to"), orgErr, tenantErr)
+	}
+	tenantUUID, err := uuid.Parse(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("the tenant to send analytics to is not a UUID: %w", err)
+	}
+	return func(ctx context.Context, client *api.Client, contentType string, body io.Reader) (*http.Response, error) {
+		return client.CreateTenantAnalyticsWithBody(ctx, tenantUUID, &api.CreateTenantAnalyticsParams{Version: reportAnalyticsAPIVersion}, contentType, body)
+	}, nil
 }
 
 // enrichV2Event adds the runtime fields GAF knows to a v2 event without overwriting values the producer set.
@@ -177,6 +212,7 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 	if body.Data.Attributes.Runtime == nil {
 		body.Data.Attributes.Runtime = &api.Runtime{}
 	}
+	addMachineID(body.Data.Attributes.Runtime, invocationCtx.GetRuntimeInfo(), logger)
 	addPlatformConfiguration(body.Data.Attributes.Runtime, invocationCtx.GetConfiguration(), logger)
 	addOSName(body.Data.Attributes.Runtime.Platform, osname.Get())
 
@@ -186,44 +222,6 @@ func enrichV2Event(invocationCtx workflow.InvocationContext, input workflow.Data
 		return input
 	}
 	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), enriched, workflow.WithLogger(logger))
-}
-
-// withoutMachineID removes runtime.machine_id from a v2 event and returns an event without one unchanged.
-func withoutMachineID(input workflow.Data, logger *zerolog.Logger) workflow.Data {
-	payload, ok := input.GetPayload().([]byte)
-	if !ok {
-		return input
-	}
-	var body map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.UseNumber()
-	if err := decoder.Decode(&body); err != nil {
-		logger.Printf("Sending the event unchanged, failed to decode it: %v", err)
-		return input
-	}
-	rt := runtimeOf(body)
-	if _, ok := rt["machine_id"]; !ok {
-		return input
-	}
-	delete(rt, "machine_id")
-
-	stripped, err := json.Marshal(body)
-	if err != nil {
-		logger.Printf("Sending the event unchanged, failed to encode it: %v", err)
-		return input
-	}
-	return workflow.NewData(input.GetIdentifier(), input.GetContentType(), stripped, workflow.WithLogger(logger))
-}
-
-func runtimeOf(body map[string]any) map[string]any {
-	if data, ok := body["data"].(map[string]any); ok {
-		if attributes, ok := data["attributes"].(map[string]any); ok {
-			if rt, ok := attributes["runtime"].(map[string]any); ok {
-				return rt
-			}
-		}
-	}
-	return nil
 }
 
 func addMachineID(rt *api.Runtime, ri runtimeinfo.RuntimeInfo, logger *zerolog.Logger) {
@@ -290,22 +288,22 @@ func isProxied(apiURL string) (bool, error) {
 	return proxyURL != nil, nil
 }
 
-func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
-	// Create a request
+func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, send sendAnalytics) error {
 	byteData, ok := input.GetPayload().([]byte)
 	if !ok {
 		return fmt.Errorf("invalid payload type: %T", input.GetPayload())
 	}
 
-	// Use context from invocation to respect timeout/cancellation
-	req, err := http.NewRequestWithContext(invocationCtx.Context(), http.MethodPost, url, bytes.NewBuffer(byteData))
+	client, err := api.NewClient(
+		invocationCtx.GetConfiguration().GetString(configuration.API_URL)+"/hidden",
+		api.WithHTTPClient(invocationCtx.GetNetworkAccess().GetHttpClient()),
+	)
 	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
+		return fmt.Errorf("error creating client: %w", err)
 	}
-	req.Header.Set("Content-Type", input.GetContentType())
 
-	// Send the request
-	resp, err := invocationCtx.GetNetworkAccess().GetHttpClient().Do(req)
+	// Use context from invocation to respect timeout/cancellation
+	resp, err := send(invocationCtx.Context(), client, input.GetContentType(), bytes.NewReader(byteData))
 	if err != nil {
 		return fmt.Errorf("error sending request: %w", err)
 	}

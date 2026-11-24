@@ -25,6 +25,12 @@ func (s *ScanConfiguration) GetDefaultFindingTypes() []FindingType {
 	if s.Secrets != nil {
 		types = append(types, FindingTypeSecrets)
 	}
+	if s.Aibom != nil {
+		types = append(types, FindingTypeAibom)
+	}
+	if s.Rift != nil {
+		types = append(types, FindingTypeRift)
+	}
 
 	return types
 }

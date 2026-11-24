@@ -41,8 +41,39 @@ func WithPathEncoder(encode PathEncoder) Option {
 
 // WithContentTranscoder allows transcoding each file's content before it is uploaded, e.g. to
 // UTF-8. Files the transcoder fails on are skipped.
+//
+// It cannot be combined with WithLargeFileUpload: the client then fails with
+// ErrContentTranscoderWithLargeFileUpload.
 func WithContentTranscoder(transcode ContentTranscoder) Option {
 	return func(h *HTTPClient) {
 		h.contentTranscoder = transcode
+	}
+}
+
+// WithLargeFileUpload allows uploading files larger than the max file size in chunks of the max size.
+// Chunks must be reassembled by the consumer itself.
+//
+// When enabled, every file is uploaded in chunks, including files smaller than the max file size,
+// which result in a single chunk. Files are no longer uploaded in batches.
+//
+// Files are uploaded sequentially; only the chunks of a single file are uploaded in parallel.
+// Uploading many small files is therefore slower than with the default batched upload, so
+// enable this only when large files are expected.
+//
+// Each chunk is named "<path>_chunk_v1_NNNN", where <path> is the file path relative to the root path
+// and NNNN is the 0-indexed chunk number, zero-padded to 4 digits (e.g. "src/big.bin_chunk_v1_0000").
+// All chunks but the last have the max file size; the last one may be smaller. A file may consist of
+// at most 10,000 chunks, and chunks must be at least 125 KB.
+//
+// The maximum size of a single file is 10 GB.
+//
+// It cannot be combined with WithContentTranscoder: the client then fails with
+// ErrContentTranscoderWithLargeFileUpload.
+//
+// Chunk names are not escaped: a real file named like a chunk (e.g. "foo_chunk_v1_0000") collides with
+// the chunks of the file "foo" if both are uploaded in the same revision.
+func WithLargeFileUpload(enabled bool) Option {
+	return func(h *HTTPClient) {
+		h.largeFileUpload = enabled
 	}
 }
