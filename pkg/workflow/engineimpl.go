@@ -712,6 +712,8 @@ func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags.String(configuration.TENANT, "", "")
 	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
+	// Workflows may register their own commit-id flag and the last bound flag wins, so hosts must bind
+	// the invoked command's flags last before Invoke for this global value to reach other workflows.
 	globalFLags.String(configuration.FLAG_COMMIT_ID, "", "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
 }
