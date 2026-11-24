@@ -64,12 +64,13 @@ type NetworkAccess interface {
 }
 
 // NetworkAccessSetupHook configures a NetworkAccess after it has been bound to a
-// configuration (for example by CreateNetworkAccess). Hooks registered on a base
-// instance are copied to clones so each new stack can be decorated for its config.
+// configuration. Hooks registered on a base instance are copied to clones so each new
+// stack can be decorated for its config. Callers apply them with ApplySetupHooks after
+// CreateNetworkAccess, and only when the engine lock is not held.
 type NetworkAccessSetupHook func(NetworkAccess, configuration.Configuration)
 
 // NetworkAccessSetup is implemented by NetworkAccess values that support setup hooks.
-// CreateNetworkAccess applies them after binding a configuration.
+// workflow.ApplyNetworkAccessSetup runs them after binding a configuration.
 type NetworkAccessSetup interface {
 	AddSetupHook(NetworkAccessSetupHook)
 	ApplySetupHooks()
@@ -190,8 +191,8 @@ func (n *networkImpl) AddSetupHook(hook NetworkAccessSetupHook) {
 }
 
 // ApplySetupHooks runs the setup hooks registered on this NetworkAccess with its
-// current configuration. Hooks are copied on Clone; CreateNetworkAccess applies them
-// on the clone after SetConfiguration.
+// current configuration. Hooks are copied on Clone; call this after CreateNetworkAccess
+// when the engine lock is not held.
 func (n *networkImpl) ApplySetupHooks() {
 	if len(n.setupHooks) == 0 {
 		return

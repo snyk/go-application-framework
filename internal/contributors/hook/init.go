@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/snyk/go-application-framework/internal/contributors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -25,40 +26,61 @@ var flagMap = map[string]string{
 
 // activator installs capture middleware on network stacks bound to a configuration when the
 // contributors feature flag is on for that configuration's credentials. The flag is not read
-// during Init: hosts such as the CLI select a profile afterwards, and CreateNetworkAccess runs
-// setup hooks with the configuration that will make the requests.
+// during Init: hosts such as the CLI select a profile afterwards, and ApplyNetworkAccessSetup
+// runs these hooks with the configuration that will make the requests.
 type activator struct {
 	sink   *contributors.Sink
 	logger *zerolog.Logger
 
-	mu         sync.Mutex
-	enabled    map[string]bool
-	resolving  bool // re-entrancy guard: GetBool may CreateNetworkAccess while resolving
+	mu      sync.Mutex
+	enabled map[string]bool // successful resolutions only; failures are retried
+	sf      singleflight.Group
 }
 
 func (a *activator) setup(na networking.NetworkAccess, cfg configuration.Configuration) {
 	key := decisiveConfigKey(cfg)
 
-	a.mu.Lock()
-	if a.resolving {
-		a.mu.Unlock()
-		return
+	enabled, ok := a.lookup(key)
+	if !ok {
+		var err error
+		enabled, err = a.resolve(key, cfg)
+		if err != nil {
+			a.logger.Debug().Err(err).Msg("contributors: feature flag lookup failed; capture not enabled")
+			return
+		}
 	}
-	enabled, known := a.enabled[key]
-	if !known {
-		a.resolving = true
-		a.mu.Unlock()
-		enabled = cfg.GetBool(configEnableEntityContributorsPublish)
-		a.mu.Lock()
-		a.resolving = false
-		a.enabled[key] = enabled
-	}
-	a.mu.Unlock()
 
 	if !enabled {
 		return
 	}
 	na.AddMiddleware(contributor_capture.NewContributorCaptureMiddleware(cfg, a.sink, a.logger))
+}
+
+func (a *activator) lookup(key string) (enabled bool, known bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	enabled, known = a.enabled[key]
+	return enabled, known
+}
+
+func (a *activator) resolve(key string, cfg configuration.Configuration) (bool, error) {
+	v, err, _ := a.sf.Do(key, func() (any, error) {
+		if enabled, known := a.lookup(key); known {
+			return enabled, nil
+		}
+		enabled, err := cfg.GetBoolWithError(configEnableEntityContributorsPublish)
+		if err != nil {
+			return false, err
+		}
+		a.mu.Lock()
+		a.enabled[key] = enabled
+		a.mu.Unlock()
+		return enabled, nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return v.(bool), nil
 }
 
 func decisiveConfigKey(cfg configuration.Configuration) string {
@@ -70,7 +92,7 @@ func decisiveConfigKey(cfg configuration.Configuration) string {
 }
 
 // Init registers the contributors feature flag and a post-invoke reporter. Capture middleware
-// is installed later, when CreateNetworkAccess applies setup hooks for a configuration, so the
+// is installed later, when ApplyNetworkAccessSetup runs setup hooks for a configuration, so the
 // flag is resolved with that configuration's credentials rather than the default profile's.
 func Init(engine workflow.Engine) error {
 	config_utils.AddFeatureFlagsToConfig(engine, flagMap)
@@ -92,11 +114,13 @@ func Init(engine workflow.Engine) error {
 	hook := func(ctx context.Context, e workflow.Engine, _ workflow.InvokeOutput) {
 		cfg := e.GetConfiguration()
 		key := decisiveConfigKey(cfg)
-		act.mu.Lock()
-		enabled, known := act.enabled[key]
-		act.mu.Unlock()
+		enabled, known := act.lookup(key)
 		if !known {
-			enabled = cfg.GetBool(configEnableEntityContributorsPublish)
+			var err error
+			enabled, err = act.resolve(key, cfg)
+			if err != nil {
+				return
+			}
 		}
 		if !enabled {
 			return
