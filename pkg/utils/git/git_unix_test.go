@@ -18,11 +18,14 @@ func openDescriptorsOf(t *testing.T, path string) []int {
 	t.Helper()
 	var target syscall.Stat_t
 	require.NoError(t, syscall.Stat(path, &target))
-	entries, err := os.ReadDir("/dev/fd")
+	fdDir, err := os.Open("/dev/fd")
 	require.NoError(t, err)
+	names, err := fdDir.Readdirnames(-1)
+	require.NoError(t, err)
+	require.NoError(t, fdDir.Close())
 	var open []int
-	for _, entry := range entries {
-		fd, err := strconv.Atoi(entry.Name())
+	for _, name := range names {
+		fd, err := strconv.Atoi(name)
 		require.NoError(t, err)
 		var st syscall.Stat_t
 		err = syscall.Fstat(fd, &st)
