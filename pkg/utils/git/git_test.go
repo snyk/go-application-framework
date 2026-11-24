@@ -377,14 +377,20 @@ func TestResolveCommitId_FallsBackToDetectedCommit(t *testing.T) {
 	assert.Equal(t, expected, commitId)
 }
 
-func TestHeadCommitHashFromDir_LinkedWorktree(t *testing.T) {
-	dir, _, expected := initRepoWithCommit(t)
+func addLinkedWorktree(t *testing.T, repoDir string) string {
+	t.Helper()
 	worktreeDir := filepath.Join(t.TempDir(), "linked")
 	cmd := exec.Command("git", "worktree", "add", "-b", "feat", worktreeDir)
-	cmd.Dir = dir
+	cmd.Dir = repoDir
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "git worktree add: %s", out)
+	return worktreeDir
+}
+
+func TestHeadCommitHashFromDir_LinkedWorktree(t *testing.T) {
+	dir, _, expected := initRepoWithCommit(t)
+	worktreeDir := addLinkedWorktree(t, dir)
 	subDir := filepath.Join(worktreeDir, "services")
 	require.NoError(t, os.MkdirAll(subDir, 0700))
 
