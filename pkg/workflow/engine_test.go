@@ -486,6 +486,7 @@ func Test_GetGlobalConfiguration(t *testing.T) {
 	assert.NotNil(t, fs.Lookup(configuration.TENANT))
 	assert.NotNil(t, fs.Lookup(configuration.DEBUG))
 	assert.NotNil(t, fs.Lookup(configuration.INSECURE_HTTPS))
+	assert.NotNil(t, fs.Lookup(configuration.FLAG_COMMIT_ID))
 }
 
 func Test_GlobalTenantFlag_isVisibleToInvokedWorkflow(t *testing.T) {
@@ -507,6 +508,49 @@ func Test_GlobalTenantFlag_isVisibleToInvokedWorkflow(t *testing.T) {
 	_, err = engine.Invoke(wfId)
 	require.NoError(t, err)
 	assert.Equal(t, "my-tenant", seenTenant)
+}
+
+func Test_GlobalCommitIdFlag_isVisibleToInvokedWorkflow(t *testing.T) {
+	config := configuration.NewInMemory()
+	globalFlags := FlagsetFromConfigurationOptions(GetGlobalConfiguration())
+	require.NoError(t, globalFlags.Parse([]string{"--commit-id", "0123456789abcdef0123456789abcdef01234567"}))
+	require.NoError(t, config.AddFlagSet(globalFlags))
+
+	engine := NewWorkFlowEngine(config)
+	wfId := NewWorkflowIdentifier("commitidtest")
+	var seenCommitId string
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("commitidtest", pflag.ContinueOnError)), func(invocation InvocationContext, _ []Data) ([]Data, error) {
+		seenCommitId = invocation.GetConfiguration().GetString(configuration.FLAG_COMMIT_ID)
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	_, err = engine.Invoke(wfId)
+	require.NoError(t, err)
+	assert.Equal(t, "0123456789abcdef0123456789abcdef01234567", seenCommitId)
+}
+
+func Test_WorkflowOwnCommitIdFlag_takesPrecedenceOverGlobalFlag(t *testing.T) {
+	config := configuration.NewInMemory()
+	require.NoError(t, config.AddFlagSet(FlagsetFromConfigurationOptions(GetGlobalConfiguration())))
+
+	engine := NewWorkFlowEngine(config)
+	wfId := NewWorkflowIdentifier("owncommitidtest")
+	workflowFlags := pflag.NewFlagSet("owncommitidtest", pflag.ContinueOnError)
+	workflowFlags.String(configuration.FLAG_COMMIT_ID, "", "")
+	var seenCommitId string
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(workflowFlags), func(invocation InvocationContext, _ []Data) ([]Data, error) {
+		seenCommitId = invocation.GetConfiguration().GetString(configuration.FLAG_COMMIT_ID)
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+	require.NoError(t, workflowFlags.Parse([]string{"--commit-id", "fedcba9876543210fedcba9876543210fedcba98"}))
+
+	_, err = engine.Invoke(wfId)
+	require.NoError(t, err)
+	assert.Equal(t, "fedcba9876543210fedcba9876543210fedcba98", seenCommitId)
 }
 
 func Test_EngineImpl_InvokeWithConfig(t *testing.T) {

@@ -1,12 +1,16 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func RepoUrlFromDir(inputDir string) (string, error) {
@@ -276,6 +280,59 @@ func TreeHashFromDir(inputDir string) (string, error) {
 	}
 
 	return commit.TreeHash.String(), nil
+}
+
+// HeadCommitHashFromDir returns the hash of the commit HEAD points to, equivalent
+// to `git rev-parse HEAD`, for the repository containing inputDir. inputDir may be
+// any directory inside the working tree. A detached HEAD is supported, and no
+// remote is required.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The commit hash as a hex string, or an empty string if inputDir is not
+//     inside a git repository or the repository has no commits yet.
+//   - An error object (if the repository exists but HEAD cannot be read).
+func HeadCommitHashFromDir(inputDir string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+		DetectDotGit:          true,
+		EnableDotGitCommonDir: true,
+	})
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	ref, err := repo.Head()
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return ref.Hash().String(), nil
+}
+
+// ResolveCommitId returns the commit hash configured under configuration.FLAG_COMMIT_ID
+// if it is set, and otherwise the result of HeadCommitHashFromDir for inputDir.
+// The configured value is returned as is, without validation.
+//
+// Parameters:
+//   - config (configuration.Configuration): The configuration to read the override from
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The commit hash, or an empty string under the same conditions as HeadCommitHashFromDir.
+//   - An error object (under the same conditions as HeadCommitHashFromDir).
+func ResolveCommitId(config configuration.Configuration, inputDir string) (string, error) {
+	if commitId := config.GetString(configuration.FLAG_COMMIT_ID); commitId != "" {
+		return commitId, nil
+	}
+	return HeadCommitHashFromDir(inputDir)
 }
 
 // GetFirstRemote retrieves the first available remote URL from a git repository.

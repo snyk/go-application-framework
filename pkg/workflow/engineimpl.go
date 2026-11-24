@@ -712,6 +712,7 @@ func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags.String(configuration.TENANT, "", "")
 	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
+	globalFLags.String(configuration.FLAG_COMMIT_ID, "", "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
 }
 

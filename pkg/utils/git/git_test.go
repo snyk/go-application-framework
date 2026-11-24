@@ -2,15 +2,19 @@ package git
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func TestStripGitCredentials(t *testing.T) {
@@ -267,4 +271,127 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	remoteUrl, err := GetRemoteUrl(tempDir)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
+}
+
+func initRepoWithCommit(t *testing.T) (string, *git.Repository, string) {
+	t.Helper()
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0600))
+	_, err = worktree.Add("test.txt")
+	require.NoError(t, err)
+	hash, err := worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(0, 0)},
+	})
+	require.NoError(t, err)
+	return dir, repo, hash.String()
+}
+
+func TestHeadCommitHashFromDir_RepoRoot(t *testing.T) {
+	dir, _, expected := initRepoWithCommit(t)
+
+	commitHash, err := HeadCommitHashFromDir(dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, expected, commitHash)
+}
+
+func TestHeadCommitHashFromDir_Subdirectory(t *testing.T) {
+	dir, _, expected := initRepoWithCommit(t)
+	subDir := filepath.Join(dir, "services", "api")
+	require.NoError(t, os.MkdirAll(subDir, 0700))
+
+	commitHash, err := HeadCommitHashFromDir(subDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, expected, commitHash)
+}
+
+func TestHeadCommitHashFromDir_DetachedHead(t *testing.T) {
+	dir, repo, firstCommit := initRepoWithCommit(t)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	_, err = worktree.Commit("second", &git.CommitOptions{
+		AllowEmptyCommits: true,
+		Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(1, 0)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(firstCommit)}))
+
+	commitHash, err := HeadCommitHashFromDir(dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, firstCommit, commitHash)
+}
+
+func TestHeadCommitHashFromDir_NoRemote(t *testing.T) {
+	dir, repo, expected := initRepoWithCommit(t)
+	remotes, err := repo.Remotes()
+	require.NoError(t, err)
+	require.Empty(t, remotes)
+
+	commitHash, err := HeadCommitHashFromDir(dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, expected, commitHash)
+}
+
+func TestHeadCommitHashFromDir_NotARepository(t *testing.T) {
+	commitHash, err := HeadCommitHashFromDir(t.TempDir())
+
+	require.NoError(t, err)
+	assert.Empty(t, commitHash)
+}
+
+func TestHeadCommitHashFromDir_NoCommits(t *testing.T) {
+	dir := t.TempDir()
+	_, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	commitHash, err := HeadCommitHashFromDir(dir)
+
+	require.NoError(t, err)
+	assert.Empty(t, commitHash)
+}
+
+func TestResolveCommitId_ConfiguredCommitIdOverridesDetected(t *testing.T) {
+	dir, _, _ := initRepoWithCommit(t)
+	config := configuration.NewInMemory()
+	config.Set(configuration.FLAG_COMMIT_ID, "0123456789abcdef0123456789abcdef01234567")
+
+	commitId, err := ResolveCommitId(config, dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, "0123456789abcdef0123456789abcdef01234567", commitId)
+}
+
+func TestResolveCommitId_FallsBackToDetectedCommit(t *testing.T) {
+	dir, _, expected := initRepoWithCommit(t)
+
+	commitId, err := ResolveCommitId(configuration.NewInMemory(), dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, expected, commitId)
+}
+
+func TestHeadCommitHashFromDir_LinkedWorktree(t *testing.T) {
+	dir, _, expected := initRepoWithCommit(t)
+	worktreeDir := filepath.Join(t.TempDir(), "linked")
+	cmd := exec.Command("git", "worktree", "add", "-b", "feat", worktreeDir)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "git worktree add: %s", out)
+	subDir := filepath.Join(worktreeDir, "services")
+	require.NoError(t, os.MkdirAll(subDir, 0700))
+
+	for _, inputDir := range []string{worktreeDir, subDir} {
+		commitHash, err := HeadCommitHashFromDir(inputDir)
+
+		require.NoError(t, err)
+		assert.Equal(t, expected, commitHash, inputDir)
+	}
 }
