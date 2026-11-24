@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/semaphore"
@@ -54,7 +55,7 @@ func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
 	return count
 }
 
-func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext) {
+func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext, renderTime time.Time) {
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfFindings(findings) == 0 {
@@ -77,6 +78,7 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 		config,
 		wEntry.writer,
 		presenters.WithRuntimeInfo(invocation.GetRuntimeInfo()),
+		presenters.WithRenderTime(renderTime),
 	)
 
 	debugLogger.Info().Msgf("LFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
@@ -115,6 +117,9 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	}
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
+	// every output of one run must carry the same timestamp, however long the renders take
+	renderTime := time.Now()
+
 	// iterate over all writers and render for each of them
 	ctx := invocation.Context()
 	availableThreads := semaphore.NewWeighted(threadCount)
@@ -127,7 +132,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 
 		go func(name string, writer *WriterEntry) {
 			defer availableThreads.Release(1)
-			useRendererWith(name, writer, findings, invocation)
+			useRendererWith(name, writer, findings, invocation, renderTime)
 		}(k, v)
 	}
 

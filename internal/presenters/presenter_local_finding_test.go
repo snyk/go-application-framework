@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -734,5 +735,24 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 		err = json.Unmarshal(writer.Bytes(), &sarifOutput)
 		require.Nil(t, err)
 		require.Regexp(t, "Snyk/Code/.*", sarifOutput.Runs[0].AutomationDetails.Id)
+	})
+
+	t.Run("with render time", func(t *testing.T) {
+		renderTime := time.Date(2026, time.November, 24, 15, 1, 1, 999, time.FixedZone("CET", 3600))
+		writer := new(bytes.Buffer)
+		p := presenters.NewLocalFindingsRenderer(
+			[]*local_models.LocalFinding{input},
+			configuration.New(),
+			writer,
+			presenters.WithRenderTime(renderTime),
+		)
+
+		err = p.RenderTemplate(presenters.ApplicationSarifTemplates, presenters.ApplicationSarifMimeType)
+		require.NoError(t, err)
+
+		var sarifOutput SarifOutput
+		err = json.Unmarshal(writer.Bytes(), &sarifOutput)
+		require.NoError(t, err)
+		require.Equal(t, "Snyk/Code/2026-11-24T14:01:01Z", sarifOutput.Runs[0].AutomationDetails.Id)
 	})
 }

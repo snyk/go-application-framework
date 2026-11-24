@@ -3,6 +3,7 @@ package output_workflow
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -70,7 +71,7 @@ func Test_useRendererWith(t *testing.T) {
 			renderEmptyData: true,
 		}
 		findings := getLocalFindingsSkeleton(t, 2)
-		useRendererWith("", writer, findings, ctx)
+		useRendererWith("", writer, findings, ctx, time.Now())
 		assert.NotEmpty(t, buffer)
 	})
 
@@ -83,7 +84,7 @@ func Test_useRendererWith(t *testing.T) {
 			renderEmptyData: true,
 		}
 		findings := getLocalFindingsSkeleton(t, 0)
-		useRendererWith("", writer, findings, ctx)
+		useRendererWith("", writer, findings, ctx, time.Now())
 		assert.NotEmpty(t, buffer)
 	})
 
@@ -96,7 +97,7 @@ func Test_useRendererWith(t *testing.T) {
 			renderEmptyData: false,
 		}
 		findings := getLocalFindingsSkeleton(t, 0)
-		useRendererWith("", writer, findings, ctx)
+		useRendererWith("", writer, findings, ctx, time.Now())
 		assert.Empty(t, buffer)
 	})
 }

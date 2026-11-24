@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/golang/mock/gomock"
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
+	internalMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -680,6 +682,90 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	assert.NotEmpty(t, dataFromBuffer)
 
 	validateSarifData(t, dataFromSarifFile)
+}
+
+// slowWriter makes every write take a second of synctest's fake clock, so the
+// renders of one run deterministically straddle a second boundary.
+type slowWriter struct {
+	bytes.Buffer
+}
+
+func (w *slowWriter) Write(p []byte) (int, error) {
+	time.Sleep(time.Second)
+	return w.Buffer.Write(p)
+}
+
+func automationDetailsIDs(t *testing.T, sarifBytes []byte) []string {
+	t.Helper()
+	var doc struct {
+		Runs []struct {
+			AutomationDetails struct {
+				ID string `json:"id"`
+			} `json:"automationDetails"`
+		} `json:"runs"`
+	}
+	require.NoError(t, json.Unmarshal(sarifBytes, &doc))
+	ids := make([]string, 0, len(doc.Runs))
+	for _, run := range doc.Runs {
+		ids = append(ids, run.AutomationDetails.ID)
+	}
+	require.NotEmpty(t, ids)
+	return ids
+}
+
+func TestLocalFindingsHandling_allOutputsOfOneRunShareAutomationDetailsId(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		logger := &zerolog.Logger{}
+		config := configuration.NewWithOpts()
+		config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+		config.Set(output_workflow.OUTPUT_CONFIG_KEY_FILE_WRITERS, []output_workflow.FileWriter{
+			{
+				NameConfigKey:     output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE,
+				MimeType:          output_workflow.SARIF_MIME_TYPE,
+				TemplateFiles:     output_workflow.ApplicationSarifTemplates,
+				WriteEmptyContent: true,
+			},
+			{
+				NameConfigKey:     output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE,
+				MimeType:          output_workflow.SARIF_MIME_TYPE,
+				TemplateFiles:     output_workflow.ApplicationSarifTemplates,
+				WriteEmptyContent: false,
+			},
+		})
+		sarifFile := filepath.Join(t.TempDir(), "out.sarif")
+		jsonFile := filepath.Join(t.TempDir(), "out.json")
+		config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, sarifFile)
+		config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE, jsonFile)
+
+		ctrl := gomock.NewController(t)
+		invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+		invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+		invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+		invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
+
+		stdout := &slowWriter{}
+		outputDestination := internalMocks.NewMockOutputDestination(ctrl)
+		outputDestination.EXPECT().GetWriter().Return(stdout).AnyTimes()
+
+		finding, err := sarifToLocalFinding(t, "testdata/sarif-snyk-goof-ignores.json", "")
+		require.NoError(t, err)
+		findingData, err := getWorkflowDataFromLocalFinding(finding)
+		require.NoError(t, err)
+
+		writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+		_, err = output_workflow.HandleContentTypeFindingsModel([]workflow.Data{findingData}, invocationContextMock, writers)
+		require.NoError(t, err)
+
+		dataFromSarifFile, err := os.ReadFile(sarifFile)
+		require.NoError(t, err)
+		dataFromJsonFile, err := os.ReadFile(jsonFile)
+		require.NoError(t, err)
+
+		stdoutIDs := automationDetailsIDs(t, stdout.Bytes())
+		assert.Equal(t, stdoutIDs, automationDetailsIDs(t, dataFromSarifFile))
+		assert.Equal(t, stdoutIDs, automationDetailsIDs(t, dataFromJsonFile))
+	})
 }
 
 func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
