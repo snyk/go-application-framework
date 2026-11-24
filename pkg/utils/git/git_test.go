@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,8 +14,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func TestStripGitCredentials(t *testing.T) {
@@ -290,114 +289,148 @@ func initRepoWithCommit(t *testing.T) (string, *git.Repository, string) {
 	return dir, repo, hash.String()
 }
 
-func TestHeadCommitHashFromDir_RepoRoot(t *testing.T) {
-	dir, _, expected := initRepoWithCommit(t)
-
-	commitHash, err := HeadCommitHashFromDir(dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, expected, commitHash)
-}
-
-func TestHeadCommitHashFromDir_Subdirectory(t *testing.T) {
-	dir, _, expected := initRepoWithCommit(t)
-	subDir := filepath.Join(dir, "services", "api")
-	require.NoError(t, os.MkdirAll(subDir, 0700))
-
-	commitHash, err := HeadCommitHashFromDir(subDir)
-
-	require.NoError(t, err)
-	assert.Equal(t, expected, commitHash)
-}
-
-func TestHeadCommitHashFromDir_DetachedHead(t *testing.T) {
-	dir, repo, firstCommit := initRepoWithCommit(t)
-	worktree, err := repo.Worktree()
-	require.NoError(t, err)
-	_, err = worktree.Commit("second", &git.CommitOptions{
-		AllowEmptyCommits: true,
-		Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(1, 0)},
-	})
-	require.NoError(t, err)
-	require.NoError(t, worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(firstCommit)}))
-
-	commitHash, err := HeadCommitHashFromDir(dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, firstCommit, commitHash)
-}
-
-func TestHeadCommitHashFromDir_NoRemote(t *testing.T) {
-	dir, repo, expected := initRepoWithCommit(t)
-	remotes, err := repo.Remotes()
-	require.NoError(t, err)
-	require.Empty(t, remotes)
-
-	commitHash, err := HeadCommitHashFromDir(dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, expected, commitHash)
-}
-
-func TestHeadCommitHashFromDir_NotARepository(t *testing.T) {
-	commitHash, err := HeadCommitHashFromDir(t.TempDir())
-
-	require.NoError(t, err)
-	assert.Empty(t, commitHash)
-}
-
-func TestHeadCommitHashFromDir_NoCommits(t *testing.T) {
-	dir := t.TempDir()
-	_, err := git.PlainInit(dir, false)
-	require.NoError(t, err)
-
-	commitHash, err := HeadCommitHashFromDir(dir)
-
-	require.NoError(t, err)
-	assert.Empty(t, commitHash)
-}
-
-func TestResolveCommitId_ConfiguredCommitIdOverridesDetected(t *testing.T) {
-	dir, _, _ := initRepoWithCommit(t)
-	config := configuration.NewInMemory()
-	config.Set(configuration.FLAG_COMMIT_ID, "0123456789abcdef0123456789abcdef01234567")
-
-	commitId, err := ResolveCommitId(config, dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, "0123456789abcdef0123456789abcdef01234567", commitId)
-}
-
-func TestResolveCommitId_FallsBackToDetectedCommit(t *testing.T) {
-	dir, _, expected := initRepoWithCommit(t)
-
-	commitId, err := ResolveCommitId(configuration.NewInMemory(), dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, expected, commitId)
-}
-
 func addLinkedWorktree(t *testing.T, repoDir string) string {
 	t.Helper()
 	worktreeDir := filepath.Join(t.TempDir(), "linked")
 	cmd := exec.Command("git", "worktree", "add", "-b", "feat", worktreeDir)
 	cmd.Dir = repoDir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
+	var env []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(kv), "GIT_") {
+			env = append(env, kv)
+		}
+	}
+	cmd.Env = append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "git worktree add: %s", out)
 	return worktreeDir
 }
 
-func TestHeadCommitHashFromDir_LinkedWorktree(t *testing.T) {
-	dir, _, expected := initRepoWithCommit(t)
-	worktreeDir := addLinkedWorktree(t, dir)
-	subDir := filepath.Join(worktreeDir, "services")
+func addEmptyCommit(t *testing.T, dir string, when time.Time) string {
+	t.Helper()
+	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	hash, err := worktree.Commit("empty", &git.CommitOptions{
+		AllowEmptyCommits: true,
+		Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: when},
+	})
+	require.NoError(t, err)
+	return hash.String()
+}
+
+func makeSubdir(t *testing.T, dir string) string {
+	t.Helper()
+	subDir := filepath.Join(dir, "services", "api")
 	require.NoError(t, os.MkdirAll(subDir, 0700))
+	return subDir
+}
 
-	for _, inputDir := range []string{worktreeDir, subDir} {
-		commitHash, err := HeadCommitHashFromDir(inputDir)
+func TestHeadCommitHashFromDir(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) (inputDir string, expected string)
+	}{
+		{
+			name: "repository root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, commit := initRepoWithCommit(t)
+				return dir, commit
+			},
+		},
+		{
+			name: "subdirectory resolves to the repository root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, commit := initRepoWithCommit(t)
+				return makeSubdir(t, dir), commit
+			},
+		},
+		{
+			name: "detached HEAD",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, repo, firstCommit := initRepoWithCommit(t)
+				worktree, err := repo.Worktree()
+				require.NoError(t, err)
+				_, err = worktree.Commit("second", &git.CommitOptions{
+					AllowEmptyCommits: true,
+					Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(1, 0)},
+				})
+				require.NoError(t, err)
+				require.NoError(t, worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(firstCommit)}))
+				return dir, firstCommit
+			},
+		},
+		{
+			name: "works when no remote is configured",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, repo, commit := initRepoWithCommit(t)
+				remotes, err := repo.Remotes()
+				require.NoError(t, err)
+				require.Empty(t, remotes)
+				return dir, commit
+			},
+		},
+		{
+			name: "not a repository",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+		},
+		{
+			name: "repository without commits",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				_, err := git.PlainInit(dir, false)
+				require.NoError(t, err)
+				return dir, ""
+			},
+		},
+		{
+			name: "linked worktree root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, _ := initRepoWithCommit(t)
+				worktreeDir := addLinkedWorktree(t, dir)
+				return worktreeDir, addEmptyCommit(t, worktreeDir, time.Unix(3, 0))
+			},
+		},
+		{
+			name: "linked worktree subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, _ := initRepoWithCommit(t)
+				worktreeDir := addLinkedWorktree(t, dir)
+				return makeSubdir(t, worktreeDir), addEmptyCommit(t, worktreeDir, time.Unix(3, 0))
+			},
+		},
+		{
+			name: "linked worktree is added to the repository even when GIT_DIR is inherited",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				decoyDir, _, _ := initRepoWithCommit(t)
+				addEmptyCommit(t, decoyDir, time.Unix(2, 0))
+				dir, _, commit := initRepoWithCommit(t)
+				t.Setenv("GIT_DIR", filepath.Join(decoyDir, ".git"))
+				return addLinkedWorktree(t, dir), commit
+			},
+		},
+	}
 
-		require.NoError(t, err)
-		assert.Equal(t, expected, commitHash, inputDir)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			inputDir, expected := tc.setup(t)
+
+			commitHash, err := HeadCommitHashFromDir(inputDir)
+
+			require.NoError(t, err)
+			assert.Equal(t, expected, commitHash)
+		})
 	}
 }

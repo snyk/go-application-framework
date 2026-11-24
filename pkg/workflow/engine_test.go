@@ -17,7 +17,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -487,7 +486,6 @@ func Test_GetGlobalConfiguration(t *testing.T) {
 	assert.NotNil(t, fs.Lookup(configuration.TENANT))
 	assert.NotNil(t, fs.Lookup(configuration.DEBUG))
 	assert.NotNil(t, fs.Lookup(configuration.INSECURE_HTTPS))
-	assert.NotNil(t, fs.Lookup(configuration.FLAG_COMMIT_ID))
 }
 
 func Test_GlobalTenantFlag_isVisibleToInvokedWorkflow(t *testing.T) {
@@ -509,117 +507,6 @@ func Test_GlobalTenantFlag_isVisibleToInvokedWorkflow(t *testing.T) {
 	_, err = engine.Invoke(wfId)
 	require.NoError(t, err)
 	assert.Equal(t, "my-tenant", seenTenant)
-}
-
-func Test_GlobalCommitIdFlag_isVisibleToInvokedWorkflow(t *testing.T) {
-	config := configuration.NewInMemory()
-	globalFlags := FlagsetFromConfigurationOptions(GetGlobalConfiguration())
-	require.NoError(t, globalFlags.Parse([]string{"--commit-id", "0123456789abcdef0123456789abcdef01234567"}))
-	require.NoError(t, config.AddFlagSet(globalFlags))
-
-	engine := NewWorkFlowEngine(config)
-	wfId := NewWorkflowIdentifier("commitidtest")
-	var seenCommitId string
-	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("commitidtest", pflag.ContinueOnError)), func(invocation InvocationContext, _ []Data) ([]Data, error) {
-		seenCommitId = invocation.GetConfiguration().GetString(configuration.FLAG_COMMIT_ID)
-		return nil, nil
-	})
-	require.NoError(t, err)
-	require.NoError(t, engine.Init())
-
-	_, err = engine.Invoke(wfId)
-	require.NoError(t, err)
-	assert.Equal(t, "0123456789abcdef0123456789abcdef01234567", seenCommitId)
-}
-
-func Test_WorkflowOwnCommitIdFlag_takesPrecedenceOverGlobalFlag(t *testing.T) {
-	config := configuration.NewInMemory()
-	require.NoError(t, config.AddFlagSet(FlagsetFromConfigurationOptions(GetGlobalConfiguration())))
-
-	engine := NewWorkFlowEngine(config)
-	wfId := NewWorkflowIdentifier("owncommitidtest")
-	workflowFlags := pflag.NewFlagSet("owncommitidtest", pflag.ContinueOnError)
-	workflowFlags.String(configuration.FLAG_COMMIT_ID, "", "")
-	var seenCommitId string
-	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(workflowFlags), func(invocation InvocationContext, _ []Data) ([]Data, error) {
-		seenCommitId = invocation.GetConfiguration().GetString(configuration.FLAG_COMMIT_ID)
-		return nil, nil
-	})
-	require.NoError(t, err)
-	require.NoError(t, engine.Init())
-	require.NoError(t, workflowFlags.Parse([]string{"--commit-id", "fedcba9876543210fedcba9876543210fedcba98"}))
-
-	_, err = engine.Invoke(wfId)
-	require.NoError(t, err)
-	assert.Equal(t, "fedcba9876543210fedcba9876543210fedcba98", seenCommitId)
-}
-
-func Test_CommitIdFlag_inCliCommandSequence(t *testing.T) {
-	tests := []struct {
-		name         string
-		preParseArgs []string
-		executeArgs  []string
-		expected     map[string]string
-	}{
-		{
-			name:         "global flag reaches a workflow without its own flag",
-			preParseArgs: []string{"noflag", "--commit-id", "abc"},
-			executeArgs:  []string{"noflag", "--commit-id", "abc"},
-			expected:     map[string]string{"noflag": "abc"},
-		},
-		{
-			name:         "a workflow's own flag is used by that workflow",
-			preParseArgs: []string{"ownflag", "--commit-id", "global"},
-			executeArgs:  []string{"ownflag", "--commit-id", "own"},
-			expected:     map[string]string{"ownflag": "own"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			rootCommand := &cobra.Command{Use: "snyk", SilenceErrors: true, SilenceUsage: true}
-			rootCommand.FParseErrWhitelist.UnknownFlags = true
-			rootCommand.PersistentFlags().AddFlagSet(FlagsetFromConfigurationOptions(GetGlobalConfiguration()))
-			require.NoError(t, rootCommand.ParseFlags(tc.preParseArgs))
-
-			config := configuration.NewInMemory()
-			require.NoError(t, config.AddFlagSet(rootCommand.LocalFlags()))
-
-			engine := NewWorkFlowEngine(config)
-			seen := map[string]string{}
-			ownFlagWorkflow := pflag.NewFlagSet("ownflag", pflag.ContinueOnError)
-			ownFlagWorkflow.String(configuration.FLAG_COMMIT_ID, "", "")
-			flagsets := map[string]*pflag.FlagSet{
-				"ownflag": ownFlagWorkflow,
-				"noflag":  pflag.NewFlagSet("noflag", pflag.ContinueOnError),
-			}
-			for name, flagset := range flagsets {
-				_, err := engine.Register(NewWorkflowIdentifier(name), ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, _ []Data) ([]Data, error) {
-					seen[name] = invocation.GetConfiguration().GetString(configuration.FLAG_COMMIT_ID)
-					return nil, nil
-				})
-				require.NoError(t, err)
-			}
-			require.NoError(t, engine.Init())
-
-			for name, flagset := range flagsets {
-				id := NewWorkflowIdentifier(name)
-				command := &cobra.Command{Use: name, RunE: func(cmd *cobra.Command, _ []string) error {
-					if err := config.AddFlagSet(cmd.Flags()); err != nil {
-						return err
-					}
-					_, err := engine.Invoke(id)
-					return err
-				}}
-				command.Flags().AddFlagSet(flagset)
-				rootCommand.AddCommand(command)
-			}
-
-			rootCommand.SetArgs(tc.executeArgs)
-			require.NoError(t, rootCommand.Execute())
-			assert.Equal(t, tc.expected, seen)
-		})
-	}
 }
 
 func Test_EngineImpl_InvokeWithConfig(t *testing.T) {

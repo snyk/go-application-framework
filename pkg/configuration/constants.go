@@ -82,7 +82,6 @@ const (
 	FLAG_INCLUDE_IGNORES                string = "include-ignores"                              // FLAG_INCLUDE_IGNORES (boolean) sets/returns if ignores shall be displayed or not
 	FLAG_SEVERITY_THRESHOLD             string = "severity-threshold"                           // FLAG_SEVERITY_THRESHOLD (string) sets/returns the severity threshold
 	FLAG_REMOTE_REPO_URL                string = "remote-repo-url"                              // FLAG_REMOTE_REPO_URL (string) sets/returns the remote repository URL
-	FLAG_COMMIT_ID                      string = "commit-id"                                    // FLAG_COMMIT_ID (string) sets/returns the commit hash that overrides the one detected from the input directory
 	INPUT_DIRECTORY                     string = "targetDirectory"                              // INPUT_DIRECTORY ([]string) sets/returns the input directories that the application shall process
 	CUSTOM_CONFIG_FILES                 string = "internal_custom_config_files"
 	WORKFLOW_USE_STDIO                  string = "internal_wflstdio"
