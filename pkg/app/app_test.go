@@ -43,7 +43,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
@@ -2247,9 +2246,8 @@ func Test_CreateAppEngine_featureFlagOfDownstreamExtensionIsResolved(t *testing.
 // Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely pins the
 // contract a consumer relies on when it forces a feature on or off: a key that
 // already holds a value never consults its default value function, so its flag
-// must not be evaluated remotely. Batching makes that easy to lose, because an
-// extension initializer reading its own flag drags every registered flag into
-// one request while the engine starts up.
+// must not be evaluated remotely. Batching makes that easy to lose when another
+// registered flag is read and drags every unset flag into one request.
 func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing.T) {
 	orgId := "0d2bc57c-1df9-4115-996f-4f19aa12912b"
 
@@ -2262,16 +2260,15 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 	engine := CreateAppEngineWithOptions(WithConfiguration(config))
 
 	// mimics an application forcing the feature off while it registers its
-	// extensions, which is before the engine initializes them and therefore
-	// before any of them reads a feature flag
+	// extensions, which is before the engine initializes them
 	config.Set(pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES, false)
 
 	require.NoError(t, engine.Init())
 
-	// The sibling flag is registered next to the overridden one and is not set
-	// locally, so it has to be in the batch. Requiring it keeps the assertion
-	// below meaningful: without it, renaming either flag would leave a negative
-	// assertion that passes because nothing matches it any more.
+	// Init registers flags without reading them. Reading the sibling flag after
+	// Init triggers the batch that must omit the locally set key.
+	_ = config.GetBool(pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX)
+
 	requested := gateway.requestedFlags()
 	require.Contains(t, requested, "clientFileFilterGitignore_MetaCharFix",
 		"the batch must cover the registration group the overridden flag belongs to")
@@ -2281,46 +2278,68 @@ func Test_CreateAppEngine_locallySetFeatureFlagIsNotEvaluatedRemotely(t *testing
 		"the local value must win over the remote one")
 }
 
-// Test_CreateAppEngine_InitUsesSelectedProfileCredentials guards the ordering
-// hosts rely on when they select a configuration profile before Init: Init-time
-// feature-flag and organization lookups must use the profile's credentials, not
-// the default configuration's.
-func Test_CreateAppEngine_InitUsesSelectedProfileCredentials(t *testing.T) {
+// Test_CreateAppEngine_InitDoesNotCallTheApiWithDefaultCredentials guards the
+// ordering hosts rely on when they select a configuration profile after Init:
+// extension initializers must not resolve remote feature flags (and thus
+// organization) during Init, or those calls would use the default
+// configuration's credentials.
+func Test_CreateAppEngine_InitDoesNotCallTheApiWithDefaultCredentials(t *testing.T) {
+	var mu sync.Mutex
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, "default-token")
+
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	require.NoError(t, engine.Init())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Empty(t, requests, "Init must not call the API before a host can select a profile")
+}
+
+// Test_CreateAppEngine_NetworkAccessSetupUsesBoundConfigurationCredentials pins that
+// contributors setup (run when an invocation binds network access to a configuration)
+// resolves the feature flag with that configuration's token, not the engine default's.
+func Test_CreateAppEngine_NetworkAccessSetupUsesBoundConfigurationCredentials(t *testing.T) {
 	var mu sync.Mutex
 	var authorizations []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		authorizations = append(authorizations, r.Header.Get("Authorization"))
 		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"attributes":{"default_org_context":"11111111-1111-1111-1111-111111111111","evaluations":[]}}}`))
 	}))
 	t.Cleanup(server.Close)
-
-	profileDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(profileDir, "work.json"),
-		[]byte(`{"`+configuration.AUTHENTICATION_TOKEN+`":"work-token","`+configuration.API_URL+`":"`+server.URL+`"}`),
-		0o600))
 
 	base := configuration.NewInMemory()
 	base.Set(configuration.API_URL, server.URL)
 	base.Set(configuration.AUTHENTICATION_TOKEN, "default-token")
-	base.Set(profile.DirKey, profileDir)
-	base.Set(profile.ConfigKey, "work")
-
 	engine := CreateAppEngineWithOptions(WithConfiguration(base))
-	registry, err := workflow.GetProfileRegistry(engine)
-	require.NoError(t, err)
-	p, err := registry.Profile("work")
-	require.NoError(t, err)
-	engine.SetConfiguration(p.Configuration())
-
 	require.NoError(t, engine.Init())
+
+	// Clone after Init so feature-flag default functions are present, then switch credentials
+	// the way a derived profile carries its own token.
+	profileConfig := base.Clone()
+	profileConfig.Set(configuration.AUTHENTICATION_TOKEN, "profile-token")
+	bound := workflow.CreateNetworkAccess(engine.GetNetworkAccess(), profileConfig)
+	workflow.ApplyNetworkAccessSetup(bound)
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.NotEmpty(t, authorizations, "Init resolves remote state when credentials are present")
+	require.NotEmpty(t, authorizations, "setup resolves the contributors flag for the bound configuration")
 	for _, authorization := range authorizations {
-		assert.Equal(t, "token work-token", authorization)
+		assert.Equal(t, "token profile-token", authorization)
 		assert.NotContains(t, authorization, "default-token")
 	}
 }

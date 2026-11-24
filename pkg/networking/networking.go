@@ -63,6 +63,18 @@ type NetworkAccess interface {
 	Clone() NetworkAccess
 }
 
+// NetworkAccessSetupHook configures a NetworkAccess after it has been bound to a
+// configuration (for example by CreateNetworkAccess). Hooks registered on a base
+// instance are copied to clones so each new stack can be decorated for its config.
+type NetworkAccessSetupHook func(NetworkAccess, configuration.Configuration)
+
+// NetworkAccessSetup is implemented by NetworkAccess values that support setup hooks.
+// CreateNetworkAccess applies them after binding a configuration.
+type NetworkAccessSetup interface {
+	AddSetupHook(NetworkAccessSetupHook)
+	ApplySetupHooks()
+}
+
 type DynamicHeaderFunc func([]string) []string
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -73,6 +85,7 @@ type networkImpl struct {
 	proxy          func(req *http.Request) (*url.URL, error)
 	errorHandler   networktypes.ErrorHandlerFunc
 	middleware     []networktypes.MiddlewareFunc
+	setupHooks     []NetworkAccessSetupHook
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
 }
@@ -165,6 +178,29 @@ func (n *networkImpl) GetErrorHandler() networktypes.ErrorHandlerFunc {
 // last registered is the outermost: it sees a request first and its response last.
 func (n *networkImpl) AddMiddleware(m networktypes.MiddlewareFunc) {
 	n.middleware = append(n.middleware, m)
+}
+
+// AddSetupHook registers a hook that runs when ApplySetupHooks is called, typically
+// after CreateNetworkAccess binds a configuration to a clone.
+func (n *networkImpl) AddSetupHook(hook NetworkAccessSetupHook) {
+	if hook == nil {
+		return
+	}
+	n.setupHooks = append(n.setupHooks, hook)
+}
+
+// ApplySetupHooks runs the setup hooks registered on this NetworkAccess with its
+// current configuration. Hooks are copied on Clone; CreateNetworkAccess applies them
+// on the clone after SetConfiguration.
+func (n *networkImpl) ApplySetupHooks() {
+	if len(n.setupHooks) == 0 {
+		return
+	}
+	hooks := slices.Clone(n.setupHooks)
+	cfg := n.config
+	for _, hook := range hooks {
+		hook(n, cfg)
+	}
 }
 
 // AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.
@@ -297,6 +333,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
 		middleware:     slices.Clone(n.middleware),
+		setupHooks:     slices.Clone(n.setupHooks),
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {

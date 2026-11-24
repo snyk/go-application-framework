@@ -18,8 +18,19 @@ func CreateNetworkAccessFromEngine(engine Engine, config configuration.Configura
 
 // CreateNetworkAccess always returns a fresh clone of base bound to the given configuration.
 // It does not call engine accessors, so it is safe to use while the engine lock is held.
+// Setup hooks are not applied here: they may read configuration (and thus the engine) and must
+// run via ApplyNetworkAccessSetup only when the engine lock is not held.
 func CreateNetworkAccess(base networking.NetworkAccess, config configuration.Configuration) networking.NetworkAccess {
 	networkAccess := base.Clone()
 	networkAccess.SetConfiguration(config)
 	return networkAccess
+}
+
+// ApplyNetworkAccessSetup runs setup hooks registered on na for its current configuration.
+// Call it after CreateNetworkAccess when the engine lock is not held. Hooks may resolve
+// remote-backed configuration and must not run under the engine mutex.
+func ApplyNetworkAccessSetup(na networking.NetworkAccess) {
+	if setup, ok := na.(networking.NetworkAccessSetup); ok {
+		setup.ApplySetupHooks()
+	}
 }

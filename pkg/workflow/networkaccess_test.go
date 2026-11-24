@@ -99,3 +99,27 @@ func TestCreateNetworkAccess_AlwaysClonesEvenForBaseConfiguration(t *testing.T) 
 	assert.NotSame(t, base, bound)
 	assert.Same(t, config, bound.GetConfiguration())
 }
+
+func TestApplyNetworkAccessSetup_RunsHooksWithBoundConfiguration(t *testing.T) {
+	baseConfig := configuration.NewInMemory()
+	base := networking.NewNetworkAccess(baseConfig)
+	setup, ok := base.(networking.NetworkAccessSetup)
+	require.True(t, ok)
+
+	var seenConfigs []configuration.Configuration
+	setup.AddSetupHook(func(na networking.NetworkAccess, cfg configuration.Configuration) {
+		seenConfigs = append(seenConfigs, cfg)
+		assert.Same(t, cfg, na.GetConfiguration())
+	})
+
+	boundConfig := configuration.NewInMemory()
+	boundConfig.Set(configuration.API_URL, "https://api.example")
+	bound := workflow.CreateNetworkAccess(base, boundConfig)
+	assert.Empty(t, seenConfigs, "CreateNetworkAccess must not apply hooks while locks may be held")
+
+	workflow.ApplyNetworkAccessSetup(bound)
+
+	require.Len(t, seenConfigs, 1)
+	assert.Same(t, boundConfig, seenConfigs[0])
+	assert.Same(t, boundConfig, bound.GetConfiguration())
+}

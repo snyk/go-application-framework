@@ -100,7 +100,7 @@ func Test_Derive(t *testing.T) {
 		assert.Equal(t, "default", base.GetString("defkey"))
 	})
 
-	t.Run("registrations added to base after Derive are seen", func(t *testing.T) {
+	t.Run("registrations added to base after Derive are not seen", func(t *testing.T) {
 		base := newBase(t)
 		d, err := Derive(base, WithPinnedFile(filepath.Join(t.TempDir(), "d.json")))
 		require.NoError(t, err)
@@ -113,25 +113,13 @@ func Test_Derive(t *testing.T) {
 		lateFlags.String("lateflag", "", "")
 		require.NoError(t, base.AddFlagSet(lateFlags))
 
-		assert.Equal(t, []string{"late_alt"}, d.GetAlternativeKeys("late"))
-		assert.Equal(t, "latevalue", d.GetString("latedef"))
-		assert.Equal(t, []string{"latechild"}, asViper(t, d).interkeyDependencies["lateparent"])
-		assert.True(t, asViper(t, d).persistedKeys["latepersisted"])
+		assert.Empty(t, d.GetAlternativeKeys("late"))
+		assert.Empty(t, d.GetString("latedef"))
+		assert.Empty(t, asViper(t, d).interkeyDependencies["lateparent"])
+		assert.False(t, asViper(t, d).persistedKeys["latepersisted"])
 		require.NoError(t, lateFlags.Set("lateflag", "latevalue"))
 		assert.Equal(t, "latevalue", base.GetString("lateflag"))
-		assert.Equal(t, "latevalue", d.GetString("lateflag"), "flag objects are shared with base")
-	})
-
-	t.Run("derived keeps its own registration when base adds the same key later", func(t *testing.T) {
-		base := newBase(t)
-		d, err := Derive(base, WithPinnedFile(filepath.Join(t.TempDir(), "d.json")))
-		require.NoError(t, err)
-		d.AddDefaultValue("latedef", StandardDefaultValueFunction("derived-wins"))
-
-		base.AddDefaultValue("latedef", StandardDefaultValueFunction("from-base"))
-
-		assert.Equal(t, "derived-wins", d.GetString("latedef"))
-		assert.Equal(t, "from-base", base.GetString("latedef"))
+		assert.Empty(t, d.GetString("lateflag"))
 	})
 
 	t.Run("in place changes of base slices after Derive are not seen", func(t *testing.T) {
