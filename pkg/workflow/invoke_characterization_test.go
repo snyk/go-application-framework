@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
 // noCallbackEntry is an entry whose workflow has no callback.
@@ -53,6 +55,31 @@ func Test_EngineImpl_Invoke_CallerConfigurationIsUsedAsGiven(t *testing.T) {
 	_, err := engine.Invoke(id, WithConfig(custom))
 	require.NoError(t, err)
 	assert.Same(t, custom, seen)
+}
+
+// Test_EngineImpl_Invoke_AppliesNetworkAccessSetup pins that Invoke decorates the
+// per-invocation network stack after CreateNetworkAccess (outside the engine lock),
+// which is how contributors and similar features activate without reading credentials in Init.
+func Test_EngineImpl_Invoke_AppliesNetworkAccessSetup(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	setup, ok := engine.GetNetworkAccess().(networking.NetworkAccessSetup)
+	require.True(t, ok)
+
+	var applied atomic.Int32
+	setup.AddSetupHook(func(_ networking.NetworkAccess, _ configuration.Configuration) {
+		applied.Add(1)
+	})
+
+	id := NewWorkflowIdentifier("setup.invoke")
+	_, err := engine.Register(id, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
+		func(InvocationContext, []Data) ([]Data, error) { return nil, nil })
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+	assert.Equal(t, int32(0), applied.Load(), "Init must not apply network setup hooks")
+
+	_, err = engine.Invoke(id)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, applied.Load(), int32(1), "Invoke must apply setup hooks on the invocation network access")
 }
 
 // Test_EngineImpl_Invoke_WithConfigBindsPostInvokeHooks ensures hooks see the

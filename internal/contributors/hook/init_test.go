@@ -30,13 +30,9 @@ func newCountingNA(cfg configuration.Configuration) *countingNetworkAccess {
 	return &countingNetworkAccess{NetworkAccess: networking.NewNetworkAccess(cfg)}
 }
 
-func Test_activator_setup_concurrentSameKeyBothGetMiddleware(t *testing.T) {
+func Test_activator_setup_concurrentBothGetMiddleware(t *testing.T) {
 	logger := zerolog.Nop()
-	act := &activator{
-		sink:    &contributors.Sink{},
-		logger:  &logger,
-		enabled: make(map[string]bool),
-	}
+	act := &activator{sink: &contributors.Sink{}, logger: &logger}
 
 	var lookups atomic.Int32
 	cfg := configuration.NewInMemory()
@@ -47,7 +43,7 @@ func Test_activator_setup_concurrentSameKeyBothGetMiddleware(t *testing.T) {
 			return existing, nil
 		}
 		lookups.Add(1)
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 		return true, nil
 	})
 
@@ -66,20 +62,16 @@ func Test_activator_setup_concurrentSameKeyBothGetMiddleware(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.Equal(t, int32(1), lookups.Load(), "flag must resolve once for the same credentials")
 	for i, na := range accesses {
 		require.NotNil(t, na)
 		assert.Equal(t, int32(1), na.added.Load(), "invoke %d must receive capture middleware", i)
 	}
+	assert.GreaterOrEqual(t, lookups.Load(), int32(1))
 }
 
-func Test_activator_setup_flagLookupErrorIsRetried(t *testing.T) {
+func Test_activator_setup_flagLookupErrorDoesNotEnable(t *testing.T) {
 	logger := zerolog.Nop()
-	act := &activator{
-		sink:    &contributors.Sink{},
-		logger:  &logger,
-		enabled: make(map[string]bool),
-	}
+	act := &activator{sink: &contributors.Sink{}, logger: &logger}
 
 	var lookups atomic.Int32
 	cfg := configuration.NewInMemory()
@@ -106,4 +98,30 @@ func Test_activator_setup_flagLookupErrorIsRetried(t *testing.T) {
 	act.setup(second, cfg)
 	assert.Equal(t, int32(1), second.added.Load(), "successful retry must enable capture")
 	assert.Equal(t, int32(2), lookups.Load())
+}
+
+func Test_activator_setup_differentOrgsDoNotShareDecision(t *testing.T) {
+	logger := zerolog.Nop()
+	act := &activator{sink: &contributors.Sink{}, logger: &logger}
+
+	makeCfg := func(org string, flag bool) configuration.Configuration {
+		cfg := configuration.NewInMemory()
+		cfg.Set(configuration.API_URL, "https://api.example")
+		cfg.Set(configuration.AUTHENTICATION_TOKEN, "same-token")
+		cfg.Set(configuration.ORGANIZATION, org)
+		cfg.Set(configEnableEntityContributorsPublish, flag)
+		return cfg
+	}
+
+	on := newCountingNA(configuration.NewInMemory())
+	onCfg := makeCfg("11111111-1111-1111-1111-111111111111", true)
+	on.SetConfiguration(onCfg)
+	act.setup(on, onCfg)
+	assert.Equal(t, int32(1), on.added.Load())
+
+	off := newCountingNA(configuration.NewInMemory())
+	offCfg := makeCfg("22222222-2222-2222-2222-222222222222", false)
+	off.SetConfiguration(offCfg)
+	act.setup(off, offCfg)
+	assert.Equal(t, int32(0), off.added.Load(), "org B must not inherit org A's enabled decision")
 }
