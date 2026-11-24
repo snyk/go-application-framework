@@ -391,6 +391,19 @@ func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger, extraOpts 
 	return machineid.Resolve(append(opts, extraOpts...)...)
 }
 
+// defaultProfileDir is the default of profile.DirKey: the profile directory in the default storage directory. Without a
+// known home directory there is no default storage directory, so it returns the error instead of a path.
+func defaultProfileDir(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	if existingValue != nil {
+		return existingValue, nil
+	}
+	storageDir, err := configuration.DefaultStorageDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(storageDir, defaultProfileDirName), nil
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient, machineIDOpts ...machineid.ResolveOption) {
 	if logger == nil {
@@ -411,13 +424,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
-	// Without a known home directory there is no default profile directory. Profiles then fail closed (SNYK-CLI-0036)
-	// instead of using the working directory.
-	if storageDir, storageErr := configuration.DefaultStorageDir(); storageErr != nil {
-		logger.Printf("no default profile directory: %v", storageErr)
-	} else {
-		config.AddDefaultValue(profile.DirKey, configuration.StandardDefaultValueFunction(filepath.Join(storageDir, defaultProfileDirName)))
-	}
+	config.AddDefaultValue(profile.DirKey, defaultProfileDir)
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))

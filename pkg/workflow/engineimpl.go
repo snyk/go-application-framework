@@ -783,7 +783,14 @@ func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	dir := e.config.GetString(profile.DirKey)
+	value, dirErr := e.config.GetWithError(profile.DirKey)
+	dir, _ := value.(string) //nolint:errcheck // a missing or non-string value is rejected by the registry as not set
+	if dirErr != nil {
+		return nil, cli.NewConfigProfileDirectoryInvalidError(
+			fmt.Sprintf("The profile directory is not set and has no default: %v. Set %s to an absolute path.", dirErr, profile.DirKey),
+			snyk_errors.WithCause(dirErr),
+		)
+	}
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}

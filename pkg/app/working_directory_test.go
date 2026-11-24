@@ -41,7 +41,7 @@ func Test_HomeDirectoryUnknown_ProfilesAreNotInWorkingDirectory(t *testing.T) {
 
 	_, storageErr := configuration.DefaultStorageDir()
 	assert.Error(t, storageErr, "the default storage directory is unavailable without a home directory")
-	assert.Empty(t, config.GetString(profile.DirKey), "no default profile directory is set, so none is relative")
+	assert.Empty(t, config.GetString(profile.DirKey), "the default profile directory is empty, so it is not relative")
 
 	// Profiles fail closed: the registry is not built without a profile directory, and the error is the catalog error
 	// SNYK-CLI-0036, asserted on its code rather than its text.
@@ -50,6 +50,7 @@ func Test_HomeDirectoryUnknown_ProfilesAreNotInWorkingDirectory(t *testing.T) {
 	var snykErr snyk_errors.Error
 	require.True(t, errors.As(err, &snykErr), "expected a catalog error, got %v", err)
 	assert.Equal(t, "SNYK-CLI-0036", snykErr.ErrorCode)
+	assert.Contains(t, snykErr.Detail, storageErr.Error(), "the error says why there is no default profile directory")
 
 	// The cache directory falls back to the relative path snyk/snyk-cli when neither the home nor the temp directory
 	// is usable. That is intentional for restricted platforms and CI runners where only the workspace is writable, and
