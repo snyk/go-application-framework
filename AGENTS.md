@@ -281,6 +281,11 @@ Use these lenses when evaluating a design proposal, implementation plan, or PR.
   a configuration or a slice the caller owns. Mutation makes call order matter and is harder to test.
 - **Doc comments state behavior and limits.** Say what is not covered (denylist vs. allowlist,
   opt-in vs. enforced) and keep package docs true to what the package does.
+- **Identifiers in SARIF are derived from persistent identities, or omitted.** A `guid` is a long-term
+  identity and the schema only allows UUID versions 1-5. Never forward a backend UUID: its version says
+  nothing about whether it is stable (IDs minted per test run are not) and services change versions.
+  Derive a UUIDv5 from an identifier created with the thing itself, via
+  `ufm_helpers.StableSARIFGUID`, or omit the property.
 
 ### Scope & complexity pushback
 

@@ -2602,7 +2602,7 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "guid":"b896fcb8-e730-55f5-8362-b472d881610a",
               "status": "accepted",
               "justification": "Experimenting with consistent ignores capability. ",
               "properties": {
@@ -2773,7 +2773,7 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "guid":"b896fcb8-e730-55f5-8362-b472d881610a",
               "status": "accepted",
               "justification": "",
               "properties": {
@@ -2985,7 +2985,7 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "guid":"b896fcb8-e730-55f5-8362-b472d881610a",
               "status": "accepted",
               "justification": "",
               "properties": {

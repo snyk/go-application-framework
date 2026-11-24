@@ -259,8 +259,9 @@
 						{
 							{{- if and $findingExtra $findingExtra.Suppression }}
 							{{- $suppExtra := $findingExtra.Suppression }}
-							{{- if $suppExtra.GUID }}
-							"guid": {{ getQuotedString $suppExtra.GUID }},
+							{{- $suppGuid := suppressionGuid $suppExtra.GUID }}
+							{{- if $suppGuid }}
+							"guid": {{ getQuotedString $suppGuid }},
 							{{- end }}
 							{{- $status := printf "%s" $ignoreDetails.GetStatus }}
 							{{- if eq $status "ignored" }}
@@ -297,9 +298,10 @@
 							}
 							{{- end }}
 							{{- else }}
-							{{- $policyID := $ignoreDetails.GetPolicyID }}
-							{{- if $policyID }}
-							"guid": {{ getQuotedString $policyID }},
+							{{- /* The policy ID can identify a per-test snapshot, so the guid is derived from the ignore's rule instead. */}}
+							{{- $suppGuid := suppressionGuid (getIgnoreRuleID $ignoreDetails) }}
+							{{- if $suppGuid }}
+							"guid": {{ getQuotedString $suppGuid }},
 							{{- end }}
 							{{- $status := printf "%s" $ignoreDetails.GetStatus }}
 							{{- if eq $status "ignored" }}
