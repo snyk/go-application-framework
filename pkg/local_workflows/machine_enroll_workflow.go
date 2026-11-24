@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 const (
 	machineEnrollWorkflowName = "machine.enroll"
 	flagDeviceToken           = machinecredential.CONFIG_KEY_DEVICE_TOKEN
+	flagFleetKey              = machinecredential.CONFIG_KEY_FLEET_KEY
 	flagFleetKeyFile          = "fleet-key-file"
 )
 
@@ -40,6 +42,7 @@ var WORKFLOWID_MACHINE_ENROLL workflow.Identifier = workflow.NewWorkflowIdentifi
 func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet(machineEnrollWorkflowName, pflag.ExitOnError)
 	flags.String(flagDeviceToken, "", "single-use device token issued for this machine")
+	flags.String(flagFleetKey, "", "fleet key registered for this machine, as its PEM file encoded in base64; other users of this system may see a command line argument")
 	flags.String(flagFleetKeyFile, "", "path to the PEM file of a fleet key registered for this machine")
 	flags.Bool(jsonFlag, false, "output the client id, enrolled machine id and key id in json format")
 
@@ -54,9 +57,10 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		return nil, errors.New("enrolling is refused because the credential cannot be stored: the configuration has no storage")
 	}
 	deviceToken := config.GetString(flagDeviceToken)
+	fleetKey := config.GetString(flagFleetKey)
 	fleetKeyFile := config.GetString(flagFleetKeyFile)
-	if (deviceToken == "") == (fleetKeyFile == "") {
-		return nil, fmt.Errorf("enrolling needs exactly one of --%s or --%s", flagDeviceToken, flagFleetKeyFile)
+	if countNonEmpty(deviceToken, fleetKey, fleetKeyFile) != 1 {
+		return nil, fmt.Errorf("enrolling needs exactly one of --%s, --%s or --%s", flagDeviceToken, flagFleetKey, flagFleetKeyFile)
 	}
 	if err := checkCredentialStorage(invocationCtx.Context(), storeTimeout, config); err != nil {
 		return nil, err
@@ -77,7 +81,14 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 	if deviceToken != "" {
 		enrollment, err = machineenrollment.EnrollWithDeviceToken(ctx, httpClient, apiURL, deviceToken, time.Now())
 	} else {
-		enrollment, err = enrollWithFleetKeyFile(ctx, invocationCtx.GetEnhancedLogger(), invocationCtx.GetRuntimeInfo(), httpClient, apiURL, fleetKeyFile)
+		readFleetKey := func() (*ecdsa.PrivateKey, error) { return machineenrollment.DecodeFleetKey(fleetKey) }
+		if fleetKeyFile != "" {
+			readFleetKey = func() (*ecdsa.PrivateKey, error) {
+				warnIfReadableByOthers(invocationCtx.GetEnhancedLogger(), fleetKeyFile)
+				return machineenrollment.ReadFleetKeyFile(fleetKeyFile)
+			}
+		}
+		enrollment, err = enrollWithFleetKey(ctx, invocationCtx.GetRuntimeInfo(), httpClient, apiURL, readFleetKey)
 	}
 	if err != nil {
 		return nil, err
@@ -101,6 +112,16 @@ func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workf
 		return nil, fmt.Errorf("enrolled as client %s, but the token stored by `snyk auth` could not be removed and will be used instead of the machine credential; remove the stored token instead of enrolling again: %w", credential.ClientID, err)
 	}
 	return enrollmentData(enrollment, config.GetBool(jsonFlag))
+}
+
+func countNonEmpty(values ...string) int {
+	count := 0
+	for _, value := range values {
+		if value != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func enrollmentData(enrollment machineenrollment.Enrollment, asJSON bool) ([]workflow.Data, error) {
@@ -193,7 +214,9 @@ func replacedCredentialLogger(invocationCtx workflow.InvocationContext, config c
 	return func() {}
 }
 
-func enrollWithFleetKeyFile(ctx context.Context, logger *zerolog.Logger, runtimeInfo runtimeinfo.RuntimeInfo, httpClient *http.Client, apiURL, fleetKeyFile string) (machineenrollment.Enrollment, error) {
+// enrollWithFleetKey calls readFleetKey only once the machine's identifiers are known, so a machine
+// without them fails the same way whichever flag holds the key.
+func enrollWithFleetKey(ctx context.Context, runtimeInfo runtimeinfo.RuntimeInfo, httpClient *http.Client, apiURL string, readFleetKey func() (*ecdsa.PrivateKey, error)) (machineenrollment.Enrollment, error) {
 	if runtimeInfo == nil {
 		return machineenrollment.Enrollment{}, errors.New("failed finding the identifiers of this machine: the application provides no runtime information")
 	}
@@ -207,8 +230,7 @@ func enrollWithFleetKeyFile(ctx context.Context, logger *zerolog.Logger, runtime
 	if machine.SerialNumber == "" {
 		return machineenrollment.Enrollment{}, errors.New("failed finding the identifiers of this machine: no serial number is known")
 	}
-	warnIfReadableByOthers(logger, fleetKeyFile)
-	fleetKey, err := machineenrollment.ReadFleetKeyFile(fleetKeyFile)
+	fleetKey, err := readFleetKey()
 	if err != nil {
 		return machineenrollment.Enrollment{}, err
 	}

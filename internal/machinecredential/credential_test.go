@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -253,8 +253,8 @@ func TestSigner_AssertionVerifiesAgainstTheKey(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, machineenrollment.ClientAssertionType, assertionType)
-	require.NoError(t, enrollmenttest.VerifyJWT(assertion, credential.Key.Public()))
-	_, claims := enrollmenttest.DecodeJWT(t, assertion)
+	require.NoError(t, fakeapi.VerifyJWT(assertion, credential.Key.Public()))
+	_, claims := fakeapi.DecodeJWT(t, assertion)
 	assert.Equal(t, "client-1", claims["iss"])
 	assert.Equal(t, "client-1", claims["sub"])
 	assert.Equal(t, "https://api.example.test/oauth2/token", claims["aud"])
@@ -378,4 +378,43 @@ func TestSecretTerms_IgnoresAPEMTooShortToBeAKey(t *testing.T) {
 
 	assert.NotContains(t, terms, "a", "it would redact every a in the logs")
 	assert.Empty(t, terms)
+}
+
+func TestSave_OfADerivedConfigurationWritesOnlyThePinnedFile(t *testing.T) {
+	isolateConfigHome(t)
+	dir := t.TempDir()
+	basePath := filepath.Join(dir, "base.json")
+	pinnedPath := filepath.Join(dir, "pinned.json")
+	base := configuration.NewWithOpts(configuration.WithPinnedFile(basePath))
+	credential := newCredential(t)
+
+	derived, err := configuration.Derive(base, configuration.WithPinnedFile(pinnedPath))
+	require.NoError(t, err)
+	require.NoError(t, machinecredential.Save(t.Context(), derived, credential))
+
+	assert.FileExists(t, pinnedPath)
+	assert.NoFileExists(t, basePath)
+	assert.Empty(t, base.GetString(machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE))
+}
+
+func TestSave_InvalidPinnedFileHasNoStorageAndWritesNothing(t *testing.T) {
+	isolateConfigHome(t)
+	dir := t.TempDir()
+	config := configuration.NewWithOpts(configuration.WithPinnedFile(dir))
+	require.Nil(t, config.GetStorage())
+
+	err := machinecredential.Save(t.Context(), config, newCredential(t))
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "no storage")
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries)
+}
+
+func isolateConfigHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 }

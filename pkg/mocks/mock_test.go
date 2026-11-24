@@ -1,6 +1,11 @@
 package mocks
 
 import (
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -21,3 +26,13 @@ var _ workflow.Data = (*MockData)(nil)
 var _ workflow.Engine = (*MockEngine)(nil)
 var _ workflow.Entry = (*MockEntry)(nil)
 var _ workflow.InvocationContext = (*MockInvocationContext)(nil)
+
+// Entries carry metadata only through workflow.EntryWithMetadata. A generated MockEntry must not implement it, so
+// callers that type-assert for metadata see a plain entry.
+func Test_MockEntry_DoesNotImplementEntryWithMetadata(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	var entry workflow.Entry = NewMockEntry(ctrl)
+
+	_, ok := entry.(workflow.EntryWithMetadata)
+	assert.False(t, ok)
+}

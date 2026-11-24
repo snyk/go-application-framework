@@ -37,9 +37,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/fakeapi"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineenrollment"
-	"github.com/snyk/go-application-framework/internal/machineenrollment/enrollmenttest"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/logging"
@@ -52,9 +52,10 @@ import (
 
 type enrollEnv struct {
 	home   string
-	server *enrollmenttest.Server
+	server *fakeapi.Server
 	engine workflow.Engine
 	config configuration.Configuration
+	stdin  *os.File
 }
 
 func newEnrollEnv(t *testing.T) *enrollEnv {
@@ -68,7 +69,7 @@ func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv 
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	server := enrollmenttest.NewServer(t)
+	server := fakeapi.NewServer(t)
 	config := openFileBackedConfig()
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -82,8 +83,8 @@ func newEnrollEnvWithRuntimeInfo(t *testing.T, withRuntimeInfo bool) *enrollEnv 
 	return &enrollEnv{home: home, server: server, engine: engine, config: config}
 }
 
-func openFileBackedConfig() configuration.Configuration {
-	return configuration.NewWithOpts(configuration.WithFiles("snyk"))
+func openFileBackedConfig(opts ...configuration.Opts) configuration.Configuration {
+	return configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk")}, opts...)...)
 }
 
 func (e *enrollEnv) enroll(flags map[string]string) error {
@@ -99,7 +100,7 @@ func (e *enrollEnv) enrollForData(flags map[string]string) ([]workflow.Data, err
 	return e.engine.InvokeWithConfig(WORKFLOWID_MACHINE_ENROLL, invokeConfig)
 }
 
-func requestToken(t *testing.T, server *enrollmenttest.Server, credential machinecredential.Credential) *http.Response {
+func requestToken(t *testing.T, server *fakeapi.Server, credential machinecredential.Credential) *http.Response {
 	t.Helper()
 	tokenURL := server.URL + "/oauth2/token"
 	assertionType, assertion, err := machinecredential.NewSigner(credential.Key).ClientAssertion(t.Context(), credential.ClientID, tokenURL)
@@ -232,6 +233,60 @@ func writeFleetKeyWithMode(t *testing.T, mode os.FileMode) (string, *ecdsa.Priva
 	return path, key
 }
 
+func fleetKeyValue(t *testing.T) (string, *ecdsa.PrivateKey) {
+	t.Helper()
+	path, key := writeFleetKey(t)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(data), key
+}
+
+func Test_machineEnroll_inlineFleetKeyNamesTheMachineBySerialNumber(t *testing.T) {
+	env := newEnrollEnv(t)
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs).Level(zerolog.TraceLevel)
+	env.engine.SetLogger(&logger)
+	machineID := env.server.RegisterMachine("SERIAL-42")
+	value, fleetKey := fleetKeyValue(t)
+	env.server.AllowFleetKey(&fleetKey.PublicKey, machineID)
+	env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+
+	output, err := env.enrollForData(map[string]string{flagFleetKey: value})
+
+	require.NoError(t, err)
+	credential, err := machinecredential.Load(openFileBackedConfig())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, requestToken(t, env.server, credential).StatusCode)
+	assert.NotContains(t, logs.String(), value)
+	require.Len(t, output, 1)
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok)
+	assert.NotContains(t, string(payload), value)
+}
+
+func Test_machineEnroll_invalidInlineFleetKeyStoresNothing(t *testing.T) {
+	fileValue, _ := writeFleetKey(t)
+	pemText, err := os.ReadFile(fileValue)
+	require.NoError(t, err)
+	for name, value := range map[string]string{
+		"PEM text":       string(pemText),
+		"invalid base64": "not*base64*but-a-secret-looking-value",
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newEnrollEnv(t)
+			env.setMachine(runtimeinfo.Machine{ID: "stable-id", SerialNumber: "SERIAL-42"})
+
+			err := env.enroll(map[string]string{flagFleetKey: value})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "base64")
+			assert.NotContains(t, err.Error(), value)
+			assert.Zero(t, env.server.EnrollmentRequests())
+			assertNothingStored(t, env.home)
+		})
+	}
+}
+
 func Test_machineEnroll_fleetKeyNamesTheMachineBySerialNumber(t *testing.T) {
 	env := newEnrollEnv(t)
 	machineID := env.server.RegisterMachine("SERIAL-42")
@@ -278,9 +333,13 @@ func Test_machineEnroll_rejectedDeviceTokenLeavesTheStoredCredentialUntouched(t 
 
 func Test_machineEnroll_needsExactlyOneCredentialFlag(t *testing.T) {
 	fleetKeyFile, _ := writeFleetKey(t)
+	fleetKey, _ := fleetKeyValue(t)
 	for name, flags := range map[string]map[string]string{
-		"neither": {},
-		"both":    {flagDeviceToken: "sdt_x", flagFleetKeyFile: fleetKeyFile},
+		"neither":                      {},
+		"device token and file":        {flagDeviceToken: "sdt_x", flagFleetKeyFile: fleetKeyFile},
+		"device token and fleet key":   {flagDeviceToken: "sdt_x", flagFleetKey: fleetKey},
+		"fleet key and fleet key file": {flagFleetKey: fleetKey, flagFleetKeyFile: fleetKeyFile},
+		"all three":                    {flagDeviceToken: "sdt_x", flagFleetKey: fleetKey, flagFleetKeyFile: fleetKeyFile},
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := newEnrollEnv(t)
@@ -289,6 +348,7 @@ func Test_machineEnroll_needsExactlyOneCredentialFlag(t *testing.T) {
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "--"+flagDeviceToken)
+			assert.Contains(t, err.Error(), "--"+flagFleetKey+" ")
 			assert.Contains(t, err.Error(), "--"+flagFleetKeyFile)
 			assertNothingStored(t, env.home)
 		})
@@ -297,22 +357,25 @@ func Test_machineEnroll_needsExactlyOneCredentialFlag(t *testing.T) {
 
 func Test_machineEnroll_fleetKeyWithoutKnownSerialNumberStoresNothing(t *testing.T) {
 	fleetKeyFile, _ := writeFleetKey(t)
-	for name, machine := range map[string]*runtimeinfo.Machine{
-		"empty serial number": {ID: "stable-id"},
-		"no machine id":       nil,
-	} {
-		t.Run(name, func(t *testing.T) {
-			env := newEnrollEnv(t)
-			if machine != nil {
-				env.setMachine(*machine)
-			}
+	fleetKey, _ := fleetKeyValue(t)
+	for flagName, flagValue := range map[string]string{flagFleetKeyFile: fleetKeyFile, flagFleetKey: fleetKey} {
+		for name, machine := range map[string]*runtimeinfo.Machine{
+			"empty serial number": {ID: "stable-id"},
+			"no machine id":       nil,
+		} {
+			t.Run(flagName+"/"+name, func(t *testing.T) {
+				env := newEnrollEnv(t)
+				if machine != nil {
+					env.setMachine(*machine)
+				}
 
-			err := env.enroll(map[string]string{flagFleetKeyFile: fleetKeyFile})
+				err := env.enroll(map[string]string{flagName: flagValue})
 
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "identifiers of this machine")
-			assertNothingStored(t, env.home)
-		})
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "identifiers of this machine")
+				assertNothingStored(t, env.home)
+			})
+		}
 	}
 }
 
@@ -441,13 +504,15 @@ func Test_machineEnroll_fleetKeyAcceptsAMachineThatComesWithAnError(t *testing.T
 }
 
 func Test_machineEnroll_fleetKeyRejectsNoMachineIDEvenWithASerialNumber(t *testing.T) {
-	fleetKeyFile, _ := writeFleetKey(t)
 	ctrl := gomock.NewController(t)
 	runtimeInfo := mocks.NewMockRuntimeInfo(ctrl)
 	runtimeInfo.EXPECT().GetMachineID().Return(runtimeinfo.Machine{SerialNumber: "S1"}, runtimeinfo.ErrNoMachineID)
+	readFleetKey := func() (*ecdsa.PrivateKey, error) {
+		t.Error("the fleet key must not be read before the machine's identifiers are known")
+		return nil, errors.New("read too early")
+	}
 
-	logger := zerolog.Nop()
-	_, err := enrollWithFleetKeyFile(t.Context(), &logger, runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", fleetKeyFile)
+	_, err := enrollWithFleetKey(t.Context(), runtimeInfo, http.DefaultClient, "http://127.0.0.1:1", readFleetKey)
 
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 }
@@ -956,7 +1021,7 @@ func Test_machineEnroll_otherRegionNamesItsTokenEndpointAndKeepsTheCredential(t 
 			res, err := env.whoami(t, "")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
-			otherRegion := enrollmenttest.NewServer(t)
+			otherRegion := fakeapi.NewServer(t)
 
 			env.switchEnvironment(otherRegion.URL)
 			_, err = env.whoami(t, "")

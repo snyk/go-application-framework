@@ -6,9 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,4 +129,83 @@ func TestReadFleetKeyFileRejectsADirectory(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a regular file")
+}
+
+func base64PEM(blockType string, der []byte) string {
+	return base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}))
+}
+
+func TestDecodeFleetKey(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	sec1, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+	prime256v1 := []byte{0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07}
+	withParameters := append(pem.EncodeToMemory(&pem.Block{Type: "EC PARAMETERS", Bytes: prime256v1}), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: sec1})...)
+
+	for name, value := range map[string]string{
+		"PKCS8":                   base64PEM("PRIVATE KEY", pkcs8),
+		"SEC1 with EC PARAMETERS": base64.StdEncoding.EncodeToString(withParameters),
+		"surrounding whitespace":  " \t" + base64PEM("PRIVATE KEY", pkcs8) + "\r\n",
+	} {
+		got, err := DecodeFleetKey(value)
+		require.NoError(t, err, name)
+		assert.True(t, key.Equal(got), name)
+	}
+}
+
+func TestDecodeFleetKeyNamesTheExpectedFormatForPEMText(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+
+	_, err = DecodeFleetKey("\n" + string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})))
+
+	require.ErrorIs(t, err, errPEMFleetKeyValue)
+	assert.Contains(t, err.Error(), "base64")
+}
+
+func TestDecodeFleetKeyDoesNotQuoteInvalidBase64(t *testing.T) {
+	value := "not*base64*but-a-secret-looking-value"
+
+	_, err := DecodeFleetKey(value)
+
+	require.ErrorIs(t, err, errNotBase64FleetKeyValue)
+	assert.NotContains(t, err.Error(), value)
+}
+
+func TestDecodeFleetKeyRejectsOtherContent(t *testing.T) {
+	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	p384DER, err := x509.MarshalPKCS8PrivateKey(p384)
+	require.NoError(t, err)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	rsaDER, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	require.NoError(t, err)
+	p256, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	p256DER, err := x509.MarshalPKCS8PrivateKey(p256)
+	require.NoError(t, err)
+
+	for name, tt := range map[string]struct {
+		value   string
+		wantErr string
+	}{
+		"empty":           {value: "", wantErr: "not a PEM private key"},
+		"not PEM":         {value: base64.StdEncoding.EncodeToString([]byte("hello")), wantErr: "not a PEM private key"},
+		"base64 of DER":   {value: base64.StdEncoding.EncodeToString(p256DER), wantErr: "not a PEM private key"},
+		"P-384":           {value: base64PEM("PRIVATE KEY", p384DER), wantErr: "not a P-256 key"},
+		"RSA":             {value: base64PEM("PRIVATE KEY", rsaDER), wantErr: "not a P-256 key"},
+		"encrypted PKCS8": {value: base64PEM("ENCRYPTED PRIVATE KEY", []byte("ciphertext")), wantErr: "encrypted"},
+		"URL alphabet":    {value: strings.NewReplacer("+", "-", "/", "_").Replace(base64PEM("PRIVATE KEY", p256DER)) + "-_", wantErr: "not valid base64"},
+		"over the limit":  {value: strings.Repeat("A", base64.StdEncoding.EncodedLen(maxFleetKeyFileBytes)+4), wantErr: "too long"},
+	} {
+		_, err := DecodeFleetKey(tt.value)
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), tt.wantErr, name)
+	}
 }
