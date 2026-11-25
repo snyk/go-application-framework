@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,8 +44,6 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
-	trackedFilesMu  sync.Mutex
-	trackedFiles    *trackedFiles
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -284,61 +281,57 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	var filteredFilesCh = make(chan string)
 
 	go func() {
-		ctx := context.Background()
-		availableThreads := semaphore.NewWeighted(fw.max_threads)
-		variant := fw.metricVariant()
 		start := time.Now()
-		var resolvedFileCount atomic.Int64
-		candidateFileCount := 0
-
-		defer close(filteredFilesCh)
 
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
 		// opens the repository and reads the git index, so it is timed alongside the filtering.
-		var isFileExcluded func(string) bool
-		if fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-			isFileExcluded = fw.trackedFileExclusionPredicate(globs)
-		} else {
-			globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
-			isFileExcluded = func(filePath string) bool {
-				return globPatternMatcher.MatchesPath(filePath)
-			}
-		}
+		predicate := fw.newExclusionPredicate(globs)
 
-		// iterate the filesToFilter channel
-		for file := range filesCh {
-			candidateFileCount++
-			err := availableThreads.Acquire(ctx, 1)
-			if err != nil {
-				fw.logger.Err(err).Msg("failed to limit threads")
-			}
-			go func(f string) {
-				defer availableThreads.Release(1)
-				// filesToFilter that do not match the glob pattern are filtered
-				if !isFileExcluded(f) {
-					filteredFilesCh <- f
-					resolvedFileCount.Add(1)
-				}
-			}(file)
-		}
-
-		// wait until the last thread is done
-		err := availableThreads.Acquire(ctx, fw.max_threads)
-		if err != nil {
-			fw.logger.Err(err).Msg("failed to wait for all threads")
-		}
-
-		// Record metrics
-		fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
-			return candidateFileCount
-		})
-		fw.recordSumLazy(variant, metricFilterOutputFileCount, func() int {
-			return int(resolvedFileCount.Load())
-		})
-		fw.recordSumLazy(variant, metricFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
+		defer close(filteredFilesCh)
+		fw.filterFiles(filesCh, predicate, filteredFilesCh, start)
 	}()
 
 	return filteredFilesCh
+}
+
+// filterFiles consumes files from filesCh, filters them using predicate, and sends
+// non-excluded files to filteredFilesCh. It records metrics.
+func (fw *FileFilter) filterFiles(filesCh <-chan string, predicate *exclusionPredicate, filteredFilesCh chan<- string, start time.Time) {
+	ctx := context.Background()
+	availableThreads := semaphore.NewWeighted(fw.max_threads)
+	variant := fw.metricVariant()
+	var resolvedFileCount atomic.Int64
+	candidateFileCount := 0
+
+	for file := range filesCh {
+		candidateFileCount++
+		err := availableThreads.Acquire(ctx, 1)
+		if err != nil {
+			fw.logger.Err(err).Msg("failed to limit threads")
+		}
+		go func(f string) {
+			defer availableThreads.Release(1)
+			if !predicate.isExcluded(f) {
+				filteredFilesCh <- f
+				resolvedFileCount.Add(1)
+			}
+		}(file)
+	}
+
+	// wait until the last thread is done
+	err := availableThreads.Acquire(ctx, fw.max_threads)
+	if err != nil {
+		fw.logger.Err(err).Msg("failed to wait for all threads")
+	}
+
+	// Record metrics
+	fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {
+		return candidateFileCount
+	})
+	fw.recordSumLazy(variant, metricFilterOutputFileCount, func() int {
+		return int(resolvedFileCount.Load())
+	})
+	fw.recordSumLazy(variant, metricFilterDurationMs, func() int { return int(time.Since(start).Milliseconds()) })
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
@@ -380,73 +373,132 @@ type trackedFiles struct {
 	paths    map[string]bool
 }
 
-// Shared with the folder walker so the git index is read once per run instead of twice.
-func (fw *FileFilter) loadTrackedFiles() (*trackedFiles, bool) {
-	fw.trackedFilesMu.Lock()
-	defer fw.trackedFilesMu.Unlock()
+// ruleMatcher pairs the compiled rules with their negated rules, the only rules that can re-include a file below an excluded folder.
+type ruleMatcher struct {
+	rules     *gitignore.GitIgnore
+	negations *gitignore.GitIgnore // nil when no rule is negated
+}
 
-	if fw.trackedFiles == nil {
-		fw.trackedFiles = fw.readTrackedFiles()
+// compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path, so negations.MatchesPath(f) is false iff a negated rule matches f.
+func compileRuleMatcher(globs []string) ruleMatcher {
+	rules := gitignore.CompileIgnoreLines(globs...)
+
+	var negated []string
+	for _, glob := range globs {
+		line := strings.TrimRight(glob, "\r")
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimLeft(line, " "), "!") {
+			negated = append(negated, glob)
+		}
 	}
-	return fw.trackedFiles, fw.trackedFiles != nil
+
+	var negations *gitignore.GitIgnore
+	if len(negated) > 0 {
+		negations = gitignore.CompileIgnoreLines(append([]string{"*"}, negated...)...)
+	}
+
+	return ruleMatcher{rules: rules, negations: negations}
 }
 
-func (fw *FileFilter) releaseTrackedFiles() {
-	fw.trackedFilesMu.Lock()
-	defer fw.trackedFilesMu.Unlock()
-	fw.trackedFiles = nil
+// excludesBelowExcludedFolder reports whether file, below a folder that rules match, is excluded. Every pattern go-gitignore compiles ends in "(|/.*)$" or "/(|.*)$", so a non-negated pattern that matches a folder matches every path below it, and only a negated pattern can re-include the file. "." does not match a newline, so such paths go to the full rule list.
+func (m ruleMatcher) excludesBelowExcludedFolder(file string) bool {
+	if strings.ContainsRune(file, '\n') {
+		return false
+	}
+	if m.negations == nil {
+		return true
+	}
+	return m.negations.MatchesPath(filepath.ToSlash(file))
 }
 
-// trackedFileExclusionPredicate builds the exclusion predicate used when
-// FF_GITIGNORE_RESPECT_TRACKED_FILES is enabled. keptCount is incremented for every file that a
-// .gitignore rule would have excluded but that is kept because git tracks it, i.e. it is
-// exempted from the .gitignore rule and not excluded by any other rule (e.g. a .snyk or
-// .dcignore rule).
-func (fw *FileFilter) trackedFileExclusionPredicate(globs []string) func(string) bool {
+// exclusionPredicate holds the compiled rules for determining file exclusion,
+// supporting both tracked-file-aware and simple exclusion modes.
+type exclusionPredicate struct {
+	all     ruleMatcher
+	other   ruleMatcher
+	tracked *trackedFiles
+}
+
+// newExclusionPredicate builds an exclusionPredicate that reproduces the current
+// legacy predicate logic exactly. If FF_GITIGNORE_RESPECT_TRACKED_FILES is off,
+// all rules are compiled raw. If on and there are .gitignore globs, .gitignore globs
+// are stripped of the #gitignore: prefix for the "all" matcher, and the raw globs
+// are used for the "other" matcher (non-tracked files).
+func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate {
+	if !fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
+		return &exclusionPredicate{all: compileRuleMatcher(globs)}
+	}
+
 	allGlobs := make([]string, 0, len(globs))
 	hasGitignoreGlobs := false
-
 	for _, glob := range globs {
 		if gitignoreGlob, ok := strings.CutPrefix(glob, gitIgnoreGlobPrefix); ok {
 			allGlobs = append(allGlobs, gitignoreGlob)
 			hasGitignoreGlobs = true
 			continue
 		}
-
 		allGlobs = append(allGlobs, glob)
 	}
 
-	otherMatcher := gitignore.CompileIgnoreLines(globs...)
-
-	allMatcher := gitignore.CompileIgnoreLines(allGlobs...)
-	defaultPredicate := func(file string) bool {
-		return allMatcher.MatchesPath(filepath.ToSlash(file))
-	}
+	p := &exclusionPredicate{all: compileRuleMatcher(allGlobs)}
 
 	if !hasGitignoreGlobs {
-		return defaultPredicate
+		return p
 	}
 
-	trackedFiles, ok := fw.loadTrackedFiles()
-	// Release so a filter reused across scans, as the IDE language server does, does not serve a stale git index.
-	fw.releaseTrackedFiles()
-	if !ok {
-		return defaultPredicate
+	trackedFiles := fw.readTrackedFiles()
+	if trackedFiles == nil {
+		return p
 	}
 
-	return func(file string) bool {
-		normalizedPath := filepath.ToSlash(file)
-		relativePath, err := filepath.Rel(trackedFiles.repoRoot, file)
-		if err != nil {
-			return allMatcher.MatchesPath(normalizedPath)
-		}
+	p.other = compileRuleMatcher(globs)
+	p.tracked = trackedFiles
+	return p
+}
 
-		if trackedFiles.paths[filepath.ToSlash(relativePath)] {
-			return otherMatcher.MatchesPath(normalizedPath)
-		}
-
-		return allMatcher.MatchesPath(normalizedPath)
+func (p *exclusionPredicate) isTracked(file string) bool {
+	if p.tracked == nil {
+		return false
 	}
+	relativePath, err := filepath.Rel(p.tracked.repoRoot, file)
+	if err != nil {
+		return false
+	}
+	return p.tracked.paths[filepath.ToSlash(relativePath)]
+}
+
+func (p *exclusionPredicate) matcherFor(file string) ruleMatcher {
+	if p.isTracked(file) {
+		return p.other
+	}
+	return p.all
+}
+
+func (p *exclusionPredicate) folderState(dir string, parent excludedFolder) excludedFolder {
+	slashDir := filepath.ToSlash(dir)
+	return excludedFolder{
+		path:    dir,
+		byAll:   parent.byAll || p.all.rules.MatchesPath(slashDir),
+		byOther: p.tracked != nil && (parent.byOther || p.other.rules.MatchesPath(slashDir)),
+	}
+}
+
+func (p *exclusionPredicate) excludedByFolder(file string, folder excludedFolder) bool {
+	if !folder.byAll && !folder.byOther {
+		return false
+	}
+	matcher, excluded := p.all, folder.byAll
+	if p.isTracked(file) {
+		matcher, excluded = p.other, folder.byOther
+	}
+	return excluded && matcher.excludesBelowExcludedFolder(file)
+}
+
+// isExcluded returns true iff the file matches the appropriate exclusion rules.
+func (p *exclusionPredicate) isExcluded(file string) bool {
+	return p.matcherFor(file).rules.MatchesPath(filepath.ToSlash(file))
 }
 
 func (fw *FileFilter) readTrackedFiles() *trackedFiles {
