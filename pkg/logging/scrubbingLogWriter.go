@@ -260,25 +260,17 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
+	const authSchemes = `[tT]oken|[bB]earer|[bB]asic|[nN]egotiate`
+	s = fmt.Sprintf(`((?i:authorization)\W+(?:%s) )(%s)`, authSchemes, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("([n|N]egotiate )(%s)", charGroup)
+	// Outside a header these words also start prose such as "basic authentication", so the value
+	// must contain a digit, base64 punctuation or a lower-to-upper case change to count as a credential.
+	const credentialShaped = `[a-zA-Z0-9-_:.=/+~]*(?:[0-9=+/]|[a-z][A-Z])[a-zA-Z0-9-_:.=/+~]*`
+	s = fmt.Sprintf(`((?:%s) )(%s)`, authSchemes, credentialShaped)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
