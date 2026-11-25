@@ -3,6 +3,7 @@ package output_workflow
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 
@@ -28,7 +29,7 @@ func getTotalNumberOfUnifiedFindings(results []testapi.TestResult) int {
 	return count
 }
 
-func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) error {
+func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext, renderTime time.Time) error {
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfUnifiedFindings(results) == 0 {
@@ -51,6 +52,7 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 		config,
 		wEntry.writer,
 		presenters.UfmWithRuntimeInfo(invocation.GetRuntimeInfo()),
+		presenters.UfmWithRenderTime(renderTime),
 	)
 
 	debugLogger.Info().Msgf("UFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
@@ -113,6 +115,9 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	}
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
+	// every output of one run must carry the same timestamp, however long the renders take
+	renderTime := time.Now()
+
 	// iterate over all writers and render for each of them
 	ctx := invocation.Context()
 	availableThreads := semaphore.NewWeighted(threadCount)
@@ -128,7 +133,7 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 
 		go func(name string, writer *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) {
 			defer availableThreads.Release(1)
-			if renderErr := useRendererWithUnifiedModel(name, writer, results, invocation); renderErr != nil {
+			if renderErr := useRendererWithUnifiedModel(name, writer, results, invocation, renderTime); renderErr != nil {
 				errMu.Lock()
 				errs = append(errs, renderErr)
 				errMu.Unlock()
