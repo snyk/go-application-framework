@@ -265,6 +265,38 @@ func TestWalkFilteredFiles_MatchesLegacy(t *testing.T) {
 	}
 }
 
+func TestWalkFilteredFiles_WithoutRuleFilesAppliesOnlyDefaultAndExtraRules(t *testing.T) {
+	root := t.TempDir()
+	for path, content := range map[string]string{
+		".git/config":   "x",
+		".gitignore":    "src/\n",
+		"src/a.js":      "x",
+		"vendor/b.js":   "x",
+		"vendor/c.tmp":  "x",
+		"docs/guide.md": "x",
+	} {
+		createFileInPath(t, filepath.Join(root, path), []byte(content))
+	}
+	extraRules := []string{"**/vendor/**"}
+
+	legacy := NewFileFilter(root, &log.Logger)
+	rules, err := legacy.GetRules(nil)
+	require.NoError(t, err)
+	expected := drainFilteredFiles(t, legacy.GetFilteredFiles(legacy.GetAllFiles(), slices.Concat(extraRules, rules)))
+	require.Contains(t, expected, filepath.Join(root, "src", "a.js"), ".gitignore must not be applied without rule files")
+	require.NotContains(t, expected, filepath.Join(root, ".git", "config"))
+	require.NotContains(t, expected, filepath.Join(root, "vendor", "b.js"))
+
+	recorder := newMetricsRecorder(t)
+	walk := NewFileFilter(root, &log.Logger, WithMetrics(recorder), WithExtraRules(extraRules))
+	walkFiles, err := walk.WalkFilteredFiles()
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, expected, drainFilteredFiles(t, walkFiles))
+	assert.NotContains(t, recordedMetrics(t, recorder)[metricVariantLegacy].ints, metricRulesBuildDurationMs,
+		"without rule files there are no rules to build, so no tree walk to time")
+}
+
 func TestWalkFilteredFiles_MatchesLegacyOnRandomTrees(t *testing.T) {
 	const iterations = 300
 	folderNames := []string{"node_modules", "dist", "src", "a", "X", "keep", "a(b)", "ab"}

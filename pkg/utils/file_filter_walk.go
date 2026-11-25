@@ -35,9 +35,14 @@ func WithExtraRules(rules []string) FileFilterOption {
 // ignore files count and an unreadable entry ends the walk as in GetAllFiles, but their files are
 // only tested against the negated rules.
 func (fw *FileFilter) WalkFilteredFiles() (chan string, error) {
-	rules, err := fw.GetRules(fw.ruleFiles)
-	if err != nil {
-		return nil, err
+	// Without rule files, GetRules would walk the tree only to return the default rules.
+	rules := fw.defaultRules
+	if len(fw.ruleFiles) > 0 {
+		var err error
+		rules, err = fw.GetRules(fw.ruleFiles)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	start := time.Now()
