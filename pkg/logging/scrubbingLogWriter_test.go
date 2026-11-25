@@ -1597,3 +1597,46 @@ func Test_AddSecretsFromConfig_IoWriter(t *testing.T) {
 	assert.NotContains(t, output.String(), "io-writer-token-value")
 	assert.Contains(t, output.String(), "seen")
 }
+
+func TestDebugLog_ProseAfterAuthSchemeWordSurvivesWhileCredentialsAreRedacted(t *testing.T) {
+	var output bytes.Buffer
+	writer := NewScrubbingWriter(zerolog.MultiLevelWriter(&output), GetScrubDictFromConfig(configuration.NewInMemory()))
+	logger := zerolog.New(writer)
+	credential := base64.StdEncoding.EncodeToString([]byte("user:pass"))
+
+	logger.Debug().Msg("HandleConnect - basic authentication result: 2 example.com:443")
+	logger.Debug().Msg("> Proxy-Authorization: Basic " + credential)
+
+	assert.Contains(t, output.String(), "HandleConnect - basic authentication result: 2 example.com:443")
+	assert.Contains(t, output.String(), "> Proxy-Authorization: Basic ***")
+	assert.NotContains(t, output.String(), credential)
+}
+
+func TestAuthSchemeRules_RedactOnlyCredentialShapedValues(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+	digitFreeBase64 := base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	allLowercase := strings.Repeat("qwerty", 3)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"digit-free base64 after basic", "Basic " + digitFreeBase64, "Basic ***"},
+		{"jwt after bearer", "Bearer eyJhbGciOiJIUzI1NiJ9", "Bearer ***"},
+		{"base64 with padding after negotiate", "Negotiate qwertyuiop==", "Negotiate ***"},
+		{"credential after a repeated scheme word", "Bearer Bearer " + digitFreeBase64, "Bearer Bearer ***"},
+		{"all-lowercase credential in an authorization header", "Authorization: Bearer " + allLowercase, "Authorization: Bearer ***"},
+		{"all-lowercase credential in a quoted header", `{"Authorization": "Basic ` + allLowercase + `"}`, `{"Authorization": "Basic ***"}`},
+		{"all-lowercase credential in a printed header map", "map[Authorization:[Negotiate " + allLowercase + "]]", "map[Authorization:[Negotiate ***]]"},
+		{"prose after basic", "basic authentication result: 2", "basic authentication result: 2"},
+		{"prose after bearer", "the Bearer request failed", "the Bearer request failed"},
+		{"prose after negotiate", "Negotiate handshake started", "Negotiate handshake started"},
+		{"prose after capitalised token", "Token authentication enabled", "Token authentication enabled"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(ScrubValue([]byte(tt.input), dict)))
+		})
+	}
+}
