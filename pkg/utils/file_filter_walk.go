@@ -4,11 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 )
 
 type excludedFolder struct {
-	path    string
 	byAll   bool
 	byOther bool
 }
@@ -38,53 +38,87 @@ func (fw *FileFilter) WalkFilteredFiles() (chan string, error) {
 	}
 
 	start := time.Now()
-	predicate := fw.newExclusionPredicate(slices.Concat(fw.extraRules, rules))
-
-	candidates := make(chan string)
-	go func() {
-		defer close(candidates)
-		fw.sendFilesNotExcludedByFolder(predicate, candidates)
-	}()
+	folders := fw.newFolderExclusions(slices.Concat(fw.extraRules, rules))
+	folders.matchFolders(fw.max_threads)
 
 	filtered := make(chan string)
 	go func() {
 		defer close(filtered)
-		fw.filterFiles(candidates, predicate, filtered, start)
+		fw.filterFiles(fw.GetAllFiles(), folders.isExcluded, filtered, start)
 	}()
 
 	return filtered, nil
 }
 
-// The callback mirrors GetAllFiles, so the walk visits and aborts on exactly the same entries.
-func (fw *FileFilter) sendFilesNotExcludedByFolder(predicate *exclusionPredicate, files chan<- string) {
-	var folders []excludedFolder
-	err := filepath.WalkDir(fw.path, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+// folderExclusions memoizes which folders below root the rules exclude, so each folder is matched
+// once, however many of its files the filter workers test concurrently.
+type folderExclusions struct {
+	predicate *exclusionPredicate
+	root      string
+	mu        sync.Mutex
+	folders   map[string]*folderExclusion
+}
 
-		parentPath := filepath.Dir(path)
-		for len(folders) > 0 && folders[len(folders)-1].path != parentPath {
-			folders = folders[:len(folders)-1]
-		}
-		var parent excludedFolder
-		if len(folders) > 0 {
-			parent = folders[len(folders)-1]
-		}
+type folderExclusion struct {
+	once   sync.Once
+	folder excludedFolder
+}
 
-		if d.IsDir() {
-			if path != fw.path {
-				folders = append(folders, predicate.folderState(path, parent))
-			}
-			return nil
-		}
+func (fw *FileFilter) newFolderExclusions(rules []string) *folderExclusions {
+	return &folderExclusions{
+		predicate: fw.newExclusionPredicate(rules),
+		root:      filepath.Clean(fw.path),
+		folders:   map[string]*folderExclusion{},
+	}
+}
 
-		if !predicate.excludedByFolder(path, parent) {
-			files <- path
-		}
-		return nil
+func (e *folderExclusions) excludedByFolder(file string) bool {
+	return e.predicate.excludedByFolder(file, e.of(filepath.Dir(file)))
+}
+
+func (e *folderExclusions) isExcluded(file string) bool {
+	return e.excludedByFolder(file) || e.predicate.isExcluded(file)
+}
+
+func (e *folderExclusions) of(dir string) excludedFolder {
+	if dir == e.root || dir == filepath.Dir(dir) {
+		return excludedFolder{}
+	}
+
+	e.mu.Lock()
+	exclusion, ok := e.folders[dir]
+	if !ok {
+		exclusion = &folderExclusion{}
+		e.folders[dir] = exclusion
+	}
+	e.mu.Unlock()
+
+	exclusion.once.Do(func() {
+		exclusion.folder = e.predicate.folderState(dir, e.of(filepath.Dir(dir)))
 	})
-	if err != nil {
-		fw.logger.Error().Msgf("walk dir failed: %v", err)
+	return exclusion.folder
+}
+
+// matchFolders matches the folders below root ahead of the file stream, which reaches the filter
+// workers one folder at a time and would otherwise make them wait on each other's folder.
+func (e *folderExclusions) matchFolders(workers int64) {
+	folders := make(chan string)
+	go func() {
+		defer close(folders)
+		//nolint:errcheck // a folder left out is matched when its first file is filtered
+		filepath.WalkDir(e.root, func(path string, d os.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				folders <- path
+			}
+			return err
+		})
+	}()
+
+	for range workers {
+		go func() {
+			for dir := range folders {
+				e.of(dir)
+			}
+		}()
 	}
 }

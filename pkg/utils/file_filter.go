@@ -289,15 +289,15 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		predicate := fw.newExclusionPredicate(globs)
 
 		defer close(filteredFilesCh)
-		fw.filterFiles(filesCh, predicate, filteredFilesCh, start)
+		fw.filterFiles(filesCh, predicate.isExcluded, filteredFilesCh, start)
 	}()
 
 	return filteredFilesCh
 }
 
-// filterFiles consumes files from filesCh, filters them using predicate, and sends
+// filterFiles consumes files from filesCh, filters them using isExcluded, and sends
 // non-excluded files to filteredFilesCh. It records metrics.
-func (fw *FileFilter) filterFiles(filesCh <-chan string, predicate *exclusionPredicate, filteredFilesCh chan<- string, start time.Time) {
+func (fw *FileFilter) filterFiles(filesCh <-chan string, isExcluded func(string) bool, filteredFilesCh chan<- string, start time.Time) {
 	ctx := context.Background()
 	availableThreads := semaphore.NewWeighted(fw.max_threads)
 	variant := fw.metricVariant()
@@ -312,7 +312,7 @@ func (fw *FileFilter) filterFiles(filesCh <-chan string, predicate *exclusionPre
 		}
 		go func(f string) {
 			defer availableThreads.Release(1)
-			if !predicate.isExcluded(f) {
+			if !isExcluded(f) {
 				filteredFilesCh <- f
 				resolvedFileCount.Add(1)
 			}
@@ -482,7 +482,6 @@ func (p *exclusionPredicate) matcherFor(file string) ruleMatcher {
 func (p *exclusionPredicate) folderState(dir string, parent excludedFolder) excludedFolder {
 	slashDir := filepath.ToSlash(dir)
 	return excludedFolder{
-		path:    dir,
 		byAll:   parent.byAll || p.all.rules.MatchesPath(slashDir),
 		byOther: p.tracked != nil && (parent.byOther || p.other.rules.MatchesPath(slashDir)),
 	}

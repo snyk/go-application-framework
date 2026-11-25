@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog/log"
@@ -55,9 +56,8 @@ func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 			root, kept := createPnpmStyleMonorepo(t, nodeModulesFiles)
 			createFileInPath(t, filepath.Join(root, test.ruleFile), []byte(test.rules))
 
-			recorder := newMetricsRecorder(t)
 			config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithMetrics(recorder), WithRuleFiles([]string{test.ruleFile}))
+			fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{test.ruleFile}))
 
 			files := filterFiles(t, fileFilter)
 
@@ -67,9 +67,18 @@ func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 			}
 			assert.ElementsMatch(t, expected, files)
 
-			variant := recordedMetrics(t, recorder)[metriVariantMetacharFix]
-			assert.Equal(t, len(expected), variant.ints[metricFilterInputFileCount],
-				"files inside excluded folders must not reach the filter")
+			rules, err := fileFilter.GetRules([]string{test.ruleFile})
+			require.NoError(t, err)
+			folders := fileFilter.newFolderExclusions(rules)
+			nodeModules := filepath.Join(root, "node_modules") + string(filepath.Separator)
+			excludedFiles := 0
+			for file := range fileFilter.GetAllFiles() {
+				if strings.HasPrefix(file, nodeModules) {
+					excludedFiles++
+					assert.True(t, folders.excludedByFolder(file), "%s must be excluded by its folder, not by matching every rule", file)
+				}
+			}
+			assert.Equal(t, nodeModulesFiles, excludedFiles)
 		})
 	}
 }
