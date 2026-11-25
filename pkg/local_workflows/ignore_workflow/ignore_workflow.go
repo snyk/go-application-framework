@@ -204,6 +204,10 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if openSource {
 		// a Snyk Code ignore keeps sending the URL as spelled, in its meta
 		repoUrl = normalizeOpenSourceRepoUrl(repoUrl)
+		// a value such as ".git" or " / " passes the checks above but is empty once normalized
+		if repoUrl == "" {
+			return nil, cli.NewEmptyFlagOptionError("The remote repository URL could not be automatically detected. Provide it using the --remote-repo-url flag.")
+		}
 	}
 
 	// the first requests are sent only once all input is valid

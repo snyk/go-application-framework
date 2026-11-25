@@ -1290,6 +1290,35 @@ func Test_normalizeOpenSourceRepoUrl(t *testing.T) {
 	}
 }
 
+func Test_ignoreCreateWorkflowEntryPoint_openSourceRepoUrlNormalizedToEmpty(t *testing.T) {
+	testCases := []struct {
+		name    string
+		flagUrl string // --remote-repo-url, used over the origin of the clone
+	}{
+		{name: "--remote-repo-url=.git", flagUrl: ".git"},
+		{name: "--remote-repo-url of a slash between spaces", flagUrl: " / "},
+	}
+
+	for _, tc := range testCases {
+		for _, interactive := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s (interactive=%t)", tc.name, interactive), func(t *testing.T) {
+				run := setupIgnoreCreateRun(t, interactive, "{}")
+				run.config.Set(FindingsIdKey, testOpenSourceId)
+				run.config.Set(RemoteRepoUrlKey, tc.flagUrl)
+
+				_, err := ignoreCreateWorkflowEntryPoint(run.invocationCtx, nil)
+
+				var snykErr snyk_errors.Error
+				require.ErrorAs(t, err, &snykErr)
+				assert.Equal(t, "SNYK-CLI-0003", snykErr.ErrorCode)
+				assert.Equal(t, "The remote repository URL could not be automatically detected. Provide it using the --remote-repo-url flag.", snykErr.Detail)
+				assert.Empty(t, run.requests, "an empty repository URL must send no request")
+				assert.Zero(t, run.whoamiCalls, "an empty repository URL must not call whoami")
+			})
+		}
+	}
+}
+
 func Test_ignoreCreateWorkflowEntryPoint_emptyFlagErrors(t *testing.T) {
 	t.Run("non-interactive without --finding-id", func(t *testing.T) {
 		run := setupIgnoreCreateRun(t, false, "{}")
