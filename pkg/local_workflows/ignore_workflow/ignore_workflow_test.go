@@ -886,6 +886,7 @@ const (
 	testOpenSourceId           = "SNYK-JS-LODASH-567746"
 	testOpenSourcePolicyId     = "22222222-2222-2222-2222-222222222222"
 	testCleanRepoUrl           = "https://github.com/org/repo.git"
+	testNormalizedRepoUrl      = "https://github.com/org/repo"
 	testRepoUrlWithCredentials = "https://x-access-token:SECRET@github.com/org/repo.git"
 	testReason                 = "Test reason"
 	testExpiration             = "2027-03-31"
@@ -1136,7 +1137,7 @@ func Test_ignoreCreateWorkflowEntryPoint_request(t *testing.T) {
 						"logical_operator": "and",
 						"conditions": [
 							{"field": "snyk-id", "operator": "includes", "value": "SNYK-JS-LODASH-567746"},
-							{"field": "repository-url", "operator": "includes", "value": "https://github.com/org/repo.git"}
+							{"field": "repository-url", "operator": "includes", "value": "https://github.com/org/repo"}
 						]
 					}
 				}
@@ -1162,21 +1163,23 @@ func Test_ignoreCreateWorkflowEntryPoint_request(t *testing.T) {
 
 func Test_ignoreCreateWorkflowEntryPoint_repoUrl(t *testing.T) {
 	testCases := []struct {
-		name            string
-		flagUrl         string // --remote-repo-url, not set when empty
-		originUrl       string // first URL of the origin remote, no git repository when empty
-		expectedRepoUrl string
+		name                      string
+		flagUrl                   string // --remote-repo-url, not set when empty
+		originUrl                 string // first URL of the origin remote, no git repository when empty
+		expectedRepoUrl           string // in the meta of a Snyk Code ignore
+		expectedOpenSourceRepoUrl string // in the condition and the output of an Open Source ignore
 	}{
 		{
-			name:            "--remote-repo-url is used over origin",
-			flagUrl:         "https://github.com/org/flag-repo.git",
-			originUrl:       "https://github.com/org/origin-repo.git",
-			expectedRepoUrl: "https://github.com/org/flag-repo.git",
+			name:                      "--remote-repo-url is used over origin",
+			flagUrl:                   "https://github.com/org/flag-repo.git",
+			originUrl:                 "https://github.com/org/origin-repo.git",
+			expectedRepoUrl:           "https://github.com/org/flag-repo.git",
+			expectedOpenSourceRepoUrl: "https://github.com/org/flag-repo",
 		},
-		{name: "credentials are stripped from --remote-repo-url", flagUrl: testRepoUrlWithCredentials, expectedRepoUrl: testCleanRepoUrl},
-		{name: "origin is used without --remote-repo-url", originUrl: "https://github.com/org/origin-repo.git", expectedRepoUrl: "https://github.com/org/origin-repo.git"},
-		{name: "credentials are stripped from origin", originUrl: testRepoUrlWithCredentials, expectedRepoUrl: testCleanRepoUrl},
-		{name: "SSH origin only loses its user", originUrl: "git@github.com:org/repo.git", expectedRepoUrl: "github.com:org/repo.git"},
+		{name: "credentials are stripped from --remote-repo-url", flagUrl: testRepoUrlWithCredentials, expectedRepoUrl: testCleanRepoUrl, expectedOpenSourceRepoUrl: testNormalizedRepoUrl},
+		{name: "origin is used without --remote-repo-url", originUrl: "https://github.com/org/origin-repo.git", expectedRepoUrl: "https://github.com/org/origin-repo.git", expectedOpenSourceRepoUrl: "https://github.com/org/origin-repo"},
+		{name: "credentials are stripped from origin", originUrl: testRepoUrlWithCredentials, expectedRepoUrl: testCleanRepoUrl, expectedOpenSourceRepoUrl: testNormalizedRepoUrl},
+		{name: "SSH origin only loses its user", originUrl: "git@github.com:org/repo.git", expectedRepoUrl: "github.com:org/repo.git", expectedOpenSourceRepoUrl: "github.com:org/repo"},
 	}
 
 	for _, tc := range testCases {
@@ -1203,9 +1206,9 @@ func Test_ignoreCreateWorkflowEntryPoint_repoUrl(t *testing.T) {
 				output := strings.Join(run.events, "")
 				if openSource {
 					require.Len(t, payload.Data.Attributes.ConditionsGroup.Conditions, 2)
-					assert.Equal(t, tc.expectedRepoUrl, payload.Data.Attributes.ConditionsGroup.Conditions[1].Value)
-					assert.Contains(t, output, "\n  Repository:    "+tc.expectedRepoUrl+"\n")
-					assert.Contains(t, output, " in "+tc.expectedRepoUrl+".\n")
+					assert.Equal(t, tc.expectedOpenSourceRepoUrl, payload.Data.Attributes.ConditionsGroup.Conditions[1].Value)
+					assert.Contains(t, output, "\n  Repository:    "+tc.expectedOpenSourceRepoUrl+"\n")
+					assert.Contains(t, output, " in "+tc.expectedOpenSourceRepoUrl+".\n")
 				} else {
 					require.NotNil(t, payload.Data.Meta)
 					assert.Equal(t, tc.expectedRepoUrl, (*payload.Data.Meta)["repo_url"])
@@ -1214,6 +1217,76 @@ func Test_ignoreCreateWorkflowEntryPoint_repoUrl(t *testing.T) {
 				assert.NotContains(t, output, "SECRET")
 			})
 		}
+	}
+}
+
+func Test_ignoreCreateWorkflowEntryPoint_openSourceRepoUrlNormalized(t *testing.T) {
+	testCases := []struct {
+		name            string
+		flagUrl         string // --remote-repo-url, not set when empty
+		originUrl       string // first URL of the origin remote
+		expectedRepoUrl string
+	}{
+		{name: "origin ending in .git loses the suffix", originUrl: "https://github.com/org/repo.git", expectedRepoUrl: testNormalizedRepoUrl},
+		{name: "origin ending in a slash loses the slash", originUrl: "https://github.com/org/repo/", expectedRepoUrl: testNormalizedRepoUrl},
+		{
+			name:            "--remote-repo-url without a suffix is unchanged",
+			flagUrl:         "https://github.com/org/flag-repo",
+			originUrl:       testCleanRepoUrl,
+			expectedRepoUrl: "https://github.com/org/flag-repo",
+		},
+		{name: "origin with credentials and .git loses both", originUrl: testRepoUrlWithCredentials, expectedRepoUrl: testNormalizedRepoUrl},
+	}
+
+	for _, tc := range testCases {
+		for _, interactive := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s (interactive=%t)", tc.name, interactive), func(t *testing.T) {
+				run := setupIgnoreCreateRun(t, interactive, getOpenSourcePolicyResponse(t, policyApi.PolicyReviewApproved))
+				run.config.Set(FindingsIdKey, testOpenSourceId)
+				if tc.flagUrl != "" {
+					run.config.Set(RemoteRepoUrlKey, tc.flagUrl)
+				}
+				run.config.Set(configuration.INPUT_DIRECTORY, initRepoWithOrigin(t, tc.originUrl))
+
+				_, err := ignoreCreateWorkflowEntryPoint(run.invocationCtx, nil)
+				require.NoError(t, err)
+
+				require.Len(t, run.requestBodies, 1)
+				var payload policyApi.CreatePolicyPayload
+				require.NoError(t, json.Unmarshal([]byte(run.requestBodies[0]), &payload))
+				conditions := payload.Data.Attributes.ConditionsGroup.Conditions
+				require.Len(t, conditions, 2)
+				assert.Equal(t, policyApi.PolicyCreateRepositoryURL, conditions[1].Field)
+				assert.Equal(t, tc.expectedRepoUrl, conditions[1].Value)
+				assert.Contains(t, run.events, "\n  ✅ Ignore created for "+testOpenSourceId+" in "+tc.expectedRepoUrl+".\n")
+				assert.NotContains(t, run.requestBodies[0], "SECRET")
+				assert.NotContains(t, strings.Join(run.events, ""), "SECRET")
+			})
+		}
+	}
+}
+
+func Test_normalizeOpenSourceRepoUrl(t *testing.T) {
+	testCases := []struct {
+		name     string
+		repoUrl  string
+		expected string
+	}{
+		{name: "URL without a suffix is unchanged", repoUrl: "https://github.com/org/repo", expected: "https://github.com/org/repo"},
+		{name: ".git is removed", repoUrl: "https://github.com/org/repo.git", expected: "https://github.com/org/repo"},
+		{name: "trailing slash is removed", repoUrl: "https://github.com/org/repo/", expected: "https://github.com/org/repo"},
+		{name: "trailing slash is removed before .git", repoUrl: "https://github.com/org/repo.git/", expected: "https://github.com/org/repo"},
+		{name: "surrounding whitespace is removed first", repoUrl: " \thttps://github.com/org/repo.git/\n", expected: "https://github.com/org/repo"},
+		{name: "only one trailing slash is removed", repoUrl: "https://github.com/org/repo//", expected: "https://github.com/org/repo/"},
+		{name: ".git is case-sensitive", repoUrl: "https://github.com/org/repo.GIT", expected: "https://github.com/org/repo.GIT"},
+		{name: "SCP-style URL only loses .git", repoUrl: "github.com:org/repo.git", expected: "github.com:org/repo"},
+		{name: "empty URL stays empty", repoUrl: "", expected: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, normalizeOpenSourceRepoUrl(tc.repoUrl))
+		})
 	}
 }
 
@@ -1284,12 +1357,12 @@ func Test_ignoreCreateWorkflowEntryPoint_emptyFlagErrors(t *testing.T) {
 		require.Len(t, run.requestBodies, 1)
 		var payload policyApi.CreatePolicyPayload
 		require.NoError(t, json.Unmarshal([]byte(run.requestBodies[0]), &payload))
-		assert.Equal(t, testCleanRepoUrl, payload.Data.Attributes.ConditionsGroup.Conditions[1].Value)
+		assert.Equal(t, testNormalizedRepoUrl, payload.Data.Attributes.ConditionsGroup.Conditions[1].Value)
 	})
 }
 
 func Test_ignoreCreateWorkflowEntryPoint_openSourceOutput(t *testing.T) {
-	createdLine := "\n  ✅ Ignore created for SNYK-JS-LODASH-567746 in https://github.com/org/repo.git.\n"
+	createdLine := "\n  ✅ Ignore created for SNYK-JS-LODASH-567746 in https://github.com/org/repo.\n"
 	pendingLine := "\n  Your ignore request has been submitted. It applies after an approver accepts it.\n"
 	testCases := []struct {
 		review       policyApi.PolicyReview
@@ -1312,7 +1385,7 @@ func Test_ignoreCreateWorkflowEntryPoint_openSourceOutput(t *testing.T) {
 				"\n  Requested on:  " + time.Now().Format(time.DateOnly) +
 				"\n  Requested by:  " + expectedUser +
 				"\n  Snyk ID:       SNYK-JS-LODASH-567746" +
-				"\n  Repository:    https://github.com/org/repo.git" +
+				"\n  Repository:    https://github.com/org/repo" +
 				"\n  Expiration:    2027-03-31" +
 				"\n  Ignore type:   wont-fix" +
 				"\n  Reason:        Test reason"

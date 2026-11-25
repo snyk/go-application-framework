@@ -161,6 +161,15 @@ func isOpenSourceIssueId(id string) bool {
 	return strings.HasPrefix(lowerId, "snyk-") || strings.HasPrefix(lowerId, "snyk:lic:") || strings.HasPrefix(lowerId, "npm:")
 }
 
+// normalizeOpenSourceRepoUrl returns the canonical form of the repository URL of an Open Source ignore: without
+// surrounding whitespace, then without one trailing "/", then without a trailing ".git" (case-sensitive). It neither
+// strips credentials nor rewrites the scheme, host or SCP-style form.
+func normalizeOpenSourceRepoUrl(repoUrl string) string {
+	normalized := strings.TrimSpace(repoUrl)
+	normalized = strings.TrimSuffix(normalized, "/")
+	return strings.TrimSuffix(normalized, ".git")
+}
+
 func isValidReason(input string) error {
 	if input == "" {
 		return cli.NewValidationFailureError("The ignore reason cannot be empty. Provide a justification for ignoring this finding.")

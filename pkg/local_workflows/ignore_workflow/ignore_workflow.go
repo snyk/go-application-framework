@@ -201,6 +201,10 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 	openSource := isOpenSourceIssueId(findingsId)
 	repoUrl = git.StripGitCredentials(repoUrl)
+	if openSource {
+		// a Snyk Code ignore keeps sending the URL as spelled, in its meta
+		repoUrl = normalizeOpenSourceRepoUrl(repoUrl)
+	}
 
 	// the first requests are sent only once all input is valid
 	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
