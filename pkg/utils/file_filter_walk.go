@@ -27,7 +27,10 @@ func WithExtraRules(rules []string) FileFilterOption {
 	}
 }
 
-// WalkFilteredFiles returns the same files as GetFilteredFiles(GetAllFiles(), rules) with the extra rules and the rules from GetRules(ruleFiles), without testing the files of excluded folders against every rule.
+// WalkFilteredFiles returns the same files as GetFilteredFiles(GetAllFiles(), rules), where rules are
+// the extra rules followed by GetRules(ruleFiles). Excluded folders are still read, because their
+// ignore files count and an unreadable entry ends the walk as in GetAllFiles, but their files are
+// only tested against the negated rules.
 func (fw *FileFilter) WalkFilteredFiles() (chan string, error) {
 	rules, err := fw.GetRules(fw.ruleFiles)
 	if err != nil {
