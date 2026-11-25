@@ -33,14 +33,19 @@ type EngineImpl struct {
 	extensionInitializer []ExtensionInit
 	workflows            map[string]Entry
 	config               configuration.Configuration
-	analytics            analytics.Analytics
+	analytics            analytics.Analytics // guarded by mu; created by GetAnalytics, reset by selectProfile
 	networkAccess        networking.NetworkAccess
 	initialized          atomic.Bool
 	logger               *zerolog.Logger
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
-	mu                sync.RWMutex
+	mu sync.RWMutex
+	// analyticsMu serialises building analytics and swapping the configuration in selectProfile. Lock order:
+	// analyticsMu before mu. The build reads the configuration, which may resolve remote-backed values, so it holds
+	// analyticsMu while it runs. Concurrent first calls and SelectProfile therefore wait for it. The alternative,
+	// building without a lock, can create an analytics object that is then discarded.
+	analyticsMu       sync.Mutex
 	workflowsMu       sync.RWMutex // guards workflows; separate from mu so registry access never waits on config or hooks
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
@@ -147,6 +152,8 @@ func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
 	}
 }
 
+// SetConfiguration replaces the configuration of the engine and rebinds network access to it. Analytics are not
+// rebound: they bind to the configuration that is current at their first GetAnalytics, and keep it.
 func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -231,10 +238,8 @@ func (e *EngineImpl) Init() error {
 	}
 
 	// later scan here for extension binaries
-
-	if e.analytics == nil {
-		e.analytics = e.initAnalytics()
-	}
+	// Analytics is created lazily in GetAnalytics so hosts can select a configuration
+	// profile after Init without freezing the default profile's API_URL (CLI-2138).
 
 	if err == nil {
 		e.mu.Lock()
@@ -245,12 +250,14 @@ func (e *EngineImpl) Init() error {
 	return err
 }
 
-func (e *EngineImpl) initAnalytics() analytics.Analytics {
+// initAnalytics creates analytics that reports with cfg and the client of na. It reads cfg, which may resolve
+// remote-backed values, so it must not be called with the engine lock held.
+func initAnalytics(cfg configuration.Configuration, na networking.NetworkAccess) analytics.Analytics {
 	a := analytics.New()
-	a.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
-	a.SetApiUrl(e.config.GetString(configuration.API_URL))
+	a.SetIntegration(cfg.GetString(configuration.INTEGRATION_NAME), cfg.GetString(configuration.INTEGRATION_VERSION))
+	a.SetApiUrl(cfg.GetString(configuration.API_URL))
 	a.SetClient(func() *http.Client {
-		return e.networkAccess.GetHttpClient()
+		return na.GetHttpClient()
 	})
 
 	return a
@@ -425,6 +432,12 @@ func (e *EngineImpl) runWorkflow(id Identifier, workflow Entry, options *engineR
 		return nil, nil, nil
 	}
 
+	// Analytics is created on first use, which reads configuration, so it is obtained before the engine lock.
+	var engineAnalytics analytics.Analytics
+	if options.ic == nil {
+		engineAnalytics = e.GetAnalytics()
+	}
+
 	e.mu.Lock()
 	e.invocationCounter++
 	e.applyInvocationDefaults(options)
@@ -433,7 +446,7 @@ func (e *EngineImpl) runWorkflow(id Identifier, workflow Entry, options *engineR
 	localLogger := e.logger.With().Str("ext", prefix).Logger()
 
 	localUi := e.ui
-	localAnalytics := e.invocationAnalytics(id, options.ic)
+	localAnalytics := invocationAnalytics(id, options.ic, engineAnalytics)
 	localNetworkAccess := e.invocationNetworkAccess(id, options.config)
 	localEngine := e.invocationEngine(options)
 	e.mu.Unlock()
@@ -482,10 +495,10 @@ func (e *EngineImpl) applyInvocationDefaults(options *engineRuntimeConfig) {
 }
 
 // invocationAnalytics returns the analytics of an invocation, with the instrumentation collector of the caller if it
-// gave one. The caller holds the engine lock.
-func (e *EngineImpl) invocationAnalytics(id Identifier, ic analytics.InstrumentationCollector) analytics.Analytics {
+// gave one. Otherwise it wraps engineAnalytics, which the caller got from GetAnalytics.
+func invocationAnalytics(id Identifier, ic analytics.InstrumentationCollector, engineAnalytics analytics.Analytics) analytics.Analytics {
 	if ic == nil {
-		return NewAnalyticsWrapper(e.analytics, id.Host)
+		return NewAnalyticsWrapper(engineAnalytics, id.Host)
 	}
 	tmpAnalytics := &analytics.AnalyticsImpl{}
 	tmpAnalytics.SetInstrumentation(ic)
@@ -609,9 +622,35 @@ func (e *EngineImpl) firePostInvokeHooks(
 	}
 }
 
-// GetAnalytics returns the analytics object.
+// GetAnalytics returns the analytics object. Before Init it is nil. After Init it is created on first use from the
+// engine's configuration at that time, so a host that selects a profile after Init (see SelectProfile) gets that
+// profile's API_URL and credentials. The object is then kept, and SetConfiguration does not rebind it. SelectProfile
+// discards it, so the next call creates it from the selected profile.
 func (e *EngineImpl) GetAnalytics() analytics.Analytics {
-	return e.analytics
+	if !e.initialized.Load() {
+		return nil
+	}
+	e.mu.RLock()
+	a := e.analytics
+	e.mu.RUnlock()
+	if a != nil {
+		return a
+	}
+
+	e.analyticsMu.Lock()
+	defer e.analyticsMu.Unlock()
+	// Read again under the build lock: another call may have built it, or SelectProfile may have swapped the configuration.
+	e.mu.RLock()
+	a, cfg, na := e.analytics, e.config, e.networkAccess
+	e.mu.RUnlock()
+	if a != nil {
+		return a
+	}
+	a = initAnalytics(cfg, na)
+	e.mu.Lock()
+	e.analytics = a
+	e.mu.Unlock()
+	return a
 }
 
 // GetNetworkAccess returns the network access object.
@@ -777,6 +816,68 @@ func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 		return nil, profilesUnavailableError("the engine does not support profiles")
 	}
 	return provider.profileRegistry()
+}
+
+// profileSelector is implemented by engines that can make a named profile their configuration after Init.
+type profileSelector interface {
+	selectProfile(name string) (configuration.Configuration, error)
+}
+
+// SelectProfile makes the named profile the engine's configuration and rebinds network access to it.
+// It keeps the existing profile registry (unlike SetConfiguration). Analytics created before the call
+// is discarded: the next GetAnalytics creates it from the selected profile, so an analytics object
+// obtained earlier keeps reporting with the previous configuration. Empty name and the default profile
+// are no-ops. It fails if the engine does not support profiles.
+func SelectProfile(engine Engine, name string) (configuration.Configuration, error) {
+	if name == "" || name == profile.DefaultName {
+		return engine.GetConfiguration(), nil
+	}
+	selector, ok := engine.(profileSelector)
+	if !ok {
+		return nil, profilesUnavailableError("the engine does not support profiles")
+	}
+	return selector.selectProfile(name)
+}
+
+// selectProfile loads the named profile, replaces the engine configuration with it, and rebinds
+// network access. The registry built from the previous configuration is kept so DirKey need not
+// be present on the derived profile. Call after Init; do not call before extensions have registered.
+func (e *EngineImpl) selectProfile(name string) (configuration.Configuration, error) {
+	registry, err := e.profileRegistry()
+	if err != nil {
+		return nil, err
+	}
+	p, err := registry.Profile(name)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil || p.Configuration() == nil {
+		return nil, profilesUnavailableError(fmt.Sprintf("profile %q has no configuration", name))
+	}
+	cfg := p.Configuration()
+
+	// Only the swap runs under the locks. analyticsMu keeps a GetAnalytics build in flight from publishing analytics of
+	// the previous configuration after the reset below.
+	e.analyticsMu.Lock()
+	defer e.analyticsMu.Unlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Pin DirKey to the registry directory. Derived profiles inherit a default DirKey
+	// (snyk_profiles under the storage dir) that is not the host's SNYK_CONFIG_PROFILE_DIR.
+	// cfg is the configuration the registry caches for name, so this Set writes to a registry-owned
+	// object; that is deliberate. profileRegistry compares the DirKey of the engine configuration with
+	// e.profilesDir and rebuilds the registry on a mismatch, which would drop the registry this call keeps.
+	// The value is the same on every call, so the cached profile does not change in any other way.
+	if e.profilesDir != "" {
+		cfg.Set(profile.DirKey, e.profilesDir)
+	}
+	e.config = cfg
+	e.analytics = nil // rebuilt from cfg by the next GetAnalytics
+	// Do not clear e.profiles: the registry was built from the base and stays valid.
+	if e.networkAccess != nil {
+		e.networkAccess.SetConfiguration(cfg)
+	}
+	return cfg, nil
 }
 
 // profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration

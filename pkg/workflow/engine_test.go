@@ -255,7 +255,8 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 	engine.SetConfiguration(config2)
 	assert.Equal(t, config2, engine.GetConfiguration())
 	assert.Equal(t, config2, engine.GetNetworkAccess().GetConfiguration())
-	assert.NotEqual(t, config, engine.GetConfiguration())
+	// NotSame, not NotEqual: Init no longer reads config to build analytics, so config and config2 compare equal by value.
+	assert.NotSame(t, config, engine.GetConfiguration())
 
 	engine.SetLogger(logger2)
 	assert.Equal(t, logger2, engine.GetLogger())

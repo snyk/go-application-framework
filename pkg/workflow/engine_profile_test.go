@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/cli"
@@ -20,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -845,4 +847,204 @@ func Test_Engine_ProfileIgnoredEnvVarsAreDroppedWhenTheRegistryIsRebuilt(t *test
 	named, err := rebuilt.Profile("machine")
 	require.NoError(t, err)
 	assert.Equal(t, "ambient", named.Configuration().GetString("snyk_token"))
+}
+
+// Test_SelectProfile_RebindsConfigAndNetwork_KeepsRegistry pins CLI-2138: after Init, SelectProfile replaces the
+// engine configuration and network access with the named profile without clearing the registry, and GetAnalytics
+// then reads that profile (lazy init).
+func Test_SelectProfile_RebindsConfigAndNetwork_KeepsRegistry(t *testing.T) {
+	env := newProfileEnv(t)
+	env.base.Set(configuration.AUTHENTICATION_TOKEN, "default-token")
+	env.base.Set(configuration.API_URL, "https://api.default.example")
+	require.NoError(t, os.WriteFile(filepath.Join(env.dir, "work.json"), []byte(
+		`{"testkey":"work-value","`+configuration.AUTHENTICATION_TOKEN+`":"work-token","`+configuration.API_URL+`":"https://api.work.example"}`,
+	), 0o600))
+
+	registryBefore, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+
+	assert.Nil(t, env.impl().analytics, "Init must not create analytics")
+
+	cfg, err := SelectProfile(env.engine, "work")
+	require.NoError(t, err)
+	assert.Equal(t, "work-token", cfg.GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "work-token", env.engine.GetConfiguration().GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "work-token", env.engine.GetNetworkAccess().GetConfiguration().GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "https://api.work.example", cfg.GetString(configuration.API_URL))
+	assert.Equal(t, env.dir, cfg.GetString(profile.DirKey), "DirKey is pinned to the registry directory")
+
+	registryAfter, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	assert.Same(t, registryBefore, registryAfter, "SelectProfile must keep the registry")
+
+	a := env.engine.GetAnalytics()
+	require.NotNil(t, a)
+	assert.Same(t, a, env.engine.GetAnalytics(), "GetAnalytics is memoised")
+}
+
+func Test_SelectProfile_DefaultAndEmptyAreNoOps(t *testing.T) {
+	env := newProfileEnv(t)
+	before := env.engine.GetConfiguration()
+
+	cfg, err := SelectProfile(env.engine, "")
+	require.NoError(t, err)
+	assert.Same(t, before, cfg)
+
+	cfg, err = SelectProfile(env.engine, profile.DefaultName)
+	require.NoError(t, err)
+	assert.Same(t, before, cfg)
+}
+
+func Test_SelectProfile_FailsForAnEngineWithoutProfiles(t *testing.T) {
+	env := newProfileEnv(t)
+	cfg, err := SelectProfile(foreignEngine{Engine: env.engine}, "work")
+	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
+	assert.Nil(t, cfg)
+}
+
+// blockingConfig blocks the read of the API URL, which creating analytics makes, until release is called. The block
+// applies only once armed is set, so the engine can be set up first.
+type blockingConfig struct {
+	configuration.Configuration
+	armed   atomic.Bool
+	reads   atomic.Int32
+	entered chan struct{}
+	gate    chan struct{}
+	once    sync.Once
+}
+
+func (c *blockingConfig) GetString(key string) string {
+	if key == configuration.API_URL && c.armed.Load() {
+		if c.reads.Add(1) == 1 {
+			close(c.entered)
+		}
+		<-c.gate
+	}
+	return c.Configuration.GetString(key)
+}
+
+func (c *blockingConfig) release() {
+	c.once.Do(func() { close(c.gate) })
+}
+
+// blockAnalyticsCreation runs the engine of env on a configuration that holds analytics creation at its API URL read.
+func blockAnalyticsCreation(t *testing.T, env *profileEnv) *blockingConfig {
+	t.Helper()
+	cfg := &blockingConfig{Configuration: env.engine.GetConfiguration(), entered: make(chan struct{}), gate: make(chan struct{})}
+	env.impl().SetConfiguration(cfg)
+	cfg.armed.Store(true)
+	t.Cleanup(cfg.release)
+	return cfg
+}
+
+// analyticsAPIHost returns the host of the API that a reports to.
+func analyticsAPIHost(t *testing.T, a analytics.Analytics) string {
+	t.Helper()
+	req, err := a.GetRequest()
+	require.NoError(t, err)
+	return req.URL.Host
+}
+
+// Test_GetAnalytics_DoesNotHoldTheEngineLockWhileCreating checks that creating analytics, which reads configuration
+// that may resolve remote-backed values, does not block other engine calls.
+func Test_GetAnalytics_DoesNotHoldTheEngineLockWhileCreating(t *testing.T) {
+	env := newProfileEnv(t)
+	cfg := blockAnalyticsCreation(t, env)
+
+	created := make(chan analytics.Analytics, 1)
+	go func() { created <- env.engine.GetAnalytics() }()
+	select {
+	case <-cfg.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("analytics was not created")
+	}
+
+	read := make(chan configuration.Configuration, 1)
+	go func() { read <- env.engine.GetConfiguration() }()
+	select {
+	case <-read:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetConfiguration blocked while analytics was created: the engine lock is held")
+	}
+	cfg.release()
+	assert.NotNil(t, <-created)
+}
+
+// Test_GetAnalytics_ConcurrentFirstCallsWaitForTheBuildLock checks that concurrent first calls wait for the build lock
+// and then share one analytics object, built from a single read of the configuration. The test holds the build lock
+// itself, so the callers provably wait for it.
+func Test_GetAnalytics_ConcurrentFirstCallsWaitForTheBuildLock(t *testing.T) {
+	env := newProfileEnv(t)
+	cfg := blockAnalyticsCreation(t, env)
+	cfg.release() // the build reads the configuration without blocking
+
+	impl := env.impl()
+	impl.analyticsMu.Lock()
+	const callers = 16
+	results := make(chan analytics.Analytics, callers)
+	for range callers {
+		go func() { results <- env.engine.GetAnalytics() }()
+	}
+	select {
+	case <-results:
+		t.Fatal("GetAnalytics returned while the build lock was held")
+	case <-time.After(100 * time.Millisecond):
+	}
+	impl.analyticsMu.Unlock()
+
+	first := <-results
+	require.NotNil(t, first)
+	for range callers - 1 {
+		assert.Same(t, first, <-results)
+	}
+	assert.Equal(t, int32(1), cfg.reads.Load(), "analytics is built once")
+}
+
+// Test_GetAnalytics_MemoisedCallDoesNotWaitForTheBuildLock checks that once analytics exists, GetAnalytics returns it
+// without taking the build lock, so invocations do not serialise on it.
+func Test_GetAnalytics_MemoisedCallDoesNotWaitForTheBuildLock(t *testing.T) {
+	env := newProfileEnv(t)
+	created := env.engine.GetAnalytics()
+	require.NotNil(t, created)
+
+	impl := env.impl()
+	impl.analyticsMu.Lock()
+	defer impl.analyticsMu.Unlock()
+	got := make(chan analytics.Analytics, 1)
+	go func() { got <- env.engine.GetAnalytics() }()
+	select {
+	case a := <-got:
+		assert.Same(t, created, a)
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetAnalytics waited for the build lock although analytics exists")
+	}
+}
+
+// Test_Invocation_UsesTheEngineAnalyticsOfTheSelectedProfile checks that the analytics of an invocation is the engine's
+// analytics also when the host has not asked for it, and that SelectProfile rebuilds it from the selected profile.
+func Test_Invocation_UsesTheEngineAnalyticsOfTheSelectedProfile(t *testing.T) {
+	env := newProfileEnv(t)
+	env.base.Set(configuration.API_URL, "https://api.default.example")
+	require.NoError(t, os.WriteFile(filepath.Join(env.dir, "work.json"), []byte(
+		`{"`+configuration.API_URL+`":"https://api.work.example"}`,
+	), 0o600))
+	var seen analytics.Analytics
+	env.register("analytics", func(ictx InvocationContext, _ []Data) ([]Data, error) {
+		seen = ictx.GetAnalytics().(*analyticsWrapper).wrappedAnalytics
+		return nil, nil
+	})
+
+	_, err := env.engine.Invoke(NewWorkflowIdentifier("analytics"))
+	require.NoError(t, err)
+	assert.Same(t, env.engine.GetAnalytics(), seen)
+	assert.Equal(t, "api.default.example", analyticsAPIHost(t, seen))
+
+	before := seen
+	_, err = SelectProfile(env.engine, "work")
+	require.NoError(t, err)
+	_, err = env.engine.Invoke(NewWorkflowIdentifier("analytics"))
+	require.NoError(t, err)
+	assert.NotSame(t, before, seen)
+	assert.Same(t, env.engine.GetAnalytics(), seen)
+	assert.Equal(t, "api.work.example", analyticsAPIHost(t, seen))
 }
