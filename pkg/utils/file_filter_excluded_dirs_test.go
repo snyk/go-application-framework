@@ -96,6 +96,10 @@ func TestFileFilter_ReIncludedFileInExcludedDirectoryIsKept(t *testing.T) {
 }
 
 func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
+	if testing.Short() {
+		b.Skip("builds a fixture of about 40k files")
+	}
+
 	root, _ := createPnpmStyleMonorepo(b, 20000)
 	createFileInPath(b, filepath.Join(root, ".gitignore"), []byte("node_modules/\n"))
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
