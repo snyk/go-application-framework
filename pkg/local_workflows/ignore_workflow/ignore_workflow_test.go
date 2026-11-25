@@ -24,6 +24,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -47,9 +48,14 @@ const (
 // Setup mock context for testing
 func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks.MockInvocationContext {
 	t.Helper()
+	logger := zerolog.Logger{}
+	return setupMockIgnoreContextWithLogger(t, payload, statusCode, &logger)
+}
+
+func setupMockIgnoreContextWithLogger(t *testing.T, payload string, statusCode int, logger *zerolog.Logger) *mocks.MockInvocationContext {
+	t.Helper()
 
 	// setup
-	logger := zerolog.Logger{}
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
@@ -77,7 +83,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	})
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
@@ -88,7 +94,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),
 		"text/plain",
 		expectedUser,
-		workflow.WithLogger(&logger),
+		workflow.WithLogger(logger),
 	)}
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(mockData, nil).AnyTimes()
 
@@ -303,15 +309,13 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, result, "payload be nil")
 	})
 
-	t.Run("IAW FF is disabled", func(t *testing.T) {
+	t.Run("non-interactive mode missing expiration returns empty flag error", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
 		expectedIgnoreType := string(policyApi.WontFix)
 		expectedReason := "Test reason"
 
 		invocationContext := setupMockIgnoreContext(t, "{}", http.StatusCreated)
 		config := invocationContext.GetConfiguration()
-		config.Set(ConfigIgnoreApprovalEnabled, false)
-
 		config.Set(InteractiveKey, false)
 
 		config.Set(FindingsIdKey, expectedFindingsId)
@@ -322,8 +326,39 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		config.Set(EnrichResponseKey, true)
 
 		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
-		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
-		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
+		assert.Nil(t, result, "result should be nil when the expiration is missing")
+		snykErr := snyk_errors.Error{}
+		assert.True(t, errors.As(err, &snykErr))
+		assert.Equal(t, "The expiration flag is required and cannot be empty. Provide it using the --expiration flag. The date format is YYYY-MM-DD or 'never' for no expiration.", snykErr.Detail)
+	})
+
+	t.Run("logs the branch name error when the branch cannot be read", func(t *testing.T) {
+		policyId := uuid.New().String()
+		findingId := uuid.New().String()
+		ignoreType := string(policyApi.WontFix)
+		reason := "Test reason"
+		responseMock := getSuccessfulPolicyResponse(policyId, findingId, ignoreType, reason, expectedUser, nil)
+
+		// not a git repository, so the branch name cannot be determined
+		inputDir := t.TempDir()
+		_, expectedBranchNameErr := git.BranchNameFromDir(inputDir)
+		assert.Error(t, expectedBranchNameErr)
+
+		var logOutput bytes.Buffer
+		logger := zerolog.New(&logOutput)
+		invocationContext := setupMockIgnoreContextWithLogger(t, responseMock, http.StatusCreated, &logger)
+		config := invocationContext.GetConfiguration()
+		config.Set(InteractiveKey, false)
+		config.Set(configuration.INPUT_DIRECTORY, inputDir)
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(ExpirationKey, local_models.DefaultSuppressionExpiration)
+		config.Set(RemoteRepoUrlKey, testRepoUrl)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
+		assert.NoError(t, err)
+		assert.Contains(t, logOutput.String(), expectedBranchNameErr.Error())
 	})
 }
 

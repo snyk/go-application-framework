@@ -107,7 +107,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if interactive {
 		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage)
 		if uiErr != nil {
-			logger.Warn().Err(err).Send()
+			logger.Warn().Err(uiErr).Send()
 		}
 	}
 
@@ -184,7 +184,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expireStr, userName, orgName, ignoreType, reason))
 		if uiErr != nil {
-			logger.Warn().Err(err).Send()
+			logger.Warn().Err(uiErr).Send()
 		}
 	} else {
 		if findingsId == "" {
@@ -210,7 +210,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
-		logger.Warn().Err(err).Send()
+		logger.Warn().Err(branchNameErr).Send()
 	}
 
 	expire, err := getExpireValue(expireStr)
@@ -228,7 +228,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if interactive {
 		uiErr := userInterface.Output("\n  " + interactiveIgnoreRequestSubmissionMessage + "\n")
 		if uiErr != nil {
-			logger.Warn().Err(err).Send()
+			logger.Warn().Err(uiErr).Send()
 		}
 	}
 
