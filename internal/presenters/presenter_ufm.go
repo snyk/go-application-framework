@@ -21,6 +21,7 @@ type UfmPresenter struct {
 	config           configuration.Configuration
 	writer           io.Writer
 	runtimeinfo      runtimeinfo.RuntimeInfo
+	renderTime       time.Time
 	templateImpl     map[string]TemplateImplFunction
 	htmlTemplateImpl map[string]HTMLTemplateImplFunction
 }
@@ -48,11 +49,21 @@ func UfmWithRuntimeInfo(ri runtimeinfo.RuntimeInfo) UfmPresenterOptions {
 	}
 }
 
+// UfmWithRenderTime sets the time stamped into rendered output, so that all
+// outputs of one run can share it. It defaults to the renderer's creation time.
+func UfmWithRenderTime(renderTime time.Time) UfmPresenterOptions {
+	return func(p *UfmPresenter) {
+		p.renderTime = renderTime
+	}
+}
+
 func NewUfmRenderer(results []testapi.TestResult, config configuration.Configuration, writer io.Writer, options ...UfmPresenterOptions) *UfmPresenter {
-	p := &UfmPresenter{
-		Input:  results,
-		config: config,
-		writer: writer,
+	var p *UfmPresenter
+	p = &UfmPresenter{
+		Input:      results,
+		config:     config,
+		writer:     writer,
+		renderTime: time.Now(),
 		templateImpl: map[string]TemplateImplFunction{
 			NoneMimeType: func() (*template.Template, template.FuncMap, error) {
 				localFindingsTemplate, err := template.New(NoneMimeType).Parse("")
@@ -76,7 +87,7 @@ func NewUfmRenderer(results []testapi.TestResult, config configuration.Configura
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getSarifTemplateFuncMap(time.Now())
+				functionMapMimeType := getSarifTemplateFuncMap(p.renderTime)
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},

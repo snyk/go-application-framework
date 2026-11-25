@@ -2,16 +2,22 @@ package output_workflow
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -249,4 +255,70 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		stdout := outputDestination.buffer.String()
 		assert.Contains(t, strings.ToLower(stdout), "<!doctype html>", "default writer should have received HTML output")
 	})
+}
+
+func automationDetailsIDs(t *testing.T, sarifBytes []byte) []string {
+	t.Helper()
+	var doc struct {
+		Runs []struct {
+			AutomationDetails struct {
+				ID string `json:"id"`
+			} `json:"automationDetails"`
+		} `json:"runs"`
+	}
+	require.NoError(t, json.Unmarshal(sarifBytes, &doc))
+	ids := make([]string, 0, len(doc.Runs))
+	for _, run := range doc.Runs {
+		ids = append(ids, run.AutomationDetails.ID)
+	}
+	require.NotEmpty(t, ids)
+	return ids
+}
+
+func Test_HandleContentTypeUnifiedModel_allOutputsOfOneRunShareAutomationDetailsId(t *testing.T) {
+	for _, threads := range []int{1, 2} {
+		t.Run(fmt.Sprintf("%d threads", threads), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				runStart := time.Now()
+				config := configuration.NewWithOpts()
+				config.Set(configuration.MAX_THREADS, threads)
+
+				logger := zerolog.Nop()
+				mockCtl := gomock.NewController(t)
+				ctx := pkgMocks.NewMockInvocationContext(mockCtl)
+				ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+				ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+				// each renderer fetches the runtime info once before it renders; making
+				// every later renderer start a fake second after the previous one
+				// separates their clock reads whether they run serially or in parallel
+				var renderersStarted atomic.Int64
+				ctx.EXPECT().GetRuntimeInfo().DoAndReturn(func() runtimeinfo.RuntimeInfo {
+					time.Sleep(time.Duration(renderersStarted.Add(1)-1) * time.Second)
+					return runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+				}).Times(2)
+				ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
+
+				results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
+				input := []workflow.Data{ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)}
+
+				stdout := &bytes.Buffer{}
+				sarifFile := &bytes.Buffer{}
+				writers := &testWriterMap{
+					writers: map[string][]*WriterEntry{
+						SARIF_MIME_TYPE: {
+							{writer: &nopCloser{writer: stdout}, mimeType: SARIF_MIME_TYPE, renderEmptyData: true, name: DEFAULT_WRITER},
+							{writer: &nopCloser{writer: sarifFile}, mimeType: SARIF_MIME_TYPE, renderEmptyData: true, name: OUTPUT_CONFIG_KEY_SARIF_FILE},
+						},
+					},
+				}
+
+				_, err := HandleContentTypeUnifiedModel(input, ctx, writers)
+				require.NoError(t, err)
+
+				expectedID := "Snyk/Secrets/0/" + runStart.UTC().Format(time.RFC3339)
+				assert.Equal(t, []string{expectedID}, automationDetailsIDs(t, stdout.Bytes()), "stdout")
+				assert.Equal(t, []string{expectedID}, automationDetailsIDs(t, sarifFile.Bytes()), "sarif file")
+			})
+		})
+	}
 }
