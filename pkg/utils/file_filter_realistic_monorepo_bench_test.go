@@ -28,13 +28,17 @@ func createRealisticMonorepo(tb testing.TB) string {
 	)
 
 	root := tb.TempDir()
-	createFileInPath(tb, filepath.Join(root, ".gitignore"), []byte("node_modules/\ndist/\ncoverage/\n*.log\n.cache/\n"))
+	createFileInPath(tb, filepath.Join(root, ".gitignore"), []byte(realisticMonorepoGitignore))
 	createFileInPath(tb, filepath.Join(root, ".dcignore"), []byte("**/__fixtures__/**\n*.min.js\n"))
 	createFileInPath(tb, filepath.Join(root, ".snyk"), []byte("exclude:\n  global:\n    - vendor/**\n"))
 
 	for i := 0; i < rootNodeModulesFiles; i++ {
 		pkg := fmt.Sprintf("pkg-%d", i%rootNodeModulesPackages)
-		createFileInPath(tb, filepath.Join(root, "node_modules", pkg, "lib", fmt.Sprintf("file-%d.js", i)), []byte("x"))
+		name := fmt.Sprintf("file-%d.js", i)
+		if i%100 == 0 {
+			name = fmt.Sprintf("file-%d.config.js", i)
+		}
+		createFileInPath(tb, filepath.Join(root, "node_modules", pkg, "lib", name), []byte("x"))
 	}
 
 	for p := 0; p < packages; p++ {
@@ -64,17 +68,20 @@ func createRealisticMonorepo(tb testing.TB) string {
 	return root
 }
 
+const realisticMonorepoGitignore = "node_modules/\ndist/\ncoverage/\n*.log\n.cache/\n"
+
 // BenchmarkFileFilter_RealisticMonorepo compares the legacy flow (GetRules, then GetFilteredFiles over
-// GetAllFiles) with WalkFilteredFiles on the fixture from createRealisticMonorepo.
+// GetAllFiles) with WalkFilteredFiles on the fixture from createRealisticMonorepo, once with the
+// fixture's rules and once with a top-level negation added to the root .gitignore.
 //
 //	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo$' -benchmem -benchtime=5x
 //
 // Profile one flow at a time, so the profile is not a mix of both:
 //
-//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/WalkFilteredFiles$' -benchtime=5x \
-//	  -cpuprofile cpu.out -memprofile mem.out
-//	go tool pprof -top -cum -focus '\(\*FileFilter\)|ruleWalker' cpu.out
-//	go tool pprof -top -cum -sample_index=alloc_space -focus '\(\*FileFilter\)|ruleWalker' mem.out
+//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/no-negation/WalkFilteredFiles$' \
+//	  -benchtime=5x -cpuprofile cpu.out -memprofile mem.out
+//	go tool pprof -top -cum -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' cpu.out
+//	go tool pprof -top -cum -sample_index=alloc_space -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' mem.out
 //	go tool pprof -http=:8080 cpu.out
 //
 // The fixture is built in the same process, so -focus is needed to keep its file writes out of the
@@ -100,30 +107,40 @@ func BenchmarkFileFilter_RealisticMonorepo(b *testing.B) {
 		}
 		return files
 	}
-	legacyFiles := legacy()
 
-	b.Run("legacy", func(b *testing.B) {
-		b.ReportAllocs()
-		for b.Loop() {
-			legacy()
-		}
-		b.ReportMetric(float64(legacyFiles), "files/op")
-	})
+	for _, rules := range []struct {
+		name      string
+		gitignore string
+	}{
+		{name: "no-negation", gitignore: realisticMonorepoGitignore},
+		{name: "top-level-negation", gitignore: realisticMonorepoGitignore + "!*.config.js\n"},
+	} {
+		createFileInPath(b, filepath.Join(root, ".gitignore"), []byte(rules.gitignore))
+		legacyFiles := legacy()
 
-	b.Run("WalkFilteredFiles", func(b *testing.B) {
-		var files int
-		b.ReportAllocs()
-		for b.Loop() {
-			fileFilter := NewFileFilter(root, &logger, WithConfig(config), WithRuleFiles(ruleFiles))
-			filesCh, err := fileFilter.WalkFilteredFiles()
-			require.NoError(b, err)
-
-			files = 0
-			for range filesCh {
-				files++
+		b.Run(rules.name+"/legacy", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				legacy()
 			}
-		}
-		b.ReportMetric(float64(files), "files/op")
-		require.Equal(b, legacyFiles, files)
-	})
+			b.ReportMetric(float64(legacyFiles), "files/op")
+		})
+
+		b.Run(rules.name+"/WalkFilteredFiles", func(b *testing.B) {
+			var files int
+			b.ReportAllocs()
+			for b.Loop() {
+				fileFilter := NewFileFilter(root, &logger, WithConfig(config), WithRuleFiles(ruleFiles))
+				filesCh, err := fileFilter.WalkFilteredFiles()
+				require.NoError(b, err)
+
+				files = 0
+				for range filesCh {
+					files++
+				}
+			}
+			b.ReportMetric(float64(files), "files/op")
+			require.Equal(b, legacyFiles, files)
+		})
+	}
 }
