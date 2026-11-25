@@ -13,6 +13,8 @@ type excludedFolder struct {
 	byOther bool
 }
 
+// WithRuleFiles sets the ignore file names, such as .gitignore, .dcignore and .snyk, whose rules
+// WalkFilteredFiles applies. Only WalkFilteredFiles reads them.
 func WithRuleFiles(ruleFiles []string) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.ruleFiles = ruleFiles
@@ -20,6 +22,8 @@ func WithRuleFiles(ruleFiles []string) FileFilterOption {
 	}
 }
 
+// WithExtraRules sets glob rules from the caller that WalkFilteredFiles applies before the rules from
+// the rule files. Only WalkFilteredFiles reads them.
 func WithExtraRules(rules []string) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.extraRules = rules
