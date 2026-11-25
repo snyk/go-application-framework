@@ -344,7 +344,12 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	respectGitIgnoreTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
 
 	var globs = make([]string, 0)
+	globPatternMatcher := gitignore.CompileIgnoreLines()
 	for _, ignoreFile := range ignoreFiles {
+		if globPatternMatcher.MatchesPath(ignoreFile) {
+			continue
+		}
+
 		var content []byte
 		content, err := os.ReadFile(ignoreFile)
 		if err != nil {
@@ -363,6 +368,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			}
 			globs = append(globs, parsedRules...)
 		}
+		globPatternMatcher = gitignore.CompileIgnoreLines(globs...)
 	}
 
 	return globs, nil
