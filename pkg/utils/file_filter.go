@@ -219,7 +219,8 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
 //
-// Deprecated: use WalkFilteredFiles, which skips folders the ignore rules exclude instead of walking them.
+// Deprecated: use WalkFilteredFiles, which returns the same files without testing every file of an
+// excluded folder against every rule.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -373,13 +374,15 @@ type trackedFiles struct {
 	paths    map[string]bool
 }
 
-// ruleMatcher pairs the compiled rules with their negated rules, the only rules that can re-include a file below an excluded folder.
+// ruleMatcher pairs the compiled rules with their negated rules, the only rules that can re-include
+// a file below an excluded folder.
 type ruleMatcher struct {
 	rules     *gitignore.GitIgnore
 	negations *gitignore.GitIgnore // nil when no rule is negated
 }
 
-// compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path, so negations.MatchesPath(f) is false iff a negated rule matches f.
+// compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path,
+// so negations.MatchesPath(f) is false iff a negated rule matches f.
 func compileRuleMatcher(globs []string) ruleMatcher {
 	rules := gitignore.CompileIgnoreLines(globs...)
 
@@ -402,7 +405,10 @@ func compileRuleMatcher(globs []string) ruleMatcher {
 	return ruleMatcher{rules: rules, negations: negations}
 }
 
-// excludesBelowExcludedFolder reports whether file, below a folder that rules match, is excluded. Every pattern go-gitignore compiles ends in "(|/.*)$" or "/(|.*)$", so a non-negated pattern that matches a folder matches every path below it, and only a negated pattern can re-include the file. "." does not match a newline, so such paths go to the full rule list.
+// excludesBelowExcludedFolder reports whether file, below a folder that rules match, is excluded.
+// Every pattern go-gitignore compiles ends in "(|/.*)$" or "/(|.*)$", so a non-negated pattern that
+// matches a folder matches every path below it, and only a negated pattern can re-include the file.
+// "." does not match a newline, so such paths go to the full rule list.
 func (m ruleMatcher) excludesBelowExcludedFolder(file string) bool {
 	if strings.ContainsRune(file, '\n') {
 		return false
@@ -413,19 +419,16 @@ func (m ruleMatcher) excludesBelowExcludedFolder(file string) bool {
 	return m.negations.MatchesPath(filepath.ToSlash(file))
 }
 
-// exclusionPredicate holds the compiled rules for determining file exclusion,
-// supporting both tracked-file-aware and simple exclusion modes.
+// exclusionPredicate decides whether a file is excluded. Tracked files are matched against other,
+// which leaves out .gitignore rules, when FF_GITIGNORE_RESPECT_TRACKED_FILES applies.
 type exclusionPredicate struct {
 	all     ruleMatcher
 	other   ruleMatcher
-	tracked *trackedFiles
+	tracked *trackedFiles // nil when tracked files are matched like any other file
 }
 
-// newExclusionPredicate builds an exclusionPredicate that reproduces the current
-// legacy predicate logic exactly. If FF_GITIGNORE_RESPECT_TRACKED_FILES is off,
-// all rules are compiled raw. If on and there are .gitignore globs, .gitignore globs
-// are stripped of the #gitignore: prefix for the "all" matcher, and the raw globs
-// are used for the "other" matcher (non-tracked files).
+// newExclusionPredicate builds the predicate GetFilteredFiles applies. With
+// FF_GITIGNORE_RESPECT_TRACKED_FILES, .gitignore rules are exempt for files git tracks.
 func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate {
 	if !fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 		return &exclusionPredicate{all: compileRuleMatcher(globs)}
@@ -496,7 +499,6 @@ func (p *exclusionPredicate) excludedByFolder(file string, folder excludedFolder
 	return excluded && matcher.excludesBelowExcludedFolder(file)
 }
 
-// isExcluded returns true iff the file matches the appropriate exclusion rules.
 func (p *exclusionPredicate) isExcluded(file string) bool {
 	return p.matcherFor(file).rules.MatchesPath(filepath.ToSlash(file))
 }
