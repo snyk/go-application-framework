@@ -235,10 +235,8 @@ func (e *EngineImpl) Init() error {
 	}
 
 	// later scan here for extension binaries
-
-	if e.analytics == nil {
-		e.analytics = e.initAnalytics()
-	}
+	// Analytics is created lazily in GetAnalytics so hosts can select a configuration
+	// profile after Init without freezing the default profile's API_URL (CLI-2138).
 
 	if err == nil {
 		e.mu.Lock()
@@ -627,8 +625,18 @@ func (e *EngineImpl) firePostInvokeHooks(
 	}
 }
 
-// GetAnalytics returns the analytics object.
+// GetAnalytics returns the analytics object. Before Init it is nil. After Init it is
+// created on first use from the engine's current configuration, so a host that selects
+// a profile after Init (see SelectProfile) gets that profile's API_URL and credentials.
 func (e *EngineImpl) GetAnalytics() analytics.Analytics {
+	if !e.initialized.Load() {
+		return e.analytics
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.analytics == nil {
+		e.analytics = e.initAnalytics()
+	}
 	return e.analytics
 }
 
@@ -795,6 +803,58 @@ func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 		return nil, profilesUnavailableError("the engine does not support profiles")
 	}
 	return provider.profileRegistry()
+}
+
+// profileSelector is implemented by engines that can make a named profile their configuration after Init.
+type profileSelector interface {
+	selectProfile(name string) (configuration.Configuration, error)
+}
+
+// SelectProfile makes the named profile the engine's configuration and rebinds network access to it.
+// It keeps the existing profile registry (unlike SetConfiguration). Analytics is not rebound: it is
+// created lazily on first GetAnalytics after this call, so it reads the selected profile. Empty name
+// and the default profile are no-ops. It fails if the engine does not support profiles.
+func SelectProfile(engine Engine, name string) (configuration.Configuration, error) {
+	if name == "" || name == profile.DefaultName {
+		return engine.GetConfiguration(), nil
+	}
+	selector, ok := engine.(profileSelector)
+	if !ok {
+		return nil, profilesUnavailableError("the engine does not support profiles")
+	}
+	return selector.selectProfile(name)
+}
+
+// selectProfile loads the named profile, replaces the engine configuration with it, and rebinds
+// network access. The registry built from the previous configuration is kept so DirKey need not
+// be present on the derived profile. Call after Init; do not call before extensions have registered.
+func (e *EngineImpl) selectProfile(name string) (configuration.Configuration, error) {
+	registry, err := e.profileRegistry()
+	if err != nil {
+		return nil, err
+	}
+	p, err := registry.Profile(name)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil || p.Configuration() == nil {
+		return nil, profilesUnavailableError(fmt.Sprintf("profile %q has no configuration", name))
+	}
+	cfg := p.Configuration()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Pin DirKey to the registry directory. Derived profiles inherit a default DirKey
+	// (snyk_profiles under the storage dir) that is not the host's SNYK_CONFIG_PROFILE_DIR.
+	if e.profilesDir != "" {
+		cfg.Set(profile.DirKey, e.profilesDir)
+	}
+	e.config = cfg
+	// Do not clear e.profiles: the registry was built from the base and stays valid.
+	if e.networkAccess != nil {
+		e.networkAccess.SetConfiguration(cfg)
+	}
+	return cfg, nil
 }
 
 // profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration
