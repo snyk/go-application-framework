@@ -300,15 +300,15 @@ func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreT
 	}
 
 	payload.Data.Attributes.ActionType = policyApi.PolicyAttributesActionTypeIgnore
-	payload.Data.Attributes.ConditionsGroup = policyApi.PolicyConditionsGroup{
-		Conditions: []policyApi.PolicyCondition{
+	payload.Data.Attributes.ConditionsGroup = policyApi.PolicyCreateConditionsGroup{
+		Conditions: []policyApi.PolicyCreateCondition{
 			{
-				Field:    policyApi.Snykassetfindingv1,
-				Operator: policyApi.Includes,
+				Field:    policyApi.PolicyCreateSnykAssetFindingV1,
+				Operator: policyApi.PolicyCreateIncludes,
 				Value:    findingsId,
 			},
 		},
-		LogicalOperator: policyApi.And,
+		LogicalOperator: policyApi.PolicyCreateAnd,
 	}
 	payload.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 	return payload

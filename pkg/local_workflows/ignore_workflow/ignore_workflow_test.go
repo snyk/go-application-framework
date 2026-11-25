@@ -187,8 +187,8 @@ func Test_createPayload(t *testing.T) {
 	assert.Equal(t, ignoreType, string(payload.Data.Attributes.Action.Data.IgnoreType), "Should have correct ignore type")
 	assert.Equal(t, reason, *payload.Data.Attributes.Action.Data.Reason, "Should have correct reason")
 	assert.NotEmpty(t, payload.Data.Attributes.ConditionsGroup.Conditions, "Should have condition")
-	assert.Equal(t, policyApi.Snykassetfindingv1, payload.Data.Attributes.ConditionsGroup.Conditions[0].Field, "Should have correct findings ID")
-	assert.Equal(t, policyApi.Includes, payload.Data.Attributes.ConditionsGroup.Conditions[0].Operator, "Condition operation must be include")
+	assert.Equal(t, policyApi.PolicyCreateSnykAssetFindingV1, payload.Data.Attributes.ConditionsGroup.Conditions[0].Field, "Should have correct findings ID")
+	assert.Equal(t, policyApi.PolicyCreateIncludes, payload.Data.Attributes.ConditionsGroup.Conditions[0].Operator, "Condition operation must be include")
 	assert.Equal(t, findingsId, payload.Data.Attributes.ConditionsGroup.Conditions[0].Value, "Should have correct findings ID")
 	assert.Equal(t, expireDate, *payload.Data.Attributes.Action.Data.Expires, "Should have correct expiration date")
 }
@@ -653,16 +653,16 @@ func getSuccessfulPolicyResponse(policyIdStr, findingId, ignoreTypeStr, reasonSt
 							Reason:     &reasonStr,
 						},
 					},
-					ActionType: policyApi.PolicyResponseAttributesActionTypeIgnore,
-					ConditionsGroup: policyApi.PolicyConditionsGroup{
-						Conditions: []policyApi.PolicyCondition{
+					ActionType: policyApi.Ignore,
+					ConditionsGroup: policyApi.PolicyResponseConditionsGroup{
+						Conditions: []policyApi.PolicyResponseCondition{
 							{
-								Field:    policyApi.Snykassetfindingv1,
-								Operator: policyApi.Includes,
+								Field:    policyApi.PolicyResponseSnykAssetFindingV1,
+								Operator: policyApi.PolicyResponseIncludes,
 								Value:    findingId,
 							},
 						},
-						LogicalOperator: policyApi.And,
+						LogicalOperator: policyApi.PolicyResponseAnd,
 					},
 					CreatedBy: &policyApi.Principal{
 						Name:  createdByName,
