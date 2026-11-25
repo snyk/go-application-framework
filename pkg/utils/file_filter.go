@@ -218,9 +218,6 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
-//
-// Deprecated: use WalkFilteredFiles, which returns the same files without testing every file of an
-// excluded folder against every rule.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -278,6 +275,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+//
+// Deprecated: use WalkFilteredFiles, which returns the same files as GetFilteredFiles(GetAllFiles(), rules)
+// without testing every file of an excluded folder against every rule.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
