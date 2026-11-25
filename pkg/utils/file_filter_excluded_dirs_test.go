@@ -206,6 +206,26 @@ func TestFileFilter_trackedFilesAreReleasedWhenRuleCollectionFails(t *testing.T)
 	assert.Nil(t, fileFilter.trackedFiles)
 }
 
+func TestFileFilter_ContentsGlobThenReIncludeIsKept(t *testing.T) {
+	root := t.TempDir()
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("X/**\n!X/keep\n"))
+	createFileInPath(t, filepath.Join(root, "X", "keep"), []byte("x"))
+	createFileInPath(t, filepath.Join(root, "X", "drop.txt"), []byte("x"))
+	createFileInPath(t, filepath.Join(root, "src", "main.go"), []byte("x"))
+
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
+
+	files := filterFiles(t, fileFilter)
+
+	expected := []string{
+		filepath.Join(root, ".gitignore"),
+		filepath.Join(root, "X", "keep"),
+		filepath.Join(root, "src", "main.go"),
+	}
+	assert.ElementsMatch(t, expected, files)
+}
+
 func filterFiles(t *testing.T, fileFilter *FileFilter) []string {
 	t.Helper()
 
