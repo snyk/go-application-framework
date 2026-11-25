@@ -3,7 +3,9 @@ package ignore_workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -59,6 +62,9 @@ const (
 
 	interactiveEnsureVersionControlMessage    = "👉🏼 Ensure the code containing the issue is committed and pushed to remote origin, so approvers can review it."
 	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
+	openSourceIgnoreScopeMessage              = "👉🏼 This ignore applies to every branch and every project of the repository."
+	openSourceIgnoreCreatedMessage            = "✅ Ignore created for %s in %s."
+	openSourceIgnorePendingMessage            = "Your ignore request has been submitted. It applies after an approver accepts it."
 
 	ConfigIgnoreApprovalEnabled = "internal_iaw_enabled"
 )
@@ -104,18 +110,6 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	interactive := config.GetBool(InteractiveKey)
 	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
 
-	if interactive {
-		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage)
-		if uiErr != nil {
-			logger.Warn().Err(uiErr).Send()
-		}
-	}
-
-	userName, err := getUser(invocationCtx)
-	if err != nil {
-		return nil, err
-	}
-
 	findingsId, err := config.GetStringWithError(FindingsIdKey)
 	if err != nil {
 		return nil, err
@@ -141,15 +135,19 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
-	if err != nil {
-		return nil, err
-	}
-
 	if interactive {
 		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdPromptHelp, findingsIdDescription, isValidFindingsId)
 		if err != nil {
 			return nil, err
+		}
+
+		scopeMessage := interactiveEnsureVersionControlMessage
+		if isOpenSourceIssueId(findingsId) {
+			scopeMessage = openSourceIgnoreScopeMessage
+		}
+		uiErr := userInterface.Output("\n" + scopeMessage)
+		if uiErr != nil {
+			logger.Warn().Err(uiErr).Send()
 		}
 
 		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePromptHelp, ignoreTypeDescription, isValidIgnoreType)
@@ -179,13 +177,6 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		if err != nil {
 			return nil, err
 		}
-
-		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
-
-		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expireStr, userName, orgName, ignoreType, reason))
-		if uiErr != nil {
-			logger.Warn().Err(uiErr).Send()
-		}
 	} else {
 		if findingsId == "" {
 			return nil, cli.NewEmptyFlagOptionError("The finding-id is required. Provide it using the --finding-id flag.")
@@ -208,6 +199,33 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		}
 	}
 
+	openSource := isOpenSourceIssueId(findingsId)
+	repoUrl = git.StripGitCredentials(repoUrl)
+
+	// the first requests are sent only once all input is valid
+	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
+	if err != nil {
+		return nil, err
+	}
+
+	userName, err := getUser(invocationCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	if interactive {
+		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
+		details := getIgnoreRequestDetailsStructure(expireStr, userName, orgName, ignoreType, reason)
+		if openSource {
+			details = getOpenSourceIgnoreRequestDetailsStructure(expireStr, userName, orgName, findingsId, repoUrl, ignoreType, reason)
+		}
+
+		uiErr := userInterface.Output(details)
+		if uiErr != nil {
+			logger.Warn().Err(uiErr).Send()
+		}
+	}
+
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
 		logger.Warn().Err(branchNameErr).Send()
@@ -218,14 +236,32 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
+	var payload policyApi.CreatePolicyPayload
+	if openSource {
+		payload = createOpenSourcePayload(repoUrl, expire, ignoreType, reason, findingsId)
+	} else {
+		payload = createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
+	}
 	response, err := sendCreateIgnore(invocationCtx, payload, orgUuid)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if interactive {
+	if openSource {
+		if !interactive {
+			// without prompts, the scope has not been stated yet
+			uiErr := userInterface.Output("\n" + openSourceIgnoreScopeMessage)
+			if uiErr != nil {
+				logger.Warn().Err(uiErr).Send()
+			}
+		}
+
+		uiErr := userInterface.Output("\n  " + getOpenSourceIgnoreResultMessage(response.Attributes.Review, findingsId, repoUrl) + "\n")
+		if uiErr != nil {
+			logger.Warn().Err(uiErr).Send()
+		}
+	} else if interactive {
 		uiErr := userInterface.Output("\n  " + interactiveIgnoreRequestSubmissionMessage + "\n")
 		if uiErr != nil {
 			logger.Warn().Err(uiErr).Send()
@@ -250,6 +286,20 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 func getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
 	return fmt.Sprintf("\n  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, expire, ignoreType, reason)
+}
+
+func getOpenSourceIgnoreRequestDetailsStructure(expire, userName, orgName, snykId, repoUrl, ignoreType, reason string) string {
+	requestedOn := time.Now().Format(time.DateOnly)
+	return fmt.Sprintf("\n  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Snyk ID:       %s\n  Repository:    %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, snykId, repoUrl, expire, ignoreType, reason)
+}
+
+// getOpenSourceIgnoreResultMessage tells whether the created ignore applies now. Any review other than approved or
+// not-required means that it does not apply yet.
+func getOpenSourceIgnoreResultMessage(review policyApi.PolicyReview, snykId, repoUrl string) string {
+	if review == policyApi.PolicyReviewApproved || review == policyApi.PolicyReviewNotRequired {
+		return fmt.Sprintf(openSourceIgnoreCreatedMessage, snykId, repoUrl)
+	}
+	return openSourceIgnorePendingMessage
 }
 
 func getExpireValue(expiryString string) (*time.Time, error) {
@@ -314,6 +364,26 @@ func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreT
 	return payload
 }
 
+// createOpenSourcePayload returns the payload of an ignore for an Open Source issue in every branch and every project of
+// a repository. Unlike a Snyk Code payload it has no meta: the repository is a condition, and there is no branch to record.
+func createOpenSourcePayload(repoUrl string, expire *time.Time, ignoreType string, reason string, snykId string) policyApi.CreatePolicyPayload {
+	payload := createPayload(repoUrl, "", expire, ignoreType, reason, snykId)
+	payload.Data.Meta = nil
+	payload.Data.Attributes.ConditionsGroup.Conditions = []policyApi.PolicyCreateCondition{
+		{
+			Field:    policyApi.PolicyCreateSnykID,
+			Operator: policyApi.PolicyCreateIncludes,
+			Value:    snykId,
+		},
+		{
+			Field:    policyApi.PolicyCreateRepositoryURL,
+			Operator: policyApi.PolicyCreateIncludes,
+			Value:    repoUrl,
+		},
+	}
+	return payload
+}
+
 func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 	config := invocationCtx.GetConfiguration().Clone()
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
@@ -363,7 +433,7 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 	}()
 
 	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("error sending request: Status %s StatusCode %d", resp.Status, resp.StatusCode)
+		return nil, errorFromResponse(resp)
 	}
 
 	parsedResponse, err := policyApi.ParseCreateOrgPolicyResponse(resp)
@@ -375,4 +445,32 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 		return nil, fmt.Errorf("error unmarshalling CreateOrgPolicyResponse response")
 	}
 	return &parsedResponse.ApplicationvndApiJSON201.Data, err
+}
+
+// errorFromResponse returns the JSON:API errors in the body of a failed response, with the title and detail the server
+// sent, or a generic error if the body has none. A network error handler, when the application registers one, reports
+// such errors before the response gets here.
+func errorFromResponse(resp *http.Response) error {
+	genericErr := fmt.Errorf("error sending request: Status %s StatusCode %d", resp.Status, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return genericErr
+	}
+
+	errorList, err := snyk_errors.FromJSONAPIErrorBytes(body)
+	if err != nil {
+		return genericErr
+	}
+
+	var serverErrs []error
+	for i := range errorList {
+		if errorList[i].Title != "" {
+			serverErrs = append(serverErrs, errorList[i])
+		}
+	}
+	if len(serverErrs) == 0 {
+		return genericErr
+	}
+	return errors.Join(serverErrs...)
 }

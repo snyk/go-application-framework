@@ -3,6 +3,7 @@ package ignore_workflow
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,13 +84,10 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 		return existingValue, nil
 	}
 
-	isInteractive := config.GetBool(InteractiveKey)
-
 	repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
-	if err != nil && isInteractive {
+	if err != nil {
+		//nolint:nilerr // an undetected URL stays empty, so the workflow prompts for it or reports the missing --remote-repo-url
 		return "", nil
-	} else if err != nil {
-		return "", err
 	}
 
 	return repoUrl, nil
@@ -148,12 +146,19 @@ func isValidIgnoreType(input string) error {
 	return nil
 }
 
+// isValidFindingsId accepts a Snyk Code finding ID (a UUID) or a Snyk Open Source issue ID, so that no other ID is ever
+// sent as a Snyk Code finding ID.
 func isValidFindingsId(input string) error {
-	_, err := uuid.Parse(input)
-	if err != nil {
-		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", input))
+	if _, err := uuid.Parse(input); err != nil && !isOpenSourceIssueId(input) {
+		return cli.NewValidationFailureError("--finding-id must be a Snyk Code finding ID (a UUID) or a Snyk Open Source issue ID (starting with SNYK-, snyk:lic: or npm:).")
 	}
 	return nil
+}
+
+// isOpenSourceIssueId reports whether id has the format of a Snyk Open Source issue ID, in any letter case.
+func isOpenSourceIssueId(id string) bool {
+	lowerId := strings.ToLower(id)
+	return strings.HasPrefix(lowerId, "snyk-") || strings.HasPrefix(lowerId, "snyk:lic:") || strings.HasPrefix(lowerId, "npm:")
 }
 
 func isValidReason(input string) error {
