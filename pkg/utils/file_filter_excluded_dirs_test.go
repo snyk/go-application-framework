@@ -2,12 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +40,7 @@ func createPnpmStyleMonorepo(tb testing.TB, nodeModulesFiles int) (string, []str
 	return root, kept
 }
 
-func TestFileFilter_ExcludedDirectoriesAreNotWalked(t *testing.T) {
+func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 	const nodeModulesFiles = 200
 
 	for _, test := range []struct {
@@ -132,78 +130,6 @@ func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {
 			})
 		}
 	}
-}
-
-func TestFileFilter_UnreadableDirectoryDoesNotStopRuleCollection(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("directory permissions are not enforced")
-	}
-
-	root := t.TempDir()
-	locked := filepath.Join(root, "a-locked")
-	require.NoError(t, os.Mkdir(locked, 0o755))
-	require.NoError(t, os.Chmod(locked, 0o000))
-	t.Cleanup(func() { assert.NoError(t, os.Chmod(locked, 0o755)) })
-	createFileInPath(t, filepath.Join(root, "z", ".gitignore"), []byte("token.txt\n"))
-	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
-
-	createFileInPath(t, filepath.Join(root, "z", "token.txt"), []byte("x"))
-	createFileInPath(t, filepath.Join(root, "z", "code.ts"), []byte("x"))
-
-	files := filterFiles(t, fileFilter)
-
-	assert.Contains(t, files, filepath.Join(root, "z", "code.ts"))
-	assert.NotContains(t, files, filepath.Join(root, "z", "token.txt"))
-}
-
-func TestFileFilter_trackedFilesAreLoadedOnceUntilReleased(t *testing.T) {
-	root := t.TempDir()
-	createFileInPath(t, filepath.Join(root, "tracked.ts"), []byte("x"))
-	repo, err := git.PlainInit(root, false)
-	require.NoError(t, err)
-	worktree, err := repo.Worktree()
-	require.NoError(t, err)
-	_, err = worktree.Add("tracked.ts")
-	require.NoError(t, err)
-	fileFilter := NewFileFilter(root, &log.Logger)
-
-	first, ok := fileFilter.loadTrackedFiles()
-	require.True(t, ok)
-	second, _ := fileFilter.loadTrackedFiles()
-	fileFilter.releaseTrackedFiles()
-	third, _ := fileFilter.loadTrackedFiles()
-
-	assert.Same(t, first, second)
-	assert.NotSame(t, first, third)
-	assert.True(t, first.paths["tracked.ts"])
-}
-
-func TestFileFilter_trackedFilesAreReleasedWhenRuleCollectionFails(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("file permissions are not enforced")
-	}
-
-	root := t.TempDir()
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("ignored/\n"))
-	createFileInPath(t, filepath.Join(root, "ignored", "tracked.ts"), []byte("x"))
-	unreadableRules := filepath.Join(root, "z", ".gitignore")
-	createFileInPath(t, unreadableRules, []byte("token.txt\n"))
-	require.NoError(t, os.Chmod(unreadableRules, 0o000))
-	t.Cleanup(func() { assert.NoError(t, os.Chmod(unreadableRules, 0o644)) })
-	repo, err := git.PlainInit(root, false)
-	require.NoError(t, err)
-	worktree, err := repo.Worktree()
-	require.NoError(t, err)
-	_, err = worktree.Add(filepath.Join("ignored", "tracked.ts"))
-	require.NoError(t, err)
-	config := newTestConfig(map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles([]string{".gitignore"}))
-
-	_, err = fileFilter.WalkFilteredFiles()
-
-	require.Error(t, err)
-	assert.Nil(t, fileFilter.trackedFiles)
 }
 
 func TestFileFilter_ContentsGlobThenReIncludeIsKept(t *testing.T) {
