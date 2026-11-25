@@ -768,6 +768,41 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 	}
 }
 
+func Test_UfmPresenter_Sarif_WithRenderTime(t *testing.T) {
+	type SarifOutput struct {
+		Runs []struct {
+			AutomationDetails struct {
+				Id string `json:"id"`
+			} `json:"automationDetails"`
+		} `json:"runs"`
+	}
+
+	testResultBytes, err := os.ReadFile("testdata/ufm/secrets.testresult.json")
+	require.NoError(t, err)
+	testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+	require.NoError(t, err)
+
+	renderTime := time.Date(2026, time.November, 24, 15, 1, 1, 999, time.FixedZone("CET", 3600))
+	writer := &bytes.Buffer{}
+	presenter := presenters.NewUfmRenderer(
+		testResult,
+		configuration.NewWithOpts(),
+		writer,
+		presenters.UfmWithRenderTime(renderTime),
+	)
+
+	err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+	require.NoError(t, err)
+
+	var sarifOutput SarifOutput
+	err = json.Unmarshal(writer.Bytes(), &sarifOutput)
+	require.NoError(t, err)
+	require.NotEmpty(t, sarifOutput.Runs)
+	for _, run := range sarifOutput.Runs {
+		require.Equal(t, "Snyk/Secrets/0/2026-11-24T14:01:01Z", run.AutomationDetails.Id)
+	}
+}
+
 // BenchmarkUfmPresenter_Sarif_MemoryUsage benchmarks SARIF rendering with large test API responses
 // to measure memory usage and performance when processing many issues.
 func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
