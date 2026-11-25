@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -43,12 +42,13 @@ func (fw *FileFilter) WalkFilteredFiles() (chan string, error) {
 
 	start := time.Now()
 	folders := fw.newFolderExclusions(slices.Concat(fw.extraRules, rules))
-	folders.matchFolders(fw.max_threads)
 
 	filtered := make(chan string)
 	go func() {
 		defer close(filtered)
-		fw.filterFiles(fw.GetAllFiles(), folders.isExcluded, filtered, start)
+		var matching sync.WaitGroup
+		defer matching.Wait()
+		fw.filterFiles(folders.matchAhead(fw.GetAllFiles(), &matching), folders.isExcluded, filtered, start)
 	}()
 
 	return filtered, nil
@@ -103,26 +103,29 @@ func (e *folderExclusions) of(dir string) excludedFolder {
 	return exclusion.folder
 }
 
-// matchFolders matches the folders below root ahead of the file stream, which reaches the filter
-// workers one folder at a time and would otherwise make them wait on each other's folder.
-func (e *folderExclusions) matchFolders(workers int64) {
-	folders := make(chan string)
-	go func() {
-		defer close(folders)
-		//nolint:errcheck // a folder left out is matched when its first file is filtered
-		filepath.WalkDir(e.root, func(path string, d os.DirEntry, err error) error {
-			if err == nil && d.IsDir() {
-				folders <- path
-			}
-			return err
-		})
-	}()
+const folderLookahead = 1024
 
-	for range workers {
-		go func() {
-			for dir := range folders {
-				e.of(dir)
+// matchAhead forwards files and starts matching the folder of each one when its first file is read.
+// The file stream reaches the filter workers one folder at a time, so without a lookahead they all
+// wait on the same folder. Every matching goroutine is registered in matching before the returned
+// channel is closed.
+func (e *folderExclusions) matchAhead(files <-chan string, matching *sync.WaitGroup) <-chan string {
+	ahead := make(chan string, folderLookahead)
+	go func() {
+		defer close(ahead)
+		seen := map[string]struct{}{}
+		for file := range files {
+			dir := filepath.Dir(file)
+			if _, ok := seen[dir]; !ok {
+				seen[dir] = struct{}{}
+				matching.Add(1)
+				go func() {
+					defer matching.Done()
+					e.of(dir)
+				}()
 			}
-		}()
-	}
+			ahead <- file
+		}
+	}()
+	return ahead
 }
