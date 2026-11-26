@@ -386,6 +386,7 @@ func TestLinkedWorktree_treeHashMatchesGit(t *testing.T) {
 
 	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
 	cmd.Dir = worktreeDir
+	cmd.Env = gitworktree.GitEnv(t)
 	out, err := cmd.Output()
 	require.NoError(t, err)
 

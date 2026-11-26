@@ -13,6 +13,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/subprocess"
 )
 
 const (
@@ -71,12 +73,21 @@ func NewHandBuiltWorktreeRelative(t *testing.T, mainDir string) string {
 	return worktreeDir
 }
 
+// GitEnv returns the process environment without GIT_* variables, so a git command runs against the repository in its working directory.
+func GitEnv(t *testing.T) []string {
+	t.Helper()
+	env, err := subprocess.SanitizeEnv(os.Environ(), "", "GIT_")
+	require.NoError(t, err)
+	return env
+}
+
 // GitWorktreeAdd creates a linked worktree on BranchName with the git binary, so the layout is the one git writes.
 func GitWorktreeAdd(t *testing.T, mainDir string) string {
 	t.Helper()
 	worktreeDir := filepath.Join(t.TempDir(), worktreeName)
 	cmd := exec.Command("git", "worktree", "add", worktreeDir, BranchName)
 	cmd.Dir = mainDir
+	cmd.Env = GitEnv(t)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "git worktree add: %s", out)
 	return worktreeDir
