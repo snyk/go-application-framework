@@ -83,16 +83,71 @@ func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 	}
 }
 
-func TestFileFilter_ReIncludedFileInExcludedDirectoryIsKept(t *testing.T) {
-	root, _ := createPnpmStyleMonorepo(t, 10)
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("node_modules/*\n!node_modules/keep.js\n"))
-	createFileInPath(t, filepath.Join(root, "node_modules", "keep.js"), []byte("x"))
-	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
-	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+func TestFileFilter_ReIncludeBelowExcludedFolderFollowsGit(t *testing.T) {
+	cases := []struct {
+		name  string
+		rules string
+		want  []string
+	}{
+		{
+			name:  "node_modules/* + !node_modules/keep.js",
+			rules: "node_modules/*\n!node_modules/keep.js\n",
+			want:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+		},
+		{
+			name:  "node_modules/ + !node_modules/keep.js",
+			rules: "node_modules/\n!node_modules/keep.js\n",
+			want:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+		},
+		{
+			name:  "node_modules/** + !node_modules/keep.js",
+			rules: "node_modules/**\n!node_modules/keep.js\n",
+			want:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+		},
+		{
+			name:  "node_modules/** + !node_modules/.pnpm/pkg-0/file-0.js",
+			rules: "node_modules/**\n!node_modules/.pnpm/pkg-0/file-0.js\n",
+			want:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+		},
+		{
+			name:  "everything then keep.txt",
+			rules: "**\n!keep.txt\n",
+			want:  []string{"keep.txt"},
+		},
+		{
+			name:  "everything at root then sub/keep.txt",
+			rules: "/**\n!sub/keep.txt\n",
+			want:  nil,
+		},
+	}
 
-	files := filterFiles(t, fileFilter, []string{".gitignore"})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, metachar := range []bool{false, true} {
+				t.Run(fmt.Sprintf("metachar=%v", metachar), func(t *testing.T) {
+					root := t.TempDir()
+					createFileInPath(t, filepath.Join(root, "node_modules", "keep.js"), []byte("x"))
+					createFileInPath(t, filepath.Join(root, "node_modules", ".pnpm", "pkg-0", "file-0.js"), []byte("x"))
+					createFileInPath(t, filepath.Join(root, "keep.txt"), []byte("x"))
+					createFileInPath(t, filepath.Join(root, "sub", "keep.txt"), []byte("x"))
+					createFileInPath(t, filepath.Join(root, ".gitignore"), []byte(tc.rules))
 
-	assert.Contains(t, files, filepath.Join(root, "node_modules", "keep.js"))
+					config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: metachar})
+					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+					files := filterFiles(t, fileFilter, []string{".gitignore"})
+
+					expected := make([]string, len(tc.want))
+					for i, p := range tc.want {
+						expected[i] = filepath.Join(root, filepath.FromSlash(p))
+					}
+
+					assert.ElementsMatch(t, expected, files,
+						"rules: %s, metachar: %v", tc.name, metachar)
+				})
+			}
+		})
+	}
 }
 
 func BenchmarkFileFilter_PnpmMonorepo(b *testing.B) {

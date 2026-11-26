@@ -343,6 +343,24 @@ func buildScenarios(t *testing.T) []scenario {
 			gitOracle:      true,
 			why:            "a negation cannot re-include anything under .git/",
 		},
+		{
+			name: "reinclude-in-excluded-dir-gitignore",
+			files: repoFiles(map[string]string{".gitignore": ruleLines("node_modules/", "!*.config.js", "!README.md")},
+				"node_modules/pkg/webpack.config.js", "node_modules/pkg/README.md", "node_modules/pkg/index.js", "webpack.config.js", "src/a.js"),
+			want:           []string{".gitignore", "src/a.js", "webpack.config.js"},
+			currentCorrect: true,
+			gitOracle:      true,
+			why:            "a file cannot be re-included once its parent folder is excluded",
+		},
+		{
+			name: "reinclude-in-excluded-dir-dcignore",
+			files: repoFiles(map[string]string{".gitignore": ruleLines("vendor/"), "vendor/.dcignore": ruleLines("!new.txt")},
+				"vendor/new.txt", "main.go"),
+			want:           []string{".gitignore", "main.go"},
+			currentCorrect: true,
+			gitOracle:      true,
+			why:            "a .dcignore negation inside an excluded folder cannot re-include a file there",
+		},
 
 		// Section 2: known gaps of today's implementation.
 		{
@@ -368,21 +386,6 @@ func buildScenarios(t *testing.T) []scenario {
 			want:      []string{"keep.txt"},
 			gitOracle: true,
 			why:       "nothing under .git/ is returned, whatever the other rules say",
-		},
-		{
-			name: "reinclude-in-excluded-dir-gitignore",
-			files: repoFiles(map[string]string{".gitignore": ruleLines("node_modules/", "!*.config.js", "!README.md")},
-				"node_modules/pkg/webpack.config.js", "node_modules/pkg/README.md", "node_modules/pkg/index.js", "webpack.config.js", "src/a.js"),
-			want:      []string{".gitignore", "src/a.js", "webpack.config.js"},
-			gitOracle: true,
-			why:       "a file cannot be re-included once its parent folder is excluded",
-		},
-		{
-			name: "reinclude-in-excluded-dir-dcignore",
-			files: repoFiles(map[string]string{".gitignore": ruleLines("vendor/"), "vendor/.dcignore": ruleLines("!new.txt")},
-				"vendor/new.txt", "main.go"),
-			want: []string{".gitignore", "main.go"},
-			why:  "a .dcignore negation inside an excluded folder cannot re-include a file there",
 		},
 		{
 			name:  "unreadable-entry-is-not-silent",

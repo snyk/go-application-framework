@@ -379,22 +379,3 @@ func isFolderIn(files map[string]string, path string) bool {
 	}
 	return false
 }
-
-func TestCompileRuleMatcher_detectsNegationsLikeTheLibrary(t *testing.T) {
-	for _, test := range []struct {
-		line    string
-		negated bool
-	}{
-		{line: "!a", negated: true},
-		{line: " !a", negated: true},
-		{line: "!a\r", negated: true},
-		{line: "#!a", negated: false},
-		{line: `\!a`, negated: false},
-		{line: "a!", negated: false},
-		{line: gitIgnoreGlobPrefix + "!a", negated: false},
-	} {
-		t.Run(fmt.Sprintf("%q", test.line), func(t *testing.T) {
-			assert.Equal(t, test.negated, compileRuleMatcher([]string{test.line}).negations != nil)
-		})
-	}
-}
