@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/ufm_helpers"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 func intPtr(v int) *int {
@@ -399,4 +400,76 @@ func TestGetFingerprints(t *testing.T) {
 		extra := &ufm_helpers.FindingExtra{Fingerprints: fps}
 		assert.Equal(t, fps, getFingerprints(extra, "fallback-id"))
 	})
+}
+
+func TestDescribeFilesNotAnalyzed(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		coverage []local_models.TypesCoverage
+		want     string
+	}{
+		{
+			desc: "nothing to report when every file was analyzed",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "JavaScript", Files: 12, IsSupported: true, Type: "SUPPORTED"},
+			},
+			want: "",
+		},
+		{
+			desc:     "no coverage at all",
+			coverage: nil,
+			want:     "",
+		},
+		{
+			desc: "files that failed parsing are named with language, count and reason",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "JavaScript", Files: 12, IsSupported: true, Type: "SUPPORTED"},
+				{Lang: "TypeScript", Files: 5, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "5 files (TypeScript 5, failed to parse)",
+		},
+		{
+			desc: "several languages and reasons are summed and listed in input order",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "TypeScript", Files: 5, IsSupported: false, Type: "FAILED_PARSING"},
+				{Lang: "XML", Files: 2, IsSupported: false, Type: "UNSUPPORTED"},
+			},
+			want: "7 files (TypeScript 5, failed to parse; XML 2, unsupported)",
+		},
+		{
+			desc: "a single file uses the singular",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Python", Files: 1, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "1 file (Python 1, failed to parse)",
+		},
+		{
+			desc: "entries with zero files are ignored",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Python", Files: 0, IsSupported: false, Type: "FAILED_PARSING"},
+			},
+			want: "",
+		},
+		{
+			desc: "files skipped before analysis have no language",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "TypeScript", Files: 5, IsSupported: false, Type: "FAILED_PARSING"},
+				{Files: 2, IsSupported: false, Type: "FILE_TOO_LARGE"},
+				{Files: 1, IsSupported: false, Type: "PATH_TOO_LONG"},
+			},
+			want: "8 files (TypeScript 5, failed to parse; other files 2, over the file size limit; other files 1, path too long)",
+		},
+		{
+			desc: "an unknown reason is shown in readable lower case",
+			coverage: []local_models.TypesCoverage{
+				{Lang: "Go", Files: 3, IsSupported: false, Type: "TOO_LARGE"},
+			},
+			want: "3 files (Go 3, too large)",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.want, describeFilesNotAnalyzed(tc.coverage))
+		})
+	}
 }

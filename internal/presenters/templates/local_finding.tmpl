@@ -39,6 +39,10 @@
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}}{{ end}}
   Project path:      {{ .Summary.Path }}
+  {{- $notAnalyzed := describeFilesNotAnalyzed .Summary.Coverage }}
+  {{- if $notAnalyzed }}
+  Not analyzed:      {{ $notAnalyzed }}
+  {{- end }}
 
   {{- $totalIssueCount := .Summary.Counts.Count }}
   {{- $openIssueCount := .Summary.Counts.CountAdjusted }}
