@@ -36,6 +36,7 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 	t.Parallel()
 	globs := []string{
 		"**/.git/**",
+		"/repo/*/*.go",
 		"/repo/**/*.tfvars",
 		"!/repo/**/*.tfvars.example",
 		"/repo/a/**/*.java",
@@ -55,19 +56,20 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 		"/repo/x.tfvars.example": false,
 		"/repo/a/z.java":         true,
 		"/repo/a/keep.java":      false,
-		"repo/a/keep.java":       false,
+		"repo/a/z.java":          true, // an anchored glob also matches without the leading "/"
 		"/repo/a/b/c/z.js":       false,
-		"/repo/ab/x/z.go":        true,
+		"/repo/ab/x/z.go":        true, // "(b)" is a regular expression group
 		"/repo/a/doc.md":         false,
 		"/other/relative/z.log":  false,
 		"/repo/bin":              true,
 		"/repo/padded/z.go":      true,
-		"/other/y":               true,
+		"/other/y":               true, // "x|y" is an alternation, "y" matches anywhere
+		"/repo/\nd/\nz.go":       true, // "." in go-gitignore's expressions does not match "\n"
 		"main.go":                false,
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
-	assert.Less(t, len(actual.globsFor("/repo/main/")), len(globs))
+	assert.Len(t, actual.globsFor("/repo/main/"), 9)
 
 	for path, want := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -81,7 +83,7 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 
 func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 	r := rand.New(rand.NewPCG(1, 2))
-	names := []string{"a", "b", "ab", "bin", "foo", "x.txt", "a(b)", "a+b", "c d", "*.txt", "?", "[ab]", "**", "a/b", "foo/**", "foo/*/**", "**/foo", "a|b", "a/{0}b", "a#$~"}
+	names := []string{"a", "b", "ab", "bin", "foo", "x.txt", "a(b)", "a+b", "c d", "*.txt", "?", "[ab]", "**", "a/b", "foo/**", "foo/*/**", "**/foo", "a|b", "a/{0}b", "a#$~", "a\nb"}
 	bases := []string{".", "/repo", "/repo/a", "repo/a", " a", "a ", "/r(x)", "/r+x", "//srv/share"}
 	pick := func(s []string) string { return s[r.IntN(len(s))] }
 

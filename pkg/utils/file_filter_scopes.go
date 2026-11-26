@@ -51,8 +51,8 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 		lines := []string{glob}
 		_, negated := globPattern(glob)
 		if negated {
-			// "*" matches every path, so the matcher is false iff the negated glob matches.
-			lines = []string{"*", glob}
+			// "|" matches every path, unlike "*" with newlines, so the matcher is false iff the negated glob matches.
+			lines = []string{"|", glob}
 		}
 		m.globs[i] = scopedGlob{matcher: gitignore.CompileIgnoreLines(lines...), negated: negated, scope: -1}
 
@@ -107,8 +107,8 @@ func scopeOfGlob(glob string) globScope {
 	return globScope{dir: dir, anchored: strings.HasPrefix(dir, "/")}
 }
 
-// contains reports whether a path in dir, which ends in "/" or is empty, can match a glob with this scope.
-func (s globScope) contains(dir string) bool {
+// appliesTo reports whether a path in dir, which ends in "/" or is empty, can match a glob with this scope.
+func (s globScope) appliesTo(dir string) bool {
 	if s.anchored {
 		// go-gitignore compiles a leading "/" to "^(|/)", so the pattern also matches without it.
 		return strings.HasPrefix(dir, s.dir) || strings.HasPrefix(dir, s.dir[1:])
@@ -139,7 +139,7 @@ func (m *scopedMatcher) globsFor(dir string) []int {
 	inScope := make([]bool, len(m.scopes))
 	var key strings.Builder
 	for i, scope := range m.scopes {
-		if scope.contains(dir) {
+		if scope.appliesTo(dir) {
 			inScope[i] = true
 			key.WriteString(strconv.Itoa(i))
 			key.WriteByte(',')
