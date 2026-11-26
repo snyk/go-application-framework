@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,8 +38,6 @@ const gitIgnoreGlobPrefix = "#gitignore:"
 type FileFilter struct {
 	path            string
 	defaultRules    []string
-	ruleFiles       []string
-	extraRules      []string
 	logger          *zerolog.Logger
 	max_threads     int64
 	dotSnykSections []DotSnykExcludeSectionName
@@ -275,9 +274,6 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
-//
-// Deprecated: use WalkFilteredFiles, which returns the same files as GetFilteredFiles(GetAllFiles(), rules)
-// without testing every file of an excluded folder against every rule.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
@@ -286,10 +282,12 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
 		// opens the repository and reads the git index, so it is timed alongside the filtering.
-		predicate := fw.newExclusionPredicate(globs)
+		folders := fw.newFolderExclusions(globs)
 
+		var matching sync.WaitGroup
 		defer close(filteredFilesCh)
-		fw.filterFiles(filesCh, predicate.isExcluded, filteredFilesCh, start)
+		defer matching.Wait()
+		fw.filterFiles(folders.matchAhead(filesCh, fw.max_threads, &matching), folders.isExcluded, filteredFilesCh, start)
 	}()
 
 	return filteredFilesCh

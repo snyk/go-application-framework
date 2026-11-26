@@ -70,15 +70,15 @@ func createRealisticMonorepo(tb testing.TB) string {
 
 const realisticMonorepoGitignore = "node_modules/\ndist/\ncoverage/\n*.log\n.cache/\n"
 
-// BenchmarkFileFilter_RealisticMonorepo compares the legacy flow (GetRules, then GetFilteredFiles over
-// GetAllFiles) with WalkFilteredFiles on the fixture from createRealisticMonorepo, once with the
-// fixture's rules and once with a top-level negation added to the root .gitignore.
+// BenchmarkFileFilter_RealisticMonorepo benchmarks GetFilteredFiles over GetAllFiles with the
+// fixture from createRealisticMonorepo, once with the fixture's rules and once with a top-level negation
+// added to the root .gitignore.
 //
 //	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo$' -benchmem -benchtime=5x
 //
-// Profile one flow at a time, so the profile is not a mix of both:
+// Profile one flow at a time:
 //
-//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/no-negation/WalkFilteredFiles$' \
+//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/no-negation/GetFilteredFiles$' \
 //	  -benchtime=5x -cpuprofile cpu.out -memprofile mem.out
 //	go tool pprof -top -cum -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' cpu.out
 //	go tool pprof -top -cum -sample_index=alloc_space -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' mem.out
@@ -96,18 +96,6 @@ func BenchmarkFileFilter_RealisticMonorepo(b *testing.B) {
 	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 	logger := zerolog.Nop()
 
-	legacy := func() int {
-		fileFilter := NewFileFilter(root, &logger, WithConfig(config))
-		rules, err := fileFilter.GetRules(ruleFiles)
-		require.NoError(b, err)
-
-		files := 0
-		for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules) {
-			files++
-		}
-		return files
-	}
-
 	for _, rules := range []struct {
 		name      string
 		gitignore string
@@ -116,31 +104,21 @@ func BenchmarkFileFilter_RealisticMonorepo(b *testing.B) {
 		{name: "top-level-negation", gitignore: realisticMonorepoGitignore + "!*.config.js\n"},
 	} {
 		createFileInPath(b, filepath.Join(root, ".gitignore"), []byte(rules.gitignore))
-		legacyFiles := legacy()
 
-		b.Run(rules.name+"/legacy", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				legacy()
-			}
-			b.ReportMetric(float64(legacyFiles), "files/op")
-		})
-
-		b.Run(rules.name+"/WalkFilteredFiles", func(b *testing.B) {
+		b.Run(rules.name+"/GetFilteredFiles", func(b *testing.B) {
 			var files int
 			b.ReportAllocs()
 			for b.Loop() {
-				fileFilter := NewFileFilter(root, &logger, WithConfig(config), WithRuleFiles(ruleFiles))
-				filesCh, err := fileFilter.WalkFilteredFiles()
+				fileFilter := NewFileFilter(root, &logger, WithConfig(config))
+				globs, err := fileFilter.GetRules(ruleFiles)
 				require.NoError(b, err)
 
 				files = 0
-				for range filesCh {
+				for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
 					files++
 				}
 			}
 			b.ReportMetric(float64(files), "files/op")
-			require.Equal(b, legacyFiles, files)
 		})
 	}
 }

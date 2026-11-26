@@ -28,25 +28,17 @@ var differentialFlagCombinations = []struct {
 	{name: "tracked=true,metachar=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: true}},
 }
 
-// assertSameAsLegacy compares WalkFilteredFiles with GetFilteredFiles(GetAllFiles(), extraRules + GetRules()).
-func assertSameAsLegacy(t *testing.T, root string, flags map[string]bool, extraRules ...string) {
+// assertMatchesReference compares GetFilteredFiles(GetAllFiles(), extraRules + GetRules()) with the reference predicate.
+func assertMatchesReference(t *testing.T, root string, flags map[string]bool, extraRules ...string) {
 	t.Helper()
 
-	config := newTestConfig(flags)
-	legacy := NewFileFilter(root, &log.Logger, WithConfig(config))
-	rules, legacyErr := legacy.GetRules(differentialRuleFiles)
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(newTestConfig(flags)))
+	rules, err := fileFilter.GetRules(differentialRuleFiles)
+	require.NoError(t, err)
+	globs := slices.Concat(extraRules, rules)
+	files := drainFilteredFiles(t, fileFilter.GetAllFiles())
 
-	walk := NewFileFilter(root, &log.Logger, WithConfig(config), WithRuleFiles(differentialRuleFiles), WithExtraRules(extraRules))
-	walkFiles, walkErr := walk.WalkFilteredFiles()
-
-	if legacyErr != nil {
-		assert.Error(t, walkErr)
-		return
-	}
-	require.NoError(t, walkErr)
-
-	legacyFiles := drainFilteredFiles(t, legacy.GetFilteredFiles(legacy.GetAllFiles(), slices.Concat(extraRules, rules)))
-	assert.ElementsMatch(t, legacyFiles, drainFilteredFiles(t, walkFiles))
+	assert.ElementsMatch(t, fileFilter.referenceFilteredFiles(files, globs), drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(files), globs)))
 }
 
 func skipWithoutPermissions(t *testing.T) {
@@ -62,7 +54,7 @@ func lockPath(t *testing.T, path string, restoreMode os.FileMode) {
 	t.Cleanup(func() { assert.NoError(t, os.Chmod(path, restoreMode)) })
 }
 
-func TestWalkFilteredFiles_MatchesLegacy(t *testing.T) {
+func TestGetFilteredFiles_MatchesReference(t *testing.T) {
 	cases := []struct {
 		name       string
 		files      map[string]string
@@ -222,20 +214,6 @@ func TestWalkFilteredFiles_MatchesLegacy(t *testing.T) {
 				lockPath(t, locked, 0o755)
 			},
 		},
-		{
-			name: "unreadable rule file",
-			files: map[string]string{
-				".gitignore":   "ignored/\n",
-				"ignored/a.ts": "x",
-				"z/.gitignore": "token.txt\n",
-				"z/code.ts":    "x",
-			},
-			setup: func(t *testing.T, root string) {
-				t.Helper()
-				skipWithoutPermissions(t)
-				lockPath(t, filepath.Join(root, "z", ".gitignore"), 0o644)
-			},
-		},
 	}
 
 	for _, tc := range cases {
@@ -259,45 +237,13 @@ func TestWalkFilteredFiles_MatchesLegacy(t *testing.T) {
 					tc.setup(t, root)
 				}
 
-				assertSameAsLegacy(t, root, combination.flags, tc.extraRules...)
+				assertMatchesReference(t, root, combination.flags, tc.extraRules...)
 			})
 		}
 	}
 }
 
-func TestWalkFilteredFiles_WithoutRuleFilesAppliesOnlyDefaultAndExtraRules(t *testing.T) {
-	root := t.TempDir()
-	for path, content := range map[string]string{
-		".git/config":   "x",
-		".gitignore":    "src/\n",
-		"src/a.js":      "x",
-		"vendor/b.js":   "x",
-		"vendor/c.tmp":  "x",
-		"docs/guide.md": "x",
-	} {
-		createFileInPath(t, filepath.Join(root, path), []byte(content))
-	}
-	extraRules := []string{"**/vendor/**"}
-
-	legacy := NewFileFilter(root, &log.Logger)
-	rules, err := legacy.GetRules(nil)
-	require.NoError(t, err)
-	expected := drainFilteredFiles(t, legacy.GetFilteredFiles(legacy.GetAllFiles(), slices.Concat(extraRules, rules)))
-	require.Contains(t, expected, filepath.Join(root, "src", "a.js"), ".gitignore must not be applied without rule files")
-	require.NotContains(t, expected, filepath.Join(root, ".git", "config"))
-	require.NotContains(t, expected, filepath.Join(root, "vendor", "b.js"))
-
-	recorder := newMetricsRecorder(t)
-	walk := NewFileFilter(root, &log.Logger, WithMetrics(recorder), WithExtraRules(extraRules))
-	walkFiles, err := walk.WalkFilteredFiles()
-	require.NoError(t, err)
-
-	assert.ElementsMatch(t, expected, drainFilteredFiles(t, walkFiles))
-	assert.NotContains(t, recordedMetrics(t, recorder)[metricVariantLegacy].ints, metricRulesBuildDurationMs,
-		"without rule files there are no rules to build, so no tree walk to time")
-}
-
-func TestWalkFilteredFiles_MatchesLegacyOnRandomTrees(t *testing.T) {
+func TestGetFilteredFiles_MatchesReferenceOnRandomTrees(t *testing.T) {
 	const iterations = 300
 	folderNames := []string{"node_modules", "dist", "src", "a", "X", "keep", "a(b)", "ab"}
 	fileNames := []string{"a.js", "keep.js", "b.log", "c.tmp", "keep", "x.config.js"}
@@ -354,9 +300,72 @@ func TestWalkFilteredFiles_MatchesLegacyOnRandomTrees(t *testing.T) {
 					}
 				})
 
-				assertSameAsLegacy(t, root, combination.flags)
+				assertMatchesReference(t, root, combination.flags)
 			})
 		}
+	}
+}
+
+// TestGetFilteredFiles_MatchesReferenceForArbitraryInput feeds inputs that GetAllFiles never produces:
+// single files, paths that are not clean, paths outside the root, missing files and rules that do not
+// come from GetRules.
+func TestGetFilteredFiles_MatchesReferenceForArbitraryInput(t *testing.T) {
+	fileMap := map[string]string{
+		".gitignore":                         "node_modules/\n*.log\n!*.config.js\n!important.log\n",
+		"node_modules/pkg/.gitignore":        "!index.js\n",
+		"node_modules/pkg/webpack.config.js": "x",
+		"node_modules/pkg/index.js":          "x",
+		"important.log":                      "x",
+		"other.log":                          "x",
+		"src/a.js":                           "x",
+	}
+	handWrittenRules := []string{"**/node_modules/**", "!**/index.js", "**/*.log"}
+	sep := string(filepath.Separator)
+
+	for _, combination := range differentialFlagCombinations {
+		t.Run(combination.name, func(t *testing.T) {
+			root := t.TempDir()
+			for path, content := range fileMap {
+				createFileInPath(t, filepath.Join(root, path), []byte(content))
+			}
+
+			for _, scan := range []struct {
+				name   string
+				root   string
+				inputs []string
+			}{
+				{name: "absolute root", root: root, inputs: []string{
+					root + sep + "src" + sep + ".." + sep + "node_modules" + sep + "pkg" + sep + "index.js",
+					root + sep + "node_modules" + sep + ".." + sep + "src" + sep + "a.js",
+					root + sep + "node_modules" + sep + sep + "pkg" + sep + "webpack.config.js",
+					filepath.Join(root, "missing", "node_modules", "gone.config.js"),
+					filepath.Join(filepath.Dir(root), "outside", "node_modules", "x.config.js"),
+				}},
+				{name: "relative root", root: ".", inputs: []string{
+					filepath.Join("node_modules", "pkg", "index.js"),
+					"." + sep + filepath.Join("node_modules", "pkg", "webpack.config.js"),
+					filepath.Join("src", "a.js"),
+					"other.log",
+				}},
+			} {
+				t.Run(scan.name, func(t *testing.T) {
+					t.Chdir(root)
+					fileFilter := NewFileFilter(scan.root, &log.Logger, WithConfig(newTestConfig(combination.flags)))
+					rules, err := fileFilter.GetRules(differentialRuleFiles)
+					require.NoError(t, err)
+					inputs := append(drainFilteredFiles(t, fileFilter.GetAllFiles()), scan.inputs...)
+
+					for _, globs := range [][]string{rules, handWrittenRules} {
+						assert.ElementsMatch(t, fileFilter.referenceFilteredFiles(inputs, globs),
+							drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(inputs), globs)), "all inputs at once, rules %q", globs)
+						for _, input := range inputs {
+							assert.ElementsMatch(t, fileFilter.referenceFilteredFiles([]string{input}, globs),
+								drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel([]string{input}), globs)), "single input %q, rules %q", input, globs)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
