@@ -104,6 +104,7 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 
 		filteredFiles(t, ictx.GetFileFilter(base))
 
+		metrics := fileFilterMetrics(t, invocationAnalytics)
 		assert.ElementsMatch(t, []string{
 			"file-filter.var0.filter.inputFileCount",
 			"file-filter.var0.filter.durationMs",
@@ -111,6 +112,9 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 			"file-filter.var0.filter.outputFileCount",
 			"file-filter.var0.feature.metaCharFix",
 			"file-filter.var0.feature.includeTracked",
-		}, slices.Collect(maps.Keys(fileFilterMetrics(t, invocationAnalytics))))
+			"file-filter.var0.feature.gitSemantics",
+		}, slices.Collect(maps.Keys(metrics)))
+		assert.Equal(t, true, metrics["file-filter.var0.feature.gitSemantics"],
+			"git semantics are on unless the configuration turns them off")
 	})
 }
