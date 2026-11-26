@@ -100,6 +100,7 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	result := writer.String()
 
 	require.NoError(t, err)
+	require.NotContains(t, result, "Not analyzed")
 	snaps.MatchSnapshot(t, result)
 }
 
@@ -226,6 +227,7 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	require.Contains(t, result, " ! [MEDIUM] Cleartext Transmission of Sensitive Information [ IGNORED ]")
 	require.Contains(t, result, "src/main.ts, line 58")
 	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
+	require.Contains(t, result, "Not analyzed:      5 files (TypeScript 5, failed to parse)")
 	require.NotContains(t, result, "Empty ignore issues state")
 	require.NotContains(t, result, "To view ignored and open issues, use the --include-ignores option.pre")
 
