@@ -59,6 +59,8 @@ type scenario struct {
 	setup func(t *testing.T, repoRoot string)
 	// skipReason, if set, skips the scenario for every implementation.
 	skipReason string
+	// needsGitSemantics marks scenarios that are correct only with FF_FILE_FILTER_GIT_SEMANTICS on.
+	needsGitSemantics bool
 }
 
 type scenarioOptions struct {
@@ -70,6 +72,9 @@ type scenarioImplementation struct {
 	// sharesCurrentGaps exempts the implementation from the known gaps of today's implementation,
 	// for variants that change how the filter runs but not what it matches.
 	sharesCurrentGaps bool
+	// withoutGitSemantics runs with FF_FILE_FILTER_GIT_SEMANTICS off, where scenarios marked
+	// needsGitSemantics are known gaps.
+	withoutGitSemantics bool
 	// run returns the files that survive filtering, as absolute or scan-root-relative paths.
 	// It takes testing.TB so the benchmark can run the same implementations.
 	run func(tb testing.TB, scanRoot string, opts scenarioOptions) []string
@@ -336,29 +341,32 @@ func buildScenarios(t *testing.T) []scenario {
 		},
 		symlinkEntriesSkippedScenario(t),
 		{
-			name:           "never-include-git-dir-despite-negation",
-			files:          repoFiles(map[string]string{".gitignore": ruleLines("!.git/", "!.git/**")}, "keep.txt"),
-			want:           []string{".gitignore", "keep.txt"},
-			currentCorrect: true,
-			gitOracle:      true,
-			why:            "a negation cannot re-include anything under .git/",
+			name:              "never-include-git-dir-despite-negation",
+			files:             repoFiles(map[string]string{".gitignore": ruleLines("!.git/", "!.git/**")}, "keep.txt"),
+			want:              []string{".gitignore", "keep.txt"},
+			currentCorrect:    true,
+			gitOracle:         true,
+			needsGitSemantics: true,
+			why:               "a negation cannot re-include anything under .git/",
 		},
 		{
 			name: "reinclude-in-excluded-dir-gitignore",
 			files: repoFiles(map[string]string{".gitignore": ruleLines("node_modules/", "!*.config.js", "!README.md")},
 				"node_modules/pkg/webpack.config.js", "node_modules/pkg/README.md", "node_modules/pkg/index.js", "webpack.config.js", "src/a.js"),
-			want:           []string{".gitignore", "src/a.js", "webpack.config.js"},
-			currentCorrect: true,
-			gitOracle:      true,
-			why:            "a file cannot be re-included once its parent folder is excluded",
+			want:              []string{".gitignore", "src/a.js", "webpack.config.js"},
+			currentCorrect:    true,
+			gitOracle:         true,
+			needsGitSemantics: true,
+			why:               "a file cannot be re-included once its parent folder is excluded",
 		},
 		{
 			name: "reinclude-in-excluded-dir-dcignore",
 			files: repoFiles(map[string]string{".gitignore": ruleLines("vendor/"), "vendor/.dcignore": ruleLines("!new.txt")},
 				"vendor/new.txt", "main.go"),
-			want:           []string{".gitignore", "main.go"},
-			currentCorrect: true,
-			why:            "a .dcignore negation inside an excluded folder cannot re-include a file there",
+			want:              []string{".gitignore", "main.go"},
+			currentCorrect:    true,
+			needsGitSemantics: true,
+			why:               "a .dcignore negation inside an excluded folder cannot re-include a file there",
 		},
 
 		// Section 2: known gaps of today's implementation.
@@ -461,9 +469,10 @@ func symlinkEntriesSkippedScenario(t *testing.T) scenario {
 			"inside-link.js": "real.js",
 			"linked-dir":     "real-dir",
 		},
-		want:           []string{"real-dir/file.js", "real.js"},
-		currentCorrect: true,
-		why:            "symlink entries are never listed: reading one would upload a file from outside the repo",
+		want:              []string{"real-dir/file.js", "real.js"},
+		currentCorrect:    true,
+		needsGitSemantics: true,
+		why:               "symlink entries are never listed: reading one would upload a file from outside the repo",
 	}
 }
 
@@ -582,7 +591,7 @@ func checkScenario(t *testing.T, impl scenarioImplementation, sc scenario, expec
 	got := impl.run(t, scanRoot, scenarioOptions{ReadParentRuleFiles: sc.parentRules})
 	got = dropLinkEntriesIfRequested(sc, normalizeScenarioResult(t, scanRoot, got))
 
-	knownGap := (impl.name == currentImplementationName || impl.sharesCurrentGaps) && !sc.currentCorrect
+	knownGap := (impl.name == currentImplementationName || impl.sharesCurrentGaps) && (!sc.currentCorrect || (impl.withoutGitSemantics && sc.needsGitSemantics))
 	missing, unexpected := diffPaths(want, got)
 	switch {
 	case len(missing) == 0 && len(unexpected) == 0 && knownGap:

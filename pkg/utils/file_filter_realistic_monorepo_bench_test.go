@@ -78,7 +78,7 @@ const realisticMonorepoGitignore = "node_modules/\ndist/\ncoverage/\n*.log\n.cac
 //
 // Profile one flow at a time:
 //
-//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/no-negation/GetFilteredFiles$' \
+//	go test ./pkg/utils -run '^$' -bench '^BenchmarkFileFilter_RealisticMonorepo/no-negation/git=on/GetFilteredFiles$' \
 //	  -benchtime=5x -cpuprofile cpu.out -memprofile mem.out
 //	go tool pprof -top -cum -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' cpu.out
 //	go tool pprof -top -cum -sample_index=alloc_space -focus '\(\*FileFilter\)|exclusionPredicate|ruleMatcher' mem.out
@@ -93,7 +93,6 @@ func BenchmarkFileFilter_RealisticMonorepo(b *testing.B) {
 
 	root := createRealisticMonorepo(b)
 	ruleFiles := []string{".gitignore", ".dcignore", ".snyk"}
-	config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: true})
 	logger := zerolog.Nop()
 
 	for _, rules := range []struct {
@@ -105,20 +104,30 @@ func BenchmarkFileFilter_RealisticMonorepo(b *testing.B) {
 	} {
 		createFileInPath(b, filepath.Join(root, ".gitignore"), []byte(rules.gitignore))
 
-		b.Run(rules.name+"/GetFilteredFiles", func(b *testing.B) {
-			var files int
-			b.ReportAllocs()
-			for b.Loop() {
-				fileFilter := NewFileFilter(root, &logger, WithConfig(config))
-				globs, err := fileFilter.GetRules(ruleFiles)
-				require.NoError(b, err)
+		for _, git := range []struct {
+			name    string
+			enabled bool
+		}{{name: "on", enabled: true}, {name: "off", enabled: false}} {
+			config := newTestConfig(map[string]bool{
+				FF_FILE_FILTER_METACHARACTER_FIX: true,
+				FF_FILE_FILTER_GIT_SEMANTICS:     git.enabled,
+			})
 
-				files = 0
-				for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-					files++
+			b.Run(rules.name+"/git="+git.name+"/GetFilteredFiles", func(b *testing.B) {
+				var files int
+				b.ReportAllocs()
+				for b.Loop() {
+					fileFilter := NewFileFilter(root, &logger, WithConfig(config))
+					globs, err := fileFilter.GetRules(ruleFiles)
+					require.NoError(b, err)
+
+					files = 0
+					for range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+						files++
+					}
 				}
-			}
-			b.ReportMetric(float64(files), "files/op")
-		})
+				b.ReportMetric(float64(files), "files/op")
+			})
+		}
 	}
 }

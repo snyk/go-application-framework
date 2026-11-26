@@ -11,13 +11,14 @@ import (
 type excludedFolder struct {
 	byAll   bool
 	byOther bool
-	linked  bool // the folder, or a folder above it below root, is a symlink
+	linked  bool // with FF_FILE_FILTER_GIT_SEMANTICS: the folder, or a folder above it below root, is a symlink
 }
 
 // folderExclusions memoizes which folders below root the rules exclude, so each folder is matched once,
-// however many of its files the filter workers test concurrently. A file inside an excluded folder is
-// excluded, as in git. The folders of a file are the prefixes of its slash path that end before a "/",
-// which is what the rules see when they match the path as a string, also for paths that are not clean.
+// however many of its files the filter workers test concurrently. With FF_FILE_FILTER_GIT_SEMANTICS, a file
+// inside an excluded folder is excluded, as in git. The folders of a file are the prefixes of its slash path
+// that end before a "/", which is what the rules see when they match the path as a string, also for paths
+// that are not clean.
 type folderExclusions struct {
 	predicate  *exclusionPredicate
 	rootPrefix string
@@ -74,6 +75,9 @@ func (e *folderExclusions) excludedByFolder(file string) bool {
 }
 
 func (e *folderExclusions) isExcluded(file string) bool {
+	if !e.predicate.gitSemantics {
+		return e.excludedByFolder(file) || e.predicate.isExcluded(file)
+	}
 	return inGitFolder(filepath.ToSlash(file)) || e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
 }
 
@@ -105,7 +109,7 @@ func (e *folderExclusions) of(slashDir string) excludedFolder {
 			parent = e.of(parentDir)
 		}
 		exclusion.folder = e.predicate.folderState(slashDir, parent)
-		exclusion.folder.linked = parent.linked || isSymlink(filepath.FromSlash(slashDir))
+		exclusion.folder.linked = e.predicate.gitSemantics && (parent.linked || isSymlink(filepath.FromSlash(slashDir)))
 	})
 	return exclusion.folder
 }

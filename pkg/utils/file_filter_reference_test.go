@@ -118,16 +118,21 @@ func referenceInExcludedFolder(root, file string, isExcluded func(file, target s
 	return slices.ContainsFunc(referenceFolders(root, file), func(folder string) bool { return isExcluded(file, folder) })
 }
 
-// referenceFilteredFiles returns the files the old full match keeps, in order, minus the deliberate
-// differences: files inside a folder below the filter's path that the rules match, symlinks and files
-// inside a symlinked folder, and paths with a .git element.
+// referenceFilteredFiles returns the files the old full match keeps, in order. With FF_FILE_FILTER_GIT_SEMANTICS
+// it also drops the deliberate differences: files inside a folder below the filter's path that the rules match,
+// symlinks and files inside a symlinked folder, and paths with a .git element.
 func (fw *FileFilter) referenceFilteredFiles(files []string, globs []string) []string {
 	isExcluded := fw.referenceExclusionPredicate(globs)
+	gitSemantics := fw.gitSemantics()
 	var kept []string
 	for _, file := range files {
-		if !isExcluded(file, file) && !referenceInExcludedFolder(fw.path, file, isExcluded) && !referenceIsLinked(fw.path, file) && !referenceInGitFolder(file) {
-			kept = append(kept, file)
+		if isExcluded(file, file) {
+			continue
 		}
+		if gitSemantics && (referenceInExcludedFolder(fw.path, file, isExcluded) || referenceIsLinked(fw.path, file) || referenceInGitFolder(file)) {
+			continue
+		}
+		kept = append(kept, file)
 	}
 	return kept
 }

@@ -106,3 +106,44 @@ func TestGetFilteredFiles_NeverReturnsGitFolderFilesWithAllowlistRules(t *testin
 	expected := []string{filepath.Join(root, "keep.txt")}
 	assert.ElementsMatch(t, expected, got)
 }
+
+func TestGetAllFiles_EntersGitFoldersWithoutGitSemantics(t *testing.T) {
+	root := t.TempDir()
+	createFileInPath(t, filepath.Join(root, ".git", "config"), []byte{})
+	createFileInPath(t, filepath.Join(root, "sub", ".git", "HEAD"), []byte{})
+	createFileInPath(t, filepath.Join(root, "sub", "a.js"), []byte{})
+	createFileInPath(t, filepath.Join(root, ".github", "workflow.yml"), []byte{})
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte{})
+	createFileInPath(t, filepath.Join(root, "a.git", "x.js"), []byte{})
+
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+	filesCh := fileFilter.GetAllFiles()
+	got := drainFilteredFiles(t, filesCh)
+
+	expected := []string{
+		filepath.Join(root, ".git", "config"),
+		filepath.Join(root, "sub", ".git", "HEAD"),
+		filepath.Join(root, "sub", "a.js"),
+		filepath.Join(root, ".github", "workflow.yml"),
+		filepath.Join(root, ".gitignore"),
+		filepath.Join(root, "a.git", "x.js"),
+	}
+	assert.ElementsMatch(t, expected, got)
+}
+
+func TestGetFilteredFiles_ReturnsNegatedGitFolderFilesWithoutGitSemantics(t *testing.T) {
+	root := t.TempDir()
+	inputs := []string{
+		filepath.Join(root, ".git", "config"),
+		filepath.Join(root, ".git"),
+		filepath.Join(root, "sub", ".git", "HEAD"),
+		filepath.Join(root, ".gitignore"),
+	}
+	globs := []string{"**/.git/**", "!**/.git/**"}
+
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+	assert.ElementsMatch(t, inputs, drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(inputs), globs)))
+}

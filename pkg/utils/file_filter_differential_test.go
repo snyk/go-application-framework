@@ -22,10 +22,14 @@ var differentialFlagCombinations = []struct {
 	name  string
 	flags map[string]bool
 }{
-	{name: "tracked=false,metachar=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: false}},
-	{name: "tracked=false,metachar=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: true}},
-	{name: "tracked=true,metachar=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: false}},
-	{name: "tracked=true,metachar=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: true}},
+	{name: "tracked=false,metachar=false,git=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: false, FF_FILE_FILTER_GIT_SEMANTICS: true}},
+	{name: "tracked=false,metachar=false,git=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: false, FF_FILE_FILTER_GIT_SEMANTICS: false}},
+	{name: "tracked=false,metachar=true,git=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: true, FF_FILE_FILTER_GIT_SEMANTICS: true}},
+	{name: "tracked=false,metachar=true,git=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: false, FF_FILE_FILTER_METACHARACTER_FIX: true, FF_FILE_FILTER_GIT_SEMANTICS: false}},
+	{name: "tracked=true,metachar=false,git=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: false, FF_FILE_FILTER_GIT_SEMANTICS: true}},
+	{name: "tracked=true,metachar=false,git=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: false, FF_FILE_FILTER_GIT_SEMANTICS: false}},
+	{name: "tracked=true,metachar=true,git=true", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: true, FF_FILE_FILTER_GIT_SEMANTICS: true}},
+	{name: "tracked=true,metachar=true,git=false", flags: map[string]bool{FF_GITIGNORE_RESPECT_TRACKED_FILES: true, FF_FILE_FILTER_METACHARACTER_FIX: true, FF_FILE_FILTER_GIT_SEMANTICS: false}},
 }
 
 // assertMatchesReference compares GetFilteredFiles(GetAllFiles(), extraRules + GetRules()) with the reference predicate.
@@ -244,7 +248,7 @@ func TestGetFilteredFiles_MatchesReference(t *testing.T) {
 }
 
 func TestGetFilteredFiles_MatchesReferenceOnRandomTrees(t *testing.T) {
-	const iterations = 300
+	const iterations = 150
 	folderNames := []string{"node_modules", "dist", "src", "a", "X", "keep", "a(b)", "ab"}
 	fileNames := []string{"a.js", "keep.js", "b.log", "c.tmp", "keep", "x.config.js"}
 	ruleLines := []string{"node_modules/", "dist/", "*.log", "!keep.js", "!*.log", "X/**", "!X/keep", "!node_modules/", "/a", "!keep", "**/dist/**", "*.tmp", "!a/keep.js", "ab/"}
@@ -378,4 +382,23 @@ func isFolderIn(files map[string]string, path string) bool {
 		}
 	}
 	return false
+}
+
+func TestCompileRuleMatcher_detectsNegationsLikeTheLibrary(t *testing.T) {
+	for _, test := range []struct {
+		line    string
+		negated bool
+	}{
+		{line: "!a", negated: true},
+		{line: " !a", negated: true},
+		{line: "!a\r", negated: true},
+		{line: "#!a", negated: false},
+		{line: `\!a`, negated: false},
+		{line: "a!", negated: false},
+		{line: gitIgnoreGlobPrefix + "!a", negated: false},
+	} {
+		t.Run(fmt.Sprintf("%q", test.line), func(t *testing.T) {
+			assert.Equal(t, test.negated, compileRuleMatcher([]string{test.line}).negations != nil)
+		})
+	}
 }

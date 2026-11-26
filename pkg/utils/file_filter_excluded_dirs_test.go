@@ -83,48 +83,57 @@ func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 	}
 }
 
-func TestFileFilter_ReIncludeBelowExcludedFolderFollowsGit(t *testing.T) {
+// TestFileFilter_ReIncludeBelowExcludedFolder checks the results against git ls-files with
+// FF_FILE_FILTER_GIT_SEMANTICS (on by default) and against main without it.
+func TestFileFilter_ReIncludeBelowExcludedFolder(t *testing.T) {
 	cases := []struct {
-		name  string
-		rules string
-		want  []string
+		name     string
+		rules    string
+		wantGit  []string
+		wantMain []string
 	}{
 		{
-			name:  "node_modules/* + !node_modules/keep.js",
-			rules: "node_modules/*\n!node_modules/keep.js\n",
-			want:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+			name:     "node_modules/* then !node_modules/keep.js",
+			rules:    "node_modules/*\n!node_modules/keep.js\n",
+			wantGit:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+			wantMain: []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
 		},
 		{
-			name:  "node_modules/ + !node_modules/keep.js",
-			rules: "node_modules/\n!node_modules/keep.js\n",
-			want:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+			name:     "node_modules/ then !node_modules/keep.js",
+			rules:    "node_modules/\n!node_modules/keep.js\n",
+			wantGit:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+			wantMain: []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
 		},
 		{
-			name:  "node_modules/** + !node_modules/keep.js",
-			rules: "node_modules/**\n!node_modules/keep.js\n",
-			want:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+			name:     "node_modules/** then !node_modules/keep.js",
+			rules:    "node_modules/**\n!node_modules/keep.js\n",
+			wantGit:  []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
+			wantMain: []string{".gitignore", "keep.txt", "node_modules/keep.js", "sub/keep.txt"},
 		},
 		{
-			name:  "node_modules/** + !node_modules/.pnpm/pkg-0/file-0.js",
-			rules: "node_modules/**\n!node_modules/.pnpm/pkg-0/file-0.js\n",
-			want:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+			name:     "node_modules/** then !node_modules/.pnpm/pkg-0/file-0.js",
+			rules:    "node_modules/**\n!node_modules/.pnpm/pkg-0/file-0.js\n",
+			wantGit:  []string{".gitignore", "keep.txt", "sub/keep.txt"},
+			wantMain: []string{".gitignore", "keep.txt", "node_modules/.pnpm/pkg-0/file-0.js", "sub/keep.txt"},
 		},
 		{
-			name:  "everything then keep.txt",
-			rules: "**\n!keep.txt\n",
-			want:  []string{"keep.txt"},
+			name:     "everything then keep.txt",
+			rules:    "**\n!keep.txt\n",
+			wantGit:  []string{"keep.txt"},
+			wantMain: []string{"keep.txt", "sub/keep.txt"},
 		},
 		{
-			name:  "everything at root then sub/keep.txt",
-			rules: "/**\n!sub/keep.txt\n",
-			want:  nil,
+			name:     "everything at root then sub/keep.txt",
+			rules:    "/**\n!sub/keep.txt\n",
+			wantGit:  nil,
+			wantMain: []string{"sub/keep.txt"},
 		},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, metachar := range []bool{false, true} {
-				t.Run(fmt.Sprintf("metachar=%v", metachar), func(t *testing.T) {
+		for _, metachar := range []bool{false, true} {
+			for _, gitSemantics := range []bool{true, false} {
+				t.Run(fmt.Sprintf("%s/metachar=%v/git=%v", tc.name, metachar, gitSemantics), func(t *testing.T) {
 					root := t.TempDir()
 					createFileInPath(t, filepath.Join(root, "node_modules", "keep.js"), []byte("x"))
 					createFileInPath(t, filepath.Join(root, "node_modules", ".pnpm", "pkg-0", "file-0.js"), []byte("x"))
@@ -132,21 +141,24 @@ func TestFileFilter_ReIncludeBelowExcludedFolderFollowsGit(t *testing.T) {
 					createFileInPath(t, filepath.Join(root, "sub", "keep.txt"), []byte("x"))
 					createFileInPath(t, filepath.Join(root, ".gitignore"), []byte(tc.rules))
 
-					config := newTestConfig(map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: metachar})
-					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+					flags := map[string]bool{FF_FILE_FILTER_METACHARACTER_FIX: metachar}
+					want := tc.wantGit
+					if !gitSemantics {
+						flags[FF_FILE_FILTER_GIT_SEMANTICS] = false
+						want = tc.wantMain
+					}
+					fileFilter := NewFileFilter(root, &log.Logger, WithConfig(newTestConfig(flags)))
 
 					files := filterFiles(t, fileFilter, []string{".gitignore"})
 
-					expected := make([]string, len(tc.want))
-					for i, p := range tc.want {
+					expected := make([]string, len(want))
+					for i, p := range want {
 						expected[i] = filepath.Join(root, filepath.FromSlash(p))
 					}
-
-					assert.ElementsMatch(t, expected, files,
-						"rules: %s, metachar: %v", tc.name, metachar)
+					assert.ElementsMatch(t, expected, files)
 				})
 			}
-		})
+		}
 	}
 }
 
