@@ -896,7 +896,6 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 	return globs
 }
 
-// parseIgnoreRuleToGlobsLegacy to be removed in future releases.
 // gitSemanticsGlobstar rewrites a rule ending in /** to match what is inside a folder, not the folder itself, so
 // that a later negation can still re-include files of an excluded folder.
 func gitSemanticsGlobstar(rule string, gitSemantics bool) string {
@@ -908,6 +907,7 @@ func gitSemanticsGlobstar(rule string, gitSemantics bool) string {
 	return rule
 }
 
+// parseIgnoreRuleToGlobsLegacy to be removed in future releases.
 func parseIgnoreRuleToGlobsLegacy(rule string, filePath string, gitSemantics bool) (globs []string) {
 	prefix := ""
 	const negation = "!"

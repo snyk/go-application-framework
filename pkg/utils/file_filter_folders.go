@@ -103,8 +103,8 @@ func inGitFolder(slashPath string) bool {
 
 // isSymlink covers callers that pass their own file channel, since GetAllFiles never returns symlinks. A path
 // that cannot be stat'ed is not reported as a symlink.
-func isSymlink(path string) bool {
-	info, err := os.Lstat(path)
+func isSymlink(file string) bool {
+	info, err := os.Lstat(file)
 	return err == nil && info.Mode()&fs.ModeSymlink != 0
 }
 
