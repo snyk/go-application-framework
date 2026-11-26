@@ -28,8 +28,9 @@ type fileRegistry struct {
 	base   configuration.Configuration
 	logger zerolog.Logger
 
-	mu       sync.Mutex
-	profiles map[string]*profileImpl
+	mu             sync.Mutex
+	profiles       map[string]*profileImpl
+	ignoredEnvVars []string
 }
 
 var _ Registry = (*fileRegistry)(nil)
@@ -45,30 +46,6 @@ func WithLogger(logger *zerolog.Logger) FileRegistryOption {
 			r.logger = *logger
 		}
 	}
-}
-
-// ignoredEnvVarsKey holds the environment variable names that are ignored when a named profile is derived from base.
-// It avoids the snyk_ and internal_ prefixes, so no supported-prefix binding reads it from the environment, and it is
-// not persisted.
-const ignoredEnvVarsKey = "gaf_profile_ignored_env_vars"
-
-// SetIgnoredEnvVars records the environment variable names that are ignored, via configuration.WithIgnoredEnvVars, when
-// the registry derives a named profile from base. Reads on base itself, and so the default profile, are not affected.
-// Call it on the configuration that backs the engine before the first profile is loaded; profiles that are already
-// loaded keep the names they were derived with. Passing no names clears them. It does nothing for a nil base.
-func SetIgnoredEnvVars(base configuration.Configuration, names ...string) {
-	if base == nil {
-		return
-	}
-	base.Set(ignoredEnvVarsKey, slices.Clone(names))
-}
-
-// ignoredEnvVarsOf returns the names recorded with SetIgnoredEnvVars.
-func ignoredEnvVarsOf(base configuration.Configuration) []string {
-	if base == nil {
-		return nil
-	}
-	return base.GetStringSlice(ignoredEnvVarsKey)
 }
 
 // NewFileRegistry returns a registry that reads each profile from dir/<name>.json, where dir is the profile directory
@@ -96,6 +73,18 @@ func NewFileRegistry(dir string, base configuration.Configuration, opts ...FileR
 		opt(r)
 	}
 	return r, nil
+}
+
+// SetIgnoredEnvVars keeps a copy of names, and fails once a profile is loaded, so that no profile is derived with
+// names that differ from the ones it was loaded with.
+func (r *fileRegistry) SetIgnoredEnvVars(names ...string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.profiles) > 0 {
+		return cli.NewConfigProfilesUnavailableError("Ignored environment variables cannot be set after a profile is loaded.")
+	}
+	r.ignoredEnvVars = slices.Clone(names)
+	return nil
 }
 
 func (r *fileRegistry) Profile(name string) (Profile, error) {
@@ -144,9 +133,9 @@ func (r *fileRegistry) load(name string) (*profileImpl, error) {
 	}
 
 	deriveOpts := []configuration.Opts{configuration.WithPinnedFile(path)}
-	if names := ignoredEnvVarsOf(r.base); len(names) > 0 {
-		deriveOpts = append(deriveOpts, configuration.WithIgnoredEnvVars(names...))
-		r.logger.Debug().Msgf("profile %q ignores the environment variables %s", name, strings.Join(names, ", "))
+	if len(r.ignoredEnvVars) > 0 {
+		deriveOpts = append(deriveOpts, configuration.WithIgnoredEnvVars(r.ignoredEnvVars...))
+		r.logger.Debug().Msgf("profile %q ignores the environment variables %s", name, strings.Join(r.ignoredEnvVars, ", "))
 	}
 	config, err := configuration.Derive(r.base, deriveOpts...)
 	if err != nil {

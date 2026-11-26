@@ -35,6 +35,16 @@ type Registry interface {
 	// file: the file is created by the first persisted write. Errors are error-catalog errors: SNYK-CLI-0034 for an
 	// invalid name, SNYK-CLI-0035 for a file that cannot be used, SNYK-CLI-0036 for a directory that cannot be used.
 	Profile(name string) (Profile, error)
+
+	// SetIgnoredEnvVars sets the names of the environment variables that named profiles ignore, as
+	// configuration.WithIgnoredEnvVars does when a named profile is derived. The default profile, which is the base
+	// configuration, still reads them. Call it before the first profile is loaded, the default profile included: once
+	// one has been loaded it returns an error and changes nothing, and callers must treat that error as fatal (fail
+	// closed). Profiles that
+	// are already loaded keep the names they were derived with. Passing no names clears the list. The engine rebuilds
+	// its registry on SetConfiguration or when profile.DirKey changes, which drops the names, so call it on each
+	// registry obtained from workflow.GetProfileRegistry.
+	SetIgnoredEnvVars(names ...string) error
 }
 
 // Profile is one named profile.

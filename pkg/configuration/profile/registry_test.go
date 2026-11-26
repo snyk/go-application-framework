@@ -482,11 +482,11 @@ func Test_Registry_LogsIgnoredEnvVarNamesOnly(t *testing.T) {
 	dir := t.TempDir()
 	writeProfile(t, dir, "work", `{}`)
 	base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
-	SetIgnoredEnvVars(base, "SNYK_TOKEN", "SNYK_OAUTH_TOKEN")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	reg, err := NewFileRegistry(dir, base, WithLogger(&logger))
 	require.NoError(t, err)
+	require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN", "SNYK_OAUTH_TOKEN"))
 
 	_, err = reg.Profile("work")
 	require.NoError(t, err)

@@ -60,7 +60,7 @@ func Test_IsProfile_MarkerIgnoresEnvironment(t *testing.T) {
 }
 
 func Test_SetIgnoredEnvVars(t *testing.T) {
-	t.Run("applies ignored env vars at Derive before any read", func(t *testing.T) {
+	t.Run("applies ignored env vars when a named profile is derived", func(t *testing.T) {
 		t.Setenv("SNYK_TOKEN", "ambient")
 
 		dir := t.TempDir()
@@ -68,9 +68,9 @@ func Test_SetIgnoredEnvVars(t *testing.T) {
 			configuration.WithSupportedEnvVarPrefixes("snyk_"),
 			configuration.WithPinnedFile(filepath.Join(t.TempDir(), "base.json")),
 		)
-		SetIgnoredEnvVars(base, "SNYK_TOKEN")
 		reg, err := NewFileRegistry(dir, base)
 		require.NoError(t, err)
+		require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"))
 
 		writeProfile(t, dir, "work", `{}`)
 		p, err := reg.Profile("work")
@@ -85,9 +85,9 @@ func Test_SetIgnoredEnvVars(t *testing.T) {
 		t.Setenv("SNYK_TOKEN", "ambient")
 
 		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
-		SetIgnoredEnvVars(base, "SNYK_TOKEN")
 		reg, err := NewFileRegistry(t.TempDir(), base)
 		require.NoError(t, err)
+		require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"))
 
 		p, err := reg.Profile(DefaultName)
 		require.NoError(t, err)
@@ -95,41 +95,71 @@ func Test_SetIgnoredEnvVars(t *testing.T) {
 		assert.Equal(t, "ambient", base.GetString("snyk_token"))
 	})
 
-	t.Run("is read on every first load, and clearing removes the names", func(t *testing.T) {
+	t.Run("fails after a profile is loaded, and changes nothing", func(t *testing.T) {
 		t.Setenv("SNYK_TOKEN", "ambient")
 
 		dir := t.TempDir()
 		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
 		reg, err := NewFileRegistry(dir, base)
 		require.NoError(t, err)
-
-		SetIgnoredEnvVars(base, "SNYK_TOKEN")
-		p, err := reg.Profile("one")
+		require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"))
+		_, err = reg.Profile("one")
 		require.NoError(t, err)
-		assert.Empty(t, p.Configuration().GetString("snyk_token"))
 
-		SetIgnoredEnvVars(base)
-		p, err = reg.Profile("two")
+		err = reg.SetIgnoredEnvVars()
+		assertCatalogError(t, err, codeUnavailable, "Ignored environment variables cannot be set after a profile is loaded.")
+
+		p, err := reg.Profile("two")
+		require.NoError(t, err)
+		assert.Empty(t, p.Configuration().GetString("snyk_token"), "the names set before the load must still apply")
+	})
+
+	t.Run("fails after the default profile is loaded", func(t *testing.T) {
+		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+		reg, err := NewFileRegistry(t.TempDir(), base)
+		require.NoError(t, err)
+		_, err = reg.Profile(DefaultName)
+		require.NoError(t, err)
+
+		assertCatalogError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"), codeUnavailable,
+			"Ignored environment variables cannot be set after a profile is loaded.")
+	})
+
+	t.Run("no names clears the list", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "ambient")
+
+		dir := t.TempDir()
+		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+		reg, err := NewFileRegistry(dir, base)
+		require.NoError(t, err)
+		require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"))
+		require.NoError(t, reg.SetIgnoredEnvVars())
+
+		p, err := reg.Profile("work")
 		require.NoError(t, err)
 		assert.Equal(t, "ambient", p.Configuration().GetString("snyk_token"))
 	})
 
-	t.Run("is not read from the environment", func(t *testing.T) {
-		t.Setenv("GAF_PROFILE_IGNORED_ENV_VARS", "SNYK_TOKEN")
-		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_", "internal_"))
-		assert.Empty(t, ignoredEnvVarsOf(base))
-	})
+	t.Run("keeps its own copy of the names", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "ambient")
 
-	t.Run("is nil safe", func(t *testing.T) {
-		assert.NotPanics(t, func() { SetIgnoredEnvVars(nil, "SNYK_TOKEN") })
-		assert.Empty(t, ignoredEnvVarsOf(nil))
+		base := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+		reg, err := NewFileRegistry(t.TempDir(), base)
+		require.NoError(t, err)
+		names := []string{"SNYK_TOKEN"}
+		require.NoError(t, reg.SetIgnoredEnvVars(names...))
+		names[0] = "SNYK_API"
+
+		p, err := reg.Profile("work")
+		require.NoError(t, err)
+		assert.Empty(t, p.Configuration().GetString("snyk_token"))
 	})
 
 	t.Run("AutomaticEnv with ignored names makes the profile unavailable", func(t *testing.T) {
 		base := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		SetIgnoredEnvVars(base, "SNYK_TOKEN")
 		reg, err := NewFileRegistry(t.TempDir(), base)
 		require.NoError(t, err)
+		require.NoError(t, reg.SetIgnoredEnvVars("SNYK_TOKEN"))
 
 		_, err = reg.Profile("work")
 		assertCatalogError(t, err, codeUnavailable, `Profile "work" cannot be loaded.`)
