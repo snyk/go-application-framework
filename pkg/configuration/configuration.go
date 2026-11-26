@@ -135,29 +135,54 @@ func ImmutableDefaultValueFunction(defaultValue interface{}) DefaultValueFunctio
 	}
 }
 
-// determineBasePath returns the base path for the configuration files.
-func determineBasePath() string {
+// basePath returns the configstore directory, which holds the configuration files and the default storage. It never
+// returns a relative path: when the home directory cannot be determined, or is not an absolute path, it returns an error,
+// so nothing is read from or written to the working directory instead. os.UserHomeDir returns the HOME (or USERPROFILE)
+// variable as it is, which is why the absolute check is needed.
+func basePath() (string, error) {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
-		return "."
+		return "", fmt.Errorf("home directory could not be determined: %w", err)
+	}
+	if !filepath.IsAbs(homedir) {
+		return "", fmt.Errorf("home directory could not be determined: %q is not an absolute path", homedir)
 	}
 
-	result := filepath.Join(homedir, ".config", "configstore")
+	return filepath.Join(homedir, ".config", "configstore"), nil
+}
+
+// determineBasePath returns the configstore directory, or "" when the home directory cannot be determined. A caller must
+// not join a file name onto "" because the result is a relative path, in the working directory.
+func determineBasePath() string {
+	result, err := basePath()
+	if err != nil {
+		return ""
+	}
 	return result
 }
 
-// DefaultStorageDir returns the directory that holds the default configuration file.
-func DefaultStorageDir() string {
-	return determineBasePath()
+// DefaultStorageDir returns the directory that holds the default configuration file. When the home directory cannot be
+// determined, or is not an absolute path, it returns an error and no directory, so a caller never joins a file name onto a
+// relative path. The error wraps the os.UserHomeDir error when there is one.
+func DefaultStorageDir() (string, error) {
+	dir, err := basePath()
+	if err != nil {
+		return "", fmt.Errorf("configuration storage unavailable: %w", err)
+	}
+	return dir, nil
 }
 
-// CreateConfigurationFile creates a configuration file with the given name.
+// CreateConfigurationFile creates a configuration file with the given name. It returns an error, and creates nothing,
+// when the home directory cannot be determined.
 func CreateConfigurationFile(filename string) (string, error) {
-	configPath := determineBasePath()
+	configPath, err := basePath()
+	if err != nil {
+		return "", err
+	}
 	p := filepath.Join(configPath, filename)
 
 	folder := filepath.Dir(p)
-	err := os.MkdirAll(folder, 0755)
+	err = os.MkdirAll(folder, 0755)
 	if err != nil {
 		return "", err
 	}
@@ -370,7 +395,16 @@ func validatePinnedFile(path string) error {
 }
 
 func readConfigFilesIntoViper(files []string, config *extendedViper) {
-	configPath := determineBasePath()
+	configPath, err := basePath()
+	if err != nil {
+		// The working directory is never a source of configuration (CLI-1124), so nothing is read or stored. Values set
+		// with PersistInStorage are then kept in memory only, and are lost when the process exits. The configuration has no
+		// injected logger here, so the standard logger reports it; it is repeated for each configuration created with
+		// WithFiles. A caller that persists values must check GetStorage() == nil and report an error instead.
+		log.Printf("configuration: continuing in memory without configuration files, %v", err)
+		config.configType = inMemory
+		return
+	}
 	config.storage = config.createFileStorage(configPath)
 
 	// prepare config files
@@ -379,7 +413,6 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	}
 
 	config.viper.AddConfigPath(configPath)
-	config.viper.AddConfigPath(".")
 
 	// read config files
 	//nolint:errcheck // breaking api change needed to fix this
