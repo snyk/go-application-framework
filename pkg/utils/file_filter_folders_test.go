@@ -3,6 +3,7 @@ package utils
 import (
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,4 +39,13 @@ func TestFolderExclusions_ParentFolder(t *testing.T) {
 			assert.Equal(t, tt.wantFolder, folder)
 		})
 	}
+}
+
+func TestFolderExclusions_ExcludedByFolder_RelativeRoot(t *testing.T) {
+	fileFilter := NewFileFilter(".", &log.Logger, WithConfig(newTestConfig(nil)))
+	folders := fileFilter.newFolderExclusions([]string{"**/x/**"})
+
+	assert.True(t, folders.excludedByFolder("x/f.txt"))
+	assert.False(t, folders.excludedByFolder("../x/f.txt"))
+	assert.False(t, folders.excludedByFolder("/x/f.txt"))
 }
