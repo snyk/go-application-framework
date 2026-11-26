@@ -40,7 +40,7 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 		"**/.git/**",
 		"/repo/*/*.go",
 		"/repo/**/*.tfvars",
-		"!/repo/**/*.tfvars.example",
+		"/repo/a\uFFFDb/x",
 		"/repo/a/**/*.java",
 		"!/repo/a/**/keep.java",
 		"/repo/a/b/**/*.js",
@@ -53,21 +53,21 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 		"/repo/a/**/x|y",
 	}
 	paths := map[string]bool{
-		"/repo/main.go":          false,
-		"/repo/.git/config":      true,
-		"/repo/x.tfvars.example": false,
-		"/repo/a/z.java":         true,
-		"/repo/a/keep.java":      false,
-		"repo/a/z.java":          true, // an anchored glob also matches without the leading "/"
-		"/repo/a/b/c/z.js":       false,
-		"/repo/ab/x/z.go":        true, // "(b)" is a regular expression group
-		"/repo/a/doc.md":         false,
-		"/other/relative/z.log":  false,
-		"/repo/bin":              true,
-		"/repo/padded/z.go":      true,
-		"/other/y":               true, // "x|y" is an alternation, "y" matches anywhere
-		"/repo/\nd/\nz.go":       true, // "." in go-gitignore's expressions does not match "\n"
-		"main.go":                false,
+		"/repo/main.go":         false,
+		"/repo/.git/config":     true,
+		"/repo/a\xffb/x":        true, // regexps match U+FFFD on invalid UTF-8 bytes
+		"/repo/a/z.java":        true,
+		"/repo/a/keep.java":     false,
+		"repo/a/z.java":         true, // an anchored glob also matches without the leading "/"
+		"/repo/a/b/c/z.js":      false,
+		"/repo/ab/x/z.go":       true, // "(b)" is a regular expression group
+		"/repo/a/doc.md":        false,
+		"/other/relative/z.log": false,
+		"/repo/bin":             true,
+		"/repo/padded/z.go":     true,
+		"/other/y":              true, // "x|y" is an alternation, "y" matches anywhere
+		"/repo/\nd/\nz.go":      true, // "." in go-gitignore's expressions does not match "\n"
+		"main.go":               false,
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
