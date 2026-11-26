@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -9,6 +11,7 @@ import (
 type excludedFolder struct {
 	byAll   bool
 	byOther bool
+	linked  bool // the folder, or a folder above it below root, is a symlink
 }
 
 // folderExclusions memoizes which folders below root the rules exclude, so each folder is matched
@@ -66,11 +69,17 @@ func (e *folderExclusions) excludedByFolder(file string) bool {
 	if !ok {
 		return false
 	}
-	return e.predicate.excludedByFolder(file, e.of(dir))
+	folder := e.of(dir)
+	return folder.linked || e.predicate.excludedByFolder(file, folder)
 }
 
 func (e *folderExclusions) isExcluded(file string) bool {
-	return e.excludedByFolder(file) || e.predicate.isExcluded(file)
+	return e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
+}
+
+func isSymlink(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode()&fs.ModeSymlink != 0
 }
 
 func (e *folderExclusions) of(slashDir string) excludedFolder {
@@ -88,6 +97,7 @@ func (e *folderExclusions) of(slashDir string) excludedFolder {
 			parent = e.of(parentDir)
 		}
 		exclusion.folder = e.predicate.folderState(slashDir, parent)
+		exclusion.folder.linked = parent.linked || isSymlink(filepath.FromSlash(slashDir))
 	})
 	return exclusion.folder
 }
