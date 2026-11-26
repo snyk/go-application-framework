@@ -51,6 +51,7 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 		"/repo/bin/**",
 		" /repo/padded/** \r",
 		"/repo/a/**/x|y",
+		"/repo/(x",
 	}
 	paths := map[string]bool{
 		"/repo/main.go":         false,
@@ -65,13 +66,14 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 		"/other/relative/z.log": false,
 		"/repo/bin":             true,
 		"/repo/padded/z.go":     true,
-		"/other/y":              true, // "x|y" is an alternation, "y" matches anywhere
-		"/repo/\nd/\nz.go":      true, // "." in go-gitignore's expressions does not match "\n"
+		"/other/y":              true,  // "x|y" is an alternation, "y" matches anywhere
+		"/repo/\nd/\nz.go":      true,  // "." in go-gitignore's expressions does not match "\n"
+		"/repo/(x":              false, // "(" without ")" does not compile, so go-gitignore drops the glob
 		"main.go":               false,
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
-	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
+	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13, 14}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
 
 	for path, want := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -124,4 +126,15 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 		}
 	}
 	assert.Greater(t, matched, 1000)
+}
+
+func TestRequiredLiterals(t *testing.T) {
+	for expr, expected := range map[string][]string{
+		`^(|/)repo/a/(|.*/)([^/]*)\.java(|/.*)$`: {"repo/a/", ".java"},
+		`^(|.*/)foo(|/.*)$`:                      {"foo"},
+		`^(|.*/)a|b(|/.*)$`:                      nil, // top level is an alternation, not a concatenation
+		`^(|/)(x`:                                nil, // does not parse
+	} {
+		assert.Equal(t, expected, requiredLiterals(expr), expr)
+	}
 }
