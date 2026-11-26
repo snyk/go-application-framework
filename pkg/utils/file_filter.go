@@ -416,11 +416,7 @@ func compileRuleMatcher(globs []string) ruleMatcher {
 
 	var negated []string
 	for _, glob := range globs {
-		line := strings.TrimRight(glob, "\r")
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.HasPrefix(strings.TrimLeft(line, " "), "!") {
+		if _, isNegated := globPattern(glob); isNegated {
 			negated = append(negated, glob)
 		}
 	}

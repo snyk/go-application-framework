@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -10,96 +10,87 @@ import (
 )
 
 func TestScopeOfGlob(t *testing.T) {
-	tests := []struct {
-		glob     string
-		expected globScope
-	}{
-		{glob: "/repo/a/**/foo/**", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "!/repo/a/**/*.txt", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "/repo/a/file.txt", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "/repo/a\\(b\\)/**/foo", expected: globScope{dir: "/repo/", anchored: true}},
-		{glob: "/repo/a(b)/**/foo", expected: globScope{dir: "/repo/", anchored: true}},
-		{glob: "/repo/a+b/foo", expected: globScope{dir: "/repo/", anchored: true}},
-		{glob: "/repo/a?/foo", expected: globScope{dir: "/repo/", anchored: true}},
-		{glob: "/repo/[ab]/foo", expected: globScope{dir: "/repo/", anchored: true}},
-		{glob: "repo/a/**/foo", expected: globScope{dir: "repo/a/", anchored: false}},
-		{glob: "/foo", expected: globScope{}},
-		{glob: "/**/.git/**", expected: globScope{}},
-		{glob: "**/.git/**", expected: globScope{}},
-		{glob: "foo", expected: globScope{}},
-		{glob: "#gitignore:/repo/a/foo", expected: globScope{}},
-		{glob: "/repo/a/bin/**", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "repo/bin/**", expected: globScope{dir: "repo/", anchored: false}},
-		{glob: "/repo/a/**/**", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: " /repo/a/foo ", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "/repo/a/foo\r", expected: globScope{dir: "/repo/a/", anchored: true}},
-		{glob: "!!/repo/a/foo", expected: globScope{}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.glob, func(t *testing.T) {
-			assert.Equal(t, tt.expected, scopeOfGlob(tt.glob))
-		})
+	for glob, expected := range map[string]globScope{
+		"/repo/a/**/foo/**":      {dir: "/repo/a/", anchored: true},
+		"!/repo/a/**/*.txt":      {dir: "/repo/a/", anchored: true},
+		"/repo/a\\(b\\)/**/foo":  {dir: "/repo/", anchored: true},
+		"/repo/a+b/foo":          {dir: "/repo/", anchored: true},
+		"/repo/[ab]/foo":         {dir: "/repo/", anchored: true},
+		"repo/a/**/foo":          {dir: "repo/a/"},
+		"/repo/a/bin/**":         {dir: "/repo/a/", anchored: true},
+		" /repo/a/foo \r":        {dir: "/repo/a/", anchored: true},
+		"/foo":                   {dir: "/", anchored: true},
+		"foo":                    {},
+		"/**/.git/**":            {},
+		"#gitignore:/repo/a/foo": {},
+		"!!/repo/a/foo":          {},
+		"/repo/a/**/x|y":         {},
+		"/repo/a/**/{0}b":        {},
+		"/repo/a/#$~":            {},
+	} {
+		assert.Equal(t, expected, scopeOfGlob(glob), glob)
 	}
 }
 
-func TestScopedMatcher_matchesUnscopedMatcher(t *testing.T) {
+func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
+	t.Parallel()
 	globs := []string{
 		"**/.git/**",
 		"/repo/**/*.tfvars",
 		"!/repo/**/*.tfvars.example",
-		"/repo/**/.terragrunt-cache/**",
-		"/repo/**/.terragrunt-cache",
 		"/repo/a/**/*.java",
 		"!/repo/a/**/keep.java",
 		"/repo/a/b/**/*.js",
-		"!/repo/a/b/c/**/*.txt",
+		"!/repo/a/b/c/**/*.js",
 		"/repo/a(b)/x/**",
-		"/repo/a+b/y/**",
-		"/repo/stamps/s/.terragrunt-cache/h1/h2/**/*.tfvars",
-		"!/repo/stamps/s/.terragrunt-cache/h1/h2/**/main.tf",
 		"#gitignore:/repo/a/**/*.md",
 		"relative/**/*.log",
 		"/repo/bin/**",
-		" /repo/padded/** ",
+		" /repo/padded/** \r",
+		"/repo/a/**/x|y",
 	}
-
-	paths := []string{
-		"/repo/main.go",
-		"/repo/.git/config",
-		"/repo/x.tfvars.example",
-		"/repo/a/keep.java",
-		"/repo/a/b/c/readme.txt",
-		"/repo/a(b)/x/y.go",
-		"/repo/aab/y/z.go",
-		"/repo/stamps/s/.terragrunt-cache/h1/h2/main.tf",
-		"/repo/a/doc.md",
-		"/other/relative/x.log",
-		"/repo/bin",
-		"/repo/padded/x.go",
+	paths := map[string]bool{
+		"/repo/main.go":          false,
+		"/repo/.git/config":      true,
+		"/repo/x.tfvars.example": false,
+		"/repo/a/z.java":         true,
+		"/repo/a/keep.java":      false,
+		"repo/a/keep.java":       false,
+		"/repo/a/b/c/z.js":       false,
+		"/repo/ab/x/z.go":        true,
+		"/repo/a/doc.md":         false,
+		"/other/relative/z.log":  false,
+		"/repo/bin":              true,
+		"/repo/padded/z.go":      true,
+		"/other/y":               true,
+		"main.go":                false,
 	}
-
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
+	assert.Less(t, len(actual.globsFor("/repo/main/")), len(globs))
 
-	for _, path := range paths {
+	for path, want := range paths {
 		t.Run(path, func(t *testing.T) {
-			assert.Equal(t, expected.MatchesPath(path), actual.MatchesPath(path))
+			// Parallel subtests share actual, so -race also checks concurrent use.
+			t.Parallel()
+			assert.Equal(t, want, expected.MatchesPath(path))
+			assert.Equal(t, want, actual.MatchesPath(path))
 		})
 	}
 }
 
-func TestScopedMatcher_matchesUnscopedMatcherForGeneratedGlobs(t *testing.T) {
-	r := rand.New(rand.NewSource(1))
-	names := []string{"a", "b", "bin", "foo", "x.txt", "a(b)", "a+b", "c d", "*.txt", "?", "[ab]", "**", "a/b", "foo/**", "foo/*/**", "**/foo"}
+func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
+	r := rand.New(rand.NewPCG(1, 2))
+	names := []string{"a", "b", "ab", "bin", "foo", "x.txt", "a(b)", "a+b", "c d", "*.txt", "?", "[ab]", "**", "a/b", "foo/**", "foo/*/**", "**/foo", "a|b", "a/{0}b", "a#$~"}
 	bases := []string{".", "/repo", "/repo/a", "repo/a", " a", "a ", "/r(x)", "/r+x", "//srv/share"}
-	pick := func(s []string) string { return s[r.Intn(len(s))] }
+	pick := func(s []string) string { return s[r.IntN(len(s))] }
 
-	for i := 0; i < 2000; i++ {
+	matched := 0
+	for i := range 2000 {
 		var globs []string
-		for range 1 + r.Intn(6) {
+		for range 1 + r.IntN(6) {
 			rule := pick(names)
-			switch r.Intn(4) {
+			switch r.IntN(4) {
 			case 0:
 				rule = "/" + rule
 			case 1:
@@ -107,23 +98,28 @@ func TestScopedMatcher_matchesUnscopedMatcherForGeneratedGlobs(t *testing.T) {
 			case 2:
 				rule = "!" + rule
 			}
-			globs = append(globs, parseIgnoreRuleToGlobs(rule, pick(bases), defaultInvalidRules, r.Intn(2) == 0, r.Intn(2) == 0)...)
+			globs = append(globs, parseIgnoreRuleToGlobs(rule, pick(bases), defaultInvalidRules, i%2 == 0, i/2%2 == 0)...)
 		}
 
 		expected := gitignore.CompileIgnoreLines(globs...)
 		actual := newScopedMatcher(globs)
 		for range 20 {
-			parts := []string{}
+			var parts []string
 			if base := pick(bases); base != "." {
 				parts = append(parts, base)
 			}
-			for range 1 + r.Intn(4) {
+			for range 1 + r.IntN(4) {
 				parts = append(parts, strings.Trim(pick(names), "/*?[]!"))
 			}
 			path := strings.Join(parts, "/")
-			if expected.MatchesPath(path) != actual.MatchesPath(path) {
-				t.Fatalf("path %q, globs %q: expected %v", path, globs, expected.MatchesPath(path))
+			got, want := actual.MatchesPath(path), expected.MatchesPath(path)
+			if got != want {
+				t.Fatalf("path %q, globs %q: got %v, want %v", path, globs, got, want)
+			}
+			if want {
+				matched++
 			}
 		}
 	}
+	assert.Positive(t, matched)
 }

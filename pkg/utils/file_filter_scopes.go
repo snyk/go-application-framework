@@ -11,24 +11,25 @@ import (
 
 // scopedMatcher gives the same result as gitignore.CompileIgnoreLines(globs...).MatchesPath, but
 // evaluates each path only against the globs that can match it. It is safe for concurrent use.
-//
-// Every glob built from an ignore file starts with that file's directory, and go-gitignore can only
-// match a pattern where its literal leading directories appear in the path: at the start when the
-// pattern starts with "/", or at the start or after any "/" otherwise. In a tree with many nested
-// ignore files, most globs therefore cannot match a given path. Paths that share a directory share
-// the same applicable globs, so each distinct set is compiled once.
+// go-gitignore can only match a pattern where its literal leading directories appear in the path: at
+// the start when the pattern starts with "/", or at the start or after any "/" otherwise. With many
+// nested ignore files, most globs therefore cannot match a given path. Each glob is compiled once, and
+// folders with the same set of scopes share one list of applicable globs.
 type scopedMatcher struct {
-	globs  []string
-	scopes []globScope
-	unique []globScope
-
+	globs      []scopedGlob
+	scopes     []globScope
 	mu         sync.RWMutex
-	byDir      map[string]*gitignore.GitIgnore
-	byScopeSet map[string]*gitignore.GitIgnore
+	byDir      map[string][]int
+	byScopeSet map[string][]int
 }
 
-// globScope holds the literal leading directories of a glob, ending in "/". An empty dir means
-// the glob can match any path.
+type scopedGlob struct {
+	matcher *gitignore.GitIgnore
+	negated bool
+	scope   int // index into scopes, -1 when the glob can match any path
+}
+
+// globScope holds the literal leading directories of a glob, ending in "/".
 type globScope struct {
 	dir      string
 	anchored bool
@@ -40,33 +41,55 @@ const globLiteralEnd = `*?[\+()|{}$^`
 
 func newScopedMatcher(globs []string) *scopedMatcher {
 	m := &scopedMatcher{
-		globs:      globs,
-		scopes:     make([]globScope, len(globs)),
-		byDir:      map[string]*gitignore.GitIgnore{},
-		byScopeSet: map[string]*gitignore.GitIgnore{},
+		globs:      make([]scopedGlob, len(globs)),
+		byDir:      map[string][]int{},
+		byScopeSet: map[string][]int{},
 	}
 
-	seen := map[globScope]bool{}
+	scopeIndex := map[globScope]int{}
 	for i, glob := range globs {
-		scope := scopeOfGlob(glob)
-		m.scopes[i] = scope
-		if scope.dir != "" && !seen[scope] {
-			seen[scope] = true
-			m.unique = append(m.unique, scope)
+		lines := []string{glob}
+		_, negated := globPattern(glob)
+		if negated {
+			// "*" matches every path, so the matcher is false iff the negated glob matches.
+			lines = []string{"*", glob}
 		}
+		m.globs[i] = scopedGlob{matcher: gitignore.CompileIgnoreLines(lines...), negated: negated, scope: -1}
+
+		scope := scopeOfGlob(glob)
+		if scope.dir == "" {
+			continue
+		}
+		index, ok := scopeIndex[scope]
+		if !ok {
+			index = len(m.scopes)
+			scopeIndex[scope] = index
+			m.scopes = append(m.scopes, scope)
+		}
+		m.globs[i].scope = index
 	}
 
 	return m
 }
 
-func scopeOfGlob(glob string) globScope {
-	pattern := strings.TrimRight(glob, "\r")
+// globPattern trims glob as go-gitignore does before it compiles a line. Comments give an empty pattern.
+func globPattern(glob string) (pattern string, negated bool) {
+	pattern = strings.TrimRight(glob, "\r")
 	if strings.HasPrefix(pattern, "#") {
-		return globScope{}
+		return "", false
 	}
+	return strings.CutPrefix(strings.Trim(pattern, " "), "!")
+}
 
-	pattern = strings.TrimPrefix(strings.Trim(pattern, " "), "!")
-	if strings.HasPrefix(pattern, "#") || strings.HasPrefix(pattern, "!") || strings.HasPrefix(pattern, "/**/") {
+// scopeOfGlob mirrors how go-gitignore turns a line into a regular expression. It returns an empty
+// scope whenever the leading directories of the glob are not required literally.
+func scopeOfGlob(glob string) globScope {
+	pattern, _ := globPattern(glob)
+	// go-gitignore strips one more leading "#" or "!", and compiles a leading "/**/" to an optional
+	// prefix. "|", "{" and its "#$~" placeholder for "*" reach the regular expression unescaped, where
+	// they can make the leading directories optional.
+	if strings.HasPrefix(pattern, "#") || strings.HasPrefix(pattern, "!") || strings.HasPrefix(pattern, "/**/") ||
+		strings.ContainsAny(pattern, "|{") || strings.Contains(pattern, "#$~") {
 		return globScope{}
 	}
 
@@ -81,68 +104,59 @@ func scopeOfGlob(glob string) globScope {
 	}
 
 	dir := pattern[:strings.LastIndex(pattern[:literalEnd], "/")+1]
-	if dir == "/" {
-		return globScope{}
-	}
-
 	return globScope{dir: dir, anchored: strings.HasPrefix(dir, "/")}
 }
 
 // contains reports whether a path in dir, which ends in "/" or is empty, can match a glob with this scope.
 func (s globScope) contains(dir string) bool {
-	if s.dir == "" || strings.HasPrefix(dir, s.dir) {
-		return true
-	}
-
 	if s.anchored {
-		return strings.HasPrefix(dir, s.dir[1:])
+		// go-gitignore compiles a leading "/" to "^(|/)", so the pattern also matches without it.
+		return strings.HasPrefix(dir, s.dir) || strings.HasPrefix(dir, s.dir[1:])
 	}
-
-	return strings.Contains(dir, "/"+s.dir)
+	return strings.HasPrefix(dir, s.dir) || strings.Contains(dir, "/"+s.dir)
 }
 
 func (m *scopedMatcher) MatchesPath(path string) bool {
 	slashPath := filepath.ToSlash(path)
-	return m.matcherFor(slashPath[:strings.LastIndex(slashPath, "/")+1]).MatchesPath(path)
+	applicable := m.globsFor(slashPath[:strings.LastIndex(slashPath, "/")+1])
+	// go-gitignore's result is decided by the last glob that matches the path.
+	for i := len(applicable) - 1; i >= 0; i-- {
+		if glob := m.globs[applicable[i]]; glob.matcher.MatchesPath(slashPath) != glob.negated {
+			return !glob.negated
+		}
+	}
+	return false
 }
 
-func (m *scopedMatcher) matcherFor(dir string) *gitignore.GitIgnore {
+func (m *scopedMatcher) globsFor(dir string) []int {
 	m.mu.RLock()
-	matcher, ok := m.byDir[dir]
+	applicable, ok := m.byDir[dir]
 	m.mu.RUnlock()
 	if ok {
-		return matcher
+		return applicable
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if matcher, ok = m.byDir[dir]; ok {
-		return matcher
-	}
-
-	inScope := map[globScope]bool{}
+	inScope := make([]bool, len(m.scopes))
 	var key strings.Builder
-	for i, scope := range m.unique {
+	for i, scope := range m.scopes {
 		if scope.contains(dir) {
-			inScope[scope] = true
+			inScope[i] = true
 			key.WriteString(strconv.Itoa(i))
 			key.WriteByte(',')
 		}
 	}
 
-	matcher, ok = m.byScopeSet[key.String()]
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	applicable, ok = m.byScopeSet[key.String()]
 	if !ok {
-		applicable := make([]string, 0, len(m.globs))
 		for i, glob := range m.globs {
-			if m.scopes[i].dir == "" || inScope[m.scopes[i]] {
-				applicable = append(applicable, glob)
+			if glob.scope < 0 || inScope[glob.scope] {
+				applicable = append(applicable, i)
 			}
 		}
-		matcher = gitignore.CompileIgnoreLines(applicable...)
-		m.byScopeSet[key.String()] = matcher
+		m.byScopeSet[key.String()] = applicable
 	}
-
-	m.byDir[dir] = matcher
-	return matcher
+	m.byDir[dir] = applicable
+	return applicable
 }
