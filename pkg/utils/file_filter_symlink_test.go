@@ -92,3 +92,54 @@ func TestGetFilteredFiles_ExcludesSymlinks(t *testing.T) {
 
 	assert.ElementsMatch(t, expected, drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(inputs), globs)))
 }
+
+func TestGetAllFiles_ListsSymlinksWithoutGitSemantics(t *testing.T) {
+	root := createSymlinkTree(t)
+
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false})
+	files := drainFilteredFiles(t, NewFileFilter(root, &log.Logger, WithConfig(config)).GetAllFiles())
+
+	expected := []string{
+		filepath.Join(root, "real.js"),
+		filepath.Join(root, "real-dir", "file.js"),
+		filepath.Join(root, "linked_vuln.js"),
+		filepath.Join(root, "inside-link.js"),
+		filepath.Join(root, "linked-dir"),
+	}
+	assert.ElementsMatch(t, expected, files)
+}
+
+func TestGetRules_ReadsSymlinkedRuleFileWithoutGitSemantics(t *testing.T) {
+	root := t.TempDir()
+	rules := filepath.Join(t.TempDir(), "rules")
+	createFileInPath(t, rules, []byte("*.js\n"))
+	symlinkOrSkip(t, rules, filepath.Join(root, ".gitignore"))
+	createFileInPath(t, filepath.Join(root, "a.js"), []byte("x"))
+
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+
+	globs, err := fileFilter.GetRules([]string{".gitignore"})
+	require.NoError(t, err)
+
+	expected := []string{"**/.git/**", filepath.ToSlash(filepath.Join(root, "**", "*.js")), filepath.ToSlash(filepath.Join(root, "**", "*.js", "**"))}
+	assert.ElementsMatch(t, expected, globs)
+	expectedFiles := []string{filepath.Join(root, ".gitignore")}
+	assert.ElementsMatch(t, expectedFiles, drainFilteredFiles(t, fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)))
+}
+
+func TestGetFilteredFiles_KeepsSymlinksWithoutGitSemantics(t *testing.T) {
+	root := createSymlinkTree(t)
+	config := newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false})
+	fileFilter := NewFileFilter(root, &log.Logger, WithConfig(config))
+	inputs := []string{
+		filepath.Join(root, "real.js"),
+		filepath.Join(root, "real-dir", "file.js"),
+		filepath.Join(root, "linked_vuln.js"),
+		filepath.Join(root, "inside-link.js"),
+		filepath.Join(root, "linked-dir"),
+		filepath.Join(root, "linked-dir", "file.js"),
+	}
+
+	assert.ElementsMatch(t, inputs, drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(inputs), []string{"**/.git/**"})))
+}
