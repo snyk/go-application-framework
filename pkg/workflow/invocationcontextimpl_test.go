@@ -111,6 +111,7 @@ func TestInvocationContextImpl_GetFileFilter(t *testing.T) {
 			"file-filter.var0.filter.outputFileCount",
 			"file-filter.var0.feature.metaCharFix",
 			"file-filter.var0.feature.includeTracked",
+			"file-filter.var0.feature.gitSemantics",
 		}, slices.Collect(maps.Keys(fileFilterMetrics(t, invocationAnalytics))))
 	})
 }
