@@ -29,9 +29,9 @@ type scopedGlob struct {
 	scopeIndex int // index into scopes, -1 when the glob can match any path
 }
 
-// globLiteralEnd lists the characters at which a glob stops being matched literally by
-// go-gitignore: glob syntax, escapes, and regex metacharacters that go-gitignore passes through.
-const globLiteralEnd = `*?[\+()}$^`
+// globLiteralEnd lists the characters at which a glob stops being matched literally by go-gitignore: glob
+// syntax, escapes, regex metacharacters it passes through, and U+FFFD, which also matches invalid UTF-8.
+const globLiteralEnd = `*?[\+()}$^` + "\uFFFD"
 
 func newScopedMatcher(globs []string) *scopedMatcher {
 	m := &scopedMatcher{

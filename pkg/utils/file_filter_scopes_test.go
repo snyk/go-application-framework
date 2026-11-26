@@ -15,7 +15,7 @@ func TestScopeOfGlob(t *testing.T) {
 		"/repo/a/**/foo/**":      "/repo/a/",
 		"!/repo/a/**/*.txt":      "/repo/a/",
 		"/repo/a\\(b\\)/**/foo":  "/repo/",
-		"/repo/a+b/foo":          "/repo/",
+		"/repo/a\uFFFDb/foo":     "/repo/",
 		"/repo/[ab]/foo":         "/repo/",
 		"repo/a/**/foo":          "repo/a/",
 		"/repo/a/bin/**":         "/repo/a/",
