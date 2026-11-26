@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,7 +63,7 @@ func SetCommonDir(t *testing.T, mainDir string, value string) {
 	require.NoError(t, os.WriteFile(filepath.Join(privateDir, "commondir"), []byte(value), 0o600))
 }
 
-// NewHandBuiltWorktreeRelative is NewHandBuiltWorktree with a relative gitdir pointer, as git writes when the worktree sits under the main repo.
+// NewHandBuiltWorktreeRelative is NewHandBuiltWorktree with a relative gitdir pointer instead of an absolute one.
 func NewHandBuiltWorktreeRelative(t *testing.T, mainDir string) string {
 	t.Helper()
 	worktreeDir := NewHandBuiltWorktree(t, mainDir)
@@ -73,8 +74,8 @@ func NewHandBuiltWorktreeRelative(t *testing.T, mainDir string) string {
 	return worktreeDir
 }
 
-// GitEnv returns the process environment without GIT_* variables, so a git command runs against the repository in its working directory.
-func GitEnv(t *testing.T) []string {
+// gitEnv returns the process environment without GIT_* variables, so a git command runs against the repository in its working directory.
+func gitEnv(t *testing.T) []string {
 	t.Helper()
 	env, err := subprocess.SanitizeEnv(os.Environ(), "", "GIT_")
 	require.NoError(t, err)
@@ -85,12 +86,19 @@ func GitEnv(t *testing.T) []string {
 func GitWorktreeAdd(t *testing.T, mainDir string) string {
 	t.Helper()
 	worktreeDir := filepath.Join(t.TempDir(), worktreeName)
-	cmd := exec.Command("git", "worktree", "add", worktreeDir, BranchName)
-	cmd.Dir = mainDir
-	cmd.Env = GitEnv(t)
-	out, err := cmd.CombinedOutput()
-	require.NoErrorf(t, err, "git worktree add: %s", out)
+	GitOutput(t, mainDir, "worktree", "add", worktreeDir, BranchName)
 	return worktreeDir
+}
+
+// GitOutput runs the git binary in dir, isolated from inherited GIT_* variables, and returns its trimmed stdout.
+func GitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = gitEnv(t)
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "git %s: %s", strings.Join(args, " "), out)
+	return strings.TrimSpace(string(out))
 }
 
 // DetachHead rewrites the worktree's private HEAD to a bare commit hash, as git does after a detached checkout.

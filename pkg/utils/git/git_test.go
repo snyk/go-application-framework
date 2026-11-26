@@ -375,15 +375,11 @@ func TestLinkedWorktree_treeHashMatchesGit(t *testing.T) {
 	mainDir := gitworktree.NewMainRepo(t)
 	worktreeDir := gitworktree.GitWorktreeAdd(t, mainDir)
 
-	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
-	cmd.Dir = worktreeDir
-	cmd.Env = gitworktree.GitEnv(t)
-	out, err := cmd.Output()
-	require.NoError(t, err)
+	expected := gitworktree.GitOutput(t, worktreeDir, "rev-parse", "HEAD^{tree}")
 
 	treeHash, err := TreeHashFromDir(worktreeDir)
 	require.NoError(t, err)
-	assert.Equal(t, strings.TrimSpace(string(out)), treeHash)
+	assert.Equal(t, expected, treeHash)
 }
 
 func initRepoWithCommit(t *testing.T) (string, *git.Repository, string) {
