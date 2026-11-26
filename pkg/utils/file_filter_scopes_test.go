@@ -128,6 +128,16 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 	assert.Greater(t, matched, 1000)
 }
 
+func TestScopedMatcher_MatchesPlainGitignoreForEdgeGlobs(t *testing.T) {
+	for _, globs := range [][]string{{"/a/**", "!"}, {"!"}, {"#/a/**", "  ", "\r", "/a"}, {"/a/**", "! /a/b", "!!a", "\\#b"}} {
+		expected := gitignore.CompileIgnoreLines(globs...)
+		actual := newScopedMatcher(globs)
+		for _, path := range []string{"a", "/a", "/a/b", "/a/c", "!a", "#b", "/a/#b"} {
+			assert.Equal(t, expected.MatchesPath(path), actual.MatchesPath(path), "path %q, globs %q", path, globs)
+		}
+	}
+}
+
 func TestRequiredLiterals(t *testing.T) {
 	for expr, expected := range map[string][]string{
 		`^(|/)repo/a/(|.*/)([^/]*)\.java(|/.*)$`: {"repo/a/", ".java"},

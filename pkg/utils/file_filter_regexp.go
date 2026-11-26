@@ -21,17 +21,9 @@ var (
 // globRegexp returns the regular expression go-gitignore compiles for glob, and whether glob is
 // negated. It returns "" for comments and blank globs, which go-gitignore drops.
 func globRegexp(glob string) (expr string, negated bool) {
-	line := strings.TrimRight(glob, "\r")
-	if strings.HasPrefix(line, "#") {
+	line, negated := globPattern(glob)
+	if line == "" && !negated {
 		return "", false
-	}
-	line = strings.Trim(line, " ")
-	if line == "" {
-		return "", false
-	}
-	if line[0] == '!' {
-		negated = true
-		line = line[1:]
 	}
 	if globEscapedHashOrBang.MatchString(line) {
 		line = line[1:]
