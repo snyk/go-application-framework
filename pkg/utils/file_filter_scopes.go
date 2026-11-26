@@ -67,9 +67,6 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 	return m
 }
 
-// matchEveryPath compiles to "^(|.*/)|(|/.*)$" and matches every path; "*" misses some paths with newlines.
-const matchEveryPath = "|"
-
 // globPattern trims glob as go-gitignore does before it compiles a line. Comments give an empty pattern.
 func globPattern(glob string) (pattern string, negated bool) {
 	pattern = strings.TrimRight(glob, "\r")

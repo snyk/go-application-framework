@@ -409,6 +409,9 @@ type ruleMatcher struct {
 	negations *gitignore.GitIgnore // nil when no rule is negated
 }
 
+// matchEveryPath compiles to "^(|.*/)|(|/.*)$" and matches every path; "*" misses some paths with newlines.
+const matchEveryPath = "|"
+
 // compileRuleMatcher detects negated rules as go-gitignore does. negations.MatchesPath(f) is false iff a negated rule matches f.
 func compileRuleMatcher(globs []string) ruleMatcher {
 	rules := newScopedMatcher(globs)
