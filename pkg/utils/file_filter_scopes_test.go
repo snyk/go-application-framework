@@ -123,5 +123,5 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 			}
 		}
 	}
-	assert.Positive(t, matched)
+	assert.Greater(t, matched, 1000)
 }
