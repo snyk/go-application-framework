@@ -93,7 +93,7 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 	bases := []string{".", "/repo", "/repo/a", "repo/a", " a", "a ", "/r(x)", "/r+x", "//srv/share"}
 	pick := func(s []string) string { return s[r.IntN(len(s))] }
 
-	matched := 0
+	matched, compared := 0, 0
 	for i := range 2000 {
 		var globs []string
 		for range 1 + r.IntN(6) {
@@ -123,6 +123,7 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 			want, how := expected.MatchesPathHow(path)
 			require.Equal(t, want, actual.MatchesPath(path), "path %q, globs %q", path, globs)
 			if how != nil {
+				compared++
 				expr, negated := globRegexp(how.Line)
 				require.Equal(t, how.Pattern.String(), expr, "glob %q", how.Line)
 				require.False(t, negated, "glob %q", how.Line)
@@ -133,6 +134,7 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 		}
 	}
 	assert.Greater(t, matched, 1000)
+	assert.GreaterOrEqual(t, compared, matched, "every matching path is checked against the port")
 }
 
 func TestScopedMatcher_MatchesPlainGitignoreForEdgeGlobs(t *testing.T) {
