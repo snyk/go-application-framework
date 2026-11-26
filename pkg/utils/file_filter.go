@@ -34,6 +34,7 @@ const (
 var defaultInvalidRules = []string{}
 
 const gitIgnoreGlobPrefix = "#gitignore:"
+const gitFolderName = ".git"
 
 type FileFilter struct {
 	path            string
@@ -218,6 +219,7 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
 // Symlinks are neither followed nor returned, because the file they point to may be outside the directory.
+// Folders named .git are not entered.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -230,6 +232,10 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 			if d.Type()&fs.ModeSymlink != 0 {
 				return nil
+			}
+
+			if d.IsDir() && d.Name() == gitFolderName {
+				return filepath.SkipDir
 			}
 
 			if !d.IsDir() {
@@ -280,6 +286,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on.
 // Symlinks, and files inside a symlinked folder below the FileFilter's path, are filtered out.
+// Paths with a .git element are filtered out whatever the rules say.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 

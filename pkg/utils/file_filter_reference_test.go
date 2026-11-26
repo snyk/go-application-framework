@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -98,16 +99,20 @@ func (fw *FileFilter) referenceTrackedFileExclusionPredicate(globs []string) fun
 }
 
 // referenceFilteredFiles returns the files that referenceExclusionPredicate keeps, in order, without
-// the symlinks and the files inside a symlinked folder below the filter's path.
+// the symlinks, files inside a symlinked folder below the filter's path, and files with a .git path element.
 func (fw *FileFilter) referenceFilteredFiles(files []string, globs []string) []string {
 	isExcluded := fw.referenceExclusionPredicate(globs)
 	var kept []string
 	for _, file := range files {
-		if !isExcluded(file) && !referenceIsLinked(fw.path, file) {
+		if !isExcluded(file) && !referenceIsLinked(fw.path, file) && !referenceInGitFolder(file) {
 			kept = append(kept, file)
 		}
 	}
 	return kept
+}
+
+func referenceInGitFolder(file string) bool {
+	return slices.Contains(strings.Split(filepath.ToSlash(file), "/"), ".git")
 }
 
 // referenceIsLinked reports whether file, or a folder between root and file, is a symlink.
