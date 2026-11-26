@@ -216,7 +216,8 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 	return NewFileFilter(path, logger, allOptions...)
 }
 
-// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
+// Symlinks are neither followed nor returned, because the file they point to may be outside the directory.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -225,6 +226,10 @@ func (fw *FileFilter) GetAllFiles() chan string {
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
+			}
+
+			if d.Type()&fs.ModeSymlink != 0 {
+				return nil
 			}
 
 			if !d.IsDir() {
@@ -273,7 +278,8 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	return rules, nil
 }
 
-// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on.
+// Symlinks, and files inside a symlinked folder below the FileFilter's path, are filtered out.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 

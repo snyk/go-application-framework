@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -95,16 +97,34 @@ func (fw *FileFilter) referenceTrackedFileExclusionPredicate(globs []string) fun
 	}
 }
 
-// referenceFilteredFiles returns the files that referenceExclusionPredicate keeps, in order.
+// referenceFilteredFiles returns the files that referenceExclusionPredicate keeps, in order, without
+// the symlinks and the files inside a symlinked folder below the filter's path.
 func (fw *FileFilter) referenceFilteredFiles(files []string, globs []string) []string {
 	isExcluded := fw.referenceExclusionPredicate(globs)
 	var kept []string
 	for _, file := range files {
-		if !isExcluded(file) {
+		if !isExcluded(file) && !referenceIsLinked(fw.path, file) {
 			kept = append(kept, file)
 		}
 	}
 	return kept
+}
+
+// referenceIsLinked reports whether file, or a folder between root and file, is a symlink.
+func referenceIsLinked(root, file string) bool {
+	paths := []string{file}
+	if rel, err := filepath.Rel(root, file); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		parts := strings.Split(rel, string(filepath.Separator))
+		for i := 1; i < len(parts); i++ {
+			paths = append(paths, filepath.Join(append([]string{root}, parts[:i]...)...))
+		}
+	}
+	for _, path := range paths {
+		if info, err := os.Lstat(path); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func filesChannel(files []string) chan string {

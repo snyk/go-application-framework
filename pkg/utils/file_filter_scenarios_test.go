@@ -334,9 +334,9 @@ func buildScenarios(t *testing.T) []scenario {
 			currentCorrect: true,
 			why:            "for untracked files the rule found last wins, and .dcignore and .snyk always drop tracked files",
 		},
+		symlinkEntriesSkippedScenario(t),
 
 		// Section 2: known gaps of today's implementation.
-		symlinkEntriesSkippedScenario(t),
 		{
 			name:      "dir-only-rule-file-named-like-rule",
 			files:     repoFiles(map[string]string{".gitignore": ruleLines("foo/")}, "foo", "sub/foo/x", "other/foo"),
@@ -449,8 +449,11 @@ func symlinkEntriesSkippedScenario(t *testing.T) scenario {
 			"inside-link.js": "real.js",
 			"linked-dir":     "real-dir",
 		},
-		want: []string{"real-dir/file.js", "real.js"},
-		why:  "symlink entries are never listed: reading one would upload a file from outside the repo",
+		want:              []string{"real-dir/file.js", "real.js"},
+		currentCorrect:    true,
+		gitOracle:         true,
+		ignoreLinkEntries: true,
+		why:               "symlink entries are never listed: reading one would upload a file from outside the repo",
 	}
 }
 
