@@ -262,7 +262,8 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	return filesCh
 }
 
-// GetRules builds a list of glob patterns that can be used to filter filesToFilter
+// GetRules builds a list of glob patterns that can be used to filter filesToFilter.
+// With FF_FILE_FILTER_GIT_SEMANTICS, rule files that are symlinks are not read, as GetAllFiles does not return them.
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	variant := fw.metricVariant()
 	start := time.Now()
@@ -862,12 +863,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 	endingSlash := strings.HasSuffix(rule, slash)
 	endingGlobstar := strings.HasSuffix(rule, all)
 
-	// With FF_FILE_FILTER_GIT_SEMANTICS, a rule ending in /** matches what is inside a folder, not the folder itself.
-	// One more path element keeps the glob from matching the folder, so that a later negation can still re-include
-	// its files.
-	if gitSemantics && (rule == all || strings.HasSuffix(rule, slash+all)) {
-		rule = strings.TrimSuffix(rule, all) + "*" + slash + all
-	}
+	rule = gitSemanticsGlobstar(rule, gitSemantics)
 
 	if startingSlash || startingGlobstar {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
@@ -901,6 +897,17 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 }
 
 // parseIgnoreRuleToGlobsLegacy to be removed in future releases.
+// gitSemanticsGlobstar rewrites a rule ending in /** to match what is inside a folder, not the folder itself, so
+// that a later negation can still re-include files of an excluded folder.
+func gitSemanticsGlobstar(rule string, gitSemantics bool) string {
+	const all = "**"
+	const slash = "/"
+	if gitSemantics && (rule == all || strings.HasSuffix(rule, slash+all)) {
+		return strings.TrimSuffix(rule, all) + "*" + slash + all
+	}
+	return rule
+}
+
 func parseIgnoreRuleToGlobsLegacy(rule string, filePath string, gitSemantics bool) (globs []string) {
 	prefix := ""
 	const negation = "!"
@@ -923,12 +930,7 @@ func parseIgnoreRuleToGlobsLegacy(rule string, filePath string, gitSemantics boo
 	endingSlash := strings.HasSuffix(rule, slash)
 	endingGlobstar := strings.HasSuffix(rule, all)
 
-	// With FF_FILE_FILTER_GIT_SEMANTICS, a rule ending in /** matches what is inside a folder, not the folder itself.
-	// One more path element keeps the glob from matching the folder, so that a later negation can still re-include
-	// its files.
-	if gitSemantics && (rule == all || strings.HasSuffix(rule, slash+all)) {
-		rule = strings.TrimSuffix(rule, all) + "*" + slash + all
-	}
+	rule = gitSemanticsGlobstar(rule, gitSemantics)
 
 	if startingSlash || startingGlobstar {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
