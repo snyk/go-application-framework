@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // scopedMatcher gives the same result as gitignore.CompileIgnoreLines(globs...).MatchesPath, but
@@ -47,6 +48,7 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 	for i, glob := range globs {
 		expr, negated := globRegexp(glob)
 		m.globs[i] = scopedGlob{negated: negated, scopeIndex: -1}
+		// Like go-gitignore, drop a glob whose expression does not compile.
 		if compiled, err := regexp.Compile(expr); expr != "" && err == nil {
 			m.globs[i].regexp = compiled
 			m.globs[i].required = requiredLiterals(expr)
@@ -165,7 +167,8 @@ func (g *scopedGlob) matches(path string) bool {
 }
 
 // requiredLiterals returns the literals at the top level of expr, longest first. Every string that
-// expr matches contains all of them.
+// expr matches contains all of them. Literals with U+FFFD are left out, as expr matches U+FFFD on
+// invalid UTF-8 bytes.
 func requiredLiterals(expr string) []string {
 	parsed, err := syntax.Parse(expr, syntax.Perl)
 	if err != nil || parsed.Op != syntax.OpConcat {
@@ -173,7 +176,7 @@ func requiredLiterals(expr string) []string {
 	}
 	var literals []string
 	for _, sub := range parsed.Sub {
-		if sub.Op == syntax.OpLiteral && sub.Flags&syntax.FoldCase == 0 {
+		if sub.Op == syntax.OpLiteral && sub.Flags&syntax.FoldCase == 0 && !slices.Contains(sub.Rune, utf8.RuneError) {
 			literals = append(literals, string(sub.Rune))
 		}
 	}

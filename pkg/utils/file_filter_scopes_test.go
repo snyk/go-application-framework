@@ -73,6 +73,8 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
+	assert.Equal(t, []string{"repo/a", ".java"}, actual.globs[4].required)
+	assert.Nil(t, actual.globs[14].regexp, "go-gitignore drops a glob that does not compile")
 	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13, 14}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
 
 	for path, want := range paths {
@@ -118,8 +120,12 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 				parts = append(parts, strings.Trim(pick(names), "/*?[]!"))
 			}
 			path := strings.Join(parts, "/")
-			want := expected.MatchesPath(path)
+			want, how := expected.MatchesPathHow(path)
 			require.Equal(t, want, actual.MatchesPath(path), "path %q, globs %q", path, globs)
+			if how != nil {
+				expr, _ := globRegexp(how.Line)
+				require.Equal(t, how.Pattern.String(), expr, "glob %q", how.Line)
+			}
 			if want {
 				matched++
 			}
@@ -129,10 +135,13 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 }
 
 func TestScopedMatcher_MatchesPlainGitignoreForEdgeGlobs(t *testing.T) {
-	for _, globs := range [][]string{{"/a/**", "!"}, {"!"}, {"#/a/**", "  ", "\r", "/a"}, {"/a/**", "! /a/b", "!!a", "\\#b"}} {
+	for _, globs := range [][]string{
+		{"/a/**", "!"}, {"!"}, {"#/a/**", "  ", "\r", "/a"}, {"/a/**", "! /a/b", "!!a", "\\#b"},
+		{"a\uFFFDb", "/r/a\uFFFDb/x"}, // regexps match U+FFFD on invalid UTF-8 bytes
+	} {
 		expected := gitignore.CompileIgnoreLines(globs...)
 		actual := newScopedMatcher(globs)
-		for _, path := range []string{"a", "/a", "/a/b", "/a/c", "!a", "#b", "/a/#b"} {
+		for _, path := range []string{"a", "/a", "/a/b", "/a/c", "!a", "#b", "/a/#b", "a\xffb", "/r/a\xffb/x"} {
 			assert.Equal(t, expected.MatchesPath(path), actual.MatchesPath(path), "path %q, globs %q", path, globs)
 		}
 	}
@@ -144,6 +153,9 @@ func TestRequiredLiterals(t *testing.T) {
 		`^(|.*/)foo(|/.*)$`:                      {"foo"},
 		`^(|.*/)a|b(|/.*)$`:                      nil, // top level is an alternation, not a concatenation
 		`^(|/)(x`:                                nil, // does not parse
+		`^a(|.*/)\.java$`:                        {".java", "a"},
+		`^(|.*/)(?i)foo(|/.*)$`:                  nil,
+		`^(|.*/)a\x{FFFD}b(|/.*)$`:               nil,
 	} {
 		assert.Equal(t, expected, requiredLiterals(expr), expr)
 	}
