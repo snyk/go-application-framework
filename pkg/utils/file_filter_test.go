@@ -2351,6 +2351,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 			config := newTestConfig(map[string]bool{
 				FF_FILE_FILTER_METACHARACTER_FIX:   test.metacharacterFix,
 				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.respectTrackedFiles,
+				FF_FILE_FILTER_GIT_SEMANTICS:       true,
 			})
 			fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 
@@ -2378,6 +2379,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 			assert.Equal(t, map[string]bool{
 				metricFeatureMetacharFix:  test.metacharacterFix,
 				metricFeatureTrackedFiles: test.respectTrackedFiles,
+				metricFeatureGitSemantics: true,
 			}, variant.bools)
 		})
 	}
