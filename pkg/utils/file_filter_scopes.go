@@ -16,7 +16,8 @@ import (
 // go-gitignore matches a pattern only where its literal leading directories appear in the path: at the
 // start if the pattern starts with "/", else at the start or after any "/" (a superset, as go-gitignore
 // anchors some of these too). With many nested ignore files, most globs cannot match a given path. Each
-// glob is compiled once, and folders with the same set of scopes share one list of applicable glob indices.
+// glob is compiled once, when a path first needs it, and folders with the same set of scopes share one
+// list of applicable glob indices.
 // A regular expression only runs on paths that contain all literals it requires.
 type scopedMatcher struct {
 	globs      []scopedGlob
@@ -27,8 +28,8 @@ type scopedMatcher struct {
 }
 
 type scopedGlob struct {
-	regexp     *regexp.Regexp // nil when go-gitignore drops the glob
-	required   []string       // literals that every path the glob matches contains
+	regexp     func() *regexp.Regexp // nil result when go-gitignore drops the glob
+	required   []string              // literals that every path the glob matches contains
 	negated    bool
 	scopeIndex int // index into scopes, -1 when the glob can match any path
 }
@@ -47,12 +48,7 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 	indexOfScope := map[string]int{}
 	for i, glob := range globs {
 		expr, negated := globRegexp(glob)
-		m.globs[i] = scopedGlob{negated: negated, scopeIndex: -1}
-		// Like go-gitignore, drop a glob whose expression does not compile.
-		if compiled, err := regexp.Compile(expr); expr != "" && err == nil {
-			m.globs[i].regexp = compiled
-			m.globs[i].required = requiredLiterals(expr)
-		}
+		m.globs[i] = scopedGlob{regexp: lazyRegexp(expr), required: requiredLiterals(expr), negated: negated, scopeIndex: -1}
 
 		scope := scopeOfGlob(glob)
 		if scope == "" {
@@ -163,7 +159,8 @@ func (g *scopedGlob) matches(path string) bool {
 			return false
 		}
 	}
-	return g.regexp != nil && g.regexp.MatchString(path)
+	compiled := g.regexp()
+	return compiled != nil && compiled.MatchString(path)
 }
 
 // requiredLiterals returns the literals at the top level of expr, longest first. Every string that
@@ -182,4 +179,20 @@ func requiredLiterals(expr string) []string {
 	}
 	slices.SortStableFunc(literals, func(a, b string) int { return len(b) - len(a) })
 	return literals
+}
+
+// lazyRegexp defers compiling expr, as most globs of a large tree never get past the scope and literal
+// checks. Like go-gitignore, it gives nil for an empty or invalid expression. Concurrent callers share
+// one compilation.
+func lazyRegexp(expr string) func() *regexp.Regexp {
+	return sync.OnceValue(func() *regexp.Regexp {
+		if expr == "" {
+			return nil
+		}
+		compiled, err := regexp.Compile(expr)
+		if err != nil {
+			return nil
+		}
+		return compiled
+	})
 }
