@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -1467,5 +1468,7 @@ func Test_DefaultStorageDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	assert.Equal(t, filepath.Join(home, ".config", "configstore"), DefaultStorageDir())
+	dir, err := DefaultStorageDir()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, ".config", "configstore"), dir)
 }
