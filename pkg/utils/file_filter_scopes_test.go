@@ -25,6 +25,7 @@ func TestScopeOfGlob(t *testing.T) {
 		"/**/.git/**":            "",
 		"#gitignore:/repo/a/foo": "",
 		"!!/repo/a/foo":          "",
+		"!#/repo/a/foo":          "",
 		"/repo/a/**/x|y":         "",
 		"/repo/a/**/{0}b":        "",
 		"/repo/a/#$~":            "",
