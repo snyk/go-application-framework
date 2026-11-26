@@ -52,9 +52,13 @@ func folderRootPrefix(root string) string {
 	}
 }
 
-// escapesRelativeRoot reports whether slashPath is absolute or leads out of a root that is ".", which has no prefix to tell paths inside from outside.
+// escapesRelativeRoot reports whether slashPath leaves a root that is ".", which has no prefix to tell
+// paths inside from outside. The leading "/" check covers rooted paths without a drive on Windows.
 func escapesRelativeRoot(slashPath string) bool {
-	return slashPath == ".." || strings.HasPrefix(slashPath, "../") || filepath.IsAbs(filepath.FromSlash(slashPath))
+	return slashPath == ".." ||
+		strings.HasPrefix(slashPath, "../") ||
+		strings.HasPrefix(slashPath, "/") ||
+		filepath.IsAbs(filepath.FromSlash(slashPath))
 }
 
 // parentFolder returns the folder of slashPath, or false when slashPath is not inside a folder below root.
