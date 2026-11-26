@@ -285,6 +285,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on.
+// A file inside an excluded folder below the FileFilter's path is filtered out even if a later negation matches it, as in git.
 // Symlinks, and files inside a symlinked folder below the FileFilter's path, are filtered out.
 // Paths with a .git element are filtered out whatever the rules say.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
@@ -385,56 +386,11 @@ type trackedFiles struct {
 	paths    map[string]bool
 }
 
-// ruleMatcher pairs the compiled rules with their negated rules, the only rules that can re-include
-// a file below an excluded folder.
-type ruleMatcher struct {
-	rules     *gitignore.GitIgnore
-	negations *gitignore.GitIgnore // nil when no rule is negated
-}
-
-// compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path,
-// so negations.MatchesPath(f) is false iff a negated rule matches f.
-func compileRuleMatcher(globs []string) ruleMatcher {
-	rules := gitignore.CompileIgnoreLines(globs...)
-
-	var negated []string
-	for _, glob := range globs {
-		line := strings.TrimRight(glob, "\r")
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.HasPrefix(strings.TrimLeft(line, " "), "!") {
-			negated = append(negated, glob)
-		}
-	}
-
-	var negations *gitignore.GitIgnore
-	if len(negated) > 0 {
-		negations = gitignore.CompileIgnoreLines(append([]string{"*"}, negated...)...)
-	}
-
-	return ruleMatcher{rules: rules, negations: negations}
-}
-
-// excludesBelowExcludedFolder reports whether file, below a folder that rules match, is excluded.
-// Every pattern go-gitignore compiles ends in "(|/.*)$" or "/(|.*)$", so a non-negated pattern that
-// matches a folder matches every path below it, and only a negated pattern can re-include the file.
-// "." does not match a newline, so such paths go to the full rule list.
-func (m ruleMatcher) excludesBelowExcludedFolder(file string) bool {
-	if strings.ContainsRune(file, '\n') {
-		return false
-	}
-	if m.negations == nil {
-		return true
-	}
-	return m.negations.MatchesPath(filepath.ToSlash(file))
-}
-
 // exclusionPredicate decides whether a file is excluded. Tracked files are matched against other,
 // which leaves out .gitignore rules, when FF_GITIGNORE_RESPECT_TRACKED_FILES applies.
 type exclusionPredicate struct {
-	all     ruleMatcher
-	other   ruleMatcher
+	all     *gitignore.GitIgnore
+	other   *gitignore.GitIgnore
 	tracked *trackedFiles // nil when tracked files are matched like any other file
 }
 
@@ -442,7 +398,7 @@ type exclusionPredicate struct {
 // FF_GITIGNORE_RESPECT_TRACKED_FILES, .gitignore rules are exempt for files git tracks.
 func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate {
 	if !fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
-		return &exclusionPredicate{all: compileRuleMatcher(globs)}
+		return &exclusionPredicate{all: gitignore.CompileIgnoreLines(globs...)}
 	}
 
 	allGlobs := make([]string, 0, len(globs))
@@ -456,7 +412,7 @@ func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate 
 		allGlobs = append(allGlobs, glob)
 	}
 
-	p := &exclusionPredicate{all: compileRuleMatcher(allGlobs)}
+	p := &exclusionPredicate{all: gitignore.CompileIgnoreLines(allGlobs...)}
 
 	if !hasGitignoreGlobs {
 		return p
@@ -467,7 +423,7 @@ func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate 
 		return p
 	}
 
-	p.other = compileRuleMatcher(globs)
+	p.other = gitignore.CompileIgnoreLines(globs...)
 	p.tracked = trackedFiles
 	return p
 }
@@ -483,7 +439,7 @@ func (p *exclusionPredicate) isTracked(file string) bool {
 	return p.tracked.paths[filepath.ToSlash(relativePath)]
 }
 
-func (p *exclusionPredicate) matcherFor(file string) ruleMatcher {
+func (p *exclusionPredicate) matcherFor(file string) *gitignore.GitIgnore {
 	if p.isTracked(file) {
 		return p.other
 	}
@@ -493,24 +449,24 @@ func (p *exclusionPredicate) matcherFor(file string) ruleMatcher {
 func (p *exclusionPredicate) folderState(dir string, parent excludedFolder) excludedFolder {
 	slashDir := filepath.ToSlash(dir)
 	return excludedFolder{
-		byAll:   parent.byAll || p.all.rules.MatchesPath(slashDir),
-		byOther: p.tracked != nil && (parent.byOther || p.other.rules.MatchesPath(slashDir)),
+		byAll:   parent.byAll || p.all.MatchesPath(slashDir),
+		byOther: p.tracked != nil && (parent.byOther || p.other.MatchesPath(slashDir)),
 	}
 }
 
+// excludedByFolder applies git's rule that a file inside an excluded folder cannot be re-included.
 func (p *exclusionPredicate) excludedByFolder(file string, folder excludedFolder) bool {
 	if !folder.byAll && !folder.byOther {
 		return false
 	}
-	matcher, excluded := p.all, folder.byAll
 	if p.isTracked(file) {
-		matcher, excluded = p.other, folder.byOther
+		return folder.byOther
 	}
-	return excluded && matcher.excludesBelowExcludedFolder(file)
+	return folder.byAll
 }
 
 func (p *exclusionPredicate) isExcluded(file string) bool {
-	return p.matcherFor(file).rules.MatchesPath(filepath.ToSlash(file))
+	return p.matcherFor(file).MatchesPath(filepath.ToSlash(file))
 }
 
 func (fw *FileFilter) readTrackedFiles() *trackedFiles {
@@ -807,6 +763,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
 	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
 	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
+	// `foo/**` => `**/foo/*/**` (meaning: Ignore the paths underneath (root/sub) foo dirs, not the dirs themselves.)
 	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo filesToFilter and dirs and their paths underneath.)
 
 	// If a rule is invalid, we skip it
@@ -844,6 +801,12 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 	endingSlash := strings.HasSuffix(rule, slash)
 	endingGlobstar := strings.HasSuffix(rule, all)
 
+	// A rule ending in /** matches what is inside a folder, not the folder itself. One more path element
+	// keeps the glob from matching the folder, so that a later negation can still re-include its files.
+	if rule == all || strings.HasSuffix(rule, slash+all) {
+		rule = strings.TrimSuffix(rule, all) + "*" + slash + all
+	}
+
 	if startingSlash || startingGlobstar {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
@@ -853,8 +816,8 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
-		// case `/foo/**` => `{baseDir}/foo/**`
-		// case `**/foo/**` => `{baseDir}/**/foo/**`
+		// case `/foo/**` => `{baseDir}/foo/*/**`
+		// case `**/foo/**` => `{baseDir}/**/foo/*/**`
 		if !endingSlash {
 			glob := prefix + joinGlob(baseDir, escapeIgnoreRuleMetaChars(rule))
 			globs = append(globs, glob)
@@ -866,7 +829,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string,
 			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
-		// case `foo/**` => `{baseDir}/**/foo/**`
+		// case `foo/**` => `{baseDir}/**/foo/*/**`
 		if !endingSlash {
 			glob := prefix + joinGlob(baseDir, all, escapeIgnoreRuleMetaChars(rule))
 			globs = append(globs, glob)
@@ -898,6 +861,12 @@ func parseIgnoreRuleToGlobsLegacy(rule string, filePath string) (globs []string)
 	endingSlash := strings.HasSuffix(rule, slash)
 	endingGlobstar := strings.HasSuffix(rule, all)
 
+	// A rule ending in /** matches what is inside a folder, not the folder itself. One more path element
+	// keeps the glob from matching the folder, so that a later negation can still re-include its files.
+	if rule == all || strings.HasSuffix(rule, slash+all) {
+		rule = strings.TrimSuffix(rule, all) + "*" + slash + all
+	}
+
 	if startingSlash || startingGlobstar {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
@@ -907,8 +876,8 @@ func parseIgnoreRuleToGlobsLegacy(rule string, filePath string) (globs []string)
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
-		// case `/foo/**` => `{baseDir}/foo/**`
-		// case `**/foo/**` => `{baseDir}/**/foo/**`
+		// case `/foo/**` => `{baseDir}/foo/*/**`
+		// case `**/foo/**` => `{baseDir}/**/foo/*/**`
 		if !endingSlash {
 			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
 			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
@@ -920,7 +889,7 @@ func parseIgnoreRuleToGlobsLegacy(rule string, filePath string) (globs []string)
 			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
 		}
 		// case `foo` => `{baseDir}/**/foo`
-		// case `foo/**` => `{baseDir}/**/foo/**`
+		// case `foo/**` => `{baseDir}/**/foo/*/**`
 		if !endingSlash {
 			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
 			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))

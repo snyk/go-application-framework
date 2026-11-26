@@ -14,10 +14,10 @@ type excludedFolder struct {
 	linked  bool // the folder, or a folder above it below root, is a symlink
 }
 
-// folderExclusions memoizes which folders below root the rules exclude, so each folder is matched
-// once, however many of its files the filter workers test concurrently. The folders of a file are the
-// prefixes of its slash path that end before a "/", which is what the rules see when they match the
-// path as a string, also for paths that are not clean.
+// folderExclusions memoizes which folders below root the rules exclude, so each folder is matched once,
+// however many of its files the filter workers test concurrently. A file inside an excluded folder is
+// excluded, as in git. The folders of a file are the prefixes of its slash path that end before a "/",
+// which is what the rules see when they match the path as a string, also for paths that are not clean.
 type folderExclusions struct {
 	predicate  *exclusionPredicate
 	rootPrefix string

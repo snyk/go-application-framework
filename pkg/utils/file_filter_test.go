@@ -1431,6 +1431,41 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				"//?/C:/Users/someone/project/**/node_modules",
 			},
 		},
+		{
+			name:          "foo/** excludes contents, not foo itself",
+			rule:          "foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "/foo/** anchored contents, not foo itself",
+			rule:          "/foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/foo/*/**"},
+		},
+		{
+			name:          "**/foo/** floating contents, not foo itself",
+			rule:          "**/foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "** excludes everything except root",
+			rule:          "**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/*/**"},
+		},
+		{
+			name:          "!foo/** re-includes contents via negation",
+			rule:          "!foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"!/tmp/test/**/foo/*/**"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1484,6 +1519,36 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 				"/tmp/test/foo/**",
 				"/tmp/test/foo",
 			},
+		},
+		{
+			name:          "foo/** excludes contents, not foo itself",
+			rule:          "foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "/foo/** anchored contents, not foo itself",
+			rule:          "/foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/foo/*/**"},
+		},
+		{
+			name:          "**/foo/** floating contents, not foo itself",
+			rule:          "**/foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "** excludes everything except root",
+			rule:          "**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/*/**"},
+		},
+		{
+			name:          "!foo/** re-includes contents via negation",
+			rule:          "!foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"!/tmp/test/**/foo/*/**"},
 		},
 	}
 
