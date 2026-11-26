@@ -73,8 +73,8 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
-	assert.Equal(t, []string{"repo/a", ".java"}, actual.globs[4].required)
-	assert.Nil(t, actual.globs[14].regexp, "go-gitignore drops a glob that does not compile")
+	assert.Equal(t, []string{"repo/a", ".java"}, actual.globs[4].required) // "/**/" in globs[4] compiles to "(/|/.+/)"
+	assert.Nil(t, actual.globs[14].regexp, "go-gitignore drops globs[14], which does not compile")
 	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13, 14}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
 
 	for path, want := range paths {
@@ -123,8 +123,9 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 			want, how := expected.MatchesPathHow(path)
 			require.Equal(t, want, actual.MatchesPath(path), "path %q, globs %q", path, globs)
 			if how != nil {
-				expr, _ := globRegexp(how.Line)
+				expr, negated := globRegexp(how.Line)
 				require.Equal(t, how.Pattern.String(), expr, "glob %q", how.Line)
+				require.False(t, negated, "glob %q", how.Line)
 			}
 			if want {
 				matched++
@@ -145,6 +146,7 @@ func TestScopedMatcher_MatchesPlainGitignoreForEdgeGlobs(t *testing.T) {
 			assert.Equal(t, expected.MatchesPath(path), actual.MatchesPath(path), "path %q, globs %q", path, globs)
 		}
 	}
+	assert.True(t, newScopedMatcher([]string{"a\uFFFDb"}).MatchesPath("a\xffb"))
 }
 
 func TestRequiredLiterals(t *testing.T) {
