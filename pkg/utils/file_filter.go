@@ -405,14 +405,14 @@ type trackedFiles struct {
 // ruleMatcher pairs the compiled rules with their negated rules, the only rules that can re-include
 // a file below an excluded folder.
 type ruleMatcher struct {
-	rules     *gitignore.GitIgnore
+	rules     *scopedMatcher
 	negations *gitignore.GitIgnore // nil when no rule is negated
 }
 
 // compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path,
 // so negations.MatchesPath(f) is false iff a negated rule matches f.
 func compileRuleMatcher(globs []string) ruleMatcher {
-	rules := gitignore.CompileIgnoreLines(globs...)
+	rules := newScopedMatcher(globs)
 
 	var negated []string
 	for _, glob := range globs {
