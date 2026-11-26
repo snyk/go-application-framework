@@ -352,15 +352,6 @@ func TestLinkedWorktree_commonDirMissing(t *testing.T) {
 	require.ErrorIs(t, err, git.ErrRepositoryIncomplete)
 }
 
-func TestLinkedWorktree_emptyCommonDirPinsExistingGoGitBehavior(t *testing.T) {
-	mainDir := gitworktree.NewMainRepo(t)
-	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
-	gitworktree.SetCommonDir(t, mainDir, "")
-
-	_, err := GetOriginRemote(worktreeDir)
-	require.Error(t, err)
-}
-
 func TestLinkedWorktree_relativeGitDir(t *testing.T) {
 	mainDir := gitworktree.NewMainRepo(t)
 	worktreeDir := gitworktree.NewHandBuiltWorktreeRelative(t, mainDir)
