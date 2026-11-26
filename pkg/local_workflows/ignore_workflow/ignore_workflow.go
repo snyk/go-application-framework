@@ -179,6 +179,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		if err != nil {
 			return nil, err
 		}
+		repoUrl = sanitizeRemoteRepoUrl(repoUrl)
 
 		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
 

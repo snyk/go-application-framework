@@ -3,6 +3,7 @@ package ignore_workflow
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,6 +81,9 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 
 func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration) (interface{}, error) {
 	if existingValue != nil && existingValue != "" {
+		if value, ok := existingValue.(string); ok {
+			return sanitizeRemoteRepoUrl(value), nil
+		}
 		return existingValue, nil
 	}
 
@@ -92,7 +96,18 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 		return "", err
 	}
 
-	return repoUrl, nil
+	return sanitizeRemoteRepoUrl(repoUrl), nil
+}
+
+// sanitizeRemoteRepoUrl removes userinfo (for example a token) from scheme-based remote URLs so that
+// credentials are not sent to policy-service. SCP-style remotes (user@host:path) are returned unchanged,
+// matching code-client-go's SanitiseCredentials: url.Parse fails on them, so the URL is kept as is.
+// Residual: an SCP "user" that is really a secret (TOKEN@host:org/repo.git) is still sent; accepted for parity.
+func sanitizeRemoteRepoUrl(repoUrl string) string {
+	if !strings.Contains(repoUrl, "://") {
+		return repoUrl
+	}
+	return git.StripGitCredentials(repoUrl)
 }
 
 func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(string) error) (interface{}, error) {
