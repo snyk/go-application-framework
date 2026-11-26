@@ -95,6 +95,7 @@ const (
 	// Record feature flags alongside the variant so consumers need not decode its name.
 	metricFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
 	metricFeatureTrackedFiles = "feature.includeTracked" // whether FF_GITIGNORE_RESPECT_TRACKED_FILES applied to the run
+	metricFeatureGitSemantics = "feature.gitSemantics"   // whether FF_FILE_FILTER_GIT_SEMANTICS applied to the run
 )
 
 type FileFilterOption func(*FileFilter) error
@@ -151,6 +152,7 @@ func (fw *FileFilter) metricVariant() string {
 
 	metacharacterFix := fw.config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
 	respectTrackedFiles := fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES)
+	gitSemantics := fw.gitSemantics()
 
 	var variant string
 	switch {
@@ -166,6 +168,7 @@ func (fw *FileFilter) metricVariant() string {
 
 	fw.recordBool(variant, metricFeatureMetacharFix, func() bool { return metacharacterFix })
 	fw.recordBool(variant, metricFeatureTrackedFiles, func() bool { return respectTrackedFiles })
+	fw.recordBool(variant, metricFeatureGitSemantics, func() bool { return gitSemantics })
 
 	return variant
 }
