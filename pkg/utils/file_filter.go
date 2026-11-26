@@ -409,7 +409,7 @@ type ruleMatcher struct {
 	negations *gitignore.GitIgnore // nil when no rule is negated
 }
 
-// compileRuleMatcher detects negated rules as go-gitignore does. The leading "*" matches every path,
+// compileRuleMatcher detects negated rules as go-gitignore does. The leading "|" matches every path,
 // so negations.MatchesPath(f) is false iff a negated rule matches f.
 func compileRuleMatcher(globs []string) ruleMatcher {
 	rules := newScopedMatcher(globs)
@@ -423,7 +423,7 @@ func compileRuleMatcher(globs []string) ruleMatcher {
 
 	var negations *gitignore.GitIgnore
 	if len(negated) > 0 {
-		negations = gitignore.CompileIgnoreLines(append([]string{"*"}, negated...)...)
+		negations = gitignore.CompileIgnoreLines(append([]string{"|"}, negated...)...)
 	}
 
 	return ruleMatcher{rules: rules, negations: negations}

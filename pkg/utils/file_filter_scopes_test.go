@@ -10,23 +10,23 @@ import (
 )
 
 func TestScopeOfGlob(t *testing.T) {
-	for glob, expected := range map[string]globScope{
-		"/repo/a/**/foo/**":      {dir: "/repo/a/", anchored: true},
-		"!/repo/a/**/*.txt":      {dir: "/repo/a/", anchored: true},
-		"/repo/a\\(b\\)/**/foo":  {dir: "/repo/", anchored: true},
-		"/repo/a+b/foo":          {dir: "/repo/", anchored: true},
-		"/repo/[ab]/foo":         {dir: "/repo/", anchored: true},
-		"repo/a/**/foo":          {dir: "repo/a/"},
-		"/repo/a/bin/**":         {dir: "/repo/a/", anchored: true},
-		" /repo/a/foo \r":        {dir: "/repo/a/", anchored: true},
-		"/foo":                   {dir: "/", anchored: true},
-		"foo":                    {},
-		"/**/.git/**":            {},
-		"#gitignore:/repo/a/foo": {},
-		"!!/repo/a/foo":          {},
-		"/repo/a/**/x|y":         {},
-		"/repo/a/**/{0}b":        {},
-		"/repo/a/#$~":            {},
+	for glob, expected := range map[string]string{
+		"/repo/a/**/foo/**":      "/repo/a/",
+		"!/repo/a/**/*.txt":      "/repo/a/",
+		"/repo/a\\(b\\)/**/foo":  "/repo/",
+		"/repo/a+b/foo":          "/repo/",
+		"/repo/[ab]/foo":         "/repo/",
+		"repo/a/**/foo":          "repo/a/",
+		"/repo/a/bin/**":         "/repo/a/",
+		" /repo/a/foo \r":        "/repo/a/",
+		"/foo":                   "/",
+		"foo":                    "",
+		"/**/.git/**":            "",
+		"#gitignore:/repo/a/foo": "",
+		"!!/repo/a/foo":          "",
+		"/repo/a/**/x|y":         "",
+		"/repo/a/**/{0}b":        "",
+		"/repo/a/#$~":            "",
 	} {
 		assert.Equal(t, expected, scopeOfGlob(glob), glob)
 	}
@@ -69,7 +69,7 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 	}
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
-	assert.Len(t, actual.globsFor("/repo/main/"), 9)
+	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
 
 	for path, want := range paths {
 		t.Run(path, func(t *testing.T) {
