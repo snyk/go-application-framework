@@ -20,7 +20,10 @@ func TestEmit_ReachesTheIngestEndpoint(t *testing.T) {
 	var gotPath, gotBody string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		gotPath = r.URL.Path
 		gotBody = string(body)

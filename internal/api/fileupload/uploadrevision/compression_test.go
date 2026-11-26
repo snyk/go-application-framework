@@ -47,11 +47,17 @@ func TestCompressionRoundTripper_RoundTrip(t *testing.T) {
 			assert.Equal(t, int64(-1), r.ContentLength)
 
 			gzipReader, err := gzip.NewReader(r.Body)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			defer gzipReader.Close()
 
 			receivedBody, err = io.ReadAll(gzipReader)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 
 			w.WriteHeader(http.StatusOK)
 		}))

@@ -30,6 +30,7 @@ linters:
     - promlinter
     - rowserrcheck
     - sqlclosecheck
+    - testifylint
     - thelper
     - tparallel
     - unconvert
@@ -105,6 +106,10 @@ linters:
         - all
         - -ST*
         - -QF*
+    testifylint:
+      disable-all: true
+      enable:
+        - go-require
   exclusions:
     generated: lax
     presets:

@@ -346,12 +346,21 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision2.HTTPSeala
 
 			contentType := r.Header.Get("Content-Type")
 			_, params, err := mime.ParseMediaType(contentType)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			boundary := params["boundary"]
-			require.NotEmpty(t, boundary, "multipart boundary should be present")
+			if !assert.NotEmpty(t, boundary, "multipart boundary should be present") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 
 			gzipReader, err := gzip.NewReader(r.Body)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			reader := multipart.NewReader(gzipReader, boundary)
 
 			for {
@@ -359,7 +368,10 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision2.HTTPSeala
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				require.NoError(t, err)
+				if !assert.NoError(t, err) {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 			}
 
 			w.WriteHeader(http.StatusNoContent)
