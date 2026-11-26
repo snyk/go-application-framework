@@ -358,7 +358,6 @@ func buildScenarios(t *testing.T) []scenario {
 				"vendor/new.txt", "main.go"),
 			want:           []string{".gitignore", "main.go"},
 			currentCorrect: true,
-			gitOracle:      true,
 			why:            "a .dcignore negation inside an excluded folder cannot re-include a file there",
 		},
 
@@ -462,11 +461,9 @@ func symlinkEntriesSkippedScenario(t *testing.T) scenario {
 			"inside-link.js": "real.js",
 			"linked-dir":     "real-dir",
 		},
-		want:              []string{"real-dir/file.js", "real.js"},
-		currentCorrect:    true,
-		gitOracle:         true,
-		ignoreLinkEntries: true,
-		why:               "symlink entries are never listed: reading one would upload a file from outside the repo",
+		want:           []string{"real-dir/file.js", "real.js"},
+		currentCorrect: true,
+		why:            "symlink entries are never listed: reading one would upload a file from outside the repo",
 	}
 }
 
