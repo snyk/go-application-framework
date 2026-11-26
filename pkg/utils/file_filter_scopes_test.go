@@ -7,6 +7,7 @@ import (
 
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScopeOfGlob(t *testing.T) {
@@ -114,10 +115,8 @@ func TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs(t *testing.T) {
 				parts = append(parts, strings.Trim(pick(names), "/*?[]!"))
 			}
 			path := strings.Join(parts, "/")
-			got, want := actual.MatchesPath(path), expected.MatchesPath(path)
-			if got != want {
-				t.Fatalf("path %q, globs %q: got %v, want %v", path, globs, got, want)
-			}
+			want := expected.MatchesPath(path)
+			require.Equal(t, want, actual.MatchesPath(path), "path %q, globs %q", path, globs)
 			if want {
 				matched++
 			}

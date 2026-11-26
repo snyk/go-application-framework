@@ -24,9 +24,9 @@ type scopedMatcher struct {
 }
 
 type scopedGlob struct {
-	matcher *gitignore.GitIgnore
-	negated bool
-	scope   int // index into scopes, -1 when the glob can match any path
+	matcher    *gitignore.GitIgnore
+	negated    bool
+	scopeIndex int // index into scopes, -1 when the glob can match any path
 }
 
 // globLiteralEnd lists the characters at which a glob stops being matched literally by
@@ -40,31 +40,33 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 		byScopeSet: map[string][]int{},
 	}
 
-	scopeIndex := map[string]int{}
+	indexOfScope := map[string]int{}
 	for i, glob := range globs {
 		lines := []string{glob}
 		_, negated := globPattern(glob)
 		if negated {
-			// "|" matches every path, unlike "*" with newlines, so the matcher is false iff the negated glob matches.
-			lines = []string{"|", glob}
+			lines = []string{matchEveryPath, glob}
 		}
-		m.globs[i] = scopedGlob{matcher: gitignore.CompileIgnoreLines(lines...), negated: negated, scope: -1}
+		m.globs[i] = scopedGlob{matcher: gitignore.CompileIgnoreLines(lines...), negated: negated, scopeIndex: -1}
 
 		scope := scopeOfGlob(glob)
 		if scope == "" {
 			continue
 		}
-		index, ok := scopeIndex[scope]
+		index, ok := indexOfScope[scope]
 		if !ok {
 			index = len(m.scopes)
-			scopeIndex[scope] = index
+			indexOfScope[scope] = index
 			m.scopes = append(m.scopes, scope)
 		}
-		m.globs[i].scope = index
+		m.globs[i].scopeIndex = index
 	}
 
 	return m
 }
+
+// matchEveryPath compiles to "^(|.*/)|(|/.*)$", which matches every path, unlike "*" for some with newlines.
+const matchEveryPath = "|"
 
 // globPattern trims glob as go-gitignore does before it compiles a line. Comments give an empty pattern.
 func globPattern(glob string) (pattern string, negated bool) {
@@ -77,6 +79,7 @@ func globPattern(glob string) (pattern string, negated bool) {
 
 // scopeOfGlob mirrors how go-gitignore turns a line into a regular expression. It returns the literal
 // leading directories of glob, ending in "/", or "" whenever they are not required literally.
+// TestScopedMatcher_MatchesPlainGitignoreForGeneratedGlobs checks this against go-gitignore on upgrades.
 func scopeOfGlob(glob string) string {
 	pattern, _ := globPattern(glob)
 	// go-gitignore strips one more leading "#" or "!", and compiles a leading "/**/" to an optional
@@ -96,7 +99,6 @@ func scopeOfGlob(glob string) string {
 	if literalEnd > 0 && strings.HasPrefix(pattern[literalEnd-1:], "/**") && !strings.HasPrefix(pattern[literalEnd-1:], "/**/") {
 		literalEnd--
 	}
-
 	return pattern[:strings.LastIndex(pattern[:literalEnd], "/")+1]
 }
 
@@ -144,7 +146,7 @@ func (m *scopedMatcher) globIndicesFor(dir string) []int {
 	applicable, ok = m.byScopeSet[key.String()]
 	if !ok {
 		for i, glob := range m.globs {
-			if glob.scope < 0 || inScope[glob.scope] {
+			if glob.scopeIndex < 0 || inScope[glob.scopeIndex] {
 				applicable = append(applicable, i)
 			}
 		}
