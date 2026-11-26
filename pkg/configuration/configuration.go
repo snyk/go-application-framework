@@ -1234,3 +1234,41 @@ func toDuration(result interface{}) (time.Duration, error) {
 
 	return 0, fmt.Errorf("value is not of type duration")
 }
+
+// IgnoredEnvVarsThatAreSet returns the names that config ignores, as recorded with WithIgnoredEnvVars, whose environment
+// variable is set to a non-empty value in the process. Matching is case-insensitive and treats "-" and "_" as equivalent,
+// and each name is returned as it was recorded, in recorded order. Only names are returned, never values. It returns
+// nil for a Configuration that this package did not create, and when nothing is set.
+func IgnoredEnvVarsThatAreSet(config Configuration) []string {
+	ev, ok := config.(*extendedViper)
+	if !ok {
+		return nil
+	}
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	if len(ev.ignoredEnvVars) == 0 {
+		return nil
+	}
+	set := nonEmptyEnvVarNames()
+	var names []string
+	for _, name := range ev.ignoredEnvVars {
+		if _, ok := set[normalizeEnvVarName(strings.ToUpper(name))]; ok {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// nonEmptyEnvVarNames returns the normalized names, upper case with "-" as "_", of the environment variables that have
+// a non-empty value. An empty value is not applied by viper, so it does not count.
+func nonEmptyEnvVarNames() map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		if name != "" && value != "" {
+			names[normalizeEnvVarName(strings.ToUpper(name))] = struct{}{}
+		}
+	}
+	return names
+}

@@ -207,3 +207,68 @@ func Test_WithIgnoredEnvVars_ForeignConfigurationIsIgnored(t *testing.T) {
 	assert.NotPanics(t, func() { WithIgnoredEnvVars("SNYK_TOKEN")(foreign) })
 	assert.Empty(t, ignoredEnvVarsOf(foreign))
 }
+
+// foreignConfig is a Configuration that this package did not create.
+type foreignConfig struct{ Configuration }
+
+func Test_IgnoredEnvVarsThatAreSet(t *testing.T) {
+	t.Run("reports the ignored names that are set to a non-empty value", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "secret")
+		t.Setenv("SNYK_API", "https://api.example")
+
+		config := NewWithOpts(
+			WithSupportedEnvVarPrefixes("snyk_"),
+			WithIgnoredEnvVars("SNYK_TOKEN", "SNYK_OAUTH_TOKEN"),
+		)
+
+		assert.Equal(t, []string{"SNYK_TOKEN"}, IgnoredEnvVarsThatAreSet(config))
+	})
+
+	t.Run("an empty value is not reported", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "")
+
+		config := NewWithOpts(
+			WithSupportedEnvVarPrefixes("snyk_"),
+			WithIgnoredEnvVars("SNYK_TOKEN"),
+		)
+
+		assert.Nil(t, IgnoredEnvVarsThatAreSet(config))
+	})
+
+	t.Run("no ignored names reports nothing", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "secret")
+
+		assert.Nil(t, IgnoredEnvVarsThatAreSet(NewWithOpts(WithSupportedEnvVarPrefixes("snyk_"))))
+	})
+
+	t.Run("a foreign configuration reports nothing", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "secret")
+
+		assert.Nil(t, IgnoredEnvVarsThatAreSet(foreignConfig{}))
+		assert.Nil(t, IgnoredEnvVarsThatAreSet(nil))
+	})
+
+	t.Run("matches case-insensitively with hyphens and underscores equivalent, and reports the recorded spelling", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "secret")
+		t.Setenv("snyk_oauth_token", "secret")
+
+		config := NewWithOpts(
+			WithSupportedEnvVarPrefixes("snyk_"),
+			WithIgnoredEnvVars("snyk-token", "SNYK_OAUTH_TOKEN"),
+		)
+
+		assert.Equal(t, []string{"snyk-token", "SNYK_OAUTH_TOKEN"}, IgnoredEnvVarsThatAreSet(config))
+	})
+
+	t.Run("reports in recorded order", func(t *testing.T) {
+		t.Setenv("SNYK_TOKEN", "secret")
+		t.Setenv("SNYK_OAUTH_TOKEN", "secret")
+
+		config := NewWithOpts(
+			WithSupportedEnvVarPrefixes("snyk_"),
+			WithIgnoredEnvVars("SNYK_OAUTH_TOKEN", "SNYK_TOKEN"),
+		)
+
+		assert.Equal(t, []string{"SNYK_OAUTH_TOKEN", "SNYK_TOKEN"}, IgnoredEnvVarsThatAreSet(config))
+	})
+}
