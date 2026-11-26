@@ -3,6 +3,7 @@ package utils
 import (
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -53,10 +54,12 @@ func folderRootPrefix(root string) string {
 }
 
 // escapesRelativeRoot reports whether slashPath leaves a root that is ".", which has no prefix to tell
-// paths inside from outside. The leading "/" check covers rooted paths without a drive on Windows.
+// paths inside from outside. Cleaning first catches unclean paths such as "a/../../x". The leading "/" check
+// covers rooted paths without a drive, which filepath.IsAbs does not report on Windows.
 func escapesRelativeRoot(slashPath string) bool {
-	return slashPath == ".." ||
-		strings.HasPrefix(slashPath, "../") ||
+	cleaned := path.Clean(slashPath)
+	return cleaned == ".." ||
+		strings.HasPrefix(cleaned, "../") ||
 		strings.HasPrefix(slashPath, "/") ||
 		filepath.IsAbs(filepath.FromSlash(slashPath))
 }
@@ -98,6 +101,8 @@ func inGitFolder(slashPath string) bool {
 		strings.Contains(slashPath, "/"+gitFolderName+"/")
 }
 
+// isSymlink covers callers that pass their own file channel, since GetAllFiles never returns symlinks. A path
+// that cannot be stat'ed is not reported as a symlink.
 func isSymlink(path string) bool {
 	info, err := os.Lstat(path)
 	return err == nil && info.Mode()&fs.ModeSymlink != 0
