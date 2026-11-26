@@ -398,6 +398,9 @@ func TestNewInMemory(t *testing.T) {
 }
 
 func TestNewFromFiles(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	config := NewFromFiles(filepath.Join(t.TempDir(), t.Name()))
 	ev, ok := config.(*extendedViper)
 	assert.True(t, ok)
@@ -1440,4 +1443,29 @@ func Test_GetAllKeysThatContainValues_noAlternateKeys(t *testing.T) {
 
 	keys := config.GetAllKeysThatContainValues("lonely")
 	assert.Contains(t, keys, "lonely")
+}
+
+func Test_appendMissing(t *testing.T) {
+	t.Run("nil list and no values", func(t *testing.T) {
+		assert.Empty(t, appendMissing(nil))
+	})
+
+	t.Run("adds values to a nil list", func(t *testing.T) {
+		assert.Equal(t, []string{"a", "b"}, appendMissing(nil, "a", "b"))
+	})
+
+	t.Run("duplicates inside values are added once", func(t *testing.T) {
+		assert.Equal(t, []string{"a", "b"}, appendMissing(nil, "a", "b", "a"))
+	})
+
+	t.Run("keeps the order of the list and skips values it has", func(t *testing.T) {
+		assert.Equal(t, []string{"c", "a", "b", "d"}, appendMissing([]string{"c", "a"}, "b", "c", "d"))
+	})
+}
+
+func Test_DefaultStorageDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	assert.Equal(t, filepath.Join(home, ".config", "configstore"), DefaultStorageDir())
 }

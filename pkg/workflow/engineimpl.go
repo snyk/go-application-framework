@@ -15,12 +15,14 @@ import (
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -39,8 +41,13 @@ type EngineImpl struct {
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
 	mu                sync.RWMutex
+	workflowsMu       sync.RWMutex // guards workflows; separate from mu so registry access never waits on config or hooks
 	invocationCounter int
 	postInvokeHooks   []PostInvokeHook
+	// profiles is built on first use from the configuration of the engine, see profileRegistry. profilesDir is the
+	// profile directory that it was built with.
+	profiles    profile.Registry
+	profilesDir string
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -61,6 +68,9 @@ type engineRuntimeConfig struct {
 	ic      analytics.InstrumentationCollector
 	ctxFunc func() context.Context
 	nested  bool
+	// invocationProfile is the configuration and network access of the profile the invocation runs on, nil for the
+	// engine's own.
+	invocationProfile *engineWrapper
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -88,6 +98,12 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 		if ctx != nil {
 			e.ctxFunc = func() context.Context { return ctx }
 		}
+	}
+}
+
+func withInvocationProfile(invocationProfile *engineWrapper) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.invocationProfile = invocationProfile
 	}
 }
 
@@ -135,6 +151,7 @@ func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.config = config
+	e.profiles, e.profilesDir = nil, "" // profiles derive from the engine configuration, so they are rebuilt from the new one
 
 	if e.networkAccess != nil {
 		e.networkAccess.SetConfiguration(config)
@@ -244,6 +261,7 @@ func (e *EngineImpl) initAnalytics() analytics.Analytics {
 // - id: the workflow identifier
 // - config: the configuration options for the workflow
 // - entryPoint: the entry point function for the workflow
+// If the configuration options cannot be added to the configuration, the workflow is not registered.
 func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryPoint Callback) (Entry, error) {
 	if entryPoint == nil {
 		return nil, fmt.Errorf("EntryPoint must not be nil")
@@ -257,15 +275,6 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		return nil, fmt.Errorf("ID must not be nil")
 	}
 
-	entry := &EntryImpl{
-		visible:        true,
-		expectedConfig: config,
-		entryPoint:     entryPoint,
-	}
-
-	tmp := id.String()
-	e.workflows[tmp] = entry
-
 	flagset := FlagsetFromConfigurationOptions(config)
 	if flagset != nil {
 		err := e.config.AddFlagSet(flagset)
@@ -274,6 +283,16 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		}
 	}
 
+	entry := &EntryImpl{
+		visible:        true,
+		expectedConfig: config,
+		entryPoint:     entryPoint,
+	}
+
+	e.workflowsMu.Lock()
+	defer e.workflowsMu.Unlock()
+	e.workflows[id.String()] = entry
+
 	return entry, nil
 }
 
@@ -281,7 +300,14 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 func (e *EngineImpl) GetWorkflows() []Identifier {
 	var result []Identifier
 
+	e.workflowsMu.RLock()
+	keys := make([]string, 0, len(e.workflows))
 	for k := range e.workflows {
+		keys = append(keys, k)
+	}
+	e.workflowsMu.RUnlock()
+
+	for _, k := range keys {
 		u, err := url.Parse(k)
 		if err != nil {
 			// a panic here is reasonable; how did we register an invalid URL in the first place?
@@ -295,6 +321,8 @@ func (e *EngineImpl) GetWorkflows() []Identifier {
 
 // GetWorkflow returns the workflow entry for the given workflow identifier.
 func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
+	e.workflowsMu.RLock()
+	defer e.workflowsMu.RUnlock()
 	workflow, ok := e.workflows[id.String()]
 	return workflow, ok
 }
@@ -325,17 +353,17 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 }
 
 // Invoke invokes the workflow with the given identifier.
+//
+// Every root invocation that does not bring its own configuration with WithConfig runs on the profile that the
+// configuration of the engine selects with profile.ConfigKey. InvokeWithConfig and WithConfig skip the profile
+// selection. The default profile keeps the configuration of the engine, and a nested invocation keeps the profile of
+// its parent.
 func (e *EngineImpl) Invoke(
 	id Identifier,
 	opts ...EngineInvokeOption,
 ) ([]Data, error) {
-	var output []Data
-	var err error
-	var callbackPanic any
-	var callbackPanicStack []byte
-
 	if !e.initialized.Load() {
-		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
+		return nil, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
 
 	// Parse options once upfront.
@@ -349,89 +377,146 @@ func (e *EngineImpl) Invoke(
 
 	hookCtx := options.ctxFunc()
 
-	workflow, ok := e.GetWorkflow(id)
-	if ok {
-		callback := workflow.GetEntryPoint()
-		if callback != nil {
-			e.mu.Lock()
-			e.invocationCounter++
-
-			// Apply defaults for options the caller didn't set.
-			if options.config == nil {
-				options.config = e.config.Clone()
-			}
-
-			// prepare logger
-			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
-			localLogger := e.logger.With().Str("ext", prefix).Logger()
-
-			localUi := e.ui
-
-			var localAnalytics analytics.Analytics
-			if options.ic != nil {
-				tmpAnalytics := &analytics.AnalyticsImpl{}
-				tmpAnalytics.SetInstrumentation(options.ic)
-				localAnalytics = NewAnalyticsWrapper(tmpAnalytics, id.Host)
-			} else {
-				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
-			}
-
-			// prepare networkAccess
-			localNetworkAccess := e.networkAccess.Clone()
-			localNetworkAccess.SetConfiguration(options.config)
-			if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
-				// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
-				localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
-					return hostErrorHandler(withExtensionName(err, id.Host), ctx)
-				})
-			}
-
-			localEngine := &engineWrapper{
-				WrappedEngine:                   e,
-				defaultInstrumentationCollector: options.ic,
-				defaultCtxFunc:                  options.ctxFunc,
-			}
-			e.mu.Unlock()
-
-			// create a context object for the invocation
-			invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
-
-			// invoke workflow through its callback, recovering panics so hooks can observe them
-			localLogger.Printf("Workflow Start")
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						callbackPanic = r
-						callbackPanicStack = debug.Stack()
-					}
-				}()
-				output, err = callback(invocationCtx, options.input)
-			}()
-			err = withExtensionName(err, id.Host)
-			localLogger.Printf("Workflow End")
-
-			if callbackPanic != nil {
-				localLogger.Printf("Workflow callback panicked: %v\n%s", callbackPanic, callbackPanicStack)
-				if panicErr, ok := callbackPanic.(error); ok {
-					err = fmt.Errorf("workflow callback panicked: %w", panicErr)
-				} else {
-					err = fmt.Errorf("workflow callback panicked: %v", callbackPanic)
-				}
-			}
+	// Only a root invocation without a configuration of its own selects a profile; a nested one keeps the profile of its
+	// parent. A failed selection fails the invocation, and the hooks see an empty configuration rather than the engine's.
+	invocationProfile, selected, selectErr := e.selectInvocationProfile(&options)
+	if selected {
+		options.invocationProfile = invocationProfile
+		if selectErr != nil {
+			options.config = invocationProfile.config
 		}
-	} else {
+	}
+
+	var output []Data
+	var err error
+	var panicked *callbackPanic
+	workflow, ok := e.GetWorkflow(id)
+	switch {
+	case selectErr != nil:
+		err = selectErr
+	case ok:
+		output, panicked, err = e.runWorkflow(id, workflow, &options)
+	default:
 		err = fmt.Errorf("workflow '%v' not found", id)
 	}
 
 	if !options.nested {
-		e.firePostInvokeHooks(hookCtx, id, output, err, options.ic, options.config)
+		e.firePostInvokeHooks(hookCtx, id, output, err, &options)
 	}
 
-	if callbackPanic != nil {
-		panic(callbackPanic)
+	if panicked != nil {
+		panic(panicked.value)
 	}
 
 	return output, err
+}
+
+// callbackPanic records a panic of a workflow callback, which is re-raised after the post-invoke hooks ran.
+type callbackPanic struct {
+	value any
+	stack []byte
+}
+
+// runWorkflow runs the callback of the workflow on a fresh invocation context. It returns the panic of the callback, if
+// any, and the error of the invocation, which includes the panic. A workflow without a callback runs nothing.
+func (e *EngineImpl) runWorkflow(id Identifier, workflow Entry, options *engineRuntimeConfig) ([]Data, *callbackPanic, error) {
+	callback := workflow.GetEntryPoint()
+	if callback == nil {
+		return nil, nil, nil
+	}
+
+	e.mu.Lock()
+	e.invocationCounter++
+	e.applyInvocationDefaults(options)
+
+	prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
+	localLogger := e.logger.With().Str("ext", prefix).Logger()
+
+	localUi := e.ui
+	localAnalytics := e.invocationAnalytics(id, options.ic)
+	localNetworkAccess := e.invocationNetworkAccess(id, options.config)
+	localEngine := e.invocationEngine(options)
+	e.mu.Unlock()
+
+	invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
+
+	// invoke workflow through its callback, recovering panics so hooks can observe them
+	localLogger.Printf("Workflow Start")
+	output, panicked, err := runCallback(callback, invocationCtx, options.input)
+	err = withExtensionName(err, id.Host)
+	localLogger.Printf("Workflow End")
+
+	if panicked != nil {
+		localLogger.Printf("Workflow callback panicked: %v\n%s", panicked.value, panicked.stack)
+		if panicErr, ok := panicked.value.(error); ok {
+			err = fmt.Errorf("workflow callback panicked: %w", panicErr)
+		} else {
+			err = fmt.Errorf("workflow callback panicked: %v", panicked.value)
+		}
+	}
+	return output, panicked, err
+}
+
+// runCallback runs the callback and reports a panic of it instead of raising it.
+func runCallback(callback Callback, invocationCtx InvocationContext, input []Data) (output []Data, panicked *callbackPanic, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = &callbackPanic{value: r, stack: debug.Stack()}
+		}
+	}()
+	output, err = callback(invocationCtx, input)
+	return output, panicked, err
+}
+
+// applyInvocationDefaults sets the configuration of an invocation the caller gave none: a clone of the configuration of
+// its profile, or else of the engine's. The caller holds the engine lock.
+func (e *EngineImpl) applyInvocationDefaults(options *engineRuntimeConfig) {
+	if options.config != nil {
+		return
+	}
+	if options.invocationProfile != nil {
+		options.config = options.invocationProfile.config.Clone()
+		return
+	}
+	options.config = e.config.Clone()
+}
+
+// invocationAnalytics returns the analytics of an invocation, with the instrumentation collector of the caller if it
+// gave one. The caller holds the engine lock.
+func (e *EngineImpl) invocationAnalytics(id Identifier, ic analytics.InstrumentationCollector) analytics.Analytics {
+	if ic == nil {
+		return NewAnalyticsWrapper(e.analytics, id.Host)
+	}
+	tmpAnalytics := &analytics.AnalyticsImpl{}
+	tmpAnalytics.SetInstrumentation(ic)
+	return NewAnalyticsWrapper(tmpAnalytics, id.Host)
+}
+
+// invocationNetworkAccess returns a clone of the engine's network access for an invocation, bound to its configuration.
+// The invocation mutates it, so it is never shared. The caller holds the engine lock.
+func (e *EngineImpl) invocationNetworkAccess(id Identifier, config configuration.Configuration) networking.NetworkAccess {
+	localNetworkAccess := CreateNetworkAccess(e.networkAccess, config)
+	if hostErrorHandler := localNetworkAccess.GetErrorHandler(); hostErrorHandler != nil {
+		// Installed once per invocation: a later AddErrorHandler on this network access replaces it and drops extension-name.
+		localNetworkAccess.AddErrorHandler(func(err error, ctx context.Context) error {
+			return hostErrorHandler(withExtensionName(err, id.Host), ctx)
+		})
+	}
+	return localNetworkAccess
+}
+
+// invocationEngine returns the engine that an invocation reaches through its context. Its configuration and network access
+// are those of the invocation's profile, which the post-invoke hooks share, so both views of a profile agree.
+func (e *EngineImpl) invocationEngine(options *engineRuntimeConfig) *engineWrapper {
+	localEngine := &engineWrapper{
+		WrappedEngine:                   e,
+		defaultInstrumentationCollector: options.ic,
+		defaultCtxFunc:                  options.ctxFunc,
+	}
+	if options.invocationProfile != nil {
+		localEngine.config, localEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
+	}
+	return localEngine
 }
 
 // withExtensionName keeps an extension name that is already set, so a nested workflow's attribution survives the outer one.
@@ -448,7 +533,15 @@ func withExtensionName(err error, extensionName string) error {
 	return catalogErr
 }
 
-func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, invokeOutput []Data, invokeErr error, ic analytics.InstrumentationCollector, cfg configuration.Configuration) {
+// firePostInvokeHooks runs the hooks of the engine for an invocation with the given options. The profile of the invocation
+// replaces the engine's configuration and network access for the hooks, if it has one.
+func (e *EngineImpl) firePostInvokeHooks(
+	ctx context.Context,
+	id Identifier,
+	invokeOutput []Data,
+	invokeErr error,
+	options *engineRuntimeConfig,
+) {
 	e.mu.RLock()
 	if len(e.postInvokeHooks) == 0 {
 		e.mu.RUnlock()
@@ -465,7 +558,7 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	}
 
 	// Use per-invocation config if provided, otherwise fall back to engine-wide config
-	resolvedCfg := cfg
+	resolvedCfg := options.config
 	if resolvedCfg == nil {
 		resolvedCfg = e.config
 	}
@@ -479,7 +572,10 @@ func (e *EngineImpl) firePostInvokeHooks(ctx context.Context, id Identifier, inv
 	defer cancel()
 
 	// Nested invocations made through hookEngine must be bound by the same timeout.
-	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: ic}
+	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: options.ic}
+	if options.invocationProfile != nil {
+		hookEngine.config, hookEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
+	}
 
 	var wg sync.WaitGroup
 	var completedCount atomic.Int32
@@ -588,20 +684,23 @@ type engineRuntimeInfo struct {
 
 // GetMachineID reads through GetWithError rather than GetStringWithError, which drops the value
 // whenever there is an error, because resolution can return a usable id together with an error.
-func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
+func (ri *engineRuntimeInfo) GetMachineID() (runtimeinfo.Machine, error) {
 	value, err := ri.engine.GetConfiguration().GetWithError(configuration.MACHINE_ID)
-	id, _ := value.(string) //nolint:errcheck // a non-string value counts as no machine id
+	var machine runtimeinfo.Machine
+	if m, isMachine := value.(runtimeinfo.Machine); isMachine {
+		machine = m
+	}
 	var details snyk_errors.Error
 	if errors.Is(err, runtimeinfo.ErrNoMachineID) && errors.As(err, &details) {
-		return "", err
+		return runtimeinfo.Machine{}, err
 	}
-	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && id == "") {
-		return "", runtimeinfo.ErrNoMachineID
+	if errors.Is(err, runtimeinfo.ErrNoMachineID) || (err == nil && machine.ID == "") {
+		return runtimeinfo.Machine{}, runtimeinfo.ErrNoMachineID
 	}
-	if err != nil && id == "" {
-		return "", fmt.Errorf("failed to read machine id: %w", err)
+	if err != nil && machine.ID == "" {
+		return runtimeinfo.Machine{}, fmt.Errorf("failed to read machine id: %w", err)
 	}
-	return id, err
+	return machine, err
 }
 
 // GetGlobalConfiguration returns the global configuration options.
@@ -610,7 +709,97 @@ func (ri *engineRuntimeInfo) GetMachineID() (string, error) {
 func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
 	globalFLags.String(configuration.ORGANIZATION, "", "")
+	globalFLags.String(configuration.TENANT, "", "")
 	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
+}
+
+func profilesUnavailableError(reason string) error {
+	return cli.NewConfigProfilesUnavailableError(
+		fmt.Sprintf("Profiles are unavailable: %s.", reason),
+	)
+}
+
+// profileRegistryProvider is implemented by the engines that own a profile registry.
+type profileRegistryProvider interface {
+	profileRegistry() (profile.Registry, error)
+}
+
+// selectInvocationProfile returns the profile that a root invocation without a configuration of its own runs on, which
+// is the profile that the configuration of the engine selects with profile.ConfigKey. The result selected is false, with
+// no profile and no error, when the invocation keeps the configuration of the engine: a nested invocation, an invocation
+// with WithConfig, or the default profile. A failed selection returns selected true, the error, and the empty profile of
+// failedInvocationProfile, so that the invocation fails rather than falls back to another profile.
+func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invocationProfile *engineWrapper, selected bool, err error) {
+	if options.nested || options.config != nil {
+		return nil, false, nil
+	}
+
+	e.mu.RLock()
+	name := e.config.GetString(profile.ConfigKey)
+	e.mu.RUnlock()
+	// the default profile is the engine's own configuration, so it needs no registry
+	if name == "" || name == profile.DefaultName {
+		return nil, false, nil
+	}
+
+	registry, err := e.profileRegistry()
+	if err != nil {
+		return e.failedInvocationProfile(), true, err
+	}
+	p, err := registry.Profile(name)
+	if err != nil {
+		return e.failedInvocationProfile(), true, err
+	}
+	if p == nil || p.Configuration() == nil {
+		return e.failedInvocationProfile(), true, profilesUnavailableError(fmt.Sprintf("profile %q has no configuration", name))
+	}
+	if p.Name() == profile.DefaultName {
+		return nil, false, nil
+	}
+
+	cfg := p.Configuration()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return &engineWrapper{config: cfg, networkAccess: CreateNetworkAccess(e.networkAccess, cfg)}, true, nil
+}
+
+// GetProfileRegistry returns the registry of configuration profiles that the engine selects from. Its profile files are
+// read from the directory set with profile.DirKey. The engine rebuilds the registry when SetConfiguration replaces its
+// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. It fails if the directory
+// is not set or not absolute, or if the engine does not support profiles.
+func GetProfileRegistry(engine Engine) (profile.Registry, error) {
+	provider, ok := engine.(profileRegistryProvider)
+	if !ok {
+		return nil, profilesUnavailableError("the engine does not support profiles")
+	}
+	return provider.profileRegistry()
+}
+
+// profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration
+// of the engine, and built again when profile.DirKey resolves to another directory than the one it was built with. A
+// failed build is not kept, so the next use retries it. The caller must not hold the engine lock.
+func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	dir := e.config.GetString(profile.DirKey)
+	if e.profiles != nil && e.profilesDir == dir {
+		return e.profiles, nil
+	}
+	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
+	if err != nil {
+		return nil, err
+	}
+	e.profiles, e.profilesDir = registry, dir
+	return registry, nil
+}
+
+// failedInvocationProfile returns the profile of an invocation whose profile selection failed: an empty configuration that
+// reads no files and no environment, with a network access bound to it.
+func (e *EngineImpl) failedInvocationProfile() *engineWrapper {
+	cfg := configuration.NewWithOpts()
+	bare := networking.NewNetworkAccess(cfg)
+	bare.SetLogger(e.logger)
+	return &engineWrapper{config: cfg, networkAccess: bare}
 }

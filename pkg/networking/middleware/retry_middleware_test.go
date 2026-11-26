@@ -2344,3 +2344,40 @@ func Test_handleSuccessfulJSONResponse(t *testing.T) {
 		assert.ErrorIs(t, err, testErr)
 	})
 }
+
+func Test_RetryMiddleware_WithoutRetry_SendsTheRequestOnce(t *testing.T) {
+	for name, tt := range map[string]struct {
+		withoutRetry bool
+		wantAttempts int
+	}{
+		"marked":   {withoutRetry: true, wantAttempts: 1},
+		"unmarked": {withoutRetry: false, wantAttempts: 3},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.withoutRetry {
+				ctx = WithoutRetry(ctx)
+			}
+			logger := zerolog.Nop()
+			attemptCount := 0
+			//nolint:unparam // error is always nil but signature must match http.RoundTripper
+			customRTFn := func(req *http.Request) (*http.Response, error) {
+				attemptCount++
+				return &http.Response{StatusCode: http.StatusBadGateway, Header: http.Header{}, Request: req}, nil
+			}
+			rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+			config := configuration.NewWithOpts()
+			config.Set(configuration.NETWORK_REQUEST_RETRIES_ENABLED, true)
+			config.Set(ConfigurationKeyRequestAttempts, 3)
+			config.Set(ConfigurationKeyRetryAfter, 1)
+			sut := NewRetryMiddleware(config, &logger, rt)
+
+			resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/v1/anything", nil).WithContext(ctx))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+			assert.Equal(t, tt.wantAttempts, attemptCount)
+		})
+	}
+}

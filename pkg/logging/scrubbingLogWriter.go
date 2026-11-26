@@ -22,6 +22,7 @@ import (
 	"io"
 	"os/user"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -146,22 +148,71 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 // REDACTION_TERMS configures literal terms redacted only as whole words.
 const REDACTION_TERMS string = "internal_redaction_terms"
 
+// minDeviceTokenTermLength mirrors machinecredential's floor for secret terms: a shorter value would
+// also redact unrelated text.
+const minDeviceTokenTermLength = 16
+
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
-	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
-	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
-	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
-	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
+	for _, secret := range secretsFromConfig(config) {
+		addStaticTermToDict(secret, dict)
+	}
 	for _, term := range config.GetStringSlice(REDACTION_TERMS) {
 		addWholeWordTermToDict(term, dict)
 	}
-	token, err := auth.GetOAuthToken(config)
-	if err != nil || token == nil {
-		return dict
-	}
-	addStaticTermToDict(token.AccessToken, dict)
-	addStaticTermToDict(token.RefreshToken, dict)
 	return dict
+}
+
+// AddSecretsFromConfig makes the writer scrub the secrets the configuration holds, wherever they appear in a
+// message, and the redaction terms it configures. The writer is typically created before it is known which
+// configuration a command runs on, for example the one of a profile, and this adds the secrets of that
+// configuration afterwards. The secrets are scrubbed as GetScrubDictFromConfig scrubs them.
+func AddSecretsFromConfig(writer ScrubbingLogWriter, config configuration.Configuration) {
+	addSecretTerms(writer, secretsFromConfig(config))
+	writer.AddTermsToReplace(config.GetStringSlice(REDACTION_TERMS))
+}
+
+// addSecretTerms adds literal secrets the way GetScrubDictFromConfig adds them, so both redact them alike.
+func addSecretTerms(writer ScrubbingLogWriter, secrets []string) {
+	var mu *sync.RWMutex
+	var dict ScrubbingDict
+	switch w := writer.(type) {
+	case *scrubbingLevelWriter:
+		mu, dict = &w.m, w.scrubDict
+	case *scrubbingIoWriter:
+		mu, dict = &w.m, w.scrubDict
+	default:
+		for _, secret := range secrets {
+			writer.AddTerm(regexp.QuoteMeta(secret), 0)
+		}
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, secret := range secrets {
+		addStaticTermToDict(secret, dict)
+	}
+}
+
+// secretsFromConfig returns the credentials a configuration holds.
+func secretsFromConfig(config configuration.Configuration) []string {
+	secrets := []string{
+		config.GetString(configuration.AUTHENTICATION_TOKEN),
+		config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN),
+		config.GetString(auth.PARAMETER_CLIENT_SECRET),
+		config.GetString(auth.PARAMETER_CLIENT_ID),
+	}
+	if token := config.GetString(machinecredential.CONFIG_KEY_DEVICE_TOKEN); len(token) >= minDeviceTokenTermLength {
+		secrets = append(secrets, token)
+	}
+	if fleetKey := config.GetString(machinecredential.CONFIG_KEY_FLEET_KEY); len(fleetKey) >= minDeviceTokenTermLength {
+		secrets = append(secrets, fleetKey)
+	}
+	secrets = append(secrets, machinecredential.SecretTerms(config)...)
+	if token, err := auth.GetOAuthToken(config); err == nil && token != nil {
+		secrets = append(secrets, token.AccessToken, token.RefreshToken)
+	}
+	return slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })
 }
 
 func getDefaultDict() ScrubbingDict {
@@ -209,25 +260,17 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
+	const authSchemes = `[tT]oken|[bB]earer|[bB]asic|[nN]egotiate`
+	s = fmt.Sprintf(`((?i:authorization)\W+(?:%s) )(%s)`, authSchemes, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("([n|N]egotiate )(%s)", charGroup)
+	// Outside a header these words also start prose such as "basic authentication", so the value
+	// must contain a digit, base64 punctuation or a lower-to-upper case change to count as a credential.
+	const credentialShaped = `[a-zA-Z0-9-_:.=/+~]*(?:[0-9=+/]|[a-z][A-Z])[a-zA-Z0-9-_:.=/+~]*`
+	s = fmt.Sprintf(`((?:%s) )(%s)`, authSchemes, credentialShaped)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),

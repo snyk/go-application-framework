@@ -2,6 +2,44 @@ package identity
 
 import "testing"
 
+func TestSerialFromBIOS(t *testing.T) {
+	t.Parallel()
+
+	serial := "C02Q7KHTGFWF"
+	empty := ""
+
+	tests := []struct {
+		name string
+		raw  *string
+		want string
+	}{
+		{
+			name: "null serial yields empty",
+			raw:  nil,
+			want: "",
+		},
+		{
+			name: "empty serial yields empty",
+			raw:  &empty,
+			want: "",
+		},
+		{
+			name: "present serial returned",
+			raw:  &serial,
+			want: "C02Q7KHTGFWF",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := serialFromBIOS(tt.raw); got != tt.want {
+				t.Errorf("serialFromBIOS() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeSerial(t *testing.T) {
 	t.Parallel()
 

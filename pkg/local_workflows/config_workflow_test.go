@@ -1,13 +1,16 @@
 package localworkflows
 
 import (
+	"errors"
 	"io"
 	"net"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -78,6 +81,7 @@ func Test_ConfigEnvironment_entryPoint_changeEnv(t *testing.T) {
 	storage.EXPECT().Set(configuration.AUTHENTICATION_TOKEN, gomock.Any())
 	storage.EXPECT().Set(auth.CONFIG_KEY_OAUTH_TOKEN, gomock.Any())
 	storage.EXPECT().Set(configuration.ORGANIZATION, gomock.Any())
+	storage.EXPECT().Set(configuration.TENANT, gomock.Any())
 
 	invocationCtx := mocks.NewMockInvocationContext(mockctl)
 	invocationCtx.EXPECT().GetConfiguration().Return(config)
@@ -117,6 +121,37 @@ func Test_ConfigEnvironment_entryPoint_NoChangeEnv(t *testing.T) {
 	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, inputData)
 	assert.Nil(t, outputData)
 	assert.NoError(t, outputErr)
+}
+
+func Test_ConfigEnvironment_entryPoint_tenantFromEnvVarBlocksChange(t *testing.T) {
+	stubLookupHostResolving(t, "api.dev.snyk.io")
+	t.Setenv("SNYK_CFG_TENANT", "env-tenant")
+	config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+	config.AddAlternativeKeys(configuration.TENANT, []string{"snyk_cfg_tenant"})
+	engine := workflow.NewWorkFlowEngine(config)
+	logger := zerolog.New(io.Discard)
+
+	config.Set(configuration.INPUT_DIRECTORY, "dev")
+	config.Set(configuration.API_URL, "random")
+
+	mockctl := gomock.NewController(t)
+	storage := mocks.NewMockStorage(mockctl)
+	config.SetStorage(storage)
+
+	invocationCtx := mocks.NewMockInvocationContext(mockctl)
+	invocationCtx.EXPECT().GetConfiguration().Return(config)
+	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger)
+	invocationCtx.EXPECT().GetUserInterface().Return(ui.DefaultUi())
+
+	err := InitConfigWorkflow(engine)
+	assert.NoError(t, err)
+
+	outputData, outputErr := configEnvironmentWorkflowEntryPoint(invocationCtx, nil)
+	assert.Nil(t, outputData)
+	var snykErr snyk_errors.Error
+	require.True(t, errors.As(outputErr, &snykErr), "expected a catalog error, got %v", outputErr)
+	assert.Equal(t, "SNYK-CLI-0002", snykErr.ErrorCode)
+	assert.Contains(t, snykErr.Detail, "SNYK_CFG_TENANT")
 }
 
 func Test_ConfigEnvironment_entryPoint_Failed(t *testing.T) {
