@@ -741,6 +741,26 @@ func Test_Engine_Profile_WithoutDirKeyFailsSelection(t *testing.T) {
 	assert.Empty(t, entries, "the home directory must not be touched")
 }
 
+// Test_Engine_Profile_FailedDirDefaultIsReportedWithItsCause checks that when the default of the profile directory fails,
+// for example because the home directory is unknown, the selection fails with the cause instead of "not set".
+func Test_Engine_Profile_FailedDirDefaultIsReportedWithItsCause(t *testing.T) {
+	cause := errors.New("home directory could not be determined")
+	base := newProfileBase(t.TempDir())
+	base.AddDefaultValue(profile.DirKey, func(_ configuration.Configuration, _ interface{}) (interface{}, error) {
+		return "", cause
+	})
+	env := newProfileEnvWithBase(t, t.TempDir(), base)
+	env.selectProfile("machine")
+
+	output, err := env.engine.Invoke(NewWorkflowIdentifier("leaf"))
+	assertFailedInvocation(t, env, output, err)
+	var catalogErr snyk_errors.Error
+	require.ErrorAs(t, err, &catalogErr)
+	assert.Equal(t, codeDirInvalid, catalogErr.ErrorCode)
+	assert.Equal(t, "The profile directory is not set and has no default: home directory could not be determined. Set config_profile_dir to an absolute path.", catalogErr.Detail)
+	assert.ErrorIs(t, err, cause)
+}
+
 // Test_GetProfileRegistry_IsTheRegistryOfTheSelection checks that a value set on a profile through the registry is seen by
 // a root invocation that selects that profile.
 func Test_GetProfileRegistry_IsTheRegistryOfTheSelection(t *testing.T) {
