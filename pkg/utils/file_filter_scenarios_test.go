@@ -335,6 +335,14 @@ func buildScenarios(t *testing.T) []scenario {
 			why:            "for untracked files the rule found last wins, and .dcignore and .snyk always drop tracked files",
 		},
 		symlinkEntriesSkippedScenario(t),
+		{
+			name:           "never-include-git-dir-despite-negation",
+			files:          repoFiles(map[string]string{".gitignore": ruleLines("!.git/", "!.git/**")}, "keep.txt"),
+			want:           []string{".gitignore", "keep.txt"},
+			currentCorrect: true,
+			gitOracle:      true,
+			why:            "a negation cannot re-include anything under .git/",
+		},
 
 		// Section 2: known gaps of today's implementation.
 		{
@@ -352,6 +360,8 @@ func buildScenarios(t *testing.T) []scenario {
 			gitOracle: true,
 			why:       "!*/ re-includes folders only, so only keep.txt files are sent",
 		},
+		// .git/ is never returned, but this allowlist also depends on dir-only-rule-allowlist: "!*/"
+		// re-includes every file today, not only folders.
 		{
 			name:      "never-include-git-dir",
 			files:     repoFiles(map[string]string{".gitignore": ruleLines("*", "!*/", "!keep.txt")}, "keep.txt", "other.txt"),

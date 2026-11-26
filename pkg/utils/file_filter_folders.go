@@ -74,7 +74,15 @@ func (e *folderExclusions) excludedByFolder(file string) bool {
 }
 
 func (e *folderExclusions) isExcluded(file string) bool {
-	return e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
+	return inGitFolder(filepath.ToSlash(file)) || e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
+}
+
+// inGitFolder reports whether a path element of slashPath is .git.
+func inGitFolder(slashPath string) bool {
+	return slashPath == gitFolderName ||
+		strings.HasPrefix(slashPath, gitFolderName+"/") ||
+		strings.HasSuffix(slashPath, "/"+gitFolderName) ||
+		strings.Contains(slashPath, "/"+gitFolderName+"/")
 }
 
 func isSymlink(path string) bool {
