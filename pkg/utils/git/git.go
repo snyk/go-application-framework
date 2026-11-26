@@ -1,12 +1,14 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 func RepoUrlFromDir(inputDir string) (string, error) {
@@ -278,6 +280,42 @@ func TreeHashFromDir(inputDir string) (string, error) {
 	}
 
 	return commit.TreeHash.String(), nil
+}
+
+// HeadCommitHashFromDir returns the hash of the commit HEAD points to in the
+// repository discovered from inputDir, like `git rev-parse HEAD` run there, but
+// ignoring GIT_* environment variables such as GIT_DIR. inputDir may be any
+// directory inside the working tree. A detached HEAD is supported, and no remote
+// is required.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The commit hash as a hex string, or an empty string if inputDir is not
+//     inside a git repository or the repository has no commits yet.
+//   - An error object (if the repository exists but HEAD cannot be read).
+func HeadCommitHashFromDir(inputDir string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+		DetectDotGit:          true,
+		EnableDotGitCommonDir: true,
+	})
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	ref, err := repo.Head()
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return ref.Hash().String(), nil
 }
 
 // GetFirstRemote retrieves the first available remote URL from a git repository.
