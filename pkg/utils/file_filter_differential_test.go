@@ -393,6 +393,7 @@ func TestCompileRuleMatcher_detectsNegationsLikeTheLibrary(t *testing.T) {
 		{line: " !a", negated: true},
 		{line: "!a\r", negated: true},
 		{line: "#!a", negated: false},
+		{line: "!#a", negated: true},
 		{line: `\!a`, negated: false},
 		{line: "a!", negated: false},
 		{line: gitIgnoreGlobPrefix + "!a", negated: false},
