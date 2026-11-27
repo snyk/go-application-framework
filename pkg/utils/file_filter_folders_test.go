@@ -46,7 +46,7 @@ func TestFolderExclusions_ParentFolder(t *testing.T) {
 
 func TestFolderExclusions_ExcludedByFolder_RelativeRoot(t *testing.T) {
 	fileFilter := NewFileFilter(".", &log.Logger, WithConfig(newTestConfig(nil)))
-	folders := fileFilter.newFolderExclusions([]string{"**/x/**"})
+	folders := fileFilter.newFolderExclusions(".", []string{"**/x/**"})
 
 	assert.True(t, folders.excludedByFolder("x/f.txt"))
 	assert.False(t, folders.excludedByFolder("../x/f.txt"))
@@ -66,7 +66,7 @@ func TestFolderExclusions_ConcurrentFolderMatching(t *testing.T) {
 	dirs := []string{"x", "x/y", "x/y/z", "a", "a/x", "a/x/b"}
 	newFolders := func() *folderExclusions {
 		fileFilter := NewFileFilter(".", &log.Logger, WithConfig(newTestConfig(map[string]bool{})))
-		return fileFilter.newFolderExclusions([]string{"**/x/**"})
+		return fileFilter.newFolderExclusions(".", []string{"**/x/**"})
 	}
 
 	want := map[string]excludedFolder{}
