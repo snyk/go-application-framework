@@ -397,7 +397,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
 		// opens the repository and reads the git index, so it is timed alongside the filtering.
-		folders := fw.newFolderExclusions(globs)
+		folders := fw.newFolderExclusions(fw.path, globs)
 
 		var matching sync.WaitGroup
 		defer close(filteredFilesCh)
@@ -544,7 +544,7 @@ type exclusionPredicate struct {
 
 // newExclusionPredicate builds the predicate GetFilteredFiles applies. With
 // FF_GITIGNORE_RESPECT_TRACKED_FILES, .gitignore rules are exempt for files git tracks.
-func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate {
+func (fw *FileFilter) newExclusionPredicate(root string, globs []string) *exclusionPredicate {
 	gitSemantics := fw.gitSemantics()
 	if !fw.config.GetBool(FF_GITIGNORE_RESPECT_TRACKED_FILES) {
 		return &exclusionPredicate{all: compileRuleMatcher(globs), gitSemantics: gitSemantics}
@@ -567,7 +567,7 @@ func (fw *FileFilter) newExclusionPredicate(globs []string) *exclusionPredicate 
 		return p
 	}
 
-	trackedFiles := fw.readTrackedFiles()
+	trackedFiles := fw.readTrackedFiles(root)
 	if trackedFiles == nil {
 		return p
 	}
@@ -620,8 +620,8 @@ func (p *exclusionPredicate) isExcluded(file string) bool {
 	return p.matcherFor(file).rules.MatchesPath(filepath.ToSlash(file))
 }
 
-func (fw *FileFilter) readTrackedFiles() *trackedFiles {
-	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
+func (fw *FileFilter) readTrackedFiles(root string) *trackedFiles {
+	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 	if err != nil {
@@ -641,7 +641,7 @@ func (fw *FileFilter) readTrackedFiles() *trackedFiles {
 		return nil
 	}
 
-	repoRoot, err := matchingRepositoryRoot(fw.path, worktree.Filesystem.Root())
+	repoRoot, err := matchingRepositoryRoot(root, worktree.Filesystem.Root())
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to resolve git repository root: %v", err)
 		return nil

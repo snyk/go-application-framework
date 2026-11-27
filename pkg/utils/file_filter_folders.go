@@ -33,10 +33,10 @@ type folderExclusion struct {
 	folder excludedFolder
 }
 
-func (fw *FileFilter) newFolderExclusions(rules []string) *folderExclusions {
+func (fw *FileFilter) newFolderExclusions(root string, rules []string) *folderExclusions {
 	return &folderExclusions{
-		predicate:  fw.newExclusionPredicate(rules),
-		rootPrefix: folderRootPrefix(fw.path),
+		predicate:  fw.newExclusionPredicate(root, rules),
+		rootPrefix: folderRootPrefix(root),
 		filter:     fw,
 		folders:    map[string]*folderExclusion{},
 	}

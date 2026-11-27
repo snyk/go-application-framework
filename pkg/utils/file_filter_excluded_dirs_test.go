@@ -69,7 +69,7 @@ func TestFileFilter_ExcludedDirectoriesAreNotFiltered(t *testing.T) {
 
 			rules, err := fileFilter.GetRules([]string{test.ruleFile})
 			require.NoError(t, err)
-			folders := fileFilter.newFolderExclusions(rules)
+			folders := fileFilter.newFolderExclusions(root, rules)
 			nodeModules := filepath.Join(root, "node_modules") + string(filepath.Separator)
 			excludedFiles := 0
 			for file := range fileFilter.GetAllFiles() {
