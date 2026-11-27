@@ -256,6 +256,10 @@ func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.
 		return authenticateWithPrivateKey(invocationCtx, logger, config, globalConfig, secret, source)
 	}
 
+	if storageErr := configuration.CheckStorage(config); storageErr != nil {
+		return cli.NewConfigNotPersistedError(fmt.Sprintf("The login is refused because the credentials cannot be stored: %s", storageErr))
+	}
+
 	// A person logging in must not authenticate as the enrolled machine, yet the machine keeps its
 	// stored credential until the login succeeds.
 	credentialConfigs := map[string]configuration.Configuration{"local": config, "global": globalConfig}
@@ -411,7 +415,7 @@ func apiURLWithoutUserLogin(config configuration.Configuration) string {
 }
 
 func checkPrivateKeyStorage(ctx context.Context, config configuration.Configuration) error {
-	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
+	if !configuration.HasStorage(config) {
 		return errors.New("the private key cannot be stored: the configuration has no storage")
 	}
 	ctx, cancel := context.WithTimeout(ctx, storeTimeout)

@@ -182,6 +182,10 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 		return result, err
 	}
 
+	if storageErr := configuration.CheckStorage(config); storageErr != nil {
+		return result, cli_error.NewConfigNotPersistedError(fmt.Sprintf("The environment is not changed because it cannot be stored: %s", storageErr))
+	}
+
 	config.Unset(configuration.ORGANIZATION)
 	config.Unset(configuration.TENANT)
 	config.Unset(configuration.AUTHENTICATION_TOKEN)

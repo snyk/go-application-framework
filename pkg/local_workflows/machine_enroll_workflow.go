@@ -53,7 +53,7 @@ func InitMachineEnrollWorkflow(engine workflow.Engine) error {
 // machineEnrollEntryPoint enrolls this machine and stores its credential; the private key never reaches the output.
 func machineEnrollEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
-	if storage := config.GetStorage(); storage == nil || isEmptyStorage(storage) {
+	if !configuration.HasStorage(config) {
 		return nil, errors.New("enrolling is refused because the credential cannot be stored: the configuration has no storage")
 	}
 	deviceToken := config.GetString(flagDeviceToken)
@@ -140,11 +140,6 @@ func enrollmentData(enrollment machineenrollment.Enrollment, asJSON bool) ([]wor
 		}
 	}
 	return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_MACHINE_ENROLL, machineEnrollWorkflowName), contentType, payload)}, nil
-}
-
-func isEmptyStorage(storage configuration.Storage) bool {
-	_, ok := storage.(*configuration.EmptyStorage)
-	return ok
 }
 
 // checkCredentialStorage proves the credential can be stored before the single-use device token is spent on enrolling.

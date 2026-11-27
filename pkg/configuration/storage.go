@@ -51,6 +51,32 @@ func (*EmptyStorage) Unlock() error {
 	return nil
 }
 
+// HasStorage reports whether config stores the values it persists: it has a storage that is not an EmptyStorage.
+func HasStorage(config Configuration) bool {
+	storage := config.GetStorage()
+	if storage == nil {
+		return false
+	}
+	_, empty := storage.(*EmptyStorage)
+	return !empty
+}
+
+// CheckStorage returns an error when config should persist values to a file but has no storage, so a persisted value
+// would be lost when the process exits. The error says how to fix that. A configuration without files is in memory on
+// purpose, and returns nil.
+func CheckStorage(config Configuration) error {
+	if len(config.GetFiles()) == 0 && !IsPinned(config) {
+		return nil
+	}
+	if HasStorage(config) {
+		return nil
+	}
+	if IsPinned(config) {
+		return errors.New("the configured configuration file cannot be used. Point the configuration at a file that can be read and written, then try again.")
+	}
+	return errors.New("the home directory could not be determined. Set the HOME environment variable (USERPROFILE on Windows) to an absolute path, then try again.")
+}
+
 // keyDeleted is a marker value which, when set, causes a key to be deleted from
 // stored configuration.
 var keyDeleted = struct{}{}
