@@ -33,6 +33,8 @@ var regions = []SnykRegion{
 
 var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
 
+var lookupHost = net.LookupHost
+
 func InitConfigWorkflow(engine workflow.Engine) error {
 	// map environmentAlias to an existing value
 	engine.GetConfiguration().AddAlternativeKeys(environmentAlias, []string{configuration.INPUT_DIRECTORY})
@@ -105,7 +107,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 	}
 
 	// test if the url is can be looked up
-	addr, err := net.LookupHost(envUrl.Host)
+	addr, err := lookupHost(envUrl.Host)
 	if err != nil {
 		return "", err
 	}
@@ -118,7 +120,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 }
 
 func sanityCheck(config configuration.Configuration) error {
-	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION}
+	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION, configuration.TENANT}
 	envVars := []string{}
 
 	for _, key := range keys {
@@ -181,6 +183,7 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	}
 
 	config.Unset(configuration.ORGANIZATION)
+	config.Unset(configuration.TENANT)
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io/fs"
 	"math/big"
 	"net"
 	"net/http"
@@ -20,9 +21,11 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -86,6 +89,11 @@ type oAuth2Authenticator struct {
 	// and will result in server.Server exiting immediately when called.
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
+	// assertionProvider, when set via WithClientAssertionProvider, makes the client credentials
+	// grant authenticate with a private_key_jwt client assertion instead of a static client secret.
+	assertionProvider ClientAssertionProvider
+	// assertionClientID is the OAuth client id to use with assertionProvider.
+	assertionClientID string
 }
 
 func OpenBrowser(authUrl string) {
@@ -129,6 +137,17 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	return conf
 }
 
+// getOAuthConfiguration builds this authenticator's oauth2.Config, overriding the client id with
+// assertionClientID when a ClientAssertionProvider is in use.
+func (o *oAuth2Authenticator) getOAuthConfiguration() *oauth2.Config {
+	conf := getOAuthConfiguration(o.config)
+	if o.assertionProvider != nil {
+		conf.ClientID = o.assertionClientID
+		conf.ClientSecret = ""
+	}
+	return conf
+}
+
 func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredentials.Config {
 	conf := &clientcredentials.Config{
 		ClientID:     in.ClientID,
@@ -136,6 +155,24 @@ func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredential
 		TokenURL:     in.Endpoint.TokenURL,
 	}
 	return conf
+}
+
+// getOAuthConfigurationClientAssertion builds a clientcredentials.Config that authenticates with a
+// private_key_jwt client assertion minted by o.assertionProvider, instead of a static client secret.
+func (o *oAuth2Authenticator) getOAuthConfigurationClientAssertion(ctx context.Context) (*clientcredentials.Config, error) {
+	assertionType, assertion, err := o.assertionProvider.ClientAssertion(ctx, o.assertionClientID, o.oauthConfig.Endpoint.TokenURL)
+	if err != nil {
+		return nil, err
+	}
+	return &clientcredentials.Config{
+		ClientID:  o.assertionClientID,
+		TokenURL:  o.oauthConfig.Endpoint.TokenURL,
+		AuthStyle: oauth2.AuthStyleInParams,
+		EndpointParams: url.Values{
+			"client_assertion_type": {assertionType},
+			"client_assertion":      {assertion},
+		},
+	}, nil
 }
 
 // This method creates a code challenge as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.2
@@ -205,6 +242,17 @@ func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Conf
 	return tokenSource.Token()
 }
 
+// refreshTokenClientAssertion fetches a token using the client_credentials grant, authenticating
+// with a freshly minted client assertion instead of a static client secret.
+func (o *oAuth2Authenticator) refreshTokenClientAssertion(ctx context.Context, _ *oauth2.Config, _ *oauth2.Token) (*oauth2.Token, error) {
+	conf, err := o.getOAuthConfigurationClientAssertion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tokenSource := conf.TokenSource(ctx)
+	return tokenSource.Token()
+}
+
 func determineGrantType(config configuration.Configuration) GrantType {
 	grantType := AuthorizationCodeGrant
 	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
@@ -226,7 +274,6 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
-	o.oauthConfig = getOAuthConfiguration(config)
 	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
 
 	// set defaults
@@ -242,10 +289,13 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 		o.tokenRefresherFunc = RefreshToken
 	}
 
-	// apply options
+	// apply options; WithClientAssertionProvider, if used, overrides grantType and
+	// tokenRefresherFunc set above to use a client assertion instead of a static secret.
 	for _, opt := range opts {
 		opt(o)
 	}
+
+	o.oauthConfig = o.getOAuthConfiguration()
 	return o
 }
 
@@ -267,9 +317,9 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 }
 
 func (o *oAuth2Authenticator) IsSupported() bool {
-	tokenExistent := o.token != nil
+	credentialExistent := o.token != nil || o.assertionProvider != nil
 	featureEnabled := o.config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	return tokenExistent && featureEnabled
+	return credentialExistent && featureEnabled
 }
 
 func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
@@ -290,7 +340,7 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 	var err error
 
 	globalRefreshMutex.Lock()
-	o.oauthConfig = getOAuthConfiguration(o.config)
+	o.oauthConfig = o.getOAuthConfiguration()
 	globalRefreshMutex.Unlock()
 
 	if o.grantType == ClientCredentialsGrant {
@@ -303,11 +353,20 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 }
 
 func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant(ctx context.Context) error {
-	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
-
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
+	}
+
+	var config *clientcredentials.Config
+	if o.assertionProvider != nil {
+		var err error
+		config, err = o.getOAuthConfigurationClientAssertion(ctx)
+		if err != nil {
+			return err
+		}
+	} else {
+		config = getOAuthConfigurationClientCredentials(o.oauthConfig)
 	}
 
 	// get token
@@ -521,10 +580,48 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
+	err := o.addAuthenticationHeader(request)
+	if err != nil && o.assertionProvider != nil {
+		return o.machineAuthenticationError(err)
+	}
+	return err
+}
+
+func (o *oAuth2Authenticator) machineAuthenticationError(err error) error {
+	tokenURL := o.oauthConfig.Endpoint.TokenURL
+	status := tokenEndpointStatus(err)
+	if errors.As(err, new(snyk_errors.Error)) {
+		// Hosts show a catalog error's detail, such as "Use `snyk auth`", in place of this message.
+		err = errors.New(err.Error())
+	}
+	if status == http.StatusBadRequest || status == http.StatusUnauthorized {
+		err = fmt.Errorf("machine authentication failed: the token endpoint %s rejected client %s: %w. "+
+			"This machine is enrolled in another region or its client was revoked. "+
+			"Switch back to its region with `snyk config environment`, or enroll this machine again", tokenURL, o.assertionClientID, err)
+	} else {
+		err = fmt.Errorf("machine authentication failed for client %s (token endpoint %s): %w", o.assertionClientID, tokenURL, err)
+	}
+	return &machinecredential.AuthenticationError{Err: err}
+}
+
+// tokenEndpointStatus also reads the catalog error that a host's error handler returns in place of oauth2's.
+func tokenEndpointStatus(err error) int {
+	var retrieveErr *oauth2.RetrieveError
+	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
+		return retrieveErr.Response.StatusCode
+	}
+	var catalogErr snyk_errors.Error
+	if errors.As(err, &catalogErr) {
+		return catalogErr.StatusCode
+	}
+	return 0
+}
+
+func (o *oAuth2Authenticator) addAuthenticationHeader(request *http.Request) error {
 	if request == nil {
 		return fmt.Errorf("request must not be nil")
 	}
-	if o.token == nil {
+	if o.token == nil && o.assertionProvider == nil {
 		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
@@ -609,14 +706,14 @@ func (o *oAuth2Authenticator) syncTokenRefresh(ctx context.Context) (func(), err
 		//
 		// To avoid this, unconditionally refresh the configuation from its
 		// storage and re-parse the oauth token stored within.
-		if err = storage.Refresh(o.config, CONFIG_KEY_OAUTH_TOKEN); err != nil {
+		if err = storage.Refresh(o.config, CONFIG_KEY_OAUTH_TOKEN); err != nil && !(o.assertionProvider != nil && errors.Is(err, fs.ErrNotExist)) {
 			return cleanup, err
 		}
 		o.token, err = GetOAuthToken(o.config)
 		if err != nil {
 			return cleanup, err
 		}
-		if o.token == nil {
+		if o.token == nil && o.assertionProvider == nil {
 			return cleanup, fmt.Errorf("oauth token must not be nil to authorize")
 		}
 	}

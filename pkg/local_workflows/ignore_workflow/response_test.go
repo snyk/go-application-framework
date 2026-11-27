@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	v20241015 "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	utils2 "github.com/snyk/go-application-framework/pkg/utils"
@@ -133,6 +134,99 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 		assert.Equal(t, expectedUserName, result.Properties.IgnoredBy.Name)
 		assert.Equal(t, expectedEmail, *result.Properties.IgnoredBy.Email)
 		assert.Equal(t, sarif.Accepted, result.Status)
+	})
+
+	t.Run("When policyResponse has no reason", func(t *testing.T) {
+		now := time.Now()
+		id := uuid.New()
+
+		policyResponse := &v20241015.PolicyResponse{
+			Id: id,
+			Attributes: v20241015.PolicyResponseAttributes{
+				CreatedAt: now,
+				CreatedBy: &v20241015.Principal{
+					Name:  expectedUserName,
+					Email: utils2.Ptr(expectedEmail),
+				},
+				Action: v20241015.PolicyActionIgnore{
+					Data: v20241015.PolicyActionIgnoreData{
+						Reason: nil,
+					},
+				},
+				Review: v20241015.PolicyReviewApproved,
+			},
+		}
+
+		var result *sarif.Suppression
+		assert.NotPanics(t, func() {
+			result = policyResponseToSarifSuppression(policyResponse)
+		})
+
+		require.NotNil(t, result)
+		assert.Equal(t, id.String(), result.Guid)
+		assert.Empty(t, result.Justification)
+		assert.Equal(t, expectedUserName, result.Properties.IgnoredBy.Name)
+		assert.Equal(t, expectedEmail, *result.Properties.IgnoredBy.Email)
+		assert.Equal(t, sarif.Accepted, result.Status)
+	})
+
+	t.Run("When policyResponse has no created_by", func(t *testing.T) {
+		reason := "security exception"
+		now := time.Now()
+		id := uuid.New()
+
+		policyResponse := &v20241015.PolicyResponse{
+			Id: id,
+			Attributes: v20241015.PolicyResponseAttributes{
+				CreatedAt: now,
+				CreatedBy: nil,
+				Action: v20241015.PolicyActionIgnore{
+					Data: v20241015.PolicyActionIgnoreData{
+						Reason: &reason,
+					},
+				},
+				Review: v20241015.PolicyReviewApproved,
+			},
+		}
+
+		var result *sarif.Suppression
+		assert.NotPanics(t, func() {
+			result = policyResponseToSarifSuppression(policyResponse)
+		})
+
+		require.NotNil(t, result)
+		assert.Equal(t, id.String(), result.Guid)
+		assert.Equal(t, reason, result.Justification)
+		assert.Equal(t, now.Format(time.RFC3339), result.Properties.IgnoredOn)
+		assert.Empty(t, result.Properties.IgnoredBy.Name)
+		assert.Nil(t, result.Properties.IgnoredBy.Email)
+		assert.Equal(t, sarif.Accepted, result.Status)
+	})
+
+	t.Run("When policyResponse has neither reason nor created_by", func(t *testing.T) {
+		now := time.Now()
+		id := uuid.New()
+
+		policyResponse := &v20241015.PolicyResponse{
+			Id: id,
+			Attributes: v20241015.PolicyResponseAttributes{
+				CreatedAt: now,
+				Review:    v20241015.PolicyReviewPending,
+			},
+		}
+
+		var result *sarif.Suppression
+		assert.NotPanics(t, func() {
+			result = policyResponseToSarifSuppression(policyResponse)
+		})
+
+		require.NotNil(t, result)
+		assert.Equal(t, id.String(), result.Guid)
+		assert.Empty(t, result.Justification)
+		assert.Nil(t, result.Properties.Expiration)
+		assert.Equal(t, now.Format(time.RFC3339), result.Properties.IgnoredOn)
+		assert.Equal(t, sarif.IgnoredBy{}, result.Properties.IgnoredBy)
+		assert.Equal(t, sarif.UnderReview, result.Status)
 	})
 
 	t.Run("Different policy review status", func(t *testing.T) {

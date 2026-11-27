@@ -59,10 +59,7 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 		}
 
 		org := c.GetString(configuration.ORGANIZATION)
-		localNetworkStack := engine.GetNetworkAccess().Clone()
-		localNetworkStack.SetConfiguration(c)
-
-		client := localNetworkStack.GetHttpClient()
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		url := c.GetString(configuration.API_URL)
 
 		apiClient := api.NewApi(url, client)

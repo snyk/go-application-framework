@@ -33,18 +33,27 @@ func policyResponseToSarifSuppression(policyResponse *v20241015.PolicyResponse) 
 		expiresStr := policyResponse.Attributes.Action.Data.Expires.Format(time.RFC3339)
 		expires = &expiresStr
 	}
+	// reason and created_by are optional in the API response
+	var justification string
+	if policyResponse.Attributes.Action.Data.Reason != nil {
+		justification = *policyResponse.Attributes.Action.Data.Reason
+	}
+	var ignoredBy sarif.IgnoredBy
+	if policyResponse.Attributes.CreatedBy != nil {
+		ignoredBy = sarif.IgnoredBy{
+			Name:  policyResponse.Attributes.CreatedBy.Name,
+			Email: policyResponse.Attributes.CreatedBy.Email,
+		}
+	}
 	return &sarif.Suppression{
 		Guid:          policyResponse.Id.String(),
-		Justification: *policyResponse.Attributes.Action.Data.Reason,
+		Justification: justification,
 		Status:        policyReviewToSarifStatus(policyResponse.Attributes.Review),
 		Properties: sarif.SuppressionProperties{
 			Expiration: expires,
 			IgnoredOn:  policyResponse.Attributes.CreatedAt.Format(time.RFC3339),
 			Category:   sarif.Category(policyResponse.Attributes.Action.Data.IgnoreType),
-			IgnoredBy: sarif.IgnoredBy{
-				Name:  policyResponse.Attributes.CreatedBy.Name,
-				Email: policyResponse.Attributes.CreatedBy.Email,
-			},
+			IgnoredBy:  ignoredBy,
 		},
 	}
 }

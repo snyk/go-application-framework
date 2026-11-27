@@ -3,9 +3,12 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
+	"github.com/snyk/go-application-framework/internal/machineenrollment"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -36,13 +39,32 @@ var (
 	ErrAuthCanceled = errors.New("authentication failed (canceled)")
 	// ErrAuthTimedOut is returned when an auth request times out.
 	ErrAuthTimedOut = errors.New("authentication failed (timeout)")
+	// ErrNoStoredClientCredential is returned by StoredClientCredential when no client credential is stored.
+	ErrNoStoredClientCredential = machinecredential.ErrNotEnrolled
 )
+
+// StoredClientCredential returns the stored client credential: its client id and its private key as
+// PKCS#8 PEM. The key is long-lived, so keep it off command lines, which other local users can read.
+func StoredClientCredential(config configuration.Configuration) (clientID, privateKeyPEM string, err error) {
+	credential, err := machinecredential.Load(config)
+	if err != nil {
+		return "", "", err
+	}
+	pemBytes, err := machineenrollment.EncodeKeyPEM(credential.Key)
+	if err != nil {
+		return "", "", err
+	}
+	return credential.ClientID, string(pemBytes), nil
+}
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	var authenticator Authenticator
 
 	// try oauth authenticator
-	tmpAuthenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
+	tmpAuthenticator, err := newOAuth2AuthenticatorForStoredCredential(config, httpClient)
+	if err != nil {
+		return &failingAuthenticator{err: err}
+	}
 	if tmpAuthenticator.IsSupported() {
 		authenticator = tmpAuthenticator
 	}
@@ -54,6 +76,30 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 
 	return authenticator
 }
+
+// newOAuth2AuthenticatorForStoredCredential lets an enrolled machine re-mint its access token from the
+// stored key. A stored credential that cannot be read is an error rather than a reason to fall back.
+func newOAuth2AuthenticatorForStoredCredential(config configuration.Configuration, httpClient *http.Client) (Authenticator, error) {
+	opts := []OAuth2AuthenticatorOption{WithHttpClient(httpClient)}
+	credential, err := machinecredential.Load(config)
+	switch {
+	case err == nil:
+		opts = append(opts, WithClientAssertionProvider(credential.ClientID, machinecredential.NewSigner(credential.Key)))
+	case !errors.Is(err, machinecredential.ErrNotEnrolled):
+		return nil, &machinecredential.AuthenticationError{Err: fmt.Errorf("machine authentication failed, the stored machine credential cannot be used: %w", err)}
+	}
+	return NewOAuth2AuthenticatorWithOpts(config, opts...), nil
+}
+
+type failingAuthenticator struct {
+	err error
+}
+
+func (f *failingAuthenticator) Authenticate() error { return f.err }
+
+func (f *failingAuthenticator) AddAuthenticationHeader(*http.Request) error { return f.err }
+
+func (f *failingAuthenticator) IsSupported() bool { return true }
 
 func IsKnownOAuthEndpoint(endpoint string) bool {
 	return api.IsFedramp(endpoint)

@@ -62,7 +62,7 @@ func emit(ctx context.Context, engine workflow.Engine, item Item) (collectionRes
 		return resultNoInputDirectory, 0
 	}
 
-	emitter, err := NewEmitter(engine.GetNetworkAccess().GetHttpClient(), config, logger)
+	emitter, err := NewEmitter(workflow.CreateNetworkAccessFromEngine(engine, config).GetHttpClient(), config, logger)
 	if err != nil {
 		logger.Debug().Err(err).Msg("contributors: failed to initialize emitter")
 		return resultEmitterInitFailed, 0

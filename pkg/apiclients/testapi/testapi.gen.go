@@ -19,6 +19,11 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AibomPolicyProblemSource.
+const (
+	AibomPolicy AibomPolicyProblemSource = "aibom_policy"
+)
+
 // Defines values for BaseResourceType.
 const (
 	BaseResourceTypeBase BaseResourceType = "base"
@@ -43,6 +48,11 @@ const (
 // Defines values for ContainerRepoResourceType.
 const (
 	Container ContainerRepoResourceType = "container"
+)
+
+// Defines values for CreateFindingsDocumentRequestBodyDataType.
+const (
+	FindingsDocumentRequests CreateFindingsDocumentRequestBodyDataType = "findings_document_requests"
 )
 
 // Defines values for CveProblemSource.
@@ -100,6 +110,13 @@ const (
 	DiffResourceCreateItemTypeDiff DiffResourceCreateItemType = "diff"
 )
 
+// Defines values for DocumentFormat.
+const (
+	Cyclonedx  DocumentFormat = "cyclonedx"
+	Sarif      DocumentFormat = "sarif"
+	SnykSchema DocumentFormat = "snyk_schema"
+)
+
 // Defines values for ExecutionFlowEvidenceSource.
 const (
 	ExecutionFlow ExecutionFlowEvidenceSource = "execution_flow"
@@ -112,13 +129,20 @@ const (
 
 // Defines values for FindingType.
 const (
+	FindingTypeAibom   FindingType = "aibom"
 	FindingTypeConfig  FindingType = "config"
 	FindingTypeDast    FindingType = "dast"
 	FindingTypeOther   FindingType = "other"
+	FindingTypeRift    FindingType = "rift"
 	FindingTypeSast    FindingType = "sast"
 	FindingTypeSca     FindingType = "sca"
 	FindingTypeSecret  FindingType = "secret"
 	FindingTypeSecrets FindingType = "secrets"
+)
+
+// Defines values for FindingsDocumentJobDataType.
+const (
+	FindingsDocumentJobs FindingsDocumentJobDataType = "findings_document_jobs"
 )
 
 // Defines values for FixAppliedOutcome.
@@ -264,6 +288,12 @@ const (
 	ReachabilityTypeNoInfo        ReachabilityType = "no_info"
 	ReachabilityTypeNone          ReachabilityType = "none"
 	ReachabilityTypeNotApplicable ReachabilityType = "not_applicable"
+)
+
+// Defines values for RiftFocus.
+const (
+	All     RiftFocus = "all"
+	Default RiftFocus = "default"
 )
 
 // Defines values for SbomReachabilitySubjectType.
@@ -438,6 +468,30 @@ const (
 // ActualVersion Resolved API version
 type ActualVersion = string
 
+// AibomPolicyProblem An organization's AI-BOM policy, violated by an AI component.
+type AibomPolicyProblem struct {
+	// Id The AI-BOM policy ID.
+	Id string `json:"id"`
+
+	// RemediationAdvice The policy's advice on resolving the finding.
+	RemediationAdvice *string `json:"remediation_advice,omitempty"`
+
+	// Severity Severity level of the finding.
+	Severity Severity                 `json:"severity"`
+	Source   AibomPolicyProblemSource `json:"source"`
+}
+
+// AibomPolicyProblemSource defines model for AibomPolicyProblem.Source.
+type AibomPolicyProblemSource string
+
+// AibomScanConfiguration Scan configuration parameters for the AI-BOM scanner, which tests the AI
+// components of the Resources (models, agents, MCP servers) against the
+// organization's AI-BOM policies.
+type AibomScanConfiguration struct {
+	// Enriched Run AI enrichment on the discovered components before testing them.
+	Enriched *bool `json:"enriched,omitempty"`
+}
+
 // AppliedPolicy defines model for AppliedPolicy.
 type AppliedPolicy struct {
 	union json.RawMessage
@@ -574,6 +628,18 @@ type ContainerRepoResourceType string
 // ContainerScanConfiguration Scan configuration parameters for the Container scanner.
 type ContainerScanConfiguration = map[string]interface{}
 
+// CreateFindingsDocumentRequestBody Request body for creating a new findings document.
+type CreateFindingsDocumentRequestBody struct {
+	Data struct {
+		// Attributes Attributes for creating a new findings document.
+		Attributes FindingsDocumentAttributes                `json:"attributes"`
+		Type       CreateFindingsDocumentRequestBodyDataType `json:"type"`
+	} `json:"data"`
+}
+
+// CreateFindingsDocumentRequestBodyDataType defines model for CreateFindingsDocumentRequestBody.Data.Type.
+type CreateFindingsDocumentRequestBodyDataType string
+
 // CveProblem CVE designation according to the public Common Vulnerability Exposure
 // database.
 type CveProblem struct {
@@ -670,7 +736,8 @@ type DepGraphSubjectCreate struct {
 // DepGraphSubjectCreateType defines model for DepGraphSubjectCreate.Type.
 type DepGraphSubjectCreateType string
 
-// DependencyCountFact DependencyCountFact represents a dependency count fact.
+// DependencyCountFact A Fact containing the count of dependencies scanned during
+// the Test.
 type DependencyCountFact struct {
 	TotalDependencyCount int64                   `json:"total_dependency_count"`
 	Type                 DependencyCountFactType `json:"type"`
@@ -759,6 +826,9 @@ type DiffSuggestion struct {
 	ExternalId *openapi_types.UUID `json:"external_id,omitempty"`
 	Rank       *uint8              `json:"rank,omitempty"`
 }
+
+// DocumentFormat Available formats findings can be converted into.
+type DocumentFormat string
 
 // Error defines model for Error.
 type Error struct {
@@ -1009,6 +1079,54 @@ type FindingSummary struct {
 // FindingType Type of Finding which was discovered.
 type FindingType string
 
+// FindingsDocumentAttributes Attributes for creating a new findings document.
+type FindingsDocumentAttributes struct {
+	// ComponentId The ID of the component to generate a document for.
+	ComponentId *string `json:"component_id,omitempty"`
+
+	// Format Desired output format for the generated Findings document.
+	Format DocumentFormat `json:"format"`
+
+	// TestId The ID of the test to generate a document for.
+	TestId openapi_types.UUID `json:"test_id"`
+}
+
+// FindingsDocumentJobAttributes FindingsDocumentJobAttributes represents the attributes of a
+// Findings-document-generation Job resource.
+type FindingsDocumentJobAttributes struct {
+	// ComponentId The ID of the component to generate a document for.
+	ComponentId *string `json:"component_id,omitempty"`
+
+	// CreatedAt Creation time of the job resource.
+	CreatedAt time.Time `json:"created_at"`
+
+	// Error An error message to inform the customer of any issues that
+	// happened while processing the job.
+	Error *string `json:"error,omitempty"`
+
+	// Format The format requested for the generated document.
+	Format DocumentFormat `json:"format"`
+
+	// Status State of the document conversion job, whether it is pending, running, complete or errored.
+	Status TestExecutionStates `json:"status"`
+
+	// TestId The ID of the test to generate a document for.
+	TestId openapi_types.UUID `json:"test_id"`
+}
+
+// FindingsDocumentJobData FindingsDocumentJobData represents a Findings-document Job resource
+// object.
+type FindingsDocumentJobData struct {
+	// Attributes FindingsDocumentJobAttributes represents the attributes of a
+	// Findings-document-generation Job resource.
+	Attributes FindingsDocumentJobAttributes `json:"attributes"`
+	Id         openapi_types.UUID            `json:"id"`
+	Type       FindingsDocumentJobDataType   `json:"type"`
+}
+
+// FindingsDocumentJobDataType defines model for FindingsDocumentJobData.Type.
+type FindingsDocumentJobDataType string
+
 // FixAction Different fix formats in which the fix action is represented. We distinguish between advice and diff formats.
 //
 // Advice - Fix advice in a display only / informational format. These are highly product line specific, so they have their own model.
@@ -1165,18 +1283,20 @@ type InlineResourceCreateItem struct {
 // InlineResourceCreateItemType defines model for InlineResourceCreateItem.Type.
 type InlineResourceCreateItemType string
 
-// JobAttributes JobAttributes represents the attributes of a Job resource
+// JobAttributes JobAttributes represents the attributes of a Job resource,
+// tracking the status of a Test in-flight.
 type JobAttributes struct {
 	// CreatedAt Creation time of the job resource
 	CreatedAt time.Time `json:"created_at"`
 
-	// Status State of the test, whether it is pending, running, complete or errored.
+	// Status State of the test, whether it is pending, started, finished or errored.
 	Status TestExecutionStates `json:"status"`
 }
 
-// JobData JobData represents a Job resource object.
+// JobData JobData encapsulates a Job resource object.
 type JobData struct {
-	// Attributes JobAttributes represents the attributes of a Job resource
+	// Attributes JobAttributes represents the attributes of a Job resource,
+	// tracking the status of a Test in-flight.
 	Attributes    JobAttributes      `json:"attributes"`
 	Id            openapi_types.UUID `json:"id"`
 	Relationships *JobRelationships  `json:"relationships,omitempty"`
@@ -1226,7 +1346,9 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
-// LocalIgnore defines model for LocalIgnore.
+// LocalIgnore A .snyk-style Ignore to apply to the Test.
+// Used to ignore known issues that should not be included
+// in determining the Test's Outcome.
 type LocalIgnore struct {
 	// CreatedAt When the ignore was first created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
@@ -1548,6 +1670,17 @@ type ReachablePath struct {
 	Location *FileRegion `json:"location,omitempty"`
 }
 
+// RiftFocus defines model for RiftFocus.
+type RiftFocus string
+
+// RiftScanConfiguration Scan configuration parameters for the Rift scanner.
+type RiftScanConfiguration struct {
+	// Focus Scope of the security review. Use `default` for a review focused on business
+	// logic, authentication and authorization, or `all` for a broad vulnerability
+	// review. Omit to let Rift select its default focus.
+	Focus *RiftFocus `json:"focus,omitempty"`
+}
+
 // Risk Risk represents Snyk's risk assessment of a finding.
 type Risk struct {
 	// RiskScore Risk score assessment for the finding.
@@ -1610,7 +1743,14 @@ type SbomSubject struct {
 type SbomSubjectType string
 
 // ScaScanConfiguration Scan configuration parameters for the SCA scanner.
-type ScaScanConfiguration = map[string]interface{}
+type ScaScanConfiguration struct {
+	// ReachabilityAnalysis Explicitly request (true) or skip (false) Reachability analysis for
+	// this SCA scan.
+	//
+	// When omitted (e.g. older clients), Reachability analysis is performed
+	// if the Test Resources include both an SBOM and a Source upload.
+	ReachabilityAnalysis *bool `json:"reachability_analysis,omitempty"`
+}
 
 // ScanConfiguration A map of scanner types to their specific set of
 // configuration parameters.
@@ -1624,11 +1764,17 @@ type ScaScanConfiguration = map[string]interface{}
 // that scanner not being run. A provided empty scan config
 // will run the scanner if it is possible.
 type ScanConfiguration struct {
+	// Aibom Cannot be combined with other scanners in the same Test.
+	Aibom *AibomScanConfiguration `json:"aibom,omitempty"`
+
 	// Container Scan configuration parameters for the Container scanner.
 	Container *ContainerScanConfiguration `json:"container,omitempty"`
 
 	// Iac Scan configuration parameters for the IAC scanner.
 	Iac *IacScanConfiguration `json:"iac,omitempty"`
+
+	// Rift Cannot be combined with other scanners in the same Test.
+	Rift *RiftScanConfiguration `json:"rift,omitempty"`
 
 	// Sast Scan configuration parameters for the SAST scanner.
 	Sast *SastScanConfiguration `json:"sast,omitempty"`
@@ -1644,9 +1790,15 @@ type ScanConfiguration struct {
 // Provides context about where the content came from; the resource itself is the testable item.
 // ScmResource does not use this; it identifies SCM via its own fields.
 type ScmContext struct {
-	Branch    *string `json:"branch,omitempty"`
+	// Branch Branch within SCM repo that will be tested.
+	Branch *string `json:"branch,omitempty"`
+
+	// CommitRef Commit hash within the SCM repo containing the
+	// tested content.
 	CommitRef *string `json:"commit_ref,omitempty"`
-	RepoUrl   *string `json:"repo_url,omitempty"`
+
+	// RepoUrl URL at which the repository can be found in the SCM.
+	RepoUrl *string `json:"repo_url,omitempty"`
 }
 
 // ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
@@ -2267,7 +2419,11 @@ type TestAttributesCreate struct {
 	UserPublicId *string `json:"user_public_id,omitempty"`
 }
 
-// TestComponent TestComponent represents a Test Component.
+// TestComponent TestComponents are discrete units of content within the
+// testable resources provided that were scanned individually.
+//
+// E.g. in SCA scans, individual package manifests within a repo
+// or an aggregated SBOM will be flagged as their own TestComponents.
 type TestComponent struct {
 	// AssetId ID of Asset associated with Component.
 	AssetId *Uuid `json:"asset_id,omitempty"`
@@ -2278,9 +2434,12 @@ type TestComponent struct {
 	// ProjectId ID of Project associated with Component.
 	ProjectId *Uuid `json:"project_id,omitempty"`
 
-	// ScanType Type of Scanner producing Findings associated with this
+	// ScanType Class of Scanner used to discover Findings associated with this
 	// Component.
 	ScanType FindingType `json:"scan_type"`
+
+	// Tool Tool used to perform the scan.
+	Tool *String256 `json:"tool,omitempty"`
 }
 
 // TestConfiguration Test configuration.
@@ -2354,7 +2513,8 @@ type TestDataCreateType string
 // TestExecutionStates defines model for TestExecutionStates.
 type TestExecutionStates string
 
-// TestFact DependencyCountFact represents a dependency count fact.
+// TestFact A Fact containing the count of dependencies scanned during
+// the Test.
 type TestFact = DependencyCountFact
 
 // TestOutcome Outcome of a test; pass or fail.
@@ -2893,6 +3053,12 @@ type SnykvulndbVulnerableFunctionId struct {
 	FunctionName string `json:"function_name"`
 }
 
+// ComponentIdParam defines model for ComponentIdParam.
+type ComponentIdParam = string
+
+// DocumentIdParam defines model for DocumentIdParam.
+type DocumentIdParam = openapi_types.UUID
+
 // JobIdParam defines model for JobIdParam.
 type JobIdParam = openapi_types.UUID
 
@@ -2931,6 +3097,57 @@ type N404 = ErrorDocument
 
 // N500 defines model for 500.
 type N500 = ErrorDocument
+
+// GetFindingsDocumentJobParams defines parameters for GetFindingsDocumentJob.
+type GetFindingsDocumentJobParams struct {
+	// Version The API version requested.
+	Version IoSnykApiRequestSnykApiRequestVersion `form:"version" json:"version"`
+
+	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
+	//
+	// Snyk clients can optionally provide this ID.
+	SnykRequestId *IoSnykApiRequestSnykApiRequestRequestId `json:"snyk-request-id,omitempty"`
+
+	// SnykInteractionId Identifies the Snyk client interaction in which this API request occurs.
+	//
+	// The identifier is an opaque string. though at the time of writing it may either be a
+	// uuid or a urn containing a uuid and some metadata.
+	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
+}
+
+// GetDocumentParams defines parameters for GetDocument.
+type GetDocumentParams struct {
+	// Version The API version requested.
+	Version IoSnykApiRequestSnykApiRequestVersion `form:"version" json:"version"`
+
+	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
+	//
+	// Snyk clients can optionally provide this ID.
+	SnykRequestId *IoSnykApiRequestSnykApiRequestRequestId `json:"snyk-request-id,omitempty"`
+
+	// SnykInteractionId Identifies the Snyk client interaction in which this API request occurs.
+	//
+	// The identifier is an opaque string. though at the time of writing it may either be a
+	// uuid or a urn containing a uuid and some metadata.
+	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
+}
+
+// CreateTestFindingsDocParams defines parameters for CreateTestFindingsDoc.
+type CreateTestFindingsDocParams struct {
+	// Version The API version requested.
+	Version IoSnykApiRequestSnykApiRequestVersion `form:"version" json:"version"`
+
+	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
+	//
+	// Snyk clients can optionally provide this ID.
+	SnykRequestId *IoSnykApiRequestSnykApiRequestRequestId `json:"snyk-request-id,omitempty"`
+
+	// SnykInteractionId Identifies the Snyk client interaction in which this API request occurs.
+	//
+	// The identifier is an opaque string. though at the time of writing it may either be a
+	// uuid or a urn containing a uuid and some metadata.
+	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
+}
 
 // GetJobParams defines parameters for GetJob.
 type GetJobParams struct {
@@ -2983,6 +3200,32 @@ type GetTestParams struct {
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
 
+// ListComponentFindingsParams defines parameters for ListComponentFindings.
+type ListComponentFindingsParams struct {
+	// Version The API version requested.
+	Version IoSnykApiRequestSnykApiRequestVersion `form:"version" json:"version"`
+
+	// StartingAfter Opaque pagination cursor for forward traversal.
+	StartingAfter *IoSnykApiRequestPaginatedRequestStartingAfter `form:"starting_after,omitempty" json:"starting_after,omitempty"`
+
+	// EndingBefore Opaque pagination cursor for reverse traversal.
+	EndingBefore *IoSnykApiRequestPaginatedRequestEndingBefore `form:"ending_before,omitempty" json:"ending_before,omitempty"`
+
+	// Limit The number of items to return.
+	Limit *IoSnykApiRequestPaginatedRequestLimit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
+	//
+	// Snyk clients can optionally provide this ID.
+	SnykRequestId *IoSnykApiRequestSnykApiRequestRequestId `json:"snyk-request-id,omitempty"`
+
+	// SnykInteractionId Identifies the Snyk client interaction in which this API request occurs.
+	//
+	// The identifier is an opaque string. though at the time of writing it may either be a
+	// uuid or a urn containing a uuid and some metadata.
+	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
+}
+
 // ListFindingsParams defines parameters for ListFindings.
 type ListFindingsParams struct {
 	// Version The API version requested.
@@ -3008,6 +3251,9 @@ type ListFindingsParams struct {
 	// uuid or a urn containing a uuid and some metadata.
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
+
+// CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody defines body for CreateTestFindingsDoc for application/vnd.api+json ContentType.
+type CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody = CreateFindingsDocumentRequestBody
 
 // CreateTestApplicationVndAPIPlusJSONRequestBody defines body for CreateTest for application/vnd.api+json ContentType.
 type CreateTestApplicationVndAPIPlusJSONRequestBody = TestRequestBody
@@ -4783,6 +5029,34 @@ func (t *Problem) MergeSecretsRuleProblem(v SecretsRuleProblem) error {
 	return err
 }
 
+// AsAibomPolicyProblem returns the union data inside the Problem as a AibomPolicyProblem
+func (t Problem) AsAibomPolicyProblem() (AibomPolicyProblem, error) {
+	var body AibomPolicyProblem
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAibomPolicyProblem overwrites any union data inside the Problem as the provided AibomPolicyProblem
+func (t *Problem) FromAibomPolicyProblem(v AibomPolicyProblem) error {
+	v.Source = "aibom_policy"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAibomPolicyProblem performs a merge with any union data inside the Problem, using the provided AibomPolicyProblem
+func (t *Problem) MergeAibomPolicyProblem(v AibomPolicyProblem) error {
+	v.Source = "aibom_policy"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsOtherProblem returns the union data inside the Problem as a OtherProblem
 func (t Problem) AsOtherProblem() (OtherProblem, error) {
 	var body OtherProblem
@@ -4825,6 +5099,8 @@ func (t Problem) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "aibom_policy":
+		return t.AsAibomPolicyProblem()
 	case "cve":
 		return t.AsCveProblem()
 	case "cwe":
@@ -5893,6 +6169,17 @@ type ClientInterface interface {
 	// GetAPIVersion request
 	GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetFindingsDocumentJob request
+	GetFindingsDocumentJob(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetFindingsDocumentJobParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDocument request
+	GetDocument(ctx context.Context, orgId OrgIdParam, documentId DocumentIdParam, params *GetDocumentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTestFindingsDocWithBody request with any body
+	CreateTestFindingsDocWithBody(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateTestFindingsDocWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, body CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetJob request
 	GetJob(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetJobParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5903,6 +6190,9 @@ type ClientInterface interface {
 
 	// GetTest request
 	GetTest(ctx context.Context, orgId OrgIdParam, testId TestIdParam, params *GetTestParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListComponentFindings request
+	ListComponentFindings(ctx context.Context, orgId OrgIdParam, testId TestIdParam, componentId ComponentIdParam, params *ListComponentFindingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListFindings request
 	ListFindings(ctx context.Context, orgId OrgIdParam, testId TestIdParam, params *ListFindingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5922,6 +6212,54 @@ func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEdito
 
 func (c *Client) GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAPIVersionRequest(c.Server, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetFindingsDocumentJob(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetFindingsDocumentJobParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetFindingsDocumentJobRequest(c.Server, orgId, jobId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetDocument(ctx context.Context, orgId OrgIdParam, documentId DocumentIdParam, params *GetDocumentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDocumentRequest(c.Server, orgId, documentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTestFindingsDocWithBody(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTestFindingsDocRequestWithBody(c.Server, orgId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTestFindingsDocWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, body CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTestFindingsDocRequestWithApplicationVndAPIPlusJSONBody(c.Server, orgId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5970,6 +6308,18 @@ func (c *Client) CreateTestWithApplicationVndAPIPlusJSONBody(ctx context.Context
 
 func (c *Client) GetTest(ctx context.Context, orgId OrgIdParam, testId TestIdParam, params *GetTestParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetTestRequest(c.Server, orgId, testId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListComponentFindings(ctx context.Context, orgId OrgIdParam, testId TestIdParam, componentId ComponentIdParam, params *ListComponentFindingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListComponentFindingsRequest(c.Server, orgId, testId, componentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6048,6 +6398,267 @@ func NewGetAPIVersionRequest(server string, version string) (*http.Request, erro
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetFindingsDocumentJobRequest generates requests for GetFindingsDocumentJob
+func NewGetFindingsDocumentJobRequest(server string, orgId OrgIdParam, jobId JobIdParam, params *GetFindingsDocumentJobParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "job_id", runtime.ParamLocationPath, jobId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/document_jobs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", false, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.SnykRequestId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "snyk-request-id", runtime.ParamLocationHeader, *params.SnykRequestId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-request-id", headerParam0)
+		}
+
+		if params.SnykInteractionId != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "snyk-interaction-id", runtime.ParamLocationHeader, *params.SnykInteractionId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-interaction-id", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetDocumentRequest generates requests for GetDocument
+func NewGetDocumentRequest(server string, orgId OrgIdParam, documentId DocumentIdParam, params *GetDocumentParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "document_id", runtime.ParamLocationPath, documentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/documents/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", false, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.SnykRequestId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "snyk-request-id", runtime.ParamLocationHeader, *params.SnykRequestId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-request-id", headerParam0)
+		}
+
+		if params.SnykInteractionId != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "snyk-interaction-id", runtime.ParamLocationHeader, *params.SnykInteractionId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-interaction-id", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewCreateTestFindingsDocRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateTestFindingsDoc builder with application/vnd.api+json body
+func NewCreateTestFindingsDocRequestWithApplicationVndAPIPlusJSONBody(server string, orgId OrgIdParam, params *CreateTestFindingsDocParams, body CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateTestFindingsDocRequestWithBody(server, orgId, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateTestFindingsDocRequestWithBody generates requests for CreateTestFindingsDoc with any type of body
+func NewCreateTestFindingsDocRequestWithBody(server string, orgId OrgIdParam, params *CreateTestFindingsDocParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/findings/documents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", false, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.SnykRequestId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "snyk-request-id", runtime.ParamLocationHeader, *params.SnykRequestId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-request-id", headerParam0)
+		}
+
+		if params.SnykInteractionId != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "snyk-interaction-id", runtime.ParamLocationHeader, *params.SnykInteractionId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-interaction-id", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -6314,6 +6925,146 @@ func NewGetTestRequest(server string, orgId OrgIdParam, testId TestIdParam, para
 	return req, nil
 }
 
+// NewListComponentFindingsRequest generates requests for ListComponentFindings
+func NewListComponentFindingsRequest(server string, orgId OrgIdParam, testId TestIdParam, componentId ComponentIdParam, params *ListComponentFindingsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "test_id", runtime.ParamLocationPath, testId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "component_id", runtime.ParamLocationPath, componentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/tests/%s/components/%s/findings", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", false, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.StartingAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndingBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.SnykRequestId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "snyk-request-id", runtime.ParamLocationHeader, *params.SnykRequestId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-request-id", headerParam0)
+		}
+
+		if params.SnykInteractionId != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "snyk-interaction-id", runtime.ParamLocationHeader, *params.SnykInteractionId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("snyk-interaction-id", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListFindingsRequest generates requests for ListFindings
 func NewListFindingsRequest(server string, orgId OrgIdParam, testId TestIdParam, params *ListFindingsParams) (*http.Request, error) {
 	var err error
@@ -6496,6 +7247,17 @@ type ClientWithResponsesInterface interface {
 	// GetAPIVersionWithResponse request
 	GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error)
 
+	// GetFindingsDocumentJobWithResponse request
+	GetFindingsDocumentJobWithResponse(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetFindingsDocumentJobParams, reqEditors ...RequestEditorFn) (*GetFindingsDocumentJobResponse, error)
+
+	// GetDocumentWithResponse request
+	GetDocumentWithResponse(ctx context.Context, orgId OrgIdParam, documentId DocumentIdParam, params *GetDocumentParams, reqEditors ...RequestEditorFn) (*GetDocumentResponse, error)
+
+	// CreateTestFindingsDocWithBodyWithResponse request with any body
+	CreateTestFindingsDocWithBodyWithResponse(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTestFindingsDocResponse, error)
+
+	CreateTestFindingsDocWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, body CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTestFindingsDocResponse, error)
+
 	// GetJobWithResponse request
 	GetJobWithResponse(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetJobParams, reqEditors ...RequestEditorFn) (*GetJobResponse, error)
 
@@ -6506,6 +7268,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetTestWithResponse request
 	GetTestWithResponse(ctx context.Context, orgId OrgIdParam, testId TestIdParam, params *GetTestParams, reqEditors ...RequestEditorFn) (*GetTestResponse, error)
+
+	// ListComponentFindingsWithResponse request
+	ListComponentFindingsWithResponse(ctx context.Context, orgId OrgIdParam, testId TestIdParam, componentId ComponentIdParam, params *ListComponentFindingsParams, reqEditors ...RequestEditorFn) (*ListComponentFindingsResponse, error)
 
 	// ListFindingsWithResponse request
 	ListFindingsWithResponse(ctx context.Context, orgId OrgIdParam, testId TestIdParam, params *ListFindingsParams, reqEditors ...RequestEditorFn) (*ListFindingsResponse, error)
@@ -6563,11 +7328,127 @@ func (r GetAPIVersionResponse) StatusCode() int {
 	return 0
 }
 
+type GetFindingsDocumentJobResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		// Data FindingsDocumentJobData represents a Findings-document Job resource
+		// object.
+		Data    FindingsDocumentJobData          `json:"data"`
+		Jsonapi IoSnykApiCommonJsonApi           `json:"jsonapi"`
+		Links   GetFindingsDocumentJob_200_Links `json:"links"`
+
+		// Meta Free-form object that may contain non-standard information.
+		Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+	}
+	ApplicationvndApiJSON303 *struct {
+		// Data FindingsDocumentJobData represents a Findings-document Job resource
+		// object.
+		Data    FindingsDocumentJobData          `json:"data"`
+		Jsonapi IoSnykApiCommonJsonApi           `json:"jsonapi"`
+		Links   GetFindingsDocumentJob_303_Links `json:"links"`
+
+		// Meta Free-form object that may contain non-standard information.
+		Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+	}
+	ApplicationvndApiJSON400 *IoSnykApiCommonErrorDocument
+}
+type GetFindingsDocumentJob_200_Links struct {
+	Related              *IoSnykApiCommonLinkProperty           `json:"related,omitempty"`
+	Self                 *IoSnykApiCommonLinkProperty           `json:"self,omitempty"`
+	AdditionalProperties map[string]IoSnykApiCommonLinkProperty `json:"-"`
+}
+type GetFindingsDocumentJob_303_Links struct {
+	Related              *IoSnykApiCommonLinkProperty           `json:"related,omitempty"`
+	Self                 *IoSnykApiCommonLinkProperty           `json:"self,omitempty"`
+	AdditionalProperties map[string]IoSnykApiCommonLinkProperty `json:"-"`
+}
+
+// Status returns HTTPResponse.Status
+func (r GetFindingsDocumentJobResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetFindingsDocumentJobResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetDocumentResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *IoSnykApiCommonErrorDocument
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDocumentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDocumentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateTestFindingsDocResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON202 *struct {
+		Data struct {
+			// Attributes FindingsDocumentJobAttributes represents the attributes of a
+			// Findings-document-generation Job resource.
+			Attributes FindingsDocumentJobAttributes    `json:"attributes"`
+			Id         openapi_types.UUID               `json:"id"`
+			Type       CreateTestFindingsDoc202DataType `json:"type"`
+		} `json:"data"`
+		Jsonapi IoSnykApiCommonJsonApi          `json:"jsonapi"`
+		Links   CreateTestFindingsDoc_202_Links `json:"links"`
+
+		// Meta Free-form object that may contain non-standard information.
+		Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+	}
+	ApplicationvndApiJSON400 *IoSnykApiCommonErrorDocument
+}
+type CreateTestFindingsDoc202DataType string
+type CreateTestFindingsDoc_202_Links struct {
+	Related              *IoSnykApiCommonLinkProperty           `json:"related,omitempty"`
+	Self                 *IoSnykApiCommonLinkProperty           `json:"self,omitempty"`
+	AdditionalProperties map[string]IoSnykApiCommonLinkProperty `json:"-"`
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTestFindingsDocResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTestFindingsDocResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetJobResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *struct {
-		// Data JobData represents a Job resource object.
+		// Data JobData encapsulates a Job resource object.
 		Data    JobData                `json:"data"`
 		Jsonapi IoSnykApiCommonJsonApi `json:"jsonapi"`
 		Links   GetJob_200_Links       `json:"links"`
@@ -6576,7 +7457,7 @@ type GetJobResponse struct {
 		Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
 	}
 	ApplicationvndApiJSON303 *struct {
-		// Data JobData represents a Job resource object.
+		// Data JobData encapsulates a Job resource object.
 		Data    JobData                `json:"data"`
 		Jsonapi IoSnykApiCommonJsonApi `json:"jsonapi"`
 		Links   GetJob_303_Links       `json:"links"`
@@ -6618,7 +7499,8 @@ type CreateTestResponse struct {
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON202 *struct {
 		Data struct {
-			// Attributes JobAttributes represents the attributes of a Job resource
+			// Attributes JobAttributes represents the attributes of a Job resource,
+			// tracking the status of a Test in-flight.
 			Attributes JobAttributes         `json:"attributes"`
 			Id         openapi_types.UUID    `json:"id"`
 			Type       CreateTest202DataType `json:"type"`
@@ -6690,6 +7572,36 @@ func (r GetTestResponse) StatusCode() int {
 	return 0
 }
 
+type ListComponentFindingsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    []FindingData                 `json:"data"`
+		Jsonapi IoSnykApiCommonJsonApi        `json:"jsonapi"`
+		Links   IoSnykApiCommonPaginatedLinks `json:"links"`
+
+		// Meta Free-form object that may contain non-standard information.
+		Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+	}
+	ApplicationvndApiJSON400 *IoSnykApiCommonErrorDocument
+}
+
+// Status returns HTTPResponse.Status
+func (r ListComponentFindingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListComponentFindingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListFindingsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -6738,6 +7650,41 @@ func (c *ClientWithResponses) GetAPIVersionWithResponse(ctx context.Context, ver
 	return ParseGetAPIVersionResponse(rsp)
 }
 
+// GetFindingsDocumentJobWithResponse request returning *GetFindingsDocumentJobResponse
+func (c *ClientWithResponses) GetFindingsDocumentJobWithResponse(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetFindingsDocumentJobParams, reqEditors ...RequestEditorFn) (*GetFindingsDocumentJobResponse, error) {
+	rsp, err := c.GetFindingsDocumentJob(ctx, orgId, jobId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetFindingsDocumentJobResponse(rsp)
+}
+
+// GetDocumentWithResponse request returning *GetDocumentResponse
+func (c *ClientWithResponses) GetDocumentWithResponse(ctx context.Context, orgId OrgIdParam, documentId DocumentIdParam, params *GetDocumentParams, reqEditors ...RequestEditorFn) (*GetDocumentResponse, error) {
+	rsp, err := c.GetDocument(ctx, orgId, documentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDocumentResponse(rsp)
+}
+
+// CreateTestFindingsDocWithBodyWithResponse request with arbitrary body returning *CreateTestFindingsDocResponse
+func (c *ClientWithResponses) CreateTestFindingsDocWithBodyWithResponse(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTestFindingsDocResponse, error) {
+	rsp, err := c.CreateTestFindingsDocWithBody(ctx, orgId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTestFindingsDocResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateTestFindingsDocWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgIdParam, params *CreateTestFindingsDocParams, body CreateTestFindingsDocApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTestFindingsDocResponse, error) {
+	rsp, err := c.CreateTestFindingsDocWithApplicationVndAPIPlusJSONBody(ctx, orgId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTestFindingsDocResponse(rsp)
+}
+
 // GetJobWithResponse request returning *GetJobResponse
 func (c *ClientWithResponses) GetJobWithResponse(ctx context.Context, orgId OrgIdParam, jobId JobIdParam, params *GetJobParams, reqEditors ...RequestEditorFn) (*GetJobResponse, error) {
 	rsp, err := c.GetJob(ctx, orgId, jobId, params, reqEditors...)
@@ -6771,6 +7718,15 @@ func (c *ClientWithResponses) GetTestWithResponse(ctx context.Context, orgId Org
 		return nil, err
 	}
 	return ParseGetTestResponse(rsp)
+}
+
+// ListComponentFindingsWithResponse request returning *ListComponentFindingsResponse
+func (c *ClientWithResponses) ListComponentFindingsWithResponse(ctx context.Context, orgId OrgIdParam, testId TestIdParam, componentId ComponentIdParam, params *ListComponentFindingsParams, reqEditors ...RequestEditorFn) (*ListComponentFindingsResponse, error) {
+	rsp, err := c.ListComponentFindings(ctx, orgId, testId, componentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListComponentFindingsResponse(rsp)
 }
 
 // ListFindingsWithResponse request returning *ListFindingsResponse
@@ -6890,6 +7846,136 @@ func ParseGetAPIVersionResponse(rsp *http.Response) (*GetAPIVersionResponse, err
 	return response, nil
 }
 
+// ParseGetFindingsDocumentJobResponse parses an HTTP response from a GetFindingsDocumentJobWithResponse call
+func ParseGetFindingsDocumentJobResponse(rsp *http.Response) (*GetFindingsDocumentJobResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetFindingsDocumentJobResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Data FindingsDocumentJobData represents a Findings-document Job resource
+			// object.
+			Data    FindingsDocumentJobData          `json:"data"`
+			Jsonapi IoSnykApiCommonJsonApi           `json:"jsonapi"`
+			Links   GetFindingsDocumentJob_200_Links `json:"links"`
+
+			// Meta Free-form object that may contain non-standard information.
+			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 303:
+		var dest struct {
+			// Data FindingsDocumentJobData represents a Findings-document Job resource
+			// object.
+			Data    FindingsDocumentJobData          `json:"data"`
+			Jsonapi IoSnykApiCommonJsonApi           `json:"jsonapi"`
+			Links   GetFindingsDocumentJob_303_Links `json:"links"`
+
+			// Meta Free-form object that may contain non-standard information.
+			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON303 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest IoSnykApiCommonErrorDocument
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDocumentResponse parses an HTTP response from a GetDocumentWithResponse call
+func ParseGetDocumentResponse(rsp *http.Response) (*GetDocumentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDocumentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest IoSnykApiCommonErrorDocument
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateTestFindingsDocResponse parses an HTTP response from a CreateTestFindingsDocWithResponse call
+func ParseCreateTestFindingsDocResponse(rsp *http.Response) (*CreateTestFindingsDocResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTestFindingsDocResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest struct {
+			Data struct {
+				// Attributes FindingsDocumentJobAttributes represents the attributes of a
+				// Findings-document-generation Job resource.
+				Attributes FindingsDocumentJobAttributes    `json:"attributes"`
+				Id         openapi_types.UUID               `json:"id"`
+				Type       CreateTestFindingsDoc202DataType `json:"type"`
+			} `json:"data"`
+			Jsonapi IoSnykApiCommonJsonApi          `json:"jsonapi"`
+			Links   CreateTestFindingsDoc_202_Links `json:"links"`
+
+			// Meta Free-form object that may contain non-standard information.
+			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest IoSnykApiCommonErrorDocument
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetJobResponse parses an HTTP response from a GetJobWithResponse call
 func ParseGetJobResponse(rsp *http.Response) (*GetJobResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6906,7 +7992,7 @@ func ParseGetJobResponse(rsp *http.Response) (*GetJobResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			// Data JobData represents a Job resource object.
+			// Data JobData encapsulates a Job resource object.
 			Data    JobData                `json:"data"`
 			Jsonapi IoSnykApiCommonJsonApi `json:"jsonapi"`
 			Links   GetJob_200_Links       `json:"links"`
@@ -6921,7 +8007,7 @@ func ParseGetJobResponse(rsp *http.Response) (*GetJobResponse, error) {
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 303:
 		var dest struct {
-			// Data JobData represents a Job resource object.
+			// Data JobData encapsulates a Job resource object.
 			Data    JobData                `json:"data"`
 			Jsonapi IoSnykApiCommonJsonApi `json:"jsonapi"`
 			Links   GetJob_303_Links       `json:"links"`
@@ -6963,7 +8049,8 @@ func ParseCreateTestResponse(rsp *http.Response) (*CreateTestResponse, error) {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
 		var dest struct {
 			Data struct {
-				// Attributes JobAttributes represents the attributes of a Job resource
+				// Attributes JobAttributes represents the attributes of a Job resource,
+				// tracking the status of a Test in-flight.
 				Attributes JobAttributes         `json:"attributes"`
 				Id         openapi_types.UUID    `json:"id"`
 				Type       CreateTest202DataType `json:"type"`
@@ -7011,6 +8098,46 @@ func ParseGetTestResponse(rsp *http.Response) (*GetTestResponse, error) {
 			Data    TestData               `json:"data"`
 			Jsonapi IoSnykApiCommonJsonApi `json:"jsonapi"`
 			Links   GetTest_200_Links      `json:"links"`
+
+			// Meta Free-form object that may contain non-standard information.
+			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest IoSnykApiCommonErrorDocument
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListComponentFindingsResponse parses an HTTP response from a ListComponentFindingsWithResponse call
+func ParseListComponentFindingsResponse(rsp *http.Response) (*ListComponentFindingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListComponentFindingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    []FindingData                 `json:"data"`
+			Jsonapi IoSnykApiCommonJsonApi        `json:"jsonapi"`
+			Links   IoSnykApiCommonPaginatedLinks `json:"links"`
 
 			// Meta Free-form object that may contain non-standard information.
 			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`

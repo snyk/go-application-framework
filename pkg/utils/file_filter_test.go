@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/metrics"
+	"github.com/snyk/go-application-framework/internal/testutils/gitworktree"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -2070,6 +2071,41 @@ func TestFileFilter_GetRulesIdentifiesGitignoreRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Guard, not a regression test: file_filter.go reads only the worktree index, so this passes without the openRepository fix too.
+func TestFileFilter_GetFilteredFiles_keepsTrackedFilesInLinkedWorktree(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	for name, content := range map[string]string{
+		".gitignore":    "*.log\n",
+		"tracked.log":   "tracked and ignored",
+		"untracked.log": "untracked and ignored",
+		"regular.txt":   "regular file",
+	} {
+		createFileInPath(t, filepath.Join(worktreeDir, name), []byte(content))
+	}
+	gitworktree.StageInWorktreeIndex(t, worktreeDir, ".gitignore", "tracked.log", "regular.txt")
+
+	pointerFile := filepath.Join(worktreeDir, ".git")
+	info, err := os.Stat(pointerFile)
+	require.NoError(t, err)
+	require.False(t, info.IsDir(), "linked worktree .git must be a pointer file, not a directory")
+
+	fileFilter := NewFileFilter(worktreeDir, &log.Logger, WithConfig(newTestConfig(map[string]bool{
+		FF_GITIGNORE_RESPECT_TRACKED_FILES: true,
+	})))
+	unfiltered := drainFilteredFiles(t, fileFilter.GetAllFiles())
+	require.Contains(t, unfiltered, pointerFile)
+
+	filtered := runFileFilter(t, fileFilter, ".gitignore")
+	assert.NotContains(t, filtered, pointerFile)
+
+	assertGitTrackedFiles(t, worktreeDir, []string{".gitignore"}, true, []string{
+		".gitignore",
+		"tracked.log",
+		"regular.txt",
+	})
 }
 
 func setupGitTrackedFilesTestCase(t *testing.T, testCase gitTrackedFilesTestCase) (string, *git.Worktree) {

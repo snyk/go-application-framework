@@ -2,11 +2,20 @@ package git
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/testutils/gitworktree"
 )
 
 func TestStripGitCredentials(t *testing.T) {
@@ -177,6 +186,65 @@ func TestGetRemoteUrl_NoRemotes(t *testing.T) {
 	assert.Contains(t, err.Error(), "no remotes configured")
 }
 
+func TestTreeHashFromDir(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	repo, err := git.PlainInit(tempDir, false)
+	require.NoError(t, err)
+
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+
+	// Write a known file so the resulting tree hash is deterministic. The tree
+	// hash depends only on tracked content, not on commit metadata (author,
+	// message, timestamp), so this value is stable across runs.
+	err = os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("hello"), 0600)
+	require.NoError(t, err)
+
+	_, err = worktree.Add("test.txt")
+	require.NoError(t, err)
+
+	_, err = worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "tester",
+			Email: "tester@example.com",
+			When:  time.Unix(0, 0),
+		},
+	})
+	require.NoError(t, err)
+
+	treeHash, err := TreeHashFromDir(tempDir)
+	require.NoError(t, err)
+	// Matches `git rev-parse HEAD^{tree}` for a single file "test.txt" == "hello".
+	assert.Equal(t, "1f8f3dc0c09ab2e1e5c303031f4205c64eab8ef4", treeHash)
+}
+
+func TestTreeHashFromDir_NoGitRepo(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "not-git-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	_, err = TreeHashFromDir(tempDir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestTreeHashFromDir_NoCommits(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	_, err = git.PlainInit(tempDir, false)
+	require.NoError(t, err)
+
+	// No commits yet, so HEAD cannot be resolved.
+	_, err = TreeHashFromDir(tempDir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve HEAD")
+}
+
 func TestGetRemoteUrl_Priority(t *testing.T) {
 	// Create a temporary directory
 	tempDir, err := os.MkdirTemp("", "git-test-*")
@@ -204,4 +272,275 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	remoteUrl, err := GetRemoteUrl(tempDir)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
+}
+
+func TestLinkedWorktree_remoteAndBranchResolution(t *testing.T) {
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, gitworktree.NewMainRepo(t))
+
+	remoteFns := map[string]func(string) (string, error){
+		"RepoUrlFromDir":  RepoUrlFromDir,
+		"GetRemoteUrl":    GetRemoteUrl,
+		"GetOriginRemote": GetOriginRemote,
+		"GetFirstRemote":  GetFirstRemote,
+	}
+	for name, fn := range remoteFns {
+		t.Run(name+" returns origin", func(t *testing.T) {
+			remoteUrl, err := fn(worktreeDir)
+			require.NoError(t, err)
+			assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+		})
+	}
+
+	t.Run("BranchNameFromDir returns the worktree branch", func(t *testing.T) {
+		branch, err := BranchNameFromDir(worktreeDir)
+		require.NoError(t, err)
+		assert.Equal(t, gitworktree.BranchName, branch)
+	})
+}
+
+func TestLinkedWorktree_detachedHeadHasNoBranch(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	gitworktree.DetachHead(t, mainDir)
+
+	branch, err := BranchNameFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Empty(t, branch)
+}
+
+func TestLinkedWorktree_withoutOriginRemote(t *testing.T) {
+	mainDir := gitworktree.NewMainRepoWithoutOrigin(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+
+	_, err := GetOriginRemote(worktreeDir)
+	assert.Error(t, err)
+	_, err = RepoUrlFromDir(worktreeDir)
+	assert.Error(t, err)
+	_, err = GetFirstRemote(worktreeDir)
+	assert.Error(t, err)
+}
+
+func TestLinkedWorktree_realGitWorktreeAddResolvesOrigin(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.GitWorktreeAdd(t, mainDir)
+
+	remoteUrl, err := GetOriginRemote(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+
+	branch, err := BranchNameFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.BranchName, branch)
+}
+
+func TestLinkedWorktree_mainRepoRemoved(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	require.NoError(t, os.RemoveAll(mainDir))
+
+	_, err := GetOriginRemote(worktreeDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestLinkedWorktree_commonDirMissing(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, mainDir)
+	gitworktree.SetCommonDir(t, mainDir, filepath.Join(t.TempDir(), "gone"))
+
+	_, err := GetOriginRemote(worktreeDir)
+	require.ErrorIs(t, err, git.ErrRepositoryIncomplete)
+}
+
+func TestLinkedWorktree_relativeGitDir(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.NewHandBuiltWorktreeRelative(t, mainDir)
+
+	remoteUrl, err := GetOriginRemote(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+}
+
+func TestLinkedWorktree_opensFromSubdirectory(t *testing.T) {
+	worktreeDir := gitworktree.NewHandBuiltWorktree(t, gitworktree.NewMainRepo(t))
+	subDir := filepath.Join(worktreeDir, "nested", "deeper")
+	require.NoError(t, os.MkdirAll(subDir, 0o750))
+
+	remoteUrl, err := GetOriginRemote(subDir)
+	require.NoError(t, err)
+	assert.Equal(t, gitworktree.OriginURL, remoteUrl)
+}
+
+func TestLinkedWorktree_treeHashMatchesGit(t *testing.T) {
+	mainDir := gitworktree.NewMainRepo(t)
+	worktreeDir := gitworktree.GitWorktreeAdd(t, mainDir)
+
+	expected := gitworktree.GitOutput(t, worktreeDir, "rev-parse", "HEAD^{tree}")
+
+	treeHash, err := TreeHashFromDir(worktreeDir)
+	require.NoError(t, err)
+	assert.Equal(t, expected, treeHash)
+}
+
+func initRepoWithCommit(t *testing.T) (string, *git.Repository, string) {
+	t.Helper()
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0600))
+	_, err = worktree.Add("test.txt")
+	require.NoError(t, err)
+	hash, err := worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(0, 0)},
+	})
+	require.NoError(t, err)
+	return dir, repo, hash.String()
+}
+
+func addLinkedWorktree(t *testing.T, repoDir string) string {
+	t.Helper()
+	worktreeDir := filepath.Join(t.TempDir(), "linked")
+	cmd := exec.Command("git", "worktree", "add", "-b", "feat", worktreeDir)
+	cmd.Dir = repoDir
+	var env []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(kv), "GIT_") {
+			env = append(env, kv)
+		}
+	}
+	cmd.Env = append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "git worktree add: %s", out)
+	return worktreeDir
+}
+
+func addEmptyCommit(t *testing.T, dir string, when time.Time) string {
+	t.Helper()
+	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	hash, err := worktree.Commit("empty", &git.CommitOptions{
+		AllowEmptyCommits: true,
+		Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: when},
+	})
+	require.NoError(t, err)
+	return hash.String()
+}
+
+func makeSubdir(t *testing.T, dir string) string {
+	t.Helper()
+	subDir := filepath.Join(dir, "services", "api")
+	require.NoError(t, os.MkdirAll(subDir, 0700))
+	return subDir
+}
+
+func TestHeadCommitHashFromDir(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) (inputDir string, expected string)
+	}{
+		{
+			name: "repository root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, commit := initRepoWithCommit(t)
+				return dir, commit
+			},
+		},
+		{
+			name: "subdirectory resolves to the repository root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, commit := initRepoWithCommit(t)
+				return makeSubdir(t, dir), commit
+			},
+		},
+		{
+			name: "detached HEAD",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, repo, firstCommit := initRepoWithCommit(t)
+				worktree, err := repo.Worktree()
+				require.NoError(t, err)
+				_, err = worktree.Commit("second", &git.CommitOptions{
+					AllowEmptyCommits: true,
+					Author:            &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Unix(1, 0)},
+				})
+				require.NoError(t, err)
+				require.NoError(t, worktree.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(firstCommit)}))
+				return dir, firstCommit
+			},
+		},
+		{
+			name: "works when no remote is configured",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, repo, commit := initRepoWithCommit(t)
+				remotes, err := repo.Remotes()
+				require.NoError(t, err)
+				require.Empty(t, remotes)
+				return dir, commit
+			},
+		},
+		{
+			name: "not a repository",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+		},
+		{
+			name: "repository without commits",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				_, err := git.PlainInit(dir, false)
+				require.NoError(t, err)
+				return dir, ""
+			},
+		},
+		{
+			name: "linked worktree root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, _ := initRepoWithCommit(t)
+				worktreeDir := addLinkedWorktree(t, dir)
+				return worktreeDir, addEmptyCommit(t, worktreeDir, time.Unix(3, 0))
+			},
+		},
+		{
+			name: "linked worktree subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir, _, _ := initRepoWithCommit(t)
+				worktreeDir := addLinkedWorktree(t, dir)
+				return makeSubdir(t, worktreeDir), addEmptyCommit(t, worktreeDir, time.Unix(3, 0))
+			},
+		},
+		{
+			name: "linked worktree is added to the repository even when GIT_DIR is inherited",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				decoyDir, _, _ := initRepoWithCommit(t)
+				addEmptyCommit(t, decoyDir, time.Unix(2, 0))
+				dir, _, commit := initRepoWithCommit(t)
+				t.Setenv("GIT_DIR", filepath.Join(decoyDir, ".git"))
+				return addLinkedWorktree(t, dir), commit
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			inputDir, expected := tc.setup(t)
+
+			commitHash, err := HeadCommitHashFromDir(inputDir)
+
+			require.NoError(t, err)
+			assert.Equal(t, expected, commitHash)
+		})
+	}
 }

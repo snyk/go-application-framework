@@ -3,10 +3,13 @@ package machineid
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -20,6 +23,7 @@ type isolatedMachine struct {
 	home   string
 	shared pathPair
 	studio pathPair
+	serial string
 }
 
 func newIsolatedMachine(t *testing.T) isolatedMachine {
@@ -50,19 +54,27 @@ func (m isolatedMachine) newRun(opts ...ResolveOption) configuration.Configurati
 }
 
 func (m isolatedMachine) resolve(opts ...ResolveOption) configuration.DefaultValueFunction {
-	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio)}, opts...)...)
+	return Resolve(append([]ResolveOption{withPaths(m.shared, m.studio), withHardware(m.serial, "test-host")}, opts...)...)
 }
 
-// machineID reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
-func machineID(t *testing.T, config configuration.Configuration) string {
+// machineOf reads MACHINE_ID, requiring runtimeinfo.ErrNoMachineID exactly when no id was found.
+func machineOf(t *testing.T, config configuration.Configuration) runtimeinfo.Machine {
 	t.Helper()
-	value, err := config.GetStringWithError(configuration.MACHINE_ID)
-	if value == "" {
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok, "MACHINE_ID must hold a runtimeinfo.Machine, got %T", value)
+	if machine.ID == "" {
 		require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
 	} else {
 		require.NoError(t, err)
 	}
-	return value
+	return machine
+}
+
+// machineID reads the identifier of MACHINE_ID, see machineOf.
+func machineID(t *testing.T, config configuration.Configuration) string {
+	t.Helper()
+	return machineOf(t, config).ID
 }
 
 // snykJSON returns the contents of the configuration file newIsolatedMachine creates.
@@ -102,6 +114,26 @@ func TestAcceptance_GeneratedIDIsReturnedAgainOnTheNextRun(t *testing.T) {
 
 	require.True(t, valid(first))
 	require.Equal(t, first, machineID(t, m.newRun()))
+}
+
+func TestAcceptance_GeneratedIDIsStoredPerUserWhenTheMachineWideFileHasANewerSchemaAndNoValidID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	newer := `{"machine_id":"","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.True(t, valid(machine.ID))
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, machine.ID, content.MachineID)
+	require.Equal(t, "generated", content.IdentifierSource)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NotContains(t, logs.String(), `"level":"warn"`)
 }
 
 func TestAcceptance_SuppliedIDWinsOverTheSharedFile(t *testing.T) {
@@ -250,7 +282,7 @@ func TestAcceptance_AFailedLookupIsRetriedWithOrWithoutConfigurationCaching(t *t
 func TestAcceptance_AnInvalidSuppliedValueIsLoggedAtDebugOnEachRead(t *testing.T) {
 	m := newIsolatedMachine(t)
 	m.blockEverySharedFileLocation(t)
-	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not valid")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "not/valid")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	config := m.newRun(WithLogger(&logger))
@@ -380,6 +412,27 @@ func TestAcceptance_StudioDeviceIDIsAdoptedUnchangedAndWrittenToTheSharedFile(t 
 	require.Equal(t, "studio-device-id\n", string(studio), "the Studio file must be left in place")
 }
 
+func TestAcceptance_StudioDeviceIDIsStoredPerUserWhenTheMachineWideFileHasANewerSchemaAndNoValidID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	newer := `{"machine_id":"","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "studio-device-id", machine.ID)
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "studio-device-id", content.MachineID)
+	require.Equal(t, "persisted", content.IdentifierSource)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
 func TestAcceptance_AdoptedStudioDeviceIDIsReturnedAgainAfterTheStudioFileChanges(t *testing.T) {
 	m := newIsolatedMachine(t)
 	seed(t, m.studio.perUser, "studio-device-id")
@@ -446,4 +499,883 @@ func TestAcceptance_SharedFileRecordsTheWriter(t *testing.T) {
 	machineID(t, m.newRun())
 
 	require.Equal(t, "go-application-framework", readFile(t, m.shared.perUser).Writer)
+}
+
+func TestAcceptance_StudioIDFromDiskIsRecordedOnTheMachineWhateverSourcedTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+
+	machine := machineOf(t, m.newRun())
+
+	require.Equal(t, "from-shared-file", machine.ID)
+	require.Equal(t, "studio-device-id", machine.StudioID)
+}
+
+func TestAcceptance_StudioCLIVariableFillsStudioIDWithoutSupplyingTheMachineID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value")
+
+	machine := machineOf(t, m.newRun())
+
+	require.NotEqual(t, "studio-cli-value", machine.ID)
+	require.Equal(t, "studio-cli-value", machine.StudioID)
+	require.Equal(t, machine.ID, readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_InvalidStudioCLIValueFallsBackToTheStudioFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a/b")
+
+	require.Equal(t, "studio-device-id", machineOf(t, m.newRun()).StudioID)
+}
+
+func TestAcceptance_InvalidStudioCLIValueIsLoggedOncePerResolvedLookup(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "a/b")
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	failures := 0
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "Snyk Studio CLI value failed validation") {
+			failures++
+		}
+	}
+	require.Equal(t, 1, failures)
+}
+
+func TestAcceptance_TrailingNewlineIsTrimmedFromStudioCLIValue(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value\n")
+
+	require.Equal(t, "studio-cli-value", machineOf(t, m.newRun()).StudioID)
+}
+
+func TestAcceptance_StudioIDIsTheSameWhetherTheMachineIDIsSuppliedOrResolved(t *testing.T) {
+	for name, cliValue := range map[string]string{"from disk": "", "from Studio CLI variable": "studio-cli-value"} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			seed(t, m.studio.perUser, "studio-device-id")
+			if cliValue != "" {
+				t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", cliValue)
+			}
+			want := "studio-device-id"
+			if cliValue != "" {
+				want = cliValue
+			}
+
+			resolved := machineOf(t, m.newRun())
+			t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+			supplied := machineOf(t, m.newRun())
+
+			require.Equal(t, want, resolved.StudioID)
+			require.Equal(t, want, supplied.StudioID)
+		})
+	}
+}
+
+func TestAcceptance_StudioCLIVariableSetAfterTheFirstLookupIsUsedOnTheResolvedPath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	config := m.newRun()
+	require.Equal(t, "studio-device-id", machineOf(t, config).StudioID)
+
+	t.Setenv("INTERNAL_SNYK_CLIENT_MACHINE_ID", "studio-cli-value")
+
+	require.Equal(t, "studio-cli-value", machineOf(t, config).StudioID)
+}
+
+func TestAcceptance_UnreadableStudioFileIsLoggedOnceForASuppliedMachine(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	seed(t, m.studio.perUser, "studio-device-id")
+	restore := makeUnreadable(t, m.studio.perUser)
+	defer restore()
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	config := m.newRun(WithLogger(&logger))
+
+	for range 3 {
+		machineOf(t, config)
+	}
+
+	require.Equal(t, 1, strings.Count(logs.String(), "could not be read for the machine description"))
+}
+
+func TestAcceptance_StudioIDOfASuppliedMachineIsReadOnce(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seed(t, m.studio.perUser, "studio-device-id")
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	config := m.newRun()
+	first := machineOf(t, config)
+
+	seed(t, m.studio.perUser, "changed-studio-device-id")
+
+	require.Equal(t, "studio-device-id", first.StudioID)
+	require.Equal(t, first.StudioID, machineOf(t, config).StudioID)
+}
+
+func TestAcceptance_HardwareSerialWinsOverAnIDInTheSharedFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "from-shared-file"})
+
+	machine := machineOf(t, m.newRun())
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "C02Q7KHTGFWF", machine.SerialNumber)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+}
+
+func TestAcceptance_HardwareSerialReplacesADifferentIDInTheMachineWideFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "from-shared-file", "identifier_source": "generated"})
+
+	machineOf(t, m.newRun())
+
+	content := readFile(t, m.shared.machineWide)
+	require.Equal(t, "C02Q7KHTGFWF", content.MachineID)
+	require.Equal(t, "serial", content.IdentifierSource)
+}
+
+func TestAcceptance_HardwareSerialReplacementKeepsTheFirstSeenTimeOfTheReplacedFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	const firstSeen = "2020-01-02T03:04:05Z"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "from-shared-file", "identifier_source": "generated", "first_seen_at": firstSeen})
+
+	machineOf(t, m.newRun())
+
+	content := readFile(t, m.shared.machineWide)
+	require.Equal(t, "C02Q7KHTGFWF", content.MachineID)
+	require.Equal(t, firstSeen, content.FirstSeenAt)
+}
+
+func TestAcceptance_HardwareSerialConvergesOnAFileFirstWrittenByAnotherSource(t *testing.T) {
+	m := newIsolatedMachine(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
+	generated := machineID(t, m.newRun())
+	require.NotEqual(t, "C02Q7KHTGFWF", generated)
+
+	m.serial = "C02Q7KHTGFWF"
+	machine := machineOf(t, m.newRun())
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	content := readFile(t, m.shared.machineWide)
+	require.Equal(t, "C02Q7KHTGFWF", content.MachineID)
+	require.Equal(t, "serial", content.IdentifierSource)
+}
+
+func TestAcceptance_HardwareSerialReplacesAPerUserIDWhenNoMachineWideFileExists(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	content := readFile(t, m.shared.perUser)
+	require.Equal(t, "C02Q7KHTGFWF", content.MachineID)
+	require.Equal(t, "serial", content.IdentifierSource)
+	require.NoFileExists(t, m.shared.machineWide)
+}
+
+func TestAcceptance_HardwareSerialReplacesAPerUserIDWhenTheMachineWideFileAlreadyHoldsTheSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"C02Q7KHTGFWF","identifier_source":"serial"}`)
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialDoesNotReplaceASharedFileItCannotRead(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file"}`)
+	restore := makeUnreadable(t, m.shared.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	restore()
+	require.ErrorContains(t, err, "unreadable")
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialLeavesASharedFileWrittenByANewerSchemaUnchanged(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	line := logLineContaining(t, logs.String(), "newer or unknown schema")
+	require.Contains(t, line, `"level":"warn"`)
+}
+
+func TestAcceptance_HardwareSerialLeavesANewerSchemaMachineWideFileUnchangedWhenItsDirectoryIsReadOnly(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NoFileExists(t, m.shared.perUser)
+	line := logLineContaining(t, logs.String(), "newer or unknown schema")
+	require.Contains(t, line, `"level":"warn"`)
+	require.NotContains(t, logs.String(), "could not be replaced")
+}
+
+func TestAcceptance_HardwareSerialLeavesANonIntegerSchemaSharedFileUnchanged(t *testing.T) {
+	for name, version := range map[string]string{"string": `"1"`, "fractional": "1.5", "whole float": "1.0"} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			original := `{"machine_id":"from-shared-file","schema_version":` + version + `}`
+			seed(t, m.shared.machineWide, original)
+
+			machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+			raw, readErr := os.ReadFile(m.shared.machineWide)
+			require.NoError(t, readErr)
+			require.Equal(t, original, string(raw))
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialLeavesAnInvalidIDSharedFileWithANewerSchemaUnchanged(t *testing.T) {
+	for name, original := range map[string]string{
+		"overlong id": `{"machine_id":"` + strings.Repeat("a", 129) + `","schema_version":2}`,
+		"empty id":    `{"machine_id":"","schema_version":2}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			seed(t, m.shared.machineWide, original)
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+			machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+			raw, readErr := os.ReadFile(m.shared.machineWide)
+			require.NoError(t, readErr)
+			require.Equal(t, original, string(raw))
+			require.NoFileExists(t, m.shared.perUser)
+			require.Contains(t, logLineContaining(t, logs.String(), "newer or unknown schema"), `"level":"warn"`)
+			require.NotContains(t, logs.String(), "could not be stored")
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialReplacesAnInvalidIDSharedFileWithoutANewerSchema(t *testing.T) {
+	for name, original := range map[string]string{
+		"missing schema": `{"machine_id":""}`,
+		"not json":       `not json at all`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			seed(t, m.shared.machineWide, original)
+
+			machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+			require.NoError(t, err)
+			require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+			require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialDoesNotWarnOrWriteWhenAReadOnlyMachineWideFileAlreadyHoldsIt(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	original := `{"machine_id":"C02Q7KHTGFWF","identifier_source":"serial"}`
+	seed(t, m.shared.machineWide, original)
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, original, string(raw))
+	require.NoFileExists(t, m.shared.perUser)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
+func TestAcceptance_HardwareSerialDoesNotShadowANewerSchemaMachineWideFileWithAPerUserID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.machineWide, newer)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, newer, string(raw))
+	require.NoFileExists(t, m.shared.perUser)
+}
+
+func TestAcceptance_HardwareSerialLeavesAReadOnlyMachineWideIDUnchangedWithoutAPerUserFileOrWarning(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	original := `{"machine_id":"from-shared-file"}`
+	seed(t, m.shared.machineWide, original)
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	raw, readErr := os.ReadFile(m.shared.machineWide)
+	require.NoError(t, readErr)
+	require.Equal(t, original, string(raw))
+	require.NoFileExists(t, m.shared.perUser)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+	require.NotContains(t, logs.String(), `"level":"error"`)
+	line := logLineContaining(t, logs.String(), "shared file holds a different machine id")
+	require.Contains(t, line, "could not be replaced")
+	require.Contains(t, line, `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialLeavesAMachineWideIDUnchangedAndWarnsWhenItsLockIsHeld(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
+	holdLock(t, m.shared.machineWide)
+	shortenLockTimeout(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.machineWide).MachineID)
+	line := logLineContaining(t, logs.String(), "could not be replaced")
+	require.Contains(t, line, `"level":"warn"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.machineWide))
+}
+
+func TestAcceptance_HardwareSerialCreatesTheMachineWideFileWhenOnlyAPerUserIDDiffers(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialIsStoredPerUserWhenNoSharedFileExistsAndMachineWideIsReadOnly(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.machineWide), 0o755))
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.NoFileExists(t, m.shared.machineWide)
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialReplacesAMachineWideIDWithoutWarning(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "from-shared-file", "identifier_source": "generated"})
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
+func TestAcceptance_ConcurrentResolversAgreeOnTheSerialWhenAMachineWideIDIsReplaced(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "from-shared-file"})
+	const resolvers = 8
+	ids := make([]string, resolvers)
+	errs := make([]error, resolvers)
+	var wg sync.WaitGroup
+	for i := range resolvers {
+		wg.Go(func() {
+			machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+			ids[i], errs[i] = machine.ID, err
+		})
+	}
+	wg.Wait()
+
+	for i := range resolvers {
+		require.NoError(t, errs[i])
+		require.Equal(t, "C02Q7KHTGFWF", ids[i])
+	}
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.machineWide).MachineID)
+}
+
+func TestAcceptance_HardwareSerialLeavesAFileAlreadyHoldingTheSerialUntouched(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "C02Q7KHTGFWF", "identifier_source": "serial"})
+	before, err := os.Stat(m.shared.perUser)
+	require.NoError(t, err)
+	contentBefore, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	past := before.ModTime().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(m.shared.perUser, past, past))
+
+	machineOf(t, m.newRun())
+
+	after, err := os.Stat(m.shared.perUser)
+	require.NoError(t, err)
+	contentAfter, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, string(contentBefore), string(contentAfter))
+	require.True(t, past.Equal(after.ModTime()), "mtime changed from %v to %v", past, after.ModTime())
+}
+
+func TestAcceptance_HardwareSerialIsStoredInAnEmptyOrMissingSharedFile(t *testing.T) {
+	for name, content := range map[string]*string{"missing": nil, "empty": new(string)} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			m.serial = "C02Q7KHTGFWF"
+			if content != nil {
+				seed(t, m.shared.perUser, *content)
+			}
+
+			id := machineID(t, m.newRun())
+
+			require.Equal(t, "C02Q7KHTGFWF", id)
+			stored := readFile(t, m.shared.perUser)
+			require.Equal(t, "C02Q7KHTGFWF", stored.MachineID)
+			require.Equal(t, "serial", stored.IdentifierSource)
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialWithInternalSpacesIsUsedAndStored(t *testing.T) {
+	m := newIsolatedMachine(t)
+	serial := "VMware-56 4d 12 34 ab cd ef 01-23 45 67 89 ab cd ef 01"
+	m.serial = serial
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	require.NoError(t, err)
+
+	require.Equal(t, serial, machine.ID)
+	stored := readFile(t, m.shared.perUser)
+	require.Equal(t, serial, stored.MachineID)
+	require.Equal(t, "serial", stored.IdentifierSource)
+	require.Equal(t, serial, machineID(t, m.newRun()))
+}
+
+func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenAnExistingIDCannotBeReplaced(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"from-shared-file"}`)
+	require.NoError(t, os.MkdirAll(filepath.Dir(m.shared.perUser), 0o755))
+	makeUnwritable(t, filepath.Dir(m.shared.machineWide))
+	makeUnwritable(t, filepath.Dir(m.shared.perUser))
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.Equal(t, "from-shared-file", readFile(t, m.shared.machineWide).MachineID)
+	require.NoFileExists(t, m.shared.perUser)
+}
+
+func TestAcceptance_HardwareSerialOutsideTheAllowedCharactersIsNotUsedAsTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02/Q7KHTGFWF"
+
+	machine := machineOf(t, m.newRun())
+
+	require.NotEqual(t, "C02/Q7KHTGFWF", machine.ID)
+	require.True(t, valid(machine.ID))
+	require.Equal(t, machine.ID, readFile(t, m.shared.perUser).MachineID)
+}
+
+func TestAcceptance_HardwareSerialReadErrorIsLoggedAtDebugAndNotReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	failSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) { return "", errors.New("serial query failed") }
+	}
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger), failSerial)).GetMachineID()
+
+	require.NoError(t, err)
+	require.True(t, valid(machine.ID))
+	line := logLineContaining(t, logs.String(), "serial")
+	require.Contains(t, line, `"level":"debug"`)
+	require.Contains(t, line, "serial query failed")
+}
+
+func TestAcceptance_APermanentlyFailingHardwareSerialProbeRunsOnceForAllLookups(t *testing.T) {
+	for name, supplied := range map[string]bool{"resolved id": false, "supplied id": true} {
+		t.Run(name, func(t *testing.T) {
+			m := newIsolatedMachine(t)
+			if supplied {
+				t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+			}
+			probes := 0
+			failingSerial := func(o *resolveOptions) {
+				o.serialNumber = func() (string, error) {
+					probes++
+					return "", errors.New("serial query failed")
+				}
+			}
+			config := m.newRun(failingSerial)
+
+			for range 3 {
+				machineOf(t, config)
+			}
+
+			require.Equal(t, 1, probes)
+		})
+	}
+}
+
+func TestAcceptance_HardwareSerialIsReadOnceForASuppliedMachine(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	reads := 0
+	countSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) {
+			reads++
+			return "C02Q7KHTGFWF", nil
+		}
+	}
+	config := m.newRun(countSerial)
+
+	machineOf(t, config)
+	machineOf(t, config)
+
+	require.Equal(t, 1, reads)
+}
+
+func TestAcceptance_SuppliedIDStillReturnsHostnameAndSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
+	serialReads := 0
+	hostnameReads := 0
+	countSerial := func(o *resolveOptions) {
+		o.serialNumber = func() (string, error) {
+			serialReads++
+			return "C02Q7KHTGFWF", nil
+		}
+	}
+	countHostname := func(o *resolveOptions) {
+		o.hostname = func() (string, error) {
+			hostnameReads++
+			return "host.example", nil
+		}
+	}
+	config := m.newRun(countSerial, countHostname)
+
+	machine, err := runtimeInfoOf(config).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, runtimeinfo.Machine{ID: "supplied-id", Hostname: "host.example", SerialNumber: "C02Q7KHTGFWF"}, machine)
+	require.Equal(t, 1, serialReads)
+	require.Equal(t, 1, hostnameReads)
+}
+
+func TestAcceptance_InvalidHardwareSerialReasonIsLoggedAtDebug(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02/Q7KHTGFWF"
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineID(t, m.newRun(WithLogger(&logger)))
+
+	line := logLineContaining(t, logs.String(), "contains characters outside the allowed set")
+	require.Contains(t, line, `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialIsReturnedWithoutAnErrorWhenTheSharedFileCannotBeWritten(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.blockEverySharedFileLocation(t)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+}
+
+func TestAcceptance_HardwareSerialStoreFailuresAreLoggedPerLocationWithTheirOwnPath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.blockEverySharedFileLocation(t)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machine, err := runtimeInfoOf(m.newRun(WithLogger(&logger))).GetMachineID()
+
+	require.NoError(t, err)
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	perUser := logLineContaining(t, logs.String(), `"path":"`+jsonEscaped(t, m.shared.perUser)+`","message":"machine id: serial number could not be stored`)
+	require.Contains(t, perUser, `"level":"warn"`)
+	machineWide := logLineContaining(t, logs.String(), `"path":"`+jsonEscaped(t, m.shared.machineWide)+`","message":"machine id: serial number could not be stored`)
+	require.Contains(t, machineWide, `"level":"debug"`)
+}
+
+func TestAcceptance_HardwareSerialReplaceLogsAMissingMachineWideDirectoryAtDebug(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+	line := logLineContaining(t, logs.String(), "could not be replaced")
+	require.Contains(t, line, `"level":"debug"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.machineWide))
+}
+
+func TestAcceptance_HardwareSerialReplacesAPerUserIDSilentlyWhenThereIsNoMachineWidePath(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	m.shared.machineWide = ""
+	seed(t, m.shared.perUser, `{"machine_id":"from-shared-file","identifier_source":"generated"}`)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	machineOf(t, m.newRun(WithLogger(&logger)))
+
+	require.Equal(t, "C02Q7KHTGFWF", readFile(t, m.shared.perUser).MachineID)
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+}
+
+func TestAcceptance_HardwareSerialDoesNotWarnAboutANewerSchemaPerUserFileWhenMachineWideHoldsTheSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.shared.machineWide, `{"machine_id":"C02Q7KHTGFWF","identifier_source":"serial"}`)
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.perUser, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	for range 2 {
+		require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
+	}
+
+	require.NotContains(t, logs.String(), `"level":"warn"`)
+	raw, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, newer, string(raw))
+}
+
+func TestAcceptance_HardwareSerialWarnsAboutANewerSchemaPerUserFileThatResolutionRead(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	newer := `{"machine_id":"from-newer-schema","schema_version":2}`
+	seed(t, m.shared.perUser, newer)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+
+	require.Equal(t, "C02Q7KHTGFWF", machineID(t, m.newRun(WithLogger(&logger))))
+
+	line := logLineContaining(t, logs.String(), "newer or unknown schema")
+	require.Contains(t, line, `"level":"warn"`)
+	require.Contains(t, line, jsonEscaped(t, m.shared.perUser))
+	raw, err := os.ReadFile(m.shared.perUser)
+	require.NoError(t, err)
+	require.Equal(t, newer, string(raw))
+}
+
+func TestAcceptance_DirectMachineValueSetBeforeFirstReadIsReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	config := m.newRun()
+	config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{
+		ID:           "supplied-id",
+		Hostname:     "box",
+		SerialNumber: "SN1",
+		StudioID:     "studio-1",
+	})
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_PointerToMachineValueSetBeforeFirstReadIsReturned(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	config := m.newRun()
+	machinePtr := &runtimeinfo.Machine{
+		ID:           "supplied-id",
+		Hostname:     "box",
+		SerialNumber: "SN1",
+		StudioID:     "studio-1",
+	}
+	config.Set(configuration.MACHINE_ID, machinePtr)
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_NilPointerToMachineIsNotSupplied(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seededID := "from-shared-file"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": seededID})
+	config := m.newRun()
+	var machinePtr *runtimeinfo.Machine
+	config.Set(configuration.MACHINE_ID, machinePtr)
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, seededID, machine.ID)
+}
+
+func TestAcceptance_MachineWithEmptyIDIsNotSupplied(t *testing.T) {
+	m := newIsolatedMachine(t)
+	seededID := "from-shared-file"
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": seededID})
+	config := m.newRun()
+	config.Set(configuration.MACHINE_ID, runtimeinfo.Machine{
+		Hostname: "box",
+	})
+
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, seededID, machine.ID)
+}
+
+func TestAcceptance_JSONEnvironmentVariableWithMachineObjectWinsOverSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"ID":"supplied-id","Hostname":"box","SerialNumber":"SN1","StudioID":"studio-1"}
+`)
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+	require.Equal(t, "SN1", machine.SerialNumber)
+	require.Equal(t, "studio-1", machine.StudioID)
+}
+
+func TestAcceptance_JSONEnvironmentVariableWithInvalidIDIsIgnored(t *testing.T) {
+	m := newIsolatedMachine(t)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"ID":"not/valid","Hostname":"box"}`)
+
+	id := machineID(t, m.newRun())
+
+	require.True(t, valid(id), "invalid supplied ID must be ignored, so a generated id is used")
+	require.Equal(t, "generated", readFile(t, m.shared.perUser).IdentifierSource)
+}
+
+func TestAcceptance_EnvironmentVariableNullWinsOverSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "null")
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "null", machine.ID)
+}
+
+func TestAcceptance_JSONObjectWithLeadingWhitespaceWinsOverTheSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "\n{\"ID\":\"supplied-id\",\"Hostname\":\"box\"}")
+
+	config := m.newRun()
+	value, err := config.GetWithError(configuration.MACHINE_ID)
+	require.NoError(t, err)
+	machine, ok := value.(runtimeinfo.Machine)
+	require.True(t, ok)
+	require.Equal(t, "supplied-id", machine.ID)
+	require.Equal(t, "box", machine.Hostname)
+}
+
+func TestAcceptance_JSONObjectWithoutAnIDUsesTheSeededFile(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "from-shared-file"})
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	t.Setenv("INTERNAL_SNYK_MACHINE_ID", `{"Hostname":"box"}`)
+
+	config := m.newRun(WithLogger(&logger))
+	id := machineID(t, config)
+
+	require.Equal(t, "from-shared-file", id)
+	require.Contains(t, logs.String(), "no usable id")
 }

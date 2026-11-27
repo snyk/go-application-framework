@@ -1,9 +1,11 @@
 package ldx_sync_config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	api_mocks "github.com/snyk/go-application-framework/internal/mocks"
@@ -748,4 +751,32 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewClientImpl_UsesCredentialsOfGivenConfiguration(t *testing.T) {
+	authHeaders := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeaders <- r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer server.Close()
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, "00000000-0000-4000-8000-000000000001")
+	engine := workflow.NewWorkFlowEngine(config)
+	require.NoError(t, engine.Init())
+
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.AUTHENTICATION_TOKEN, "00000000-0000-4000-8000-000000000002")
+
+	client, err := newClientImpl(engine, clonedConfig)
+	require.NoError(t, err)
+	_, err = client.GetUserConfigWithResponse(context.Background(), &v20241015.GetUserConfigParams{Version: "2026-05-07"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "token 00000000-0000-4000-8000-000000000002", <-authHeaders)
 }

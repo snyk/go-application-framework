@@ -43,9 +43,9 @@ Before changing anything under `pkg/`, ask:
 - Can I make this **additive** instead (new function, new optional field, new
   functional option, new default value) and keep the old path working? → prefer
   this.
-- If a break is truly unavoidable, it must be a `feat!`/`fix!` or carry a
-  `BREAKING CHANGE:` footer so semantic-release bumps the major version. See
-  [CONTRIBUTING.md](CONTRIBUTING.md#handling-breaking-changes).
+- If a break is truly unavoidable, follow the
+  [breaking change policy](CONTRIBUTING.md#handling-breaking-changes). GAF stays
+  on major version 0, so **never** use `!` or a `BREAKING CHANGE:` footer.
 
 ---
 
@@ -154,6 +154,14 @@ Tests live **next to their source files** (`foo.go` → `foo_test.go`).
 - **Tests always.** Write/update unit tests AND integration tests and iterate until they pass. Use
   `t.Setenv` (never `os.Setenv`). Use existing `gomock`-generated mocks; don't
   hand-roll new ones. Don't fix test data to make tests pass.
+- **Generate clients for versioned Snyk APIs.** A `/rest/` or `/hidden/`
+  endpoint called with `?version=YYYY-MM-DD` has an OpenAPI spec in the repo of
+  the service that owns it, at `internal/api/<rest|hidden>/versions/<version>/spec.yaml`.
+  Copy that spec into GAF, generate the client with `oapi-codegen`
+  (`client: true`, laid out like `internal/apiclients/contributors_ingest/`) and
+  call the generated client. If the copy here lacks the endpoint, refresh it.
+  Hand-write clients only for unversioned `/v1/` endpoints. If you cannot read
+  the spec, ask the user for it.
 - **Run the tooling before committing:** `make format`, `make lint`,
   `make test`, `make generate`. Then verify `git diff --name-only` is clean
   (stage anything the tools changed).
@@ -251,10 +259,13 @@ Use these lenses when evaluating a design proposal, implementation plan, or PR.
   - `pkg/` is the public API
     - `pkg/workflow/` implements the workflow engine, which is the extensibility/orchestration layer for local clients. To extensions authors it provides an opinionated usage of the basic library functions like configuration, logging, network, ... This way authors can use functions consistently and don't have to deal with the complexity of the basic library functions but can focus on the actual business logic. 
     - `pkg/app` is the application integration layer, it provides a pre-configured workflow.Engine, whose configuration can be extended with application specific aspects by the final applications like the CLI ...
-    - `pkg/local_workflows/` hosts extension workflows available for all applications and are based on the `workflow` package
+    - `pkg/local_workflows/` hosts the built-in workflows available for all applications, plus Snyk-specific primitives and helpers around them. This is the layer where Snyk-specific behavior is allowed
     - `pkg/apiclients` contains auto-generated API clients from Open API Specs, in addition it might also contain a higher level API abstraction if reasonable
     - `pkg/*` are raw/basic library functions that might depend on other gaf library functions but basically have no assumptions on how they are used and should not know about products etc 
   - `docs/` is for documentation.
+- **Keep generic `pkg/*` packages free of Snyk-specific behavior** (env var prefixes, hostnames, product terms).
+  It belongs in `pkg/local_workflows/`, see its
+  [AGENTS.md](pkg/local_workflows/AGENTS.md).
 
 ### API surface tradeoffs
 
@@ -265,6 +276,11 @@ Use these lenses when evaluating a design proposal, implementation plan, or PR.
   functional options (`With…`) keep the surface narrow and typed.
 - **Keep related code close to each other.** Don't spread related code across different packages.
   For example, keep configuration key constants close to the code that uses them.
+- **Prefer pure functions over mutating inputs.** Take values and return values
+  (e.g. `func(env []string, dir string) ([]string, error)`) rather than modifying an `*exec.Cmd`,
+  a configuration or a slice the caller owns. Mutation makes call order matter and is harder to test.
+- **Doc comments state behavior and limits.** Say what is not covered (denylist vs. allowlist,
+  opt-in vs. enforced) and keep package docs true to what the package does.
 
 ### Scope & complexity pushback
 
@@ -287,6 +303,8 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
 - **No single-invocation assumptions.** An MCP or IDE host may invoke many
   workflows in the same process. Avoid package-level mutable state; prefer
   per-invocation state threaded via `InvocationContext` or `context.Context`.
+  Where shared state is unavoidable it must be synchronized (see
+  [Concurrency & thread safety](#concurrency--thread-safety)).
 - **Configuration, not hard-coding.** Behavior that might differ by consumer
   belongs in `Configuration` with a sensible default — not in a constant. If a
   CLI needs a flag and an IDE needs a settings key, both read the same config
@@ -302,6 +320,22 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
 - **Configuration DefaultFunctions are multi purpose helper.** even if called default function, they can be used to provide a default value for a configuration key but also perform validation and translation logic 
 
 
+### Concurrency & thread safety
+
+GAF is called from many goroutines at once (IDE hosts, MCP servers, parallel
+workflows), so concurrent use is the default.
+
+- **Library functionality must be thread safe.** This covers (almost) every
+  exported symbol in `pkg/`. If something is intentionally not safe, say so in
+  its doc comment.
+- **Question whether state is needed at all.** Prefer stateless functions and
+  per-invocation state over caches, memoization, or package-level variables.
+- **Guard required state.** Protect every access, reads included, with a mutex,
+  `sync.Once`, atomics, or channels. Don't return internal maps/slices, and
+  don't hold a lock across callbacks, I/O, or other workflow invocations.
+- **Test concurrent access** of stateful code under the race detector
+  (`make test` runs with `-race`).
+
 ### Error Handling
 
 - **Errors in Data vs. returned errors.** Use `data.AddError()` for
@@ -312,6 +346,8 @@ Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
 
 - **Test public API.** Test need to cover the public API.
 - **Test coverage.** test internal APIs, unexported functions and dependency injection to increase test coverage for edge cases.
+- **Cover the boundaries explicitly.** Add cases for nil vs. empty inputs, relative vs. absolute paths,
+  and platform-specific branches. If a test skips on a platform, note where it is covered.
 
 
 ---
