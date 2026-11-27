@@ -36,10 +36,16 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
-func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+func openRepository(inputDir string) (*git.Repository, error) {
+	return git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
+		// Linked worktrees keep config and refs in the common git dir, not their private gitdir.
+		EnableDotGitCommonDir: true,
 	})
+}
+
+func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
+	repo, err := openRepository(inputDir)
 
 	if err != nil {
 		return nil, nil, err
@@ -228,9 +234,7 @@ func GetRemoteUrl(inputDir string) (string, error) {
 //   - The origin remote URL as a string.
 //   - An error object (if no git repository found or no origin remote configured).
 func GetOriginRemote(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
@@ -260,9 +264,7 @@ func GetOriginRemote(inputDir string) (string, error) {
 //   - An error object (if no git repository found, HEAD cannot be resolved, or
 //     the repository has no commits).
 func TreeHashFromDir(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
@@ -325,9 +327,7 @@ func HeadCommitHashFromDir(inputDir string) (string, error) {
 //   - The first remote URL as a string.
 //   - An error object (if no git repository found or no remotes configured).
 func GetFirstRemote(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
