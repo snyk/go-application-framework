@@ -2,7 +2,9 @@ package utils
 
 import (
 	"math/rand/v2"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	gitignore "github.com/sabhiram/go-gitignore"
@@ -74,7 +76,8 @@ func TestScopedMatcher_MatchesPlainGitignore(t *testing.T) {
 	expected := gitignore.CompileIgnoreLines(globs...)
 	actual := newScopedMatcher(globs)
 	assert.Equal(t, []string{"repo/a", ".java"}, actual.globs[4].required) // "/**/" in globs[4] compiles to "(/|/.+/)"
-	assert.Nil(t, actual.globs[14].regexp, "go-gitignore drops globs[14], which does not compile")
+	assert.Nil(t, actual.globs[14].regexp(), "go-gitignore drops globs[14], which does not compile")
+	assert.Nil(t, actual.globs[14].required)
 	assert.Equal(t, []int{0, 1, 2, 3, 8, 9, 11, 12, 13, 14}, actual.globIndicesFor("/repo/main/"), "unscoped globs and globs scoped to /repo/")
 
 	for path, want := range paths {
@@ -162,5 +165,27 @@ func TestRequiredLiterals(t *testing.T) {
 		`^(|.*/)a\x{FFFD}b(|/.*)$`:               nil,
 	} {
 		assert.Equal(t, expected, requiredLiterals(expr), expr)
+	}
+}
+
+func TestLazyRegexp(t *testing.T) {
+	assert.Nil(t, lazyRegexp("")())
+	assert.Nil(t, lazyRegexp("^(x")())
+	compiled := lazyRegexp("^a$")
+	assert.True(t, compiled().MatchString("a"))
+	assert.False(t, compiled().MatchString("ab"))
+	assert.Same(t, compiled(), compiled())
+}
+
+func TestLazyRegexp_CompilesOnceForConcurrentCallers(t *testing.T) {
+	compiled := lazyRegexp("^a$")
+	results := make([]*regexp.Regexp, 8)
+	var callers sync.WaitGroup
+	for i := range results {
+		callers.Go(func() { results[i] = compiled() })
+	}
+	callers.Wait()
+	for _, result := range results {
+		assert.Same(t, results[0], result)
 	}
 }
