@@ -1,0 +1,141 @@
+[
+  {
+    "testId": "11111111-2222-3333-4444-555555555555",
+    "testConfiguration": {
+      "local_policy": {
+        "fail_on_upgradable": false,
+        "severity_threshold": "low",
+        "suppress_pending_ignores": false
+      },
+      "scan_config": {
+        "rift": {}
+      },
+      "timeout": {
+        "outcome": "fail",
+        "seconds": 1200
+      }
+    },
+    "createdAt": "2025-12-12T09:07:21.538667Z",
+    "executionState": "finished",
+    "passFail": "fail",
+    "outcomeReason": "policy_breach",
+    "effectiveSummary": {
+      "count": 2,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "rift": 2,
+          "sast": 0,
+          "sca": 0,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 0,
+          "medium": 1,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "rawSummary": {
+      "count": 2,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "rift": 2,
+          "sast": 0,
+          "sca": 0,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 0,
+          "medium": 1,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "findingsComplete": true,
+    "problemStore": {
+      "CWE-79": {
+        "id": "CWE-79",
+        "source": "cwe"
+      },
+      "CWE-89": {
+        "id": "CWE-89",
+        "source": "cwe"
+      }
+    },
+    "_problemRefs": {
+      "c0ffee00-1111-4222-8333-444455556666": ["CWE-89"],
+      "c0ffee00-7777-4888-9999-aaaabbbbcccc": ["CWE-79"]
+    },
+    "findings": [
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows.",
+          "evidence": [],
+          "finding_type": "rift",
+          "key": "rift-finding-0001",
+          "locations": [
+            {
+              "file_path": "src/handlers/users.go",
+              "from_column": 2,
+              "from_line": 42,
+              "to_column": 18,
+              "to_line": 47,
+              "type": "source"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": null,
+          "rating": {
+            "severity": "high"
+          },
+          "risk": {},
+          "title": "SQL injection in user lookup"
+        },
+        "id": "c0ffee00-1111-4222-8333-444455556666",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "The search term is written into the HTML response without escaping.",
+          "evidence": [],
+          "finding_type": "rift",
+          "key": "rift-finding-0002",
+          "locations": [
+            {
+              "file_path": "web/templates/search.html",
+              "from_line": 12,
+              "type": "source"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": null,
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Reflected cross-site scripting in search page"
+        },
+        "id": "c0ffee00-7777-4888-9999-aaaabbbbcccc",
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      }
+    ]
+  }
+]

@@ -1,0 +1,107 @@
+
+	{
+		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+		"version": "2.1.0",
+		"runs": [
+			{
+				"tool": {
+					"driver" : {
+						"name" : "Snyk Rift",
+						"semanticVersion" : "1.1301.0",
+						"version" : "1.1301.0",
+						"informationUri" : "https://docs.snyk.io/",
+						"rules" : [
+							{
+								"id": "CWE-79",
+								"shortDescription": {
+									"text": "Medium severity - Reflected cross-site scripting in search page"
+								},
+								"help": {
+									"text": "",
+									"markdown": "The search term is written into the HTML response without escaping."
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-79"
+									]
+								}
+							},
+							{
+								"id": "CWE-89",
+								"shortDescription": {
+									"text": "High severity - SQL injection in user lookup"
+								},
+								"help": {
+									"text": "",
+									"markdown": "The `id` query parameter is concatenated into a SQL statement without parameterization, allowing an attacker to read or modify arbitrary rows."
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-89"
+									]
+								}
+							}
+						]
+					}
+				},
+			"results": [
+				{
+					"ruleId": "CWE-79",
+					"level": "warning",
+					"message": {
+						"text": "This file contains a medium severity Reflected cross-site scripting in search page vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "web/templates/search.html"
+								},
+								"region": {
+									"startLine": 12
+								}
+							}
+						}
+						
+					],
+					"fingerprints": {
+						"identity": "rift-finding-0002",
+						"snyk/asset/finding/v1": "rift-finding-0002"
+					}
+				},
+				{
+					"ruleId": "CWE-89",
+					"level": "error",
+					"message": {
+						"text": "This file contains a high severity SQL injection in user lookup vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "src/handlers/users.go"
+								},
+								"region": {
+									"startLine": 42,
+									"endLine": 47,
+									"startColumn": 2,
+									"endColumn": 18
+								}
+							}
+						}
+						
+					],
+					"fingerprints": {
+						"identity": "rift-finding-0001",
+						"snyk/asset/finding/v1": "rift-finding-0001"
+					}
+				}
+			],
+				"automationDetails": {
+					"id":"Snyk/Rift/0/2026-11-19T16:59:46Z"
+				}
+			}
+		]
+	}
