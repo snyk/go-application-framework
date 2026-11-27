@@ -116,6 +116,7 @@ func Test_EngineBasics(t *testing.T) {
 	err = engine.Init()
 	assert.Nil(t, err)
 
+	// Analytics is created lazily on first GetAnalytics after Init (CLI-2138).
 	assert.NotNil(t, engine.GetAnalytics())
 
 	// method under test: Invoke()
@@ -253,14 +254,14 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 	assert.Nil(t, err)
 
 	engine.SetConfiguration(config2)
-	assert.Equal(t, config2, engine.GetConfiguration())
-	assert.Equal(t, config2, engine.GetNetworkAccess().GetConfiguration())
-	assert.NotEqual(t, config, engine.GetConfiguration())
+	assert.Same(t, config2, engine.GetConfiguration())
+	assert.Same(t, config2, engine.GetNetworkAccess().GetConfiguration())
+	assert.NotSame(t, config, engine.GetConfiguration())
 
 	engine.SetLogger(logger2)
-	assert.Equal(t, logger2, engine.GetLogger())
-	assert.Equal(t, logger2, engine.GetNetworkAccess().GetLogger())
-	assert.NotEqual(t, logger, engine.GetLogger())
+	assert.Same(t, logger2, engine.GetLogger())
+	assert.Same(t, logger2, engine.GetNetworkAccess().GetLogger())
+	assert.NotSame(t, logger, engine.GetLogger())
 }
 
 func Test_Engine_SetterRuntimeInfo(t *testing.T) {

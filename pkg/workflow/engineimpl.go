@@ -71,6 +71,9 @@ type engineRuntimeConfig struct {
 	// invocationProfile is the configuration and network access of the profile the invocation runs on, nil for the
 	// engine's own.
 	invocationProfile *engineWrapper
+	// configFromCaller is true when WithConfig set the configuration, so post-invoke hooks can bind to it instead of
+	// falling back to the engine's credentials.
+	configFromCaller bool
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -78,6 +81,7 @@ type EngineInvokeOption func(*engineRuntimeConfig)
 func WithConfig(config configuration.Configuration) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
 		e.config = config
+		e.configFromCaller = true
 	}
 }
 
@@ -231,10 +235,8 @@ func (e *EngineImpl) Init() error {
 	}
 
 	// later scan here for extension binaries
-
-	if e.analytics == nil {
-		e.analytics = e.initAnalytics()
-	}
+	// Analytics is created lazily in GetAnalytics so hosts can select a configuration
+	// profile after Init without freezing the default profile's API_URL (CLI-2138).
 
 	if err == nil {
 		e.mu.Lock()
@@ -385,6 +387,11 @@ func (e *EngineImpl) Invoke(
 		if selectErr != nil {
 			options.config = invocationProfile.config
 		}
+		// Profile network access is created under the registry/engine locks; decorate it only
+		// after those locks are released so setup hooks can resolve remote-backed config.
+		if invocationProfile != nil && invocationProfile.networkAccess != nil {
+			ApplyNetworkAccessSetup(invocationProfile.networkAccess)
+		}
 	}
 
 	var output []Data
@@ -437,6 +444,9 @@ func (e *EngineImpl) runWorkflow(id Identifier, workflow Entry, options *engineR
 	localNetworkAccess := e.invocationNetworkAccess(id, options.config)
 	localEngine := e.invocationEngine(options)
 	e.mu.Unlock()
+
+	// Invocation network access is cloned under the engine lock; apply setup hooks afterwards.
+	ApplyNetworkAccessSetup(localNetworkAccess)
 
 	invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
@@ -573,8 +583,14 @@ func (e *EngineImpl) firePostInvokeHooks(
 
 	// Nested invocations made through hookEngine must be bound by the same timeout.
 	hookEngine := &engineWrapper{WrappedEngine: e, defaultCtxFunc: func() context.Context { return boundedHookCtx }, defaultInstrumentationCollector: options.ic}
-	if options.invocationProfile != nil {
+	switch {
+	case options.invocationProfile != nil:
 		hookEngine.config, hookEngine.networkAccess = options.invocationProfile.config, options.invocationProfile.networkAccess
+	case options.configFromCaller && options.config != nil:
+		// WithConfig skips profile selection; bind hooks to that configuration so they do not use the engine's
+		// credentials (for example the default profile's token while a host reports with another profile).
+		hookEngine.config = options.config
+		hookEngine.networkAccess = CreateNetworkAccess(e.GetNetworkAccess(), options.config)
 	}
 
 	var wg sync.WaitGroup
@@ -609,8 +625,18 @@ func (e *EngineImpl) firePostInvokeHooks(
 	}
 }
 
-// GetAnalytics returns the analytics object.
+// GetAnalytics returns the analytics object. Before Init it is nil. After Init it is
+// created on first use from the engine's current configuration, so a host that selects
+// a profile after Init (see SelectProfile) gets that profile's API_URL and credentials.
 func (e *EngineImpl) GetAnalytics() analytics.Analytics {
+	if !e.initialized.Load() {
+		return e.analytics
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.analytics == nil {
+		e.analytics = e.initAnalytics()
+	}
 	return e.analytics
 }
 
@@ -767,16 +793,68 @@ func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invo
 
 // GetProfileRegistry returns the registry of configuration profiles that the engine selects from. Its profile files are
 // read from the directory set with profile.DirKey. The engine rebuilds the registry when SetConfiguration replaces its
-// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. A registry that is
-// rebuilt loses the names set with profile.Registry.SetIgnoredEnvVars, so call it on each registry obtained here,
-// before the first profile is loaded. It fails if the directory is not set or not absolute, or if the engine does not
-// support profiles.
+// configuration with one that is not derived from the registry's base, or when profile.DirKey changes, so ask for it on
+// every use and do not keep it. A registry that is rebuilt loses the names set with profile.Registry.SetIgnoredEnvVars,
+// so call it on each registry obtained here, before the first profile is loaded. It fails if the directory is not set or
+// not absolute, or if the engine does not support profiles.
 func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 	provider, ok := engine.(profileRegistryProvider)
 	if !ok {
 		return nil, profilesUnavailableError("the engine does not support profiles")
 	}
 	return provider.profileRegistry()
+}
+
+// profileSelector is implemented by engines that can make a named profile their configuration after Init.
+type profileSelector interface {
+	selectProfile(name string) (configuration.Configuration, error)
+}
+
+// SelectProfile makes the named profile the engine's configuration and rebinds network access to it.
+// It keeps the existing profile registry (unlike SetConfiguration). Analytics is not rebound: it is
+// created lazily on first GetAnalytics after this call, so it reads the selected profile. Empty name
+// and the default profile are no-ops. It fails if the engine does not support profiles.
+func SelectProfile(engine Engine, name string) (configuration.Configuration, error) {
+	if name == "" || name == profile.DefaultName {
+		return engine.GetConfiguration(), nil
+	}
+	selector, ok := engine.(profileSelector)
+	if !ok {
+		return nil, profilesUnavailableError("the engine does not support profiles")
+	}
+	return selector.selectProfile(name)
+}
+
+// selectProfile loads the named profile, replaces the engine configuration with it, and rebinds
+// network access. The registry built from the previous configuration is kept so DirKey need not
+// be present on the derived profile. Call after Init; do not call before extensions have registered.
+func (e *EngineImpl) selectProfile(name string) (configuration.Configuration, error) {
+	registry, err := e.profileRegistry()
+	if err != nil {
+		return nil, err
+	}
+	p, err := registry.Profile(name)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil || p.Configuration() == nil {
+		return nil, profilesUnavailableError(fmt.Sprintf("profile %q has no configuration", name))
+	}
+	cfg := p.Configuration()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Pin DirKey to the registry directory. Derived profiles inherit a default DirKey
+	// (snyk_profiles under the storage dir) that is not the host's SNYK_CONFIG_PROFILE_DIR.
+	if e.profilesDir != "" {
+		cfg.Set(profile.DirKey, e.profilesDir)
+	}
+	e.config = cfg
+	// Do not clear e.profiles: the registry was built from the base and stays valid.
+	if e.networkAccess != nil {
+		e.networkAccess.SetConfiguration(cfg)
+	}
+	return cfg, nil
 }
 
 // profileRegistry returns the registry of the engine's profiles. It is built on first use from the current configuration
@@ -789,8 +867,7 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
-	registry, err := profile.NewFileRegistry(dir, e.config, opts...)
+	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
 	if err != nil {
 		return nil, err
 	}

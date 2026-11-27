@@ -846,3 +846,56 @@ func Test_Engine_ProfileIgnoredEnvVarsAreDroppedWhenTheRegistryIsRebuilt(t *test
 	require.NoError(t, err)
 	assert.Equal(t, "ambient", named.Configuration().GetString("snyk_token"))
 }
+
+// Test_SelectProfile_RebindsConfigAndNetwork_KeepsRegistry pins CLI-2138: after Init, SelectProfile replaces the
+// engine configuration and network access with the named profile without clearing the registry, and GetAnalytics
+// then reads that profile (lazy init).
+func Test_SelectProfile_RebindsConfigAndNetwork_KeepsRegistry(t *testing.T) {
+	env := newProfileEnv(t)
+	env.base.Set(configuration.AUTHENTICATION_TOKEN, "default-token")
+	env.base.Set(configuration.API_URL, "https://api.default.example")
+	require.NoError(t, os.WriteFile(filepath.Join(env.dir, "work.json"), []byte(
+		`{"testkey":"work-value","`+configuration.AUTHENTICATION_TOKEN+`":"work-token","`+configuration.API_URL+`":"https://api.work.example"}`,
+	), 0o600))
+
+	registryBefore, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+
+	assert.Nil(t, env.impl().analytics, "Init must not create analytics")
+
+	cfg, err := SelectProfile(env.engine, "work")
+	require.NoError(t, err)
+	assert.Equal(t, "work-token", cfg.GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "work-token", env.engine.GetConfiguration().GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "work-token", env.engine.GetNetworkAccess().GetConfiguration().GetString(configuration.AUTHENTICATION_TOKEN))
+	assert.Equal(t, "https://api.work.example", cfg.GetString(configuration.API_URL))
+	assert.Equal(t, env.dir, cfg.GetString(profile.DirKey), "DirKey is pinned to the registry directory")
+
+	registryAfter, err := GetProfileRegistry(env.engine)
+	require.NoError(t, err)
+	assert.Same(t, registryBefore, registryAfter, "SelectProfile must keep the registry")
+
+	a := env.engine.GetAnalytics()
+	require.NotNil(t, a)
+	assert.Same(t, a, env.engine.GetAnalytics(), "GetAnalytics is memoised")
+}
+
+func Test_SelectProfile_DefaultAndEmptyAreNoOps(t *testing.T) {
+	env := newProfileEnv(t)
+	before := env.engine.GetConfiguration()
+
+	cfg, err := SelectProfile(env.engine, "")
+	require.NoError(t, err)
+	assert.Same(t, before, cfg)
+
+	cfg, err = SelectProfile(env.engine, profile.DefaultName)
+	require.NoError(t, err)
+	assert.Same(t, before, cfg)
+}
+
+func Test_SelectProfile_FailsForAnEngineWithoutProfiles(t *testing.T) {
+	env := newProfileEnv(t)
+	cfg, err := SelectProfile(foreignEngine{Engine: env.engine}, "work")
+	assertCatalogError(t, err, codeUnavailable, "Profiles are unavailable: the engine does not support profiles.")
+	assert.Nil(t, cfg)
+}
