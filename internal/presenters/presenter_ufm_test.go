@@ -1268,6 +1268,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 		testResultPath    string
 		includeIgnores    bool
 		severityThreshold string
+		remoteRepoUrl     string
 	}{
 		{
 			name:              "cli",
@@ -1275,6 +1276,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			testResultPath:    "testdata/ufm/testresult_cli.json",
 			includeIgnores:    false,
 			severityThreshold: "",
+			remoteRepoUrl:     "https://github.com/snyk/cli",
 		},
 		{
 			name:              "webgoat",
@@ -1296,6 +1298,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			testResultPath:    "testdata/ufm/multi_project.testresult.json",
 			includeIgnores:    false,
 			severityThreshold: "",
+			remoteRepoUrl:     "https://github.com/snyk/multi-project",
 		},
 		{
 			name:              "multi_project_with_asset",
@@ -1303,6 +1306,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			testResultPath:    "testdata/ufm/multi_project.with-asset.testresult.json",
 			includeIgnores:    false,
 			severityThreshold: "",
+			remoteRepoUrl:     "https://github.com/snyk/multi-project",
 		},
 		{
 			name:              "secrets_duplicated_rules",
@@ -1343,6 +1347,9 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 				config.Set(configuration.FLAG_SEVERITY_THRESHOLD, tc.severityThreshold)
 			}
 			config.Set(configuration.FLAG_INCLUDE_IGNORES, tc.includeIgnores)
+			if tc.remoteRepoUrl != "" {
+				config.Set(configuration.FLAG_REMOTE_REPO_URL, tc.remoteRepoUrl)
+			}
 
 			writer := &bytes.Buffer{}
 

@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -49,6 +50,9 @@ func cleanUpEnvVars() {
 }
 
 func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	os.Unsetenv("SNYK_TOKEN")
 	expectedValue := "mytoken"
 	expectedValue2 := "123456"
@@ -72,6 +76,9 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 }
 
 func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	expectedValue := "anotherToken"
 	expectedValueDocker := "dockerToken"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
@@ -99,6 +106,9 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 }
 
 func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"snyk_oauth_token": "mytoken", "somethingElse": 12}`))
 
 	config := NewWithOpts(
@@ -119,6 +129,9 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 }
 
 func Test_Configuration_GetE(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"snyk_oauth_token": "mytoken", "somethingElse": 12}`))
 
 	config := NewWithOpts(
@@ -166,6 +179,9 @@ func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
 }
 
 func Test_ConfigurationGet_unset(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
 	config := NewWithOpts(WithFiles(TEST_FILENAME))
@@ -182,6 +198,9 @@ func Test_ConfigurationGet_unset(t *testing.T) {
 }
 
 func Test_ConfigurationSet_differentCases(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
 
 	config := NewWithOpts(
@@ -258,6 +277,9 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 }
 
 func Test_ConfigurationGet_Url(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"validUrl": "https://www.snyk.io", "invalidUrl": "something"}`))
 
 	config := NewFromFiles(TEST_FILENAME)
@@ -270,6 +292,9 @@ func Test_ConfigurationGet_Url(t *testing.T) {
 }
 
 func Test_ConfigurationGet_StringSlice(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	configtest.IsolateEnvironmentForTest(t)
 
 	config := New()
@@ -290,6 +315,9 @@ func Test_ConfigurationGet_StringSlice(t *testing.T) {
 }
 
 func Test_ConfigurationClone(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
 	flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	flagset.Bool("debug", true, "debugging")
@@ -371,6 +399,9 @@ func TestNewInMemory(t *testing.T) {
 }
 
 func TestNewFromFiles(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	config := NewFromFiles(filepath.Join(t.TempDir(), t.Name()))
 	ev, ok := config.(*extendedViper)
 	assert.True(t, ok)
@@ -486,6 +517,9 @@ func Test_DefaultValuehandling(t *testing.T) {
 }
 
 func Test_ConfigurationGet_GetAllKeysThatContainValues(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	// prepare values
 	t.Setenv(strings.ToUpper(API_URL), "something")
 	flagset := pflag.NewFlagSet("test set", pflag.ExitOnError)
@@ -549,6 +583,9 @@ func Test_Configuration_Locking(t *testing.T) {
 	})
 
 	t.Run("locks gets", func(t *testing.T) {
+		fakehome := t.TempDir()
+		t.Setenv("HOME", fakehome)
+		t.Setenv("USERPROFILE", fakehome)
 		var wg sync.WaitGroup
 		N := 100
 
@@ -614,6 +651,9 @@ func Test_ImmutableDefaultValueFunction(t *testing.T) {
 }
 
 func Test_JsonStorage_Locking(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	outerConfig := NewFromFiles(TEST_FILENAME)
 	outerConfig.PersistInStorage("n")
 	outerConfig.Set("n", float64(0))
@@ -653,6 +693,9 @@ func Test_JsonStorage_Locking(t *testing.T) {
 }
 
 func Test_JsonStorage_Locking_Interrupted(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	outerConfig := NewFromFiles(TEST_FILENAME)
 	outerConfig.PersistInStorage("n")
 	outerConfig.Set("n", float64(0))
@@ -1191,6 +1234,9 @@ func Test_GetSupportedEnvVarPrefixes(t *testing.T) {
 }
 
 func Test_GetFiles(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	config := NewWithOpts(WithFiles("file1", "file2"))
 	files := config.GetFiles()
 	assert.Contains(t, files, "file1")
@@ -1198,6 +1244,9 @@ func Test_GetFiles(t *testing.T) {
 }
 
 func Test_ReloadConfig(t *testing.T) {
+	fakehome := t.TempDir()
+	t.Setenv("HOME", fakehome)
+	t.Setenv("USERPROFILE", fakehome)
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken"}`))
 	config := NewFromFiles(TEST_FILENAME)
 
@@ -1395,4 +1444,31 @@ func Test_GetAllKeysThatContainValues_noAlternateKeys(t *testing.T) {
 
 	keys := config.GetAllKeysThatContainValues("lonely")
 	assert.Contains(t, keys, "lonely")
+}
+
+func Test_appendMissing(t *testing.T) {
+	t.Run("nil list and no values", func(t *testing.T) {
+		assert.Empty(t, appendMissing(nil))
+	})
+
+	t.Run("adds values to a nil list", func(t *testing.T) {
+		assert.Equal(t, []string{"a", "b"}, appendMissing(nil, "a", "b"))
+	})
+
+	t.Run("duplicates inside values are added once", func(t *testing.T) {
+		assert.Equal(t, []string{"a", "b"}, appendMissing(nil, "a", "b", "a"))
+	})
+
+	t.Run("keeps the order of the list and skips values it has", func(t *testing.T) {
+		assert.Equal(t, []string{"c", "a", "b", "d"}, appendMissing([]string{"c", "a"}, "b", "c", "d"))
+	})
+}
+
+func Test_DefaultStorageDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dir, err := DefaultStorageDir()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, ".config", "configstore"), dir)
 }

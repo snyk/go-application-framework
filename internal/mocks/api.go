@@ -66,6 +66,21 @@ func (mr *MockApiClientMockRecorder) GetFeatureFlag(ctx, flagname, origId interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeatureFlag", reflect.TypeOf((*MockApiClient)(nil).GetFeatureFlag), ctx, flagname, origId)
 }
 
+// GetMachineTenantId mocks base method.
+func (m *MockApiClient) GetMachineTenantId(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMachineTenantId", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMachineTenantId indicates an expected call of GetMachineTenantId.
+func (mr *MockApiClientMockRecorder) GetMachineTenantId(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachineTenantId", reflect.TypeOf((*MockApiClient)(nil).GetMachineTenantId), ctx)
+}
+
 // GetOrgIdFromSlug mocks base method.
 func (m *MockApiClient) GetOrgIdFromSlug(ctx context.Context, slugName string) (string, error) {
 	m.ctrl.T.Helper()
@@ -139,6 +154,21 @@ func (m *MockApiClient) GetSlugFromOrgId(ctx context.Context, orgID string) (str
 func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(ctx, orgID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), ctx, orgID)
+}
+
+// GetTenantIdFromOrgId mocks base method.
+func (m *MockApiClient) GetTenantIdFromOrgId(ctx context.Context, orgID string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTenantIdFromOrgId", ctx, orgID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTenantIdFromOrgId indicates an expected call of GetTenantIdFromOrgId.
+func (mr *MockApiClientMockRecorder) GetTenantIdFromOrgId(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTenantIdFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetTenantIdFromOrgId), ctx, orgID)
 }
 
 // GetUserMe mocks base method.

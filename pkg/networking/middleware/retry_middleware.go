@@ -133,6 +133,15 @@ func isSuccessResponse(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
+type noRetryKey struct{}
+
+// WithoutRetry marks the requests made with the returned context as not to be retried, whatever
+// the configuration says. Use it for a request the server accepts only once, such as one that
+// spends a single-use token: a retry after the server consumed the token can't succeed.
+func WithoutRetry(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noRetryKey{}, true)
+}
+
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -187,6 +196,10 @@ func handleSuccessfulJSONResponse(response *http.Response) error {
 }
 
 func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) { //nolint:gocyclo // complexity from sequential retry logic with per-status-code overrides
+	if req.Context().Value(noRetryKey{}) != nil {
+		return rm.nextRoundtripper.RoundTrip(req)
+	}
+
 	var finalResponse *http.Response
 	var finalError error
 	var maxAttempts = defaultMaxAttemptsCount
@@ -331,7 +344,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	finalResponse, finalError = backoff.Retry(reqCtx, op,
 		backoff.WithBackOff(backoffMethod),
 		backoff.WithNotify(func(err error, duration time.Duration) {
-			rm.notifyRetry(reqCtx, err, duration)
+			rm.notifyRetry(req, err, duration)
 		}),
 	)
 
@@ -387,7 +400,7 @@ func ensureGetBodyExists(req *http.Request) (io.ReadCloser, func() (io.ReadClose
 	return firstBody, newGetBody, nil, firstBodyErr
 }
 
-func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration time.Duration) {
+func (rm RetryMiddleware) notifyRetry(req *http.Request, err error, duration time.Duration) {
 	if rm.errorHandler == nil {
 		return
 	}
@@ -395,7 +408,8 @@ func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration t
 	if errors.As(err, &retryErr) {
 		retryErr.Duration = duration
 		if catalogErr, ok := retryAttemptNotification(retryErr); ok {
-			if handlerErr := rm.errorHandler(catalogErr, ctx); handlerErr != nil {
+			catalogErr = addRequestDataToErr(catalogErr, req)
+			if handlerErr := rm.errorHandler(catalogErr, req.Context()); handlerErr != nil {
 				rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
 			}
 		}

@@ -9,6 +9,8 @@ import (
 	"unicode"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 // defaultStudioDeviceIDPaths returns the machine-wide and per-user locations of the Snyk Studio
@@ -71,4 +73,19 @@ func readStudioDeviceID(paths pathPair, logger *zerolog.Logger) (id string, path
 		return candidate, p, true, errors.Join(readErrs...)
 	}
 	return "", "", false, errors.Join(readErrs...)
+}
+
+const studioCLIMachineIDKey = "internal_snyk_client_machine_id"
+
+// studioID prefers the Studio CLI value over the disk value. It never supplies the machine id itself.
+func studioID(config configuration.Configuration, logger *zerolog.Logger, disk string) string {
+	supplied := strings.TrimRightFunc(config.GetString(studioCLIMachineIDKey), unicode.IsSpace)
+	if blank(supplied) {
+		return disk
+	}
+	if reason, ok := validate(supplied); !ok {
+		logger.Debug().Str("reason", reason).Msg("machine id: Snyk Studio CLI value failed validation, ignoring")
+		return disk
+	}
+	return supplied
 }

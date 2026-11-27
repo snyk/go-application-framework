@@ -57,7 +57,8 @@ func TestAcceptance_UnreadableSharedFileIsReportedAlongsideTheIDFoundAfterIt(t *
 	makeUnreadable(t, m.shared.machineWide)
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "per-user-id"})
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.Equal(t, "per-user-id", id)
 	requireUnreadableFileReported(t, err, m.shared.machineWide)
@@ -69,7 +70,8 @@ func TestAcceptance_UnreadableSharedFileWithNothingStorableIsReportedWithTheWrit
 	makeUnreadable(t, m.shared.machineWide)
 	m.blockEverySharedFileLocation(t)
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.Empty(t, id)
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)
@@ -102,12 +104,12 @@ func TestAcceptance_RepeatedLookupsReportTheSameIDAndUnreadableFile(t *testing.T
 			config := configuration.NewWithOpts(append([]configuration.Opts{configuration.WithFiles("snyk"), configuration.WithAutomaticEnv()}, opts...)...)
 			config.AddDefaultValue(configuration.MACHINE_ID, m.resolve())
 			ri := runtimeInfoOf(config)
-			firstID, firstErr := ri.GetMachineID()
+			firstMachine, firstErr := ri.GetMachineID()
 
 			restore()
-			id, err := ri.GetMachineID()
+			machine, err := ri.GetMachineID()
 
-			require.Equal(t, firstID, id)
+			require.Equal(t, firstMachine, machine)
 			require.Equal(t, firstErr, err, "the id is kept for the life of the engine, and so is the error it was found with")
 		})
 	}
@@ -119,24 +121,61 @@ func TestAcceptance_SuppliedIDIsReturnedWithoutReportingUnreadableFiles(t *testi
 	makeUnreadable(t, m.shared.machineWide)
 	t.Setenv("INTERNAL_SNYK_MACHINE_ID", "supplied-id")
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.NoError(t, err)
 	require.Equal(t, "supplied-id", id)
 }
 
-func TestAcceptance_UnreadableStudioDeviceIDFilesAreReportedAlongsideTheGeneratedID(t *testing.T) {
+func TestAcceptance_UnreadableStudioDeviceIDFilesAreNotReportedWhenAGeneratedIDIsUsed(t *testing.T) {
 	m := newIsolatedMachine(t)
 	for _, p := range []string{m.studio.machineWide, m.studio.perUser} {
 		seed(t, p, "studio-device-id")
 		makeUnreadable(t, p)
 	}
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.Equal(t, readFile(t, m.shared.perUser).MachineID, id)
-	requireUnreadableFileReported(t, err, m.studio.machineWide)
-	requireUnreadableFileReported(t, err, m.studio.perUser)
+	require.NoError(t, err)
+}
+
+func TestAcceptance_UnreadableStudioFileIsNotReportedWhenTheSharedFileSuppliesTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "per-user-id"})
+	seed(t, m.studio.perUser, "studio-device-id")
+	makeUnreadable(t, m.studio.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Equal(t, "per-user-id", machine.ID)
+	require.NoError(t, err)
+}
+
+func TestAcceptance_UnreadableStudioFileIsNotReportedWhenTheHardwareSerialSuppliesTheID(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	seed(t, m.studio.perUser, "studio-device-id")
+	makeUnreadable(t, m.studio.perUser)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	require.NoError(t, err)
+}
+
+func TestAcceptance_UnreadableSharedFileIsReportedAlongsideTheHardwareSerial(t *testing.T) {
+	m := newIsolatedMachine(t)
+	m.serial = "C02Q7KHTGFWF"
+	writeSharedFileAs(t, m.shared.machineWide, map[string]any{"machine_id": "machine-wide-id"})
+	makeUnreadable(t, m.shared.machineWide)
+
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+
+	require.Equal(t, "C02Q7KHTGFWF", machine.ID)
+	requireUnreadableFileReported(t, err, m.shared.machineWide)
 }
 
 func TestAcceptance_ADirectoryAtTheSharedFilePathIsReportedAsUnreadable(t *testing.T) {
@@ -144,7 +183,8 @@ func TestAcceptance_ADirectoryAtTheSharedFilePathIsReportedAsUnreadable(t *testi
 	require.NoError(t, os.MkdirAll(m.shared.machineWide, 0o755))
 	writeSharedFileAs(t, m.shared.perUser, map[string]any{"machine_id": "per-user-id"})
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.Equal(t, "per-user-id", id)
 	requireUnreadableFileReported(t, err, m.shared.machineWide)
@@ -153,10 +193,11 @@ func TestAcceptance_ADirectoryAtTheSharedFilePathIsReportedAsUnreadable(t *testi
 func TestAcceptance_FilesThatAreMissingOrHoldNoValidIDAreNotReported(t *testing.T) {
 	m := newIsolatedMachine(t)
 	seed(t, m.shared.machineWide, "{not json")
-	seed(t, m.studio.machineWide, "not a valid id")
+	seed(t, m.studio.machineWide, "not/a/valid/id")
 	seed(t, m.studio.perUser, strings.Repeat("a", maxIDFileSize+1))
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.NoError(t, err)
 	require.True(t, valid(id))
@@ -168,7 +209,8 @@ func TestAcceptance_UnwritablePerUserDirectoryWithoutUnreadableFilesIsReportedAs
 	require.NoError(t, os.MkdirAll(perUserDir, 0o755))
 	makeUnwritable(t, perUserDir)
 
-	id, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	machine, err := runtimeInfoOf(m.newRun()).GetMachineID()
+	id := machine.ID
 
 	require.Empty(t, id)
 	require.ErrorIs(t, err, runtimeinfo.ErrNoMachineID)

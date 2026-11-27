@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/fips140"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -20,12 +21,14 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/internal/machineid"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/profile"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -47,6 +50,9 @@ const (
 	orgLookupProvidedSlugFailed OrgLookup = "provided_slug_failed"
 	orgLookupDefault            OrgLookup = "default"
 	orgLookupDefaultFailed      OrgLookup = "default_failed"
+
+	// defaultProfileDirName is the name of the profile directory in the default storage directory.
+	defaultProfileDirName = "snyk_profiles"
 )
 
 type instrumentationRecorder struct {
@@ -82,10 +88,8 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
-		localNetworkStack := engine.GetNetworkAccess().Clone()
-		localNetworkStack.SetConfiguration(c)
 		url := c.GetString(configuration.API_URL)
-		client := localNetworkStack.GetHttpClient()
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		apiClient := apiClientFactory(url, client)
 		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
@@ -105,13 +109,21 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	if err != nil {
 		logger.Print("Failed to add dependency for ORGANIZATION:", err)
 	}
+	// the organization is looked up with these credentials, so a clone changing them must not reuse a cached value
+	for _, credentialKey := range []string{configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN} {
+		err = config.AddKeyDependency(configuration.ORGANIZATION, credentialKey)
+		if err != nil {
+			logger.Print("Failed to add dependency for ORGANIZATION:", err)
+		}
+	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
-		client := engine.GetNetworkAccess().GetHttpClient()
+	callback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// network access and API url follow the configuration the value is resolved on, so that a clone's
+		// own credentials and host are used.
+		client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
 		instrumentation := newInstrumentationRecorder(engine, logger)
 		instrumentation.addExtension(orgLookupSourceKey, orgLookupDefault)
-		url := config.GetString(configuration.API_URL)
+		url := c.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
 		if existingValue != nil && ok && len(existingString) > 0 {
@@ -143,6 +155,51 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		return orgId, err
 	}
 	return callback
+}
+
+func defaultFuncTenantId(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	// the tenant is looked up with these credentials and for this org, so a clone changing them must not reuse a cached value
+	for _, key := range []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, auth.CONFIG_KEY_OAUTH_TOKEN, machinecredential.CONFIG_KEY_MACHINE_IDENTITY_STORAGE, configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ORGANIZATION} {
+		if err := config.AddKeyDependency(configuration.TENANT, key); err != nil {
+			logger.Print("Failed to add dependency for TENANT:", err)
+		}
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		if existing, ok := existingValue.(string); ok && len(existing) > 0 {
+			return existing, nil
+		}
+
+		tenantId, err := lookupTenantId(engine, c, apiClientFactory)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"TENANT\":", err)
+		}
+		return tenantId, err
+	}
+	return callback
+}
+
+func lookupTenantId(engine workflow.Engine, c configuration.Configuration, apiClientFactory func(url string, client *http.Client) api.ApiClient) (string, error) {
+	_, err := machinecredential.Load(c)
+	if err != nil && !errors.Is(err, machinecredential.ErrNotEnrolled) {
+		return "", err
+	}
+	client := workflow.CreateNetworkAccessFromEngine(engine, c).GetHttpClient()
+	apiClient := apiClientFactory(c.GetString(configuration.API_URL), client)
+
+	// only a machine can read its own record, and requests go out as the machine only when the OAuth flow is on
+	if err == nil && c.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
+		return apiClient.GetMachineTenantId(context.Background())
+	}
+
+	orgId, err := c.GetStringWithError(configuration.ORGANIZATION)
+	if err != nil {
+		return "", err
+	}
+	if orgId == "" {
+		return "", errors.New("no organization to look up the tenant of")
+	}
+	return apiClient.GetTenantIdFromOrgId(context.Background(), orgId)
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
@@ -228,9 +285,8 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -249,7 +305,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 			return existingValue, nil
 		}
 
-		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
+		tmpDir := pkg_utils.GetTemporaryDirectory(c.GetString(configuration.CACHE_PATH), version)
 		err := pkg_utils.CreateAllDirectories(tmpDir, version)
 		if err != nil {
 			logger.Err(err)
@@ -330,12 +386,26 @@ func defaultNetworkRequestRetryAllowedPaths() configuration.DefaultValueFunction
 	return callback
 }
 
-func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	return machineid.Resolve(machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo))
+func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger, extraOpts []machineid.ResolveOption) configuration.DefaultValueFunction {
+	opts := []machineid.ResolveOption{machineid.WithLogger(logger), machineid.WithRuntimeInfo(engine.GetRuntimeInfo)}
+	return machineid.Resolve(append(opts, extraOpts...)...)
+}
+
+// defaultProfileDir is the default of profile.DirKey: the profile directory in the default storage directory. Without a
+// known home directory there is no default storage directory, so it returns the error instead of a path.
+func defaultProfileDir(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	if existingValue != nil {
+		return existingValue, nil
+	}
+	storageDir, err := configuration.DefaultStorageDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(storageDir, defaultProfileDirName), nil
 }
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
+func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient, machineIDOpts ...machineid.ResolveOption) {
 	if logger == nil {
 		logger = &zlog.Logger
 	}
@@ -354,10 +424,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
+	config.AddDefaultValue(profile.DirKey, defaultProfileDir)
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
-	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger))
+	config.AddDefaultValue(configuration.MACHINE_ID, defaultMachineID(engine, logger, machineIDOpts))
 	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
 	// any external caller still using IsValidAuthHost directly keeps
 	// working; GAF's own validation no longer reads this key (see
@@ -367,7 +438,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
+	err = config.AddKeyDependency(configuration.TEMP_DIR_PATH, configuration.CACHE_PATH)
+	if err != nil {
+		logger.Print("Failed to add dependency for TEMP_DIR_PATH:", err)
+	}
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, logger))
 
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 
@@ -388,6 +463,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.TENANT, defaultFuncTenantId(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
@@ -402,10 +478,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
 	}
 
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
-			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
+			return api.IsFedramp(c.GetString(configuration.API_URL)), nil
 		} else {
 			return existingValue, nil
 		}
@@ -413,7 +488,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
-	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
+	err = config.AddKeyDependency(configuration.CUSTOM_CONFIG_FILES, "configfile")
+	if err != nil {
+		logger.Print("Failed to add dependency for CUSTOM_CONFIG_FILES:", err)
+	}
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles())
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
 	config.AddDefaultValue(configuration.NETWORK_REQUEST_RETRY_ALLOWED_PATHS, defaultNetworkRequestRetryAllowedPaths())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
@@ -424,9 +503,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 }
 
-func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
+func customConfigFiles() configuration.DefaultValueFunction {
+	return func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:
@@ -439,7 +517,7 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 		files = append(files, ".snyk.env."+runtime.GOOS)
 		files = append(files, ".envrc."+runtime.GOOS)
 
-		configFile := config.GetString("configfile")
+		configFile := c.GetString("configfile")
 		if configFile != "" {
 			files = append(files, configFile)
 		}
@@ -461,6 +539,10 @@ func CreateAppEngine() workflow.Engine {
 }
 
 func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
+	return createAppEngine(nil, opts...)
+}
+
+func createAppEngine(machineIDOpts []machineid.ResolveOption, opts ...Opts) workflow.Engine {
 	engine := workflow.NewDefaultWorkFlowEngine()
 
 	for _, opt := range opts {
@@ -469,7 +551,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	config := engine.GetConfiguration()
 	if config != nil {
-		initConfiguration(engine, config, engine.GetLogger(), nil)
+		initConfiguration(engine, config, engine.GetLogger(), nil, machineIDOpts...)
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)

@@ -1,12 +1,14 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 func RepoUrlFromDir(inputDir string) (string, error) {
@@ -34,10 +36,16 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
-func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+func openRepository(inputDir string) (*git.Repository, error) {
+	return git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
+		// Linked worktrees keep config and refs in the common git dir, not their private gitdir.
+		EnableDotGitCommonDir: true,
 	})
+}
+
+func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
+	repo, err := openRepository(inputDir)
 
 	if err != nil {
 		return nil, nil, err
@@ -226,9 +234,7 @@ func GetRemoteUrl(inputDir string) (string, error) {
 //   - The origin remote URL as a string.
 //   - An error object (if no git repository found or no origin remote configured).
 func GetOriginRemote(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
@@ -246,6 +252,72 @@ func GetOriginRemote(inputDir string) (string, error) {
 	return remoteConfig.URLs[0], nil
 }
 
+// TreeHashFromDir returns the git tree hash of the current HEAD commit,
+// equivalent to `git rev-parse HEAD^{tree}`. It resolves HEAD to its commit
+// and returns the hash of that commit's root tree.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The tree hash as a hex string.
+//   - An error object (if no git repository found, HEAD cannot be resolved, or
+//     the repository has no commits).
+func TreeHashFromDir(inputDir string) (string, error) {
+	repo, err := openRepository(inputDir)
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve HEAD commit: %w", err)
+	}
+
+	return commit.TreeHash.String(), nil
+}
+
+// HeadCommitHashFromDir returns the hash of the commit HEAD points to in the
+// repository discovered from inputDir, like `git rev-parse HEAD` run there, but
+// ignoring GIT_* environment variables such as GIT_DIR. inputDir may be any
+// directory inside the working tree. A detached HEAD is supported, and no remote
+// is required.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The commit hash as a hex string, or an empty string if inputDir is not
+//     inside a git repository or the repository has no commits yet.
+//   - An error object (if the repository exists but HEAD cannot be read).
+func HeadCommitHashFromDir(inputDir string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+		DetectDotGit:          true,
+		EnableDotGitCommonDir: true,
+	})
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	ref, err := repo.Head()
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return ref.Hash().String(), nil
+}
+
 // GetFirstRemote retrieves the first available remote URL from a git repository.
 //
 // Parameters:
@@ -255,9 +327,7 @@ func GetOriginRemote(inputDir string) (string, error) {
 //   - The first remote URL as a string.
 //   - An error object (if no git repository found or no remotes configured).
 func GetFirstRemote(inputDir string) (string, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
+	repo, err := openRepository(inputDir)
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
