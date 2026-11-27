@@ -44,7 +44,9 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
-	symlinkRootWarn sync.Once
+	skippedHandler  func(path string, reason error)
+	skippedPaths    sync.Map
+	skippedCount    atomic.Int64 // distinct skipped symlinks not yet added to the metric
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -91,6 +93,8 @@ const (
 	metricFilterDurationMs      = "filter.durationMs"      // sum, across all GetFilteredFiles calls for the variant, of elapsed time including the caller's drain of the result channel
 
 	metricRulesBuildDurationMs = "rules.durationMs" // sum, across all GetRules calls for the variant, of elapsed time for directory walk, ignore discovery, and buildGlobs
+
+	metricSkippedSymlinkCount = "symlinks.skippedCount" // sum, across all FileFilters for the variant, of distinct symlinks left out of the results
 
 	// Record feature flags alongside the variant so consumers need not decode its name.
 	metricFeatureMetacharFix  = "feature.metaCharFix"    // whether FF_FILE_FILTER_METACHARACTER_FIX applied to the run
@@ -144,6 +148,26 @@ func WithMetrics(recorder metrics.Recorder) FileFilterOption {
 	}
 }
 
+// WithSkippedPathHandler registers handler to be told about every path the FileFilter leaves out of its results
+// because Snyk does not follow symbolic links. Each path is reported once per FileFilter, however many times
+// GetAllFiles and GetFilteredFiles run, and reason is a *SymlinkError carrying the path. The reported path is
+// cleaned with filepath.Clean, so it is relative if the FileFilter's path is relative.
+// GetAllFiles reports every symlink it meets, whatever the rules say, and a symlinked root. For paths a caller
+// passes to GetFilteredFiles, the symlink itself is reported unless the rules already exclude it; for a file below
+// a symlinked folder, the topmost symlinked folder below the FileFilter's path is reported.
+// handler runs synchronously on the walk goroutine or a filter worker, so it must be safe for concurrent use and
+// return quickly. With FF_FILE_FILTER_GIT_SEMANTICS the walk does not enter .git folders, so symlinks inside
+// them are not reported. For a symlinked root the reported path is cleaned, while the *SymlinkError that GetRules
+// returns keeps the path as passed. A nil handler is ignored.
+func WithSkippedPathHandler(handler func(path string, reason error)) FileFilterOption {
+	return func(filter *FileFilter) error {
+		if handler != nil {
+			filter.skippedHandler = handler
+		}
+		return nil
+	}
+}
+
 // Avoid resolving flags, which may require network access, when metrics are disabled.
 func (fw *FileFilter) metricVariant() string {
 	if !fw.metrics.IsRecording() {
@@ -185,6 +209,39 @@ func (fw *FileFilter) gitSemantics() bool {
 func (fw *FileFilter) recordBool(variant, key string, getMetric func() bool) {
 	if fw.metrics.IsRecording() {
 		fw.metrics.RecordBool(buildMetricKey(variant, key), getMetric())
+	}
+}
+
+func (fw *FileFilter) reportSkippedSymlink(path string) {
+	fw.reportSkipped(path, zerolog.DebugLevel, "skipping symbolic link")
+}
+
+func (fw *FileFilter) reportSkippedRoot() {
+	fw.reportSkipped(fw.path, zerolog.WarnLevel, "skipping files of symlinked root")
+}
+
+// reportSkipped cleans path only for the report, never for accessing the file. The handler is called without holding a lock, as it may block.
+func (fw *FileFilter) reportSkipped(path string, level zerolog.Level, msg string) {
+	path = filepath.Clean(path)
+	if _, reported := fw.skippedPaths.LoadOrStore(path, struct{}{}); reported {
+		return
+	}
+
+	reason := &SymlinkError{Path: path}
+	fw.logger.WithLevel(level).Err(reason).Msg(msg)
+	if fw.metrics.IsRecording() {
+		fw.skippedCount.Add(1)
+	}
+	if fw.skippedHandler != nil {
+		fw.skippedHandler(path, reason)
+	}
+}
+
+// flushSkippedSymlinkCount adds the symlinks reported since the last flush to the metric in one step, as a
+// folder tree can hold thousands of them and resolving the variant costs feature flag lookups.
+func (fw *FileFilter) flushSkippedSymlinkCount() {
+	if count := fw.skippedCount.Swap(0); count > 0 {
+		fw.metrics.AddToSum(buildMetricKey(fw.metricVariant(), metricSkippedSymlinkCount), int(count))
 	}
 }
 
@@ -231,16 +288,18 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
 // Symlinks are never followed or returned, because the file they point to may be outside the directory.
-// If the root itself is a symlink, nothing is returned and a warning is logged once per FileFilter.
+// If the root itself is a symlink, nothing is returned and it is reported as skipped with a warning.
+// Skipped symlinks are logged, counted by WithMetrics and passed to WithSkippedPathHandler, once per FileFilter.
 // With FF_FILE_FILTER_GIT_SEMANTICS, folders named .git are not entered.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
+		defer fw.flushSkippedSymlinkCount()
 
 		// A path with a trailing separator makes the OS follow a symlinked root, so WalkDir would list its target.
 		if err := CheckNotSymlink(fw.path); err != nil {
-			fw.symlinkRootWarn.Do(func() { fw.logger.Warn().Err(err).Msg("skipping files of symlinked root") })
+			fw.reportSkippedRoot()
 			return
 		}
 
@@ -251,6 +310,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 			}
 
 			if d.Type()&fs.ModeSymlink != 0 {
+				fw.reportSkippedSymlink(path)
 				return nil
 			}
 
@@ -274,9 +334,11 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter.
 // Rule files that are symlinks are never read, as GetAllFiles does not return them.
-// It returns a *SymlinkError if the root itself is a symlink.
+// It returns a *SymlinkError if the root itself is a symlink, which it also reports as skipped.
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	if err := CheckNotSymlink(fw.path); err != nil {
+		fw.reportSkippedRoot()
+		fw.flushSkippedSymlinkCount()
 		return nil, err
 	}
 
@@ -314,11 +376,23 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 // With FF_FILE_FILTER_GIT_SEMANTICS, which is on unless the configuration sets it to false, a file inside an excluded
 // folder below the FileFilter's path is filtered out even if a later negation matches it, as in git, and paths with a
 // .git element are filtered out whatever the rules say. Symlinks, and files inside a symlinked folder below the
-// FileFilter's path, are always filtered out.
+// FileFilter's path, are always filtered out, and nothing is returned if the FileFilter's path is a symlink.
+// They are reported as skipped, see WithSkippedPathHandler.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
 	go func() {
+		// GetAllFiles yields nothing for a symlinked root, so paths a caller passes through it must not pass either.
+		// The input is drained so that its producer is not left blocked.
+		if CheckNotSymlink(fw.path) != nil {
+			fw.reportSkippedRoot()
+			fw.flushSkippedSymlinkCount()
+			for range filesCh {
+			}
+			close(filteredFilesCh)
+			return
+		}
+
 		start := time.Now()
 
 		// Building the predicate is part of the run: with FF_GITIGNORE_RESPECT_TRACKED_FILES it
@@ -363,6 +437,8 @@ func (fw *FileFilter) filterFiles(filesCh <-chan string, isExcluded func(string)
 	if err != nil {
 		fw.logger.Err(err).Msg("failed to wait for all threads")
 	}
+
+	fw.flushSkippedSymlinkCount()
 
 	// Record metrics
 	fw.recordSumLazy(variant, metricFilterInputFileCount, func() int {

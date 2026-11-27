@@ -12,7 +12,7 @@ import (
 type excludedFolder struct {
 	byAll   bool
 	byOther bool
-	linked  bool // the folder, or a folder above it below root, is a symlink
+	linked  string // the topmost folder, from the folder itself up to root, that is a symlink, or empty; a slash path
 }
 
 // folderExclusions memoizes which folders below root the rules exclude, so each folder is matched once,
@@ -23,6 +23,7 @@ type excludedFolder struct {
 type folderExclusions struct {
 	predicate  *exclusionPredicate
 	rootPrefix string
+	filter     *FileFilter
 	mu         sync.Mutex
 	folders    map[string]*folderExclusion
 }
@@ -36,6 +37,7 @@ func (fw *FileFilter) newFolderExclusions(rules []string) *folderExclusions {
 	return &folderExclusions{
 		predicate:  fw.newExclusionPredicate(rules),
 		rootPrefix: folderRootPrefix(fw.path),
+		filter:     fw,
 		folders:    map[string]*folderExclusion{},
 	}
 }
@@ -83,14 +85,27 @@ func (e *folderExclusions) excludedByFolder(file string) bool {
 		return false
 	}
 	folder := e.of(dir)
-	return folder.linked || e.predicate.excludedByFolder(file, folder)
+	if folder.linked != "" {
+		// Reported here, not where the folder is memoized, so the handler never runs inside a sync.Once that
+		// other workers wait on. One report for the topmost symlinked folder stands for every file below it.
+		e.filter.reportSkippedSymlink(filepath.FromSlash(folder.linked))
+		return true
+	}
+	return e.predicate.excludedByFolder(file, folder)
 }
 
 func (e *folderExclusions) isExcluded(file string) bool {
 	if e.predicate.gitSemantics && inGitFolder(filepath.ToSlash(file)) {
 		return true
 	}
-	return e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
+	if e.excludedByFolder(file) || e.predicate.isExcluded(file) {
+		return true
+	}
+	if !isSymlink(file) {
+		return false
+	}
+	e.filter.reportSkippedSymlink(file)
+	return true
 }
 
 // inGitFolder reports whether a path element of slashPath is .git.
@@ -123,7 +138,10 @@ func (e *folderExclusions) of(slashDir string) excludedFolder {
 			parent = e.of(parentDir)
 		}
 		exclusion.folder = e.predicate.folderState(slashDir, parent)
-		exclusion.folder.linked = parent.linked || isSymlink(filepath.FromSlash(slashDir))
+		exclusion.folder.linked = parent.linked
+		if parent.linked == "" && isSymlink(filepath.FromSlash(slashDir)) {
+			exclusion.folder.linked = slashDir
+		}
 	})
 	return exclusion.folder
 }
