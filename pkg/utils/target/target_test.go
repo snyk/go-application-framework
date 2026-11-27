@@ -183,13 +183,22 @@ func Test_GetTargetId(t *testing.T) {
 }
 
 func Test_GetTargetId_linkedWorktree(t *testing.T) {
-	worktreeDir := gitworktree.NewHandBuiltWorktree(t, gitworktree.NewMainRepo(t))
+	layouts := map[string]func(t *testing.T, mainDir string) string{
+		"hand built":       gitworktree.NewHandBuiltWorktree,
+		"git worktree add": gitworktree.GitWorktreeAdd,
+	}
 
-	targetId, err := GetTargetId(worktreeDir, AutoDetectedTargetId)
-	assert.NoError(t, err)
+	for name, newWorktree := range layouts {
+		t.Run(name, func(t *testing.T) {
+			worktreeDir := newWorktree(t, gitworktree.NewMainRepo(t))
 
-	pattern := `^pkg:git/github\.com/example/repo@[a-fA-F0-9]{40}\?branch=feature$`
-	assert.Regexp(t, pattern, targetId)
+			targetId, err := GetTargetId(worktreeDir, AutoDetectedTargetId)
+			assert.NoError(t, err)
+
+			pattern := `^pkg:git/github\.com/example/repo@[a-fA-F0-9]{40}\?branch=feature$`
+			assert.Regexp(t, pattern, targetId)
+		})
+	}
 }
 
 func clone(t *testing.T) string {

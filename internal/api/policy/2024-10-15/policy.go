@@ -18,9 +18,148 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for CreateGroupPolicyPayloadDataType.
+const (
+	CreateGroupPolicyPayloadDataTypePolicy CreateGroupPolicyPayloadDataType = "policy"
+)
+
 // Defines values for CreatePolicyPayloadDataType.
 const (
 	CreatePolicyPayloadDataTypePolicy CreatePolicyPayloadDataType = "policy"
+)
+
+// Defines values for GroupPolicyActionIgnoreDataIgnoreType.
+const (
+	GroupPolicyNotVulnerable   GroupPolicyActionIgnoreDataIgnoreType = "not-vulnerable"
+	GroupPolicyTemporaryIgnore GroupPolicyActionIgnoreDataIgnoreType = "temporary-ignore"
+	GroupPolicyWontFix         GroupPolicyActionIgnoreDataIgnoreType = "wont-fix"
+)
+
+// Defines values for GroupPolicyActionType.
+const (
+	GroupPolicyActionTypeAnnotation       GroupPolicyActionType = "annotation"
+	GroupPolicyActionTypeIgnore           GroupPolicyActionType = "ignore"
+	GroupPolicyActionTypeSeverityOverride GroupPolicyActionType = "severity-override"
+)
+
+// Defines values for GroupPolicyConditionBusinessCriticalityField.
+const (
+	GroupPolicyBusinessCriticality GroupPolicyConditionBusinessCriticalityField = "business-criticality"
+)
+
+// Defines values for GroupPolicyConditionBusinessCriticalityValue.
+const (
+	GroupPolicyConditionBusinessCriticalityValueCritical GroupPolicyConditionBusinessCriticalityValue = "critical"
+	GroupPolicyConditionBusinessCriticalityValueHigh     GroupPolicyConditionBusinessCriticalityValue = "high"
+	GroupPolicyConditionBusinessCriticalityValueLow      GroupPolicyConditionBusinessCriticalityValue = "low"
+	GroupPolicyConditionBusinessCriticalityValueMedium   GroupPolicyConditionBusinessCriticalityValue = "medium"
+)
+
+// Defines values for GroupPolicyConditionCVEField.
+const (
+	GroupPolicyCVE GroupPolicyConditionCVEField = "cve"
+)
+
+// Defines values for GroupPolicyConditionCWEField.
+const (
+	GroupPolicyCWE GroupPolicyConditionCWEField = "cwe"
+)
+
+// Defines values for GroupPolicyConditionEnvironmentField.
+const (
+	GroupPolicyEnvironment GroupPolicyConditionEnvironmentField = "environment"
+)
+
+// Defines values for GroupPolicyConditionEnvironmentValue.
+const (
+	Backend     GroupPolicyConditionEnvironmentValue = "backend"
+	Distributed GroupPolicyConditionEnvironmentValue = "distributed"
+	External    GroupPolicyConditionEnvironmentValue = "external"
+	Frontend    GroupPolicyConditionEnvironmentValue = "frontend"
+	Hosted      GroupPolicyConditionEnvironmentValue = "hosted"
+	Internal    GroupPolicyConditionEnvironmentValue = "internal"
+	Mobile      GroupPolicyConditionEnvironmentValue = "mobile"
+	OnPrem      GroupPolicyConditionEnvironmentValue = "on-prem"
+	Saas        GroupPolicyConditionEnvironmentValue = "saas"
+)
+
+// Defines values for GroupPolicyConditionExploitMaturityField.
+const (
+	GroupPolicyExploitMaturity GroupPolicyConditionExploitMaturityField = "exploit-maturity"
+)
+
+// Defines values for GroupPolicyConditionExploitMaturityValue.
+const (
+	Mature         GroupPolicyConditionExploitMaturityValue = "mature"
+	NoData         GroupPolicyConditionExploitMaturityValue = "no-data"
+	NoKnownExploit GroupPolicyConditionExploitMaturityValue = "no-known-exploit"
+	ProofOfConcept GroupPolicyConditionExploitMaturityValue = "proof-of-concept"
+)
+
+// Defines values for GroupPolicyConditionLifecycleField.
+const (
+	GroupPolicyLifecycle GroupPolicyConditionLifecycleField = "lifecycle"
+)
+
+// Defines values for GroupPolicyConditionLifecycleValue.
+const (
+	Development GroupPolicyConditionLifecycleValue = "development"
+	Production  GroupPolicyConditionLifecycleValue = "production"
+	Sandbox     GroupPolicyConditionLifecycleValue = "sandbox"
+)
+
+// Defines values for GroupPolicyConditionOperator.
+const (
+	GroupPolicyIncludes    GroupPolicyConditionOperator = "includes"
+	GroupPolicyNotIncludes GroupPolicyConditionOperator = "not-includes"
+)
+
+// Defines values for GroupPolicyConditionOrgIDField.
+const (
+	GroupPolicyOrgID GroupPolicyConditionOrgIDField = "org-id"
+)
+
+// Defines values for GroupPolicyConditionProjectTagsField.
+const (
+	GroupPolicyProjectTags GroupPolicyConditionProjectTagsField = "project-tags"
+)
+
+// Defines values for GroupPolicyConditionRuleIdField.
+const (
+	GroupPolicyRuleId GroupPolicyConditionRuleIdField = "rule-id"
+)
+
+// Defines values for GroupPolicyConditionSeverityField.
+const (
+	GroupPolicySeverity GroupPolicyConditionSeverityField = "severity"
+)
+
+// Defines values for GroupPolicyConditionSeverityValue.
+const (
+	GroupPolicyConditionSeverityValueCritical GroupPolicyConditionSeverityValue = "critical"
+	GroupPolicyConditionSeverityValueHigh     GroupPolicyConditionSeverityValue = "high"
+	GroupPolicyConditionSeverityValueLow      GroupPolicyConditionSeverityValue = "low"
+	GroupPolicyConditionSeverityValueMedium   GroupPolicyConditionSeverityValue = "medium"
+)
+
+// Defines values for GroupPolicyConditionSnykAssetFindingV1Field.
+const (
+	GroupPolicySnykAssetFindingV1 GroupPolicyConditionSnykAssetFindingV1Field = "snyk/asset/finding/v1"
+)
+
+// Defines values for GroupPolicyConditionSnykIdField.
+const (
+	GroupPolicySnykId GroupPolicyConditionSnykIdField = "snyk-id"
+)
+
+// Defines values for GroupPolicyOperator.
+const (
+	GroupPolicyAnd GroupPolicyOperator = "and"
+)
+
+// Defines values for GroupPolicyResponseType.
+const (
+	GroupPolicyResponseTypePolicy GroupPolicyResponseType = "policy"
 )
 
 // Defines values for PolicyActionIgnoreDataIgnoreType.
@@ -33,6 +172,15 @@ const (
 // Defines values for PolicyAttributesActionType.
 const (
 	PolicyAttributesActionTypeIgnore PolicyAttributesActionType = "ignore"
+)
+
+// Defines values for PolicyAttributesSource.
+const (
+	Api     PolicyAttributesSource = "api"
+	Cli     PolicyAttributesSource = "cli"
+	Ide     PolicyAttributesSource = "ide"
+	Unknown PolicyAttributesSource = "unknown"
+	Web     PolicyAttributesSource = "web"
 )
 
 // Defines values for PolicyConditionField.
@@ -48,6 +196,23 @@ const (
 // Defines values for PolicyConditionsGroupLogicalOperator.
 const (
 	And PolicyConditionsGroupLogicalOperator = "and"
+)
+
+// Defines values for PolicyCreateConditionField.
+const (
+	PolicyCreateRepositoryURL      PolicyCreateConditionField = "repository-url"
+	PolicyCreateSnykAssetFindingV1 PolicyCreateConditionField = "snyk/asset/finding/v1"
+	PolicyCreateSnykID             PolicyCreateConditionField = "snyk-id"
+)
+
+// Defines values for PolicyCreateConditionOperator.
+const (
+	PolicyCreateIncludes PolicyCreateConditionOperator = "includes"
+)
+
+// Defines values for PolicyCreateConditionsGroupLogicalOperator.
+const (
+	PolicyCreateAnd PolicyCreateConditionsGroupLogicalOperator = "and"
 )
 
 // Defines values for PolicyEventResponseType.
@@ -72,21 +237,69 @@ const (
 
 // Defines values for PolicyResponseAttributesActionType.
 const (
-	PolicyResponseAttributesActionTypeIgnore PolicyResponseAttributesActionType = "ignore"
+	Ignore PolicyResponseAttributesActionType = "ignore"
+)
+
+// Defines values for PolicyResponseConditionField.
+const (
+	PolicyResponseAssetID            PolicyResponseConditionField = "asset-id"
+	PolicyResponseSnykAssetFindingV1 PolicyResponseConditionField = "snyk/asset/finding/v1"
+	PolicyResponseSnykID             PolicyResponseConditionField = "snyk-id"
+)
+
+// Defines values for PolicyResponseConditionOperator.
+const (
+	PolicyResponseIncludes PolicyResponseConditionOperator = "includes"
+)
+
+// Defines values for PolicyResponseConditionsGroupLogicalOperator.
+const (
+	PolicyResponseAnd PolicyResponseConditionsGroupLogicalOperator = "and"
 )
 
 // Defines values for PolicyReview.
 const (
 	PolicyReviewApproved    PolicyReview = "approved"
-	PolicyReviewCancelled   PolicyReview = "cancelled"
 	PolicyReviewNotRequired PolicyReview = "not-required"
 	PolicyReviewPending     PolicyReview = "pending"
 	PolicyReviewRejected    PolicyReview = "rejected"
 )
 
+// Defines values for PrincipalActorSource.
+const (
+	ExternalUser PrincipalActorSource = "external_user"
+	SnykUser     PrincipalActorSource = "snyk_user"
+)
+
+// Defines values for PrincipalOrigin.
+const (
+	AzureRepos          PrincipalOrigin = "azure_repos"
+	BitbucketCloud      PrincipalOrigin = "bitbucket_cloud"
+	BitbucketConnectApp PrincipalOrigin = "bitbucket_connect_app"
+	BitbucketServer     PrincipalOrigin = "bitbucket_server"
+	Github              PrincipalOrigin = "github"
+	GithubCloudApp      PrincipalOrigin = "github_cloud_app"
+	GithubEnterprise    PrincipalOrigin = "github_enterprise"
+	GithubServerApp     PrincipalOrigin = "github_server_app"
+	Gitlab              PrincipalOrigin = "gitlab"
+)
+
+// Defines values for SeverityLevel.
+const (
+	Critical SeverityLevel = "critical"
+	High     SeverityLevel = "high"
+	Low      SeverityLevel = "low"
+	Medium   SeverityLevel = "medium"
+)
+
+// Defines values for UpdateGroupPolicyPayloadDataType.
+const (
+	UpdateGroupPolicyPayloadDataTypePolicy UpdateGroupPolicyPayloadDataType = "policy"
+)
+
 // Defines values for UpdatePolicyPayloadDataType.
 const (
-	Policy UpdatePolicyPayloadDataType = "policy"
+	UpdatePolicyPayloadDataTypePolicy UpdatePolicyPayloadDataType = "policy"
 )
 
 // Defines values for UpdatePolicyReview.
@@ -96,8 +309,47 @@ const (
 	UpdatePolicyReviewRejected UpdatePolicyReview = "rejected"
 )
 
+// Defines values for OrderBy.
+const (
+	OrderByCreated     OrderBy = "created"
+	OrderByExpires     OrderBy = "expires"
+	OrderByIgnoreType  OrderBy = "ignore-type"
+	OrderByRequestedBy OrderBy = "requested-by"
+)
+
+// Defines values for OrderDirection.
+const (
+	OrderDirectionAsc  OrderDirection = "asc"
+	OrderDirectionDesc OrderDirection = "desc"
+)
+
+// Defines values for GetOrgPoliciesParamsOrderBy.
+const (
+	GetOrgPoliciesParamsOrderByCreated     GetOrgPoliciesParamsOrderBy = "created"
+	GetOrgPoliciesParamsOrderByExpires     GetOrgPoliciesParamsOrderBy = "expires"
+	GetOrgPoliciesParamsOrderByIgnoreType  GetOrgPoliciesParamsOrderBy = "ignore-type"
+	GetOrgPoliciesParamsOrderByRequestedBy GetOrgPoliciesParamsOrderBy = "requested-by"
+)
+
+// Defines values for GetOrgPoliciesParamsOrderDirection.
+const (
+	GetOrgPoliciesParamsOrderDirectionAsc  GetOrgPoliciesParamsOrderDirection = "asc"
+	GetOrgPoliciesParamsOrderDirectionDesc GetOrgPoliciesParamsOrderDirection = "desc"
+)
+
 // ActualVersion Resolved API version
 type ActualVersion = string
+
+// CreateGroupPolicyPayload defines model for CreateGroupPolicyPayload.
+type CreateGroupPolicyPayload struct {
+	Data struct {
+		Attributes GroupPolicyRequestAttributes     `json:"attributes"`
+		Type       CreateGroupPolicyPayloadDataType `json:"type"`
+	} `json:"data"`
+}
+
+// CreateGroupPolicyPayloadDataType defines model for CreateGroupPolicyPayload.Data.Type.
+type CreateGroupPolicyPayloadDataType string
 
 // CreatePolicyPayload defines model for CreatePolicyPayload.
 type CreatePolicyPayload struct {
@@ -151,6 +403,246 @@ type ErrorDocument struct {
 // ErrorLink A link that leads to further details about this particular occurrance of the problem.
 type ErrorLink struct {
 	About *LinkProperty `json:"about,omitempty"`
+}
+
+// GroupPolicyAction defines model for GroupPolicyAction.
+type GroupPolicyAction struct {
+	union json.RawMessage
+}
+
+// GroupPolicyActionAnnotation Annotation action
+type GroupPolicyActionAnnotation struct {
+	Data GroupPolicyActionAnnotationData `json:"data"`
+}
+
+// GroupPolicyActionAnnotationData defines model for GroupPolicyActionAnnotationData.
+type GroupPolicyActionAnnotationData struct {
+	Reason *string `json:"reason,omitempty"`
+	Value  string  `json:"value"`
+}
+
+// GroupPolicyActionIgnore Ignore action
+type GroupPolicyActionIgnore struct {
+	Data GroupPolicyActionIgnoreData `json:"data"`
+}
+
+// GroupPolicyActionIgnoreData defines model for GroupPolicyActionIgnoreData.
+type GroupPolicyActionIgnoreData struct {
+	IgnoreType GroupPolicyActionIgnoreDataIgnoreType `json:"ignore_type"`
+	Reason     *string                               `json:"reason,omitempty"`
+}
+
+// GroupPolicyActionIgnoreDataIgnoreType defines model for GroupPolicyActionIgnoreData.IgnoreType.
+type GroupPolicyActionIgnoreDataIgnoreType string
+
+// GroupPolicyActionSeverityOverride Severity override action
+type GroupPolicyActionSeverityOverride struct {
+	Data GroupPolicyActionSeverityOverrideData `json:"data"`
+}
+
+// GroupPolicyActionSeverityOverrideData defines model for GroupPolicyActionSeverityOverrideData.
+type GroupPolicyActionSeverityOverrideData struct {
+	Reason   *string       `json:"reason,omitempty"`
+	Severity SeverityLevel `json:"severity"`
+}
+
+// GroupPolicyActionType defines model for GroupPolicyActionType.
+type GroupPolicyActionType string
+
+// GroupPolicyConditionBusinessCriticality Matches on the project business criticality - if business criticality is provided, the policy will only apply to projects with the specified business criticality.
+type GroupPolicyConditionBusinessCriticality struct {
+	Field    GroupPolicyConditionBusinessCriticalityField   `json:"field"`
+	Operator GroupPolicyConditionOperator                   `json:"operator"`
+	Value    []GroupPolicyConditionBusinessCriticalityValue `json:"value"`
+}
+
+// GroupPolicyConditionBusinessCriticalityField defines model for GroupPolicyConditionBusinessCriticality.Field.
+type GroupPolicyConditionBusinessCriticalityField string
+
+// GroupPolicyConditionBusinessCriticalityValue defines model for GroupPolicyConditionBusinessCriticality.Value.
+type GroupPolicyConditionBusinessCriticalityValue string
+
+// GroupPolicyConditionCVE Matches on the CVE.
+type GroupPolicyConditionCVE struct {
+	Field    GroupPolicyConditionCVEField `json:"field"`
+	Operator GroupPolicyConditionOperator `json:"operator"`
+	Value    []string                     `json:"value"`
+}
+
+// GroupPolicyConditionCVEField defines model for GroupPolicyConditionCVE.Field.
+type GroupPolicyConditionCVEField string
+
+// GroupPolicyConditionCWE Matches on the CWE.
+type GroupPolicyConditionCWE struct {
+	Field    GroupPolicyConditionCWEField `json:"field"`
+	Operator GroupPolicyConditionOperator `json:"operator"`
+	Value    []string                     `json:"value"`
+}
+
+// GroupPolicyConditionCWEField defines model for GroupPolicyConditionCWE.Field.
+type GroupPolicyConditionCWEField string
+
+// GroupPolicyConditionEnvironment Matches on the project environment - if environment is provided, the policy will only apply to projects with the specified environment.
+type GroupPolicyConditionEnvironment struct {
+	Field    GroupPolicyConditionEnvironmentField   `json:"field"`
+	Operator GroupPolicyConditionOperator           `json:"operator"`
+	Value    []GroupPolicyConditionEnvironmentValue `json:"value"`
+}
+
+// GroupPolicyConditionEnvironmentField defines model for GroupPolicyConditionEnvironment.Field.
+type GroupPolicyConditionEnvironmentField string
+
+// GroupPolicyConditionEnvironmentValue defines model for GroupPolicyConditionEnvironment.Value.
+type GroupPolicyConditionEnvironmentValue string
+
+// GroupPolicyConditionExploitMaturity Matches on the exploit maturity.
+type GroupPolicyConditionExploitMaturity struct {
+	Field    GroupPolicyConditionExploitMaturityField   `json:"field"`
+	Operator GroupPolicyConditionOperator               `json:"operator"`
+	Value    []GroupPolicyConditionExploitMaturityValue `json:"value"`
+}
+
+// GroupPolicyConditionExploitMaturityField defines model for GroupPolicyConditionExploitMaturity.Field.
+type GroupPolicyConditionExploitMaturityField string
+
+// GroupPolicyConditionExploitMaturityValue defines model for GroupPolicyConditionExploitMaturity.Value.
+type GroupPolicyConditionExploitMaturityValue string
+
+// GroupPolicyConditionLifecycle Matches on the project lifecycle - if lifecycle is provided, the policy will only apply to projects with the specified lifecycle.
+type GroupPolicyConditionLifecycle struct {
+	Field    GroupPolicyConditionLifecycleField   `json:"field"`
+	Operator GroupPolicyConditionOperator         `json:"operator"`
+	Value    []GroupPolicyConditionLifecycleValue `json:"value"`
+}
+
+// GroupPolicyConditionLifecycleField defines model for GroupPolicyConditionLifecycle.Field.
+type GroupPolicyConditionLifecycleField string
+
+// GroupPolicyConditionLifecycleValue defines model for GroupPolicyConditionLifecycle.Value.
+type GroupPolicyConditionLifecycleValue string
+
+// GroupPolicyConditionOperator defines model for GroupPolicyConditionOperator.
+type GroupPolicyConditionOperator string
+
+// GroupPolicyConditionOrgID Matches on the organization ID - if org ID is provided, the policy will only apply to the specified organization. If no org ID is provided, the policy will apply to all organizations.
+type GroupPolicyConditionOrgID struct {
+	Field    GroupPolicyConditionOrgIDField `json:"field"`
+	Operator GroupPolicyConditionOperator   `json:"operator"`
+	Value    []openapi_types.UUID           `json:"value"`
+}
+
+// GroupPolicyConditionOrgIDField defines model for GroupPolicyConditionOrgID.Field.
+type GroupPolicyConditionOrgIDField string
+
+// GroupPolicyConditionProjectTags Matches on the project tags - if project tags are provided, the policy will only apply to projects with the specified tags.
+// The value is a list of key:value pairs.
+// The key and value must be Alphanumeric including - and _ with a limit of 30 characters for each key and value.
+type GroupPolicyConditionProjectTags struct {
+	Field    GroupPolicyConditionProjectTagsField `json:"field"`
+	Operator GroupPolicyConditionOperator         `json:"operator"`
+	Value    []string                             `json:"value"`
+}
+
+// GroupPolicyConditionProjectTagsField defines model for GroupPolicyConditionProjectTags.Field.
+type GroupPolicyConditionProjectTagsField string
+
+// GroupPolicyConditionRuleId Matches on the rule ID.
+type GroupPolicyConditionRuleId struct {
+	Field    GroupPolicyConditionRuleIdField `json:"field"`
+	Operator GroupPolicyConditionOperator    `json:"operator"`
+	Value    []string                        `json:"value"`
+}
+
+// GroupPolicyConditionRuleIdField defines model for GroupPolicyConditionRuleId.Field.
+type GroupPolicyConditionRuleIdField string
+
+// GroupPolicyConditionSeverity Matches on the severity.
+type GroupPolicyConditionSeverity struct {
+	Field    GroupPolicyConditionSeverityField   `json:"field"`
+	Operator GroupPolicyConditionOperator        `json:"operator"`
+	Value    []GroupPolicyConditionSeverityValue `json:"value"`
+}
+
+// GroupPolicyConditionSeverityField defines model for GroupPolicyConditionSeverity.Field.
+type GroupPolicyConditionSeverityField string
+
+// GroupPolicyConditionSeverityValue defines model for GroupPolicyConditionSeverity.Value.
+type GroupPolicyConditionSeverityValue string
+
+// GroupPolicyConditionSnykAssetFindingV1 Matches on the Snyk Asset Finding V1 identifier.
+type GroupPolicyConditionSnykAssetFindingV1 struct {
+	Field    GroupPolicyConditionSnykAssetFindingV1Field `json:"field"`
+	Operator GroupPolicyConditionOperator                `json:"operator"`
+	Value    []openapi_types.UUID                        `json:"value"`
+}
+
+// GroupPolicyConditionSnykAssetFindingV1Field defines model for GroupPolicyConditionSnykAssetFindingV1.Field.
+type GroupPolicyConditionSnykAssetFindingV1Field string
+
+// GroupPolicyConditionSnykId Matches on the Snyk ID.
+type GroupPolicyConditionSnykId struct {
+	Field    GroupPolicyConditionSnykIdField `json:"field"`
+	Operator GroupPolicyConditionOperator    `json:"operator"`
+	Value    []string                        `json:"value"`
+}
+
+// GroupPolicyConditionSnykIdField defines model for GroupPolicyConditionSnykId.Field.
+type GroupPolicyConditionSnykIdField string
+
+// GroupPolicyConditionsGroup defines model for GroupPolicyConditionsGroup.
+type GroupPolicyConditionsGroup struct {
+	Conditions      []GroupPolicyConditionsGroup_Conditions_Item `json:"conditions"`
+	LogicalOperator GroupPolicyOperator                          `json:"logical_operator"`
+}
+
+// GroupPolicyConditionsGroup_Conditions_Item defines model for GroupPolicyConditionsGroup.conditions.Item.
+type GroupPolicyConditionsGroup_Conditions_Item struct {
+	union json.RawMessage
+}
+
+// GroupPolicyOperator defines model for GroupPolicyOperator.
+type GroupPolicyOperator string
+
+// GroupPolicyPrincipal defines model for GroupPolicyPrincipal.
+type GroupPolicyPrincipal struct {
+	Email *string `json:"email"`
+
+	// Id The Snyk ID corresponding to this user or service account that created the policy
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the user or service account that created the policy
+	Name string `json:"name"`
+}
+
+// GroupPolicyRequestAttributes defines model for GroupPolicyRequestAttributes.
+type GroupPolicyRequestAttributes struct {
+	Action          GroupPolicyAction          `json:"action"`
+	ActionType      GroupPolicyActionType      `json:"action_type"`
+	ConditionsGroup GroupPolicyConditionsGroup `json:"conditions_group"`
+	Name            string                     `json:"name"`
+}
+
+// GroupPolicyResponse defines model for GroupPolicyResponse.
+type GroupPolicyResponse struct {
+	Attributes GroupPolicyResponseAttributes `json:"attributes"`
+
+	// Id A unique identifier for this particular occurrence of the group level policy.
+	Id   openapi_types.UUID      `json:"id"`
+	Type GroupPolicyResponseType `json:"type"`
+}
+
+// GroupPolicyResponseType defines model for GroupPolicyResponse.Type.
+type GroupPolicyResponseType string
+
+// GroupPolicyResponseAttributes defines model for GroupPolicyResponseAttributes.
+type GroupPolicyResponseAttributes struct {
+	Action          GroupPolicyAction          `json:"action"`
+	ActionType      GroupPolicyActionType      `json:"action_type"`
+	ConditionsGroup GroupPolicyConditionsGroup `json:"conditions_group"`
+	CreatedAt       time.Time                  `json:"created_at"`
+	CreatedBy       GroupPolicyPrincipal       `json:"created_by"`
+	Name            string                     `json:"name"`
+	UpdatedAt       time.Time                  `json:"updated_at"`
 }
 
 // JsonApi defines model for JsonApi.
@@ -215,20 +707,29 @@ type PolicyActionIgnoreDataIgnoreType string
 
 // PolicyAttributes defines model for PolicyAttributes.
 type PolicyAttributes struct {
-	Action          PolicyActionIgnore         `json:"action"`
-	ActionType      PolicyAttributesActionType `json:"action_type"`
-	ConditionsGroup PolicyConditionsGroup      `json:"conditions_group"`
-	Name            string                     `json:"name"`
+	Action     PolicyActionIgnore         `json:"action"`
+	ActionType PolicyAttributesActionType `json:"action_type"`
+
+	// ConditionsGroup The conditions of a new org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `repository-url` condition.
+	ConditionsGroup PolicyCreateConditionsGroup `json:"conditions_group"`
+	Name            string                      `json:"name"`
+
+	// Source The source of the policy creation. Defaults to 'api' if not provided.
+	Source *PolicyAttributesSource `json:"source,omitempty"`
 }
 
 // PolicyAttributesActionType defines model for PolicyAttributes.ActionType.
 type PolicyAttributesActionType string
 
+// PolicyAttributesSource The source of the policy creation. Defaults to 'api' if not provided.
+type PolicyAttributesSource string
+
 // PolicyCondition defines model for PolicyCondition.
 type PolicyCondition struct {
 	// Field field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
 	// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
-	// The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+	// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+	// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 	Field PolicyConditionField `json:"field"`
 
 	// Operator Operator for the field to value matching. Currently
@@ -242,7 +743,8 @@ type PolicyCondition struct {
 
 // PolicyConditionField field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
 // - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
-// The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 type PolicyConditionField string
 
 // PolicyConditionOperator Operator for the field to value matching. Currently
@@ -261,6 +763,47 @@ type PolicyConditionsGroup struct {
 // PolicyConditionsGroupLogicalOperator The logical operator for the policy condition. Currently only 'and' is supported.
 type PolicyConditionsGroupLogicalOperator string
 
+// PolicyCreateCondition defines model for PolicyCreateCondition.
+type PolicyCreateCondition struct {
+	// Field field refers to the type of identifier used in the condition of the policy:
+	// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk asset (e.g. a repository).
+	// - `snyk-id` (Closed Beta) : the Snyk ID of the Open Source vulnerability or license issue to ignore.
+	// - `repository-url` (Closed Beta) : the URL of the repository that the ignore applies to, on every branch and every project of the repository. The repository must be imported into a Snyk project in this organization. The policy stores the ID of the repository asset in an `asset-id` condition, and never stores the URL.
+	// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+	// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+	Field PolicyCreateConditionField `json:"field"`
+
+	// Operator Operator for the field to value matching. Currently
+	// only 'includes' is supported.
+	Operator PolicyCreateConditionOperator `json:"operator"`
+
+	// Value The value of the field to match on.
+	Value string `json:"value"`
+}
+
+// PolicyCreateConditionField field refers to the type of identifier used in the condition of the policy:
+// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk asset (e.g. a repository).
+// - `snyk-id` (Closed Beta) : the Snyk ID of the Open Source vulnerability or license issue to ignore.
+// - `repository-url` (Closed Beta) : the URL of the repository that the ignore applies to, on every branch and every project of the repository. The repository must be imported into a Snyk project in this organization. The policy stores the ID of the repository asset in an `asset-id` condition, and never stores the URL.
+// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+type PolicyCreateConditionField string
+
+// PolicyCreateConditionOperator Operator for the field to value matching. Currently
+// only 'includes' is supported.
+type PolicyCreateConditionOperator string
+
+// PolicyCreateConditionsGroup The conditions of a new org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `repository-url` condition.
+type PolicyCreateConditionsGroup struct {
+	Conditions []PolicyCreateCondition `json:"conditions"`
+
+	// LogicalOperator The logical operator for the policy condition. Currently only 'and' is supported.
+	LogicalOperator PolicyCreateConditionsGroupLogicalOperator `json:"logical_operator"`
+}
+
+// PolicyCreateConditionsGroupLogicalOperator The logical operator for the policy condition. Currently only 'and' is supported.
+type PolicyCreateConditionsGroupLogicalOperator string
+
 // PolicyEventAttributes defines model for PolicyEventAttributes.
 type PolicyEventAttributes struct {
 	Changes   PolicyEventChanges `json:"changes"`
@@ -272,15 +815,19 @@ type PolicyEventAttributes struct {
 
 // PolicyEventChanges defines model for PolicyEventChanges.
 type PolicyEventChanges struct {
-	NewAction          *PolicyActionIgnore    `json:"new_action,omitempty"`
-	NewConditionsGroup *PolicyConditionsGroup `json:"new_conditions_group,omitempty"`
-	NewName            *string                `json:"new_name,omitempty"`
+	NewAction *PolicyActionIgnore `json:"new_action,omitempty"`
+
+	// NewConditionsGroup The conditions of an org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `asset-id` condition.
+	NewConditionsGroup *PolicyResponseConditionsGroup `json:"new_conditions_group,omitempty"`
+	NewName            *string                        `json:"new_name,omitempty"`
 
 	// NewReview Review status.
-	NewReview          *PolicyReview          `json:"new_review,omitempty"`
-	OldAction          *PolicyActionIgnore    `json:"old_action,omitempty"`
-	OldConditionsGroup *PolicyConditionsGroup `json:"old_conditions_group,omitempty"`
-	OldName            *string                `json:"old_name,omitempty"`
+	NewReview *PolicyReview       `json:"new_review,omitempty"`
+	OldAction *PolicyActionIgnore `json:"old_action,omitempty"`
+
+	// OldConditionsGroup The conditions of an org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `asset-id` condition.
+	OldConditionsGroup *PolicyResponseConditionsGroup `json:"old_conditions_group,omitempty"`
+	OldName            *string                        `json:"old_name,omitempty"`
 
 	// OldReview Review status.
 	OldReview *PolicyReview `json:"old_review,omitempty"`
@@ -315,12 +862,14 @@ type PolicyResponseType string
 
 // PolicyResponseAttributes defines model for PolicyResponseAttributes.
 type PolicyResponseAttributes struct {
-	Action          PolicyActionIgnore                 `json:"action"`
-	ActionType      PolicyResponseAttributesActionType `json:"action_type"`
-	ConditionsGroup PolicyConditionsGroup              `json:"conditions_group"`
-	CreatedAt       time.Time                          `json:"created_at"`
-	CreatedBy       *Principal                         `json:"created_by,omitempty"`
-	Name            string                             `json:"name"`
+	Action     PolicyActionIgnore                 `json:"action"`
+	ActionType PolicyResponseAttributesActionType `json:"action_type"`
+
+	// ConditionsGroup The conditions of an org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `asset-id` condition.
+	ConditionsGroup PolicyResponseConditionsGroup `json:"conditions_group"`
+	CreatedAt       time.Time                     `json:"created_at"`
+	CreatedBy       *Principal                    `json:"created_by,omitempty"`
+	Name            string                        `json:"name"`
 
 	// Review Review status.
 	Review    PolicyReview `json:"review"`
@@ -330,19 +879,74 @@ type PolicyResponseAttributes struct {
 // PolicyResponseAttributesActionType defines model for PolicyResponseAttributes.ActionType.
 type PolicyResponseAttributesActionType string
 
+// PolicyResponseCondition defines model for PolicyResponseCondition.
+type PolicyResponseCondition struct {
+	// Field field refers to the type of identifier used in the condition of the policy:
+	// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk asset (e.g. a repository).
+	// - `snyk-id` (Closed Beta) : the Snyk ID of the Open Source vulnerability or license issue.
+	// - `asset-id` (Closed Beta) : the ID of the repository asset that the ignore applies to.
+	// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+	// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+	Field PolicyResponseConditionField `json:"field"`
+
+	// Operator Operator for the field to value matching. Currently
+	// only 'includes' is supported.
+	Operator PolicyResponseConditionOperator `json:"operator"`
+
+	// Value The value of the field to match on.
+	Value string `json:"value"`
+}
+
+// PolicyResponseConditionField field refers to the type of identifier used in the condition of the policy:
+// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk asset (e.g. a repository).
+// - `snyk-id` (Closed Beta) : the Snyk ID of the Open Source vulnerability or license issue.
+// - `asset-id` (Closed Beta) : the ID of the repository asset that the ignore applies to.
+// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+type PolicyResponseConditionField string
+
+// PolicyResponseConditionOperator Operator for the field to value matching. Currently
+// only 'includes' is supported.
+type PolicyResponseConditionOperator string
+
+// PolicyResponseConditionsGroup The conditions of an org-level policy. A Snyk Code consistent ignore has one `snyk/asset/finding/v1` condition. An Open Source consistent ignore (Closed Beta) has one `snyk-id` condition and one `asset-id` condition.
+type PolicyResponseConditionsGroup struct {
+	Conditions []PolicyResponseCondition `json:"conditions"`
+
+	// LogicalOperator The logical operator for the policy condition. Currently only 'and' is supported.
+	LogicalOperator PolicyResponseConditionsGroupLogicalOperator `json:"logical_operator"`
+}
+
+// PolicyResponseConditionsGroupLogicalOperator The logical operator for the policy condition. Currently only 'and' is supported.
+type PolicyResponseConditionsGroupLogicalOperator string
+
 // PolicyReview Review status.
 type PolicyReview string
 
 // Principal defines model for Principal.
 type Principal struct {
-	Email *string `json:"email,omitempty"`
+	// ActorSource The kind of actor that created the policy. "snyk_user" is a Snyk identity; "external_user" indicates an external (e.g. SCM) actor.
+	ActorSource *PrincipalActorSource `json:"actor_source,omitempty"`
+	Email       *string               `json:"email,omitempty"`
+
+	// ExternalId The identifier of the actor within the external provider. Present only when the policy was created by an external actor; absent for Snyk users.
+	ExternalId *string `json:"external_id,omitempty"`
 
 	// Id The Snyk ID corresponding to this user or service account that created the policy
 	Id openapi_types.UUID `json:"id"`
 
 	// Name Name of the user or service account that created the policy
 	Name string `json:"name"`
+
+	// Origin The external provider through which the actor created the policy. Present only when the policy was created by an external actor; absent for Snyk users.
+	Origin *PrincipalOrigin `json:"origin,omitempty"`
 }
+
+// PrincipalActorSource The kind of actor that created the policy. "snyk_user" is a Snyk identity; "external_user" indicates an external (e.g. SCM) actor.
+type PrincipalActorSource string
+
+// PrincipalOrigin The external provider through which the actor created the policy. Present only when the policy was created by an external actor; absent for Snyk users.
+type PrincipalOrigin string
 
 // QueryVersion Requested API version
 type QueryVersion = string
@@ -351,6 +955,34 @@ type QueryVersion = string
 type SelfLink struct {
 	Self *LinkProperty `json:"self,omitempty"`
 }
+
+// SeverityLevel defines model for SeverityLevel.
+type SeverityLevel string
+
+// UpdateGroupPolicyAttributes Attributes of a policy that can be updated.
+// At least one of 'name', 'conditions_group', 'action_type', or 'action' must be provided.
+type UpdateGroupPolicyAttributes struct {
+	Action          *GroupPolicyAction          `json:"action,omitempty"`
+	ActionType      *GroupPolicyActionType      `json:"action_type,omitempty"`
+	ConditionsGroup *GroupPolicyConditionsGroup `json:"conditions_group,omitempty"`
+	Name            *string                     `json:"name,omitempty"`
+}
+
+// UpdateGroupPolicyPayload defines model for UpdateGroupPolicyPayload.
+type UpdateGroupPolicyPayload struct {
+	Data struct {
+		// Attributes Attributes of a policy that can be updated.
+		// At least one of 'name', 'conditions_group', 'action_type', or 'action' must be provided.
+		Attributes UpdateGroupPolicyAttributes `json:"attributes"`
+
+		// Id the UUID of the policy to update.
+		Id   openapi_types.UUID               `json:"id"`
+		Type UpdateGroupPolicyPayloadDataType `json:"type"`
+	} `json:"data"`
+}
+
+// UpdateGroupPolicyPayloadDataType defines model for UpdateGroupPolicyPayload.Data.Type.
+type UpdateGroupPolicyPayloadDataType string
 
 // UpdatePolicyAttributes Attributes of a policy that can be updated.
 // At least one of 'name', 'conditions_group', 'action', or 'review' must be provided.
@@ -398,8 +1030,17 @@ type UpdatePolicyReview string
 // EndingBefore defines model for EndingBefore.
 type EndingBefore = string
 
+// GroupId defines model for GroupId.
+type GroupId = openapi_types.UUID
+
 // Limit defines model for Limit.
 type Limit = int32
+
+// OrderBy defines model for OrderBy.
+type OrderBy string
+
+// OrderDirection defines model for OrderDirection.
+type OrderDirection string
 
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
@@ -409,6 +1050,9 @@ type PolicyId = openapi_types.UUID
 
 // Review defines model for Review.
 type Review = []PolicyReview
+
+// Search defines model for Search.
+type Search = string
 
 // StartingAfter defines model for StartingAfter.
 type StartingAfter = string
@@ -434,6 +1078,39 @@ type N409 = ErrorDocument
 // N500 defines model for 500.
 type N500 = ErrorDocument
 
+// ListGroupPoliciesParams defines parameters for ListGroupPolicies.
+type ListGroupPoliciesParams struct {
+	// Version The requested version of the endpoint to process the request
+	Version Version `form:"version" json:"version"`
+
+	// StartingAfter Return the page of results immediately after this cursor
+	StartingAfter *StartingAfter `form:"starting_after,omitempty" json:"starting_after,omitempty"`
+
+	// EndingBefore Return the page of results immediately before this cursor
+	EndingBefore *EndingBefore `form:"ending_before,omitempty" json:"ending_before,omitempty"`
+
+	// Limit Number of results to return per page
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateGroupPolicyParams defines parameters for CreateGroupPolicy.
+type CreateGroupPolicyParams struct {
+	// Version The requested version of the endpoint to process the request
+	Version Version `form:"version" json:"version"`
+}
+
+// DeleteGroupPolicyParams defines parameters for DeleteGroupPolicy.
+type DeleteGroupPolicyParams struct {
+	// Version The requested version of the endpoint to process the request
+	Version Version `form:"version" json:"version"`
+}
+
+// UpdateGroupPolicyParams defines parameters for UpdateGroupPolicy.
+type UpdateGroupPolicyParams struct {
+	// Version The requested version of the endpoint to process the request
+	Version Version `form:"version" json:"version"`
+}
+
 // GetOrgPoliciesParams defines parameters for GetOrgPolicies.
 type GetOrgPoliciesParams struct {
 	// Version The requested version of the endpoint to process the request
@@ -448,6 +1125,15 @@ type GetOrgPoliciesParams struct {
 	// Limit Number of results to return per page
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
+	// Search Search keyword for searching fields ignored_by.name, ignored_by.email, ignore_type in policy_rules
+	Search *Search `form:"search,omitempty" json:"search,omitempty"`
+
+	// OrderBy The column name to sort on
+	OrderBy *GetOrgPoliciesParamsOrderBy `form:"order_by,omitempty" json:"order_by,omitempty"`
+
+	// OrderDirection Sorting direction ASC/DESC
+	OrderDirection *GetOrgPoliciesParamsOrderDirection `form:"order_direction,omitempty" json:"order_direction,omitempty"`
+
 	// Review Policy rule review state e.g. approved
 	Review *Review `form:"review,omitempty" json:"review,omitempty"`
 
@@ -460,6 +1146,12 @@ type GetOrgPoliciesParams struct {
 	// ExpiresNever Select only policies that never expire.
 	ExpiresNever *bool `form:"expires_never,omitempty" json:"expires_never,omitempty"`
 }
+
+// GetOrgPoliciesParamsOrderBy defines parameters for GetOrgPolicies.
+type GetOrgPoliciesParamsOrderBy string
+
+// GetOrgPoliciesParamsOrderDirection defines parameters for GetOrgPolicies.
+type GetOrgPoliciesParamsOrderDirection string
 
 // CreateOrgPolicyParams defines parameters for CreateOrgPolicy.
 type CreateOrgPolicyParams struct {
@@ -500,11 +1192,427 @@ type GetOrgPolicyEventsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody defines body for CreateGroupPolicy for application/vnd.api+json ContentType.
+type CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody = CreateGroupPolicyPayload
+
+// UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody defines body for UpdateGroupPolicy for application/vnd.api+json ContentType.
+type UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody = UpdateGroupPolicyPayload
+
 // CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody defines body for CreateOrgPolicy for application/vnd.api+json ContentType.
 type CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody = CreatePolicyPayload
 
 // UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody defines body for UpdateOrgPolicy for application/vnd.api+json ContentType.
 type UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody = UpdatePolicyPayload
+
+// AsGroupPolicyActionIgnore returns the union data inside the GroupPolicyAction as a GroupPolicyActionIgnore
+func (t GroupPolicyAction) AsGroupPolicyActionIgnore() (GroupPolicyActionIgnore, error) {
+	var body GroupPolicyActionIgnore
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyActionIgnore overwrites any union data inside the GroupPolicyAction as the provided GroupPolicyActionIgnore
+func (t *GroupPolicyAction) FromGroupPolicyActionIgnore(v GroupPolicyActionIgnore) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyActionIgnore performs a merge with any union data inside the GroupPolicyAction, using the provided GroupPolicyActionIgnore
+func (t *GroupPolicyAction) MergeGroupPolicyActionIgnore(v GroupPolicyActionIgnore) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyActionAnnotation returns the union data inside the GroupPolicyAction as a GroupPolicyActionAnnotation
+func (t GroupPolicyAction) AsGroupPolicyActionAnnotation() (GroupPolicyActionAnnotation, error) {
+	var body GroupPolicyActionAnnotation
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyActionAnnotation overwrites any union data inside the GroupPolicyAction as the provided GroupPolicyActionAnnotation
+func (t *GroupPolicyAction) FromGroupPolicyActionAnnotation(v GroupPolicyActionAnnotation) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyActionAnnotation performs a merge with any union data inside the GroupPolicyAction, using the provided GroupPolicyActionAnnotation
+func (t *GroupPolicyAction) MergeGroupPolicyActionAnnotation(v GroupPolicyActionAnnotation) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyActionSeverityOverride returns the union data inside the GroupPolicyAction as a GroupPolicyActionSeverityOverride
+func (t GroupPolicyAction) AsGroupPolicyActionSeverityOverride() (GroupPolicyActionSeverityOverride, error) {
+	var body GroupPolicyActionSeverityOverride
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyActionSeverityOverride overwrites any union data inside the GroupPolicyAction as the provided GroupPolicyActionSeverityOverride
+func (t *GroupPolicyAction) FromGroupPolicyActionSeverityOverride(v GroupPolicyActionSeverityOverride) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyActionSeverityOverride performs a merge with any union data inside the GroupPolicyAction, using the provided GroupPolicyActionSeverityOverride
+func (t *GroupPolicyAction) MergeGroupPolicyActionSeverityOverride(v GroupPolicyActionSeverityOverride) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t GroupPolicyAction) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *GroupPolicyAction) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsGroupPolicyConditionExploitMaturity returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionExploitMaturity
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionExploitMaturity() (GroupPolicyConditionExploitMaturity, error) {
+	var body GroupPolicyConditionExploitMaturity
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionExploitMaturity overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionExploitMaturity
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionExploitMaturity(v GroupPolicyConditionExploitMaturity) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionExploitMaturity performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionExploitMaturity
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionExploitMaturity(v GroupPolicyConditionExploitMaturity) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionSnykAssetFindingV1 returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionSnykAssetFindingV1
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionSnykAssetFindingV1() (GroupPolicyConditionSnykAssetFindingV1, error) {
+	var body GroupPolicyConditionSnykAssetFindingV1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionSnykAssetFindingV1 overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionSnykAssetFindingV1
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionSnykAssetFindingV1(v GroupPolicyConditionSnykAssetFindingV1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionSnykAssetFindingV1 performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionSnykAssetFindingV1
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionSnykAssetFindingV1(v GroupPolicyConditionSnykAssetFindingV1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionRuleId returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionRuleId
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionRuleId() (GroupPolicyConditionRuleId, error) {
+	var body GroupPolicyConditionRuleId
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionRuleId overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionRuleId
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionRuleId(v GroupPolicyConditionRuleId) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionRuleId performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionRuleId
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionRuleId(v GroupPolicyConditionRuleId) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionSeverity returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionSeverity
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionSeverity() (GroupPolicyConditionSeverity, error) {
+	var body GroupPolicyConditionSeverity
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionSeverity overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionSeverity
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionSeverity(v GroupPolicyConditionSeverity) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionSeverity performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionSeverity
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionSeverity(v GroupPolicyConditionSeverity) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionCWE returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionCWE
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionCWE() (GroupPolicyConditionCWE, error) {
+	var body GroupPolicyConditionCWE
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionCWE overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionCWE
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionCWE(v GroupPolicyConditionCWE) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionCWE performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionCWE
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionCWE(v GroupPolicyConditionCWE) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionCVE returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionCVE
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionCVE() (GroupPolicyConditionCVE, error) {
+	var body GroupPolicyConditionCVE
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionCVE overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionCVE
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionCVE(v GroupPolicyConditionCVE) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionCVE performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionCVE
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionCVE(v GroupPolicyConditionCVE) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionSnykId returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionSnykId
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionSnykId() (GroupPolicyConditionSnykId, error) {
+	var body GroupPolicyConditionSnykId
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionSnykId overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionSnykId
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionSnykId(v GroupPolicyConditionSnykId) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionSnykId performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionSnykId
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionSnykId(v GroupPolicyConditionSnykId) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionOrgID returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionOrgID
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionOrgID() (GroupPolicyConditionOrgID, error) {
+	var body GroupPolicyConditionOrgID
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionOrgID overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionOrgID
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionOrgID(v GroupPolicyConditionOrgID) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionOrgID performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionOrgID
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionOrgID(v GroupPolicyConditionOrgID) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionProjectTags returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionProjectTags
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionProjectTags() (GroupPolicyConditionProjectTags, error) {
+	var body GroupPolicyConditionProjectTags
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionProjectTags overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionProjectTags
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionProjectTags(v GroupPolicyConditionProjectTags) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionProjectTags performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionProjectTags
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionProjectTags(v GroupPolicyConditionProjectTags) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionBusinessCriticality returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionBusinessCriticality
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionBusinessCriticality() (GroupPolicyConditionBusinessCriticality, error) {
+	var body GroupPolicyConditionBusinessCriticality
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionBusinessCriticality overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionBusinessCriticality
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionBusinessCriticality(v GroupPolicyConditionBusinessCriticality) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionBusinessCriticality performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionBusinessCriticality
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionBusinessCriticality(v GroupPolicyConditionBusinessCriticality) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionEnvironment returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionEnvironment
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionEnvironment() (GroupPolicyConditionEnvironment, error) {
+	var body GroupPolicyConditionEnvironment
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionEnvironment overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionEnvironment
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionEnvironment(v GroupPolicyConditionEnvironment) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionEnvironment performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionEnvironment
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionEnvironment(v GroupPolicyConditionEnvironment) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGroupPolicyConditionLifecycle returns the union data inside the GroupPolicyConditionsGroup_Conditions_Item as a GroupPolicyConditionLifecycle
+func (t GroupPolicyConditionsGroup_Conditions_Item) AsGroupPolicyConditionLifecycle() (GroupPolicyConditionLifecycle, error) {
+	var body GroupPolicyConditionLifecycle
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGroupPolicyConditionLifecycle overwrites any union data inside the GroupPolicyConditionsGroup_Conditions_Item as the provided GroupPolicyConditionLifecycle
+func (t *GroupPolicyConditionsGroup_Conditions_Item) FromGroupPolicyConditionLifecycle(v GroupPolicyConditionLifecycle) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGroupPolicyConditionLifecycle performs a merge with any union data inside the GroupPolicyConditionsGroup_Conditions_Item, using the provided GroupPolicyConditionLifecycle
+func (t *GroupPolicyConditionsGroup_Conditions_Item) MergeGroupPolicyConditionLifecycle(v GroupPolicyConditionLifecycle) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t GroupPolicyConditionsGroup_Conditions_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *GroupPolicyConditionsGroup_Conditions_Item) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsLinkProperty0 returns the union data inside the LinkProperty as a LinkProperty0
 func (t LinkProperty) AsLinkProperty0() (LinkProperty0, error) {
@@ -641,6 +1749,22 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListGroupPolicies request
+	ListGroupPolicies(ctx context.Context, groupId GroupId, params *ListGroupPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateGroupPolicyWithBody request with any body
+	CreateGroupPolicyWithBody(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, body CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteGroupPolicy request
+	DeleteGroupPolicy(ctx context.Context, groupId GroupId, policyId PolicyId, params *DeleteGroupPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateGroupPolicyWithBody request with any body
+	UpdateGroupPolicyWithBody(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, body UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAPIVersions request
 	ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -668,6 +1792,78 @@ type ClientInterface interface {
 
 	// GetOrgPolicyEvents request
 	GetOrgPolicyEvents(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListGroupPolicies(ctx context.Context, groupId GroupId, params *ListGroupPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListGroupPoliciesRequest(c.Server, groupId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateGroupPolicyWithBody(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateGroupPolicyRequestWithBody(c.Server, groupId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, body CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, groupId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteGroupPolicy(ctx context.Context, groupId GroupId, policyId PolicyId, params *DeleteGroupPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteGroupPolicyRequest(c.Server, groupId, policyId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateGroupPolicyWithBody(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateGroupPolicyRequestWithBody(c.Server, groupId, policyId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, body UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, groupId, policyId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -788,6 +1984,302 @@ func (c *Client) GetOrgPolicyEvents(ctx context.Context, orgId OrgId, policyId P
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListGroupPoliciesRequest generates requests for ListGroupPolicies
+func NewListGroupPoliciesRequest(server string, groupId GroupId, params *ListGroupPoliciesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "group_id", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/groups/%s/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.StartingAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndingBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateGroupPolicy builder with application/vnd.api+json body
+func NewCreateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, groupId GroupId, params *CreateGroupPolicyParams, body CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateGroupPolicyRequestWithBody(server, groupId, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateGroupPolicyRequestWithBody generates requests for CreateGroupPolicy with any type of body
+func NewCreateGroupPolicyRequestWithBody(server string, groupId GroupId, params *CreateGroupPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "group_id", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/groups/%s/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteGroupPolicyRequest generates requests for DeleteGroupPolicy
+func NewDeleteGroupPolicyRequest(server string, groupId GroupId, policyId PolicyId, params *DeleteGroupPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "group_id", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/groups/%s/policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateGroupPolicy builder with application/vnd.api+json body
+func NewUpdateGroupPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, body UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateGroupPolicyRequestWithBody(server, groupId, policyId, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateGroupPolicyRequestWithBody generates requests for UpdateGroupPolicy with any type of body
+func NewUpdateGroupPolicyRequestWithBody(server string, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "group_id", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/groups/%s/policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewListAPIVersionsRequest generates requests for ListAPIVersions
@@ -927,6 +2419,54 @@ func NewGetOrgPoliciesRequest(server string, orgId OrgId, params *GetOrgPolicies
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Search != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "search", runtime.ParamLocationQuery, *params.Search); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.OrderBy != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order_by", runtime.ParamLocationQuery, *params.OrderBy); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.OrderDirection != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order_direction", runtime.ParamLocationQuery, *params.OrderDirection); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -1420,6 +2960,22 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListGroupPoliciesWithResponse request
+	ListGroupPoliciesWithResponse(ctx context.Context, groupId GroupId, params *ListGroupPoliciesParams, reqEditors ...RequestEditorFn) (*ListGroupPoliciesResponse, error)
+
+	// CreateGroupPolicyWithBodyWithResponse request with any body
+	CreateGroupPolicyWithBodyWithResponse(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateGroupPolicyResponse, error)
+
+	CreateGroupPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, body CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateGroupPolicyResponse, error)
+
+	// DeleteGroupPolicyWithResponse request
+	DeleteGroupPolicyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *DeleteGroupPolicyParams, reqEditors ...RequestEditorFn) (*DeleteGroupPolicyResponse, error)
+
+	// UpdateGroupPolicyWithBodyWithResponse request with any body
+	UpdateGroupPolicyWithBodyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateGroupPolicyResponse, error)
+
+	UpdateGroupPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, body UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateGroupPolicyResponse, error)
+
 	// ListAPIVersionsWithResponse request
 	ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error)
 
@@ -1447,6 +3003,125 @@ type ClientWithResponsesInterface interface {
 
 	// GetOrgPolicyEventsWithResponse request
 	GetOrgPolicyEventsWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*GetOrgPolicyEventsResponse, error)
+}
+
+type ListGroupPoliciesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    []GroupPolicyResponse `json:"data"`
+		Jsonapi JsonApi               `json:"jsonapi"`
+		Links   *PaginatedLinks       `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r ListGroupPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListGroupPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateGroupPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *struct {
+		Data    GroupPolicyResponse `json:"data"`
+		Jsonapi JsonApi             `json:"jsonapi"`
+		Links   *Links              `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateGroupPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateGroupPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteGroupPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteGroupPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteGroupPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateGroupPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    GroupPolicyResponse `json:"data"`
+		Jsonapi JsonApi             `json:"jsonapi"`
+		Links   *SelfLink           `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON409 *N409
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateGroupPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateGroupPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListAPIVersionsResponse struct {
@@ -1513,6 +3188,7 @@ type GetOrgPoliciesResponse struct {
 	ApplicationvndApiJSON401 *N401
 	ApplicationvndApiJSON403 *N403
 	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
 }
 
 // Status returns HTTPResponse.Status
@@ -1679,6 +3355,58 @@ func (r GetOrgPolicyEventsResponse) StatusCode() int {
 	return 0
 }
 
+// ListGroupPoliciesWithResponse request returning *ListGroupPoliciesResponse
+func (c *ClientWithResponses) ListGroupPoliciesWithResponse(ctx context.Context, groupId GroupId, params *ListGroupPoliciesParams, reqEditors ...RequestEditorFn) (*ListGroupPoliciesResponse, error) {
+	rsp, err := c.ListGroupPolicies(ctx, groupId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListGroupPoliciesResponse(rsp)
+}
+
+// CreateGroupPolicyWithBodyWithResponse request with arbitrary body returning *CreateGroupPolicyResponse
+func (c *ClientWithResponses) CreateGroupPolicyWithBodyWithResponse(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateGroupPolicyResponse, error) {
+	rsp, err := c.CreateGroupPolicyWithBody(ctx, groupId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateGroupPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateGroupPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, groupId GroupId, params *CreateGroupPolicyParams, body CreateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateGroupPolicyResponse, error) {
+	rsp, err := c.CreateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx, groupId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateGroupPolicyResponse(rsp)
+}
+
+// DeleteGroupPolicyWithResponse request returning *DeleteGroupPolicyResponse
+func (c *ClientWithResponses) DeleteGroupPolicyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *DeleteGroupPolicyParams, reqEditors ...RequestEditorFn) (*DeleteGroupPolicyResponse, error) {
+	rsp, err := c.DeleteGroupPolicy(ctx, groupId, policyId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteGroupPolicyResponse(rsp)
+}
+
+// UpdateGroupPolicyWithBodyWithResponse request with arbitrary body returning *UpdateGroupPolicyResponse
+func (c *ClientWithResponses) UpdateGroupPolicyWithBodyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateGroupPolicyResponse, error) {
+	rsp, err := c.UpdateGroupPolicyWithBody(ctx, groupId, policyId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateGroupPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateGroupPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, groupId GroupId, policyId PolicyId, params *UpdateGroupPolicyParams, body UpdateGroupPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateGroupPolicyResponse, error) {
+	rsp, err := c.UpdateGroupPolicyWithApplicationVndAPIPlusJSONBody(ctx, groupId, policyId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateGroupPolicyResponse(rsp)
+}
+
 // ListAPIVersionsWithResponse request returning *ListAPIVersionsResponse
 func (c *ClientWithResponses) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error) {
 	rsp, err := c.ListAPIVersions(ctx, reqEditors...)
@@ -1765,6 +3493,255 @@ func (c *ClientWithResponses) GetOrgPolicyEventsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetOrgPolicyEventsResponse(rsp)
+}
+
+// ParseListGroupPoliciesResponse parses an HTTP response from a ListGroupPoliciesWithResponse call
+func ParseListGroupPoliciesResponse(rsp *http.Response) (*ListGroupPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListGroupPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    []GroupPolicyResponse `json:"data"`
+			Jsonapi JsonApi               `json:"jsonapi"`
+			Links   *PaginatedLinks       `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateGroupPolicyResponse parses an HTTP response from a CreateGroupPolicyWithResponse call
+func ParseCreateGroupPolicyResponse(rsp *http.Response) (*CreateGroupPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateGroupPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			Data    GroupPolicyResponse `json:"data"`
+			Jsonapi JsonApi             `json:"jsonapi"`
+			Links   *Links              `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteGroupPolicyResponse parses an HTTP response from a DeleteGroupPolicyWithResponse call
+func ParseDeleteGroupPolicyResponse(rsp *http.Response) (*DeleteGroupPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteGroupPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateGroupPolicyResponse parses an HTTP response from a UpdateGroupPolicyWithResponse call
+func ParseUpdateGroupPolicyResponse(rsp *http.Response) (*UpdateGroupPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateGroupPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    GroupPolicyResponse `json:"data"`
+			Jsonapi JsonApi             `json:"jsonapi"`
+			Links   *SelfLink           `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListAPIVersionsResponse parses an HTTP response from a ListAPIVersionsWithResponse call
@@ -1927,6 +3904,13 @@ func ParseGetOrgPoliciesResponse(rsp *http.Response) (*GetOrgPoliciesResponse, e
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
 
 	}
 
