@@ -6,11 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/machinecredential"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -94,41 +94,57 @@ func unauthorizedResponse(request *http.Request) *http.Response {
 
 func ShouldRequireAuthentication(
 	apiUrl string,
-	url *url.URL,
+	requestUrl *url.URL,
 	additionalSubdomains []string,
 	additionalUrls []string,
 ) (matchesPattern bool, err error) {
-	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
-	for _, subdomain := range subdomainsToCheck {
-		var matchesPattern bool
-		var prefixUrl, referenceUrl string
-		if len(subdomain) == 0 {
-			prefixUrl = apiUrl
-			referenceUrl, err = api.GetCanonicalApiUrl(*url)
-		} else {
-			referenceUrl = url.String()
-			prefixUrl, err = api.DeriveSubdomainUrl(apiUrl, subdomain)
-		}
+	if apiUrl == "" {
+		apiUrl = constants.SNYK_DEFAULT_API_URL
+	}
+	apiBase, err := url.Parse(apiUrl)
+	if err != nil {
+		return false, err
+	}
 
+	canonicalUrl, err := api.GetCanonicalApiAsUrl(*requestUrl)
+	if err != nil {
+		return false, err
+	}
+	if isWithinUrl(&canonicalUrl, apiBase) {
+		return true, nil
+	}
+
+	for _, subdomain := range additionalSubdomains {
+		subdomainUrl, err := api.DeriveSubdomainUrl(apiUrl, subdomain)
 		if err != nil {
 			return false, err
 		}
-
-		matchesPattern = strings.HasPrefix(referenceUrl, prefixUrl)
-		if matchesPattern {
-			return matchesPattern, nil
+		base, err := url.Parse(subdomainUrl)
+		if err != nil {
+			return false, err
+		}
+		if isWithinUrl(requestUrl, base) {
+			return true, nil
 		}
 	}
 
 	// if the default check for an api didn't succeed, check additional Urls if available
-	requestUrl := url.String()
-	for _, v := range additionalUrls {
-		if strings.HasPrefix(requestUrl, v) {
+	for _, additionalUrl := range additionalUrls {
+		base, err := url.Parse(additionalUrl)
+		if err != nil {
+			// An entry that is not a URL can never match a request.
+			continue
+		}
+		if isWithinUrl(requestUrl, base) {
 			return true, nil
 		}
 	}
 
 	return false, nil
+}
+
+func isWithinUrl(u, base *url.URL) bool {
+	return api.MatchesOrigin(u, base) && api.HasPathPrefix(u, base)
 }
 
 // ErrAuthenticationFailed indicates that authentication failed in the
