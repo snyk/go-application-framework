@@ -779,8 +779,10 @@ func (e *EngineImpl) selectInvocationProfile(options *engineRuntimeConfig) (invo
 
 // GetProfileRegistry returns the registry of configuration profiles that the engine selects from. Its profile files are
 // read from the directory set with profile.DirKey. The engine rebuilds the registry when SetConfiguration replaces its
-// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. It fails if the directory
-// is not set or not absolute, or if the engine does not support profiles.
+// configuration or when profile.DirKey changes, so ask for it on every use and do not keep it. A registry that is
+// rebuilt loses the names set with profile.Registry.SetIgnoredEnvVars, so call it on each registry obtained here,
+// before the first profile is loaded. It fails if the directory is not set or not absolute, or if the engine does not
+// support profiles.
 func GetProfileRegistry(engine Engine) (profile.Registry, error) {
 	provider, ok := engine.(profileRegistryProvider)
 	if !ok {
@@ -806,7 +808,8 @@ func (e *EngineImpl) profileRegistry() (profile.Registry, error) {
 	if e.profiles != nil && e.profilesDir == dir {
 		return e.profiles, nil
 	}
-	registry, err := profile.NewFileRegistry(dir, e.config, profile.WithLogger(e.logger))
+	opts := []profile.FileRegistryOption{profile.WithLogger(e.logger)}
+	registry, err := profile.NewFileRegistry(dir, e.config, opts...)
 	if err != nil {
 		return nil, err
 	}

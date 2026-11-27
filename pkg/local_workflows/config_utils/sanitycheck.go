@@ -16,8 +16,21 @@ type SanityCheckResult struct {
 	Description string
 }
 
+// CheckIgnoredEnvVars reports, in one result, the environment variables that config ignores while they are set to a
+// non-empty value. The result names the variables only, never their values. It returns nil when there are none.
+func CheckIgnoredEnvVars(config configuration.Configuration) []SanityCheckResult {
+	names := configuration.IgnoredEnvVarsThatAreSet(config)
+	if len(names) == 0 {
+		return nil
+	}
+	return []SanityCheckResult{{
+		Description: fmt.Sprintf("Ignoring environment variable(s) %s: they are not applied to this configuration.",
+			strings.ToUpper(strings.Join(names, ", "))),
+	}}
+}
+
 func CheckSanity(config configuration.Configuration) []SanityCheckResult {
-	var result []SanityCheckResult
+	result := CheckIgnoredEnvVars(config)
 
 	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION, configuration.TENANT}
 	for _, key := range keys {

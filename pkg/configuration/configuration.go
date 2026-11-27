@@ -114,6 +114,11 @@ type extendedViper struct {
 	// supportedEnvVars store the env vars that should be supported REGARDLESS of its prefix. e.g. NODE_EXTRA_CA_CERTS
 	supportedEnvVars []string
 
+	// ignoredEnvVars are environment variable names that must not be read, even when they match a supported
+	// name or prefix. Matching is case-insensitive. The list is consulted only when binding env vars and when
+	// listing keys that hold values; GetKeyType is unchanged.
+	ignoredEnvVars []string
+
 	interkeyDependencies map[string][]string
 }
 
@@ -213,6 +218,28 @@ func WithSupportedEnvVars(envVars ...string) Opts {
 func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
 	return func(c Configuration) {
 		c.SetSupportedEnvVarPrefixes(prefixes...)
+	}
+}
+
+// WithIgnoredEnvVars appends the given environment variable names to the ignore list (case-insensitive
+// dedupe; "-" and "_" are treated as equivalent). Ignored names win over supported names and prefixes:
+// they are not bound from the environment and are not reported as set by GetAllKeysThatContainValues.
+// Apply ignores at construction (NewWithOpts / Derive); setting them after a key has already been read
+// and bound has no effect on that binding.
+//
+// The option is additive so multiple WithIgnoredEnvVars in one NewWithOpts / Derive keep every name.
+//
+// The option does nothing if c is not a configuration created by this package, the same as reading the ignored
+// names of such a configuration yields none. Combining ignored env vars with AutomaticEnv is rejected by Derive.
+func WithIgnoredEnvVars(names ...string) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			return
+		}
+		ev.mutex.Lock()
+		defer ev.mutex.Unlock()
+		ev.ignoredEnvVars = appendMissingIgnored(ev.ignoredEnvVars, names...)
 	}
 }
 
@@ -436,6 +463,8 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 // carried over, so a cache that base has turned off with its CONFIG_CACHE_DISABLED value is enabled on the result.
 //
 // WithFiles works as in NewWithOpts. WithPinnedFile makes Derive return an error for a file that cannot be used.
+// Derive returns an error when automatic environment mode is enabled and ignored env vars are set, because
+// AutomaticEnv bypasses the ignore checks that apply when binding supported env vars.
 func Derive(base Configuration, opts ...Opts) (Configuration, error) {
 	src, ok := base.(*extendedViper)
 	if !ok {
@@ -447,6 +476,10 @@ func Derive(base Configuration, opts ...Opts) (Configuration, error) {
 		opt(derived)
 	}
 	hasCache, cacheTTL := src.copyRegistrationsTo(derived)
+
+	if derived.GetAutomaticEnv() && len(ignoredEnvVarsOf(derived)) > 0 {
+		return nil, errors.New("cannot derive configuration: AutomaticEnv is incompatible with ignored environment variables")
+	}
 
 	if err := derived.loadFiles(); err != nil {
 		return nil, fmt.Errorf("cannot derive configuration: %w", err)
@@ -486,6 +519,7 @@ func (ev *extendedViper) copyRegistrationsTo(dst *extendedViper) (bool, time.Dur
 	}
 	dst.supportedEnvVars = appendMissing(dst.supportedEnvVars, ev.supportedEnvVars...)
 	dst.supportedEnvVarPrefixes = appendMissing(dst.supportedEnvVarPrefixes, ev.supportedEnvVarPrefixes...)
+	dst.ignoredEnvVars = appendMissingIgnored(dst.ignoredEnvVars, ev.ignoredEnvVars...)
 	for _, flagset := range ev.flagsets {
 		//nolint:errcheck // viper's BindPFlags returns nil for a non-nil flag set
 		_ = dst.AddFlagSet(flagset)
@@ -510,6 +544,31 @@ func appendMissing(list []string, values ...string) []string {
 		}
 	}
 	return list
+}
+
+// appendMissingIgnored appends values that are not already present under case-insensitive comparison
+// with "-" normalized to "_", matching isEnvVarIgnoredUnlocked.
+func appendMissingIgnored(list []string, values ...string) []string {
+	for _, v := range values {
+		if !containsIgnoredEnvVar(list, v) {
+			list = append(list, v)
+		}
+	}
+	return list
+}
+
+func normalizeEnvVarName(name string) string {
+	return strings.ReplaceAll(name, "-", "_")
+}
+
+func containsIgnoredEnvVar(list []string, name string) bool {
+	norm := normalizeEnvVarName(name)
+	for _, existing := range list {
+		if strings.EqualFold(normalizeEnvVarName(existing), norm) {
+			return true
+		}
+	}
+	return false
 }
 
 // Clone creates a copy of the current configuration.
@@ -549,6 +608,12 @@ func (ev *extendedViper) Clone() Configuration {
 	clone.SetSupportedEnvVarPrefixes(ev.supportedEnvVarPrefixes...)
 	clone.SetFiles(ev.configFiles...)
 
+	evClone, ok := clone.(*extendedViper)
+	if !ok {
+		panic("cloned configuration is of different type")
+	}
+	evClone.ignoredEnvVars = slices.Clone(ev.ignoredEnvVars)
+
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
 	}
@@ -559,11 +624,6 @@ func (ev *extendedViper) Clone() Configuration {
 	}
 
 	if ev.defaultCache != nil {
-		evClone, ok := clone.(*extendedViper)
-		if !ok {
-			panic("cloned configuration is of different type")
-		}
-
 		items := ev.defaultCache.Items()
 		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
 		evClone.setCache(clonedCache)
@@ -622,9 +682,10 @@ func (ev *extendedViper) get(key string) (result interface{}, err error) {
 
 // bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var.
 // Short-circuits before calling AllKeys() when the key cannot be an env var, avoiding
-// Viper's expensive internal map rebuild on every lookup.
+// Viper's expensive internal map rebuild on every lookup. Ignored env var names are never bound.
+// The caller holds the mutex.
 func (ev *extendedViper) bindEnv(key string) error {
-	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType {
+	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType || ev.isEnvVarIgnoredUnlocked(key) {
 		return nil
 	}
 
@@ -961,6 +1022,9 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	foundKeys := []string{}
 	for _, ak := range alternativeKeys {
 		if ev.GetKeyType(ak) == EnvVarKeyType {
+			if ev.isEnvVarIgnoredLocked(ak) {
+				continue
+			}
 			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
 				foundKeys = append(foundKeys, ak)
 			}
@@ -1058,6 +1122,31 @@ func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
 	defer ev.mutex.RUnlock()
 
 	return ev.supportedEnvVarPrefixes
+}
+
+// ignoredEnvVarsOf returns the ignored environment variable names of config when it is a
+// configuration created by this package. For any other Configuration implementation it returns nil.
+func ignoredEnvVarsOf(config Configuration) []string {
+	ev, ok := config.(*extendedViper)
+	if !ok {
+		return nil
+	}
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return ev.ignoredEnvVars
+}
+
+// isEnvVarIgnoredLocked reports whether key is in the ignored set. It takes the read lock.
+func (ev *extendedViper) isEnvVarIgnoredLocked(key string) bool {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return ev.isEnvVarIgnoredUnlocked(key)
+}
+
+// isEnvVarIgnoredUnlocked reports whether key matches an ignored env var name. Matching is
+// case-insensitive and treats "-" and "_" as equivalent. The caller holds the mutex.
+func (ev *extendedViper) isEnvVarIgnoredUnlocked(key string) bool {
+	return containsIgnoredEnvVar(ev.ignoredEnvVars, key)
 }
 
 // SetFiles sets the files from which the Configuration instance uses
@@ -1177,4 +1266,42 @@ func toDuration(result interface{}) (time.Duration, error) {
 	}
 
 	return 0, fmt.Errorf("value is not of type duration")
+}
+
+// IgnoredEnvVarsThatAreSet returns the names that config ignores, as recorded with WithIgnoredEnvVars, whose environment
+// variable is set to a non-empty value in the process. Matching is case-insensitive and treats "-" and "_" as equivalent,
+// and each name is returned as it was recorded, in recorded order. Only names are returned, never values. It returns
+// nil for a Configuration that this package did not create, and when nothing is set.
+func IgnoredEnvVarsThatAreSet(config Configuration) []string {
+	ev, ok := config.(*extendedViper)
+	if !ok {
+		return nil
+	}
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	if len(ev.ignoredEnvVars) == 0 {
+		return nil
+	}
+	set := nonEmptyEnvVarNames()
+	var names []string
+	for _, name := range ev.ignoredEnvVars {
+		if _, ok := set[normalizeEnvVarName(strings.ToUpper(name))]; ok {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// nonEmptyEnvVarNames returns the normalized names, upper case with "-" as "_", of the environment variables that have
+// a non-empty value. An empty value is not applied by viper, so it does not count.
+func nonEmptyEnvVarNames() map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		if name != "" && value != "" {
+			names[normalizeEnvVarName(strings.ToUpper(name))] = struct{}{}
+		}
+	}
+	return names
 }

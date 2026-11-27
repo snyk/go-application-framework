@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -27,8 +28,9 @@ type fileRegistry struct {
 	base   configuration.Configuration
 	logger zerolog.Logger
 
-	mu       sync.Mutex
-	profiles map[string]*profileImpl
+	mu             sync.Mutex
+	profiles       map[string]*profileImpl
+	ignoredEnvVars []string
 }
 
 var _ Registry = (*fileRegistry)(nil)
@@ -71,6 +73,18 @@ func NewFileRegistry(dir string, base configuration.Configuration, opts ...FileR
 		opt(r)
 	}
 	return r, nil
+}
+
+// SetIgnoredEnvVars keeps a copy of names, and fails once a profile is loaded, so that no profile is derived with
+// names that differ from the ones it was loaded with.
+func (r *fileRegistry) SetIgnoredEnvVars(names ...string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.profiles) > 0 {
+		return cli.NewConfigProfilesUnavailableError("Ignored environment variables cannot be set after a profile is loaded.")
+	}
+	r.ignoredEnvVars = slices.Clone(names)
+	return nil
 }
 
 func (r *fileRegistry) Profile(name string) (Profile, error) {
@@ -118,10 +132,18 @@ func (r *fileRegistry) load(name string) (*profileImpl, error) {
 		}
 	}
 
-	config, err := configuration.Derive(r.base, configuration.WithPinnedFile(path))
+	deriveOpts := []configuration.Opts{configuration.WithPinnedFile(path)}
+	if len(r.ignoredEnvVars) > 0 {
+		deriveOpts = append(deriveOpts, configuration.WithIgnoredEnvVars(r.ignoredEnvVars...))
+		r.logger.Debug().Msgf("profile %q ignores the environment variables %s", name, strings.Join(r.ignoredEnvVars, ", "))
+	}
+	config, err := configuration.Derive(r.base, deriveOpts...)
 	if err != nil {
+		// Log the cause; keep the user-facing catalog detail generic (no internal err text).
+		r.logger.Error().Err(err).Msgf("failed to derive profile %q", name)
 		return nil, cli.NewConfigProfilesUnavailableError(fmt.Sprintf("Profile %q cannot be loaded.", name))
 	}
+	SetMarker(config, name)
 	return &profileImpl{name: name, config: config}, nil
 }
 
