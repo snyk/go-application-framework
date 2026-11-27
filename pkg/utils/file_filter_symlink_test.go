@@ -1,11 +1,15 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,6 +113,77 @@ func TestGetFilteredFiles_ExcludesSymlinks(t *testing.T) {
 			}
 
 			assert.ElementsMatch(t, expected, drainFilteredFiles(t, fileFilter.GetFilteredFiles(filesChannel(inputs), globs)))
+		})
+	}
+}
+
+func symlinkedRoots(t *testing.T) []struct{ name, root string } {
+	t.Helper()
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	createFileInPath(t, filepath.Join(target, "secret.js"), []byte("x"))
+	createFileInPath(t, filepath.Join(target, ".gitignore"), []byte("*.js\n"))
+	link := filepath.Join(dir, "link")
+	symlinkOrSkip(t, target, link)
+
+	return []struct{ name, root string }{
+		{name: "symlinked root", root: link},
+		{name: "symlinked root with trailing separator", root: link + string(os.PathSeparator)},
+	}
+}
+
+func TestGetRules_SymlinkedRoot(t *testing.T) {
+	for name, option := range gitSemanticsStates() {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range symlinkedRoots(t) {
+				t.Run(tc.name, func(t *testing.T) {
+					globs, err := NewFileFilter(tc.root, &log.Logger, option).GetRules([]string{".gitignore"})
+
+					var symlinkErr *SymlinkError
+					require.ErrorAs(t, err, &symlinkErr)
+					assert.Equal(t, tc.root, symlinkErr.Path)
+					assert.Nil(t, globs)
+				})
+			}
+		})
+	}
+}
+
+func TestGetAllFiles_SymlinkedRoot(t *testing.T) {
+	for name, option := range gitSemanticsStates() {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range symlinkedRoots(t) {
+				t.Run(tc.name, func(t *testing.T) {
+					var logs bytes.Buffer
+					logger := zerolog.New(&logs)
+					fileFilter := NewFileFilter(tc.root, &logger, option)
+
+					assert.Empty(t, drainFilteredFiles(t, fileFilter.GetAllFiles()))
+					assert.Empty(t, drainFilteredFiles(t, fileFilter.GetAllFiles()))
+
+					lines := strings.Split(strings.TrimSpace(logs.String()), "\n")
+					require.Len(t, lines, 1, logs.String())
+					var entry map[string]any
+					require.NoError(t, json.Unmarshal([]byte(lines[0]), &entry))
+					assert.Equal(t, "warn", entry["level"])
+					assert.Equal(t, tc.root+" is a symbolic link. Snyk does not follow symbolic links; pass the real path instead.", entry["error"])
+				})
+			}
+		})
+	}
+}
+
+func TestGetAllFiles_RealRootWithTrailingSeparator(t *testing.T) {
+	for name, option := range gitSemanticsStates() {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			createFileInPath(t, filepath.Join(root, "a.js"), []byte("x"))
+			createFileInPath(t, filepath.Join(root, "dir", "b.js"), []byte("x"))
+
+			files := drainFilteredFiles(t, NewFileFilter(root+string(os.PathSeparator), &log.Logger, option).GetAllFiles())
+
+			assert.ElementsMatch(t, []string{filepath.Join(root, "a.js"), filepath.Join(root, "dir", "b.js")}, files)
 		})
 	}
 }
