@@ -310,11 +310,9 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- end -}}
 
     {{- "\n" }}
-    {{- with $.GetMetadataValue "target-directory" }}
-	    {{- $targetId := getTargetId . }}
-        {{- if not (hasPrefix $targetId "pkg:git") }}
-            {{- tip "Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality."}}
-        {{- end }}
+    {{- $targetId := getResultTargetId $ }}
+    {{- if and $targetId (not (hasPrefix $targetId "pkg:git")) }}
+        {{- tip "Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality."}}
     {{- end }}
 {{- end }}
 
