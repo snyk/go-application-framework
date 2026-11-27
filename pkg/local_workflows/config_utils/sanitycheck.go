@@ -58,5 +58,9 @@ func CheckSanity(config configuration.Configuration) []SanityCheckResult {
 		}
 	}
 
+	if warning := configuration.WorkingDirConfigFileWarning(config); warning != "" {
+		result = append(result, SanityCheckResult{Description: warning})
+	}
+
 	return result
 }
