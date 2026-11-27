@@ -108,6 +108,8 @@ type extendedViper struct {
 
 	// pinnedFile is the file given to WithPinnedFile. When it is set, configFiles are not used.
 	pinnedFile string
+	// pinRejected is true when pinnedFile cannot name a configuration file, see validatePinnedFile.
+	pinRejected bool
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -271,6 +273,25 @@ func WithPinnedFile(path string) Opts {
 	}
 }
 
+// PinnedFile returns the cleaned path that WithPinnedFile pinned config to. It returns empty when config is not pinned or
+// WithPinnedFile rejected the path, see validatePinnedFile. It reports the path even when the file could not be read, so
+// a default that sits next to the file, such as the profile directory, does not depend on the contents of the file.
+func PinnedFile(config Configuration) string {
+	ev, ok := config.(*extendedViper)
+	if !ok || ev.pinnedFile == "" || ev.pinRejected {
+		return ""
+	}
+	return filepath.Clean(ev.pinnedFile)
+}
+
+// IsPinned reports whether WithPinnedFile was given to config. It is also true when the path was rejected or the file
+// could not be used, where config is in memory without storage. A caller uses it to tell that from a configuration that
+// is in memory on purpose.
+func IsPinned(config Configuration) bool {
+	ev, ok := config.(*extendedViper)
+	return ok && ev.pinnedFile != ""
+}
+
 // WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
 func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
@@ -371,6 +392,7 @@ func (ev *extendedViper) loadFiles() error {
 // in-memory configuration without storage and is returned.
 func (ev *extendedViper) pinFile() error {
 	if err := validatePinnedFile(ev.pinnedFile); err != nil {
+		ev.pinRejected = true
 		ev.useMemory()
 		return err
 	}
@@ -587,13 +609,22 @@ func (ev *extendedViper) Clone() Configuration {
 	defer ev.mutex.RUnlock()
 
 	// manually clone the Configuration instance
-	options := []Opts{}
-	if ev.configType == jsonFile {
-		configFileUsed := ev.viper.ConfigFileUsed()
-		options = append(options, WithFiles(configFileUsed))
+	var clone Configuration
+	if ev.pinnedFile != "" {
+		// the pinned file is not read again: the values and the storage are copied below
+		pinned := newExtendedViper()
+		pinned.pinnedFile = ev.pinnedFile
+		pinned.pinRejected = ev.pinRejected
+		pinned.configType = ev.configType
+		clone = pinned
+	} else {
+		options := []Opts{}
+		if ev.configType == jsonFile {
+			configFileUsed := ev.viper.ConfigFileUsed()
+			options = append(options, WithFiles(configFileUsed))
+		}
+		clone = NewWithOpts(options...)
 	}
-
-	clone := NewWithOpts(options...)
 	clone.SetStorage(ev.storage)
 	keys := ev.viper.AllKeys()
 	for i := range keys {
