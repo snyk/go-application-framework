@@ -469,10 +469,9 @@ func symlinkEntriesSkippedScenario(t *testing.T) scenario {
 			"inside-link.js": "real.js",
 			"linked-dir":     "real-dir",
 		},
-		want:              []string{"real-dir/file.js", "real.js"},
-		currentCorrect:    true,
-		needsGitSemantics: true,
-		why:               "symlink entries are never listed: reading one would upload a file from outside the repo",
+		want:           []string{"real-dir/file.js", "real.js"},
+		currentCorrect: true,
+		why:            "symlink entries are never listed: reading one would upload a file from outside the repo",
 	}
 }
 
