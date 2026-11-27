@@ -27,7 +27,7 @@ import (
 const (
 	FF_FILE_FILTER_METACHARACTER_FIX   string = "internal_snyk_file_filter_metacharacter_fix_enabled"   // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
 	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled" // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
-	FF_FILE_FILTER_GIT_SEMANTICS       string = "internal_snyk_file_filter_git_semantics_enabled"       // FF_FILE_FILTER_GIT_SEMANTICS (boolean, on unless set to false) makes the file filter skip symlinks and .git folders and keeps negations from re-including files inside excluded folders, as git does
+	FF_FILE_FILTER_GIT_SEMANTICS       string = "internal_snyk_file_filter_git_semantics_enabled"       // FF_FILE_FILTER_GIT_SEMANTICS (boolean, on unless set to false) makes the file filter skip .git folders and keeps negations from re-including files inside excluded folders, as git does
 )
 
 // by default, all rules are valid
@@ -229,8 +229,8 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
-// With FF_FILE_FILTER_GIT_SEMANTICS, symlinks are neither followed nor returned, because the file they point to
-// may be outside the directory, and folders named .git are not entered.
+// Symlinks are never followed or returned, because the file they point to may be outside the directory.
+// With FF_FILE_FILTER_GIT_SEMANTICS, folders named .git are not entered.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
@@ -242,7 +242,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 				return err
 			}
 
-			if gitSemantics && d.Type()&fs.ModeSymlink != 0 {
+			if d.Type()&fs.ModeSymlink != 0 {
 				return nil
 			}
 
@@ -265,7 +265,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 }
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter.
-// With FF_FILE_FILTER_GIT_SEMANTICS, rule files that are symlinks are not read, as GetAllFiles does not return them.
+// Rule files that are symlinks are never read, as GetAllFiles does not return them.
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	variant := fw.metricVariant()
 	start := time.Now()
@@ -299,9 +299,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on.
 // With FF_FILE_FILTER_GIT_SEMANTICS, which is on unless the configuration sets it to false, a file inside an excluded
-// folder below the FileFilter's path is filtered out even if a later negation matches it, as in git; symlinks, and files
-// inside a symlinked folder below the FileFilter's path, are filtered out; and paths with a .git element are filtered
-// out whatever the rules say.
+// folder below the FileFilter's path is filtered out even if a later negation matches it, as in git, and paths with a
+// .git element are filtered out whatever the rules say. Symlinks, and files inside a symlinked folder below the
+// FileFilter's path, are always filtered out.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
