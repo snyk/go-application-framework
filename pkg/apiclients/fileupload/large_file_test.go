@@ -194,6 +194,27 @@ func Test_CreateRevisionFromLargeFile_Validation(t *testing.T) {
 		require.ErrorAs(t, res.SkippedFiles[0].Reason, &specialErr)
 	})
 
+	for name, targetExists := range map[string]bool{"symlink": true, "broken symlink": false} {
+		t.Run(name+" is skipped without reading its target", func(t *testing.T) {
+			client, rec, target := setupLargeFileTest(t, []byte("secret"))
+			link := filepath.Join(filepath.Dir(target), "link")
+			if !targetExists {
+				target += "-missing"
+			}
+			symlinkOrSkip(t, target, link)
+
+			res, err := createFromLargeFile(t.Context(), client, link)
+
+			require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
+			require.Len(t, res.SkippedFiles, 1)
+			assert.Equal(t, "link", res.SkippedFiles[0].Path)
+			var symlinkErr *fileupload.SymlinkError
+			require.ErrorAs(t, res.SkippedFiles[0].Reason, &symlinkErr)
+			assert.Equal(t, "link", symlinkErr.FilePath)
+			assert.Zero(t, rec.uploads)
+		})
+	}
+
 	t.Run("file whose chunk name is too long is skipped without aborting the revision", func(t *testing.T) {
 		client, rec, first := setupLargeFileTest(t, testContent(testChunkSize+1))
 		dir := filepath.Dir(first)

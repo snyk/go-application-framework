@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/google/uuid"
@@ -182,24 +183,60 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
 	})
 
-	t.Run("uploads a symlink to a regular file", func(t *testing.T) {
-		ctx, fakeSealableClient, client, dir := setupOptionsTest(t, defaultLimits, files)
+	t.Run("skips a symlink to a regular file", func(t *testing.T) {
+		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files)
 
-		link := path.Join(dir.Name(), "link.go")
-		require.NoError(t, os.Symlink(path.Join(dir.Name(), "my file.go"), link))
+		link := filepath.Join(dir.Name(), "link.go")
+		symlinkOrSkip(t, path.Join(dir.Name(), "my file.go"), link)
 
 		paths := make(chan string, 1)
 		paths <- link
 		close(paths)
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.NoError(t, err)
+		require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
 
-		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
-		require.Len(t, uploadedFiles, 1)
-		assert.Equal(t, "package main", uploadedFiles[0].Content)
+		var symlinkErr *fileupload.SymlinkError
+		require.Len(t, res.SkippedFiles, 1)
+		assert.Equal(t, "link.go", res.SkippedFiles[0].Path)
+		require.ErrorAs(t, res.SkippedFiles[0].Reason, &symlinkErr)
+		assert.Equal(t, "link.go", symlinkErr.FilePath)
+
+		var specialFileErr *fileupload.SpecialFileError
+		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &specialFileErr)
 	})
+
+	t.Run("skips a broken symlink as a symlink", func(t *testing.T) {
+		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files)
+
+		link := filepath.Join(dir.Name(), "broken.go")
+		symlinkOrSkip(t, filepath.Join(dir.Name(), "missing.go"), link)
+
+		paths := make(chan string, 1)
+		paths <- link
+		close(paths)
+
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
+
+		var symlinkErr *fileupload.SymlinkError
+		require.Len(t, res.SkippedFiles, 1)
+		require.ErrorAs(t, res.SkippedFiles[0].Reason, &symlinkErr)
+
+		var fileAccessErr *fileupload.FileAccessError
+		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
+	})
+}
+
+// symlinkOrSkip skips the test where the privilege to create symlinks is missing, which on Windows needs Developer Mode or administrator rights.
+func symlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		if errors.Is(err, syscall.Errno(1314)) { // ERROR_PRIVILEGE_NOT_HELD
+			t.Skipf("creating symlinks needs Developer Mode or administrator rights on Windows: %v", err)
+		}
+		require.NoError(t, err)
+	}
 }
 
 func Test_CreateRevisionFromChan_UnreadableFile(t *testing.T) {

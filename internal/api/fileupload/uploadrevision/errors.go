@@ -105,6 +105,17 @@ func (e *SpecialFileError) Error() string {
 	return fmt.Sprintf("path %s is not a regular file (mode: %s)", e.FilePath, e.Mode)
 }
 
+// SymlinkError indicates a path is a symbolic link, which is never followed, so its target is not uploaded.
+// It is the upload client's counterpart of utils.SymlinkError and does not unwrap to it.
+// FilePath is the root-relative (encoded) path.
+type SymlinkError struct {
+	FilePath string
+}
+
+func (e *SymlinkError) Error() string {
+	return fmt.Sprintf("path %s is a symbolic link, which Snyk does not follow", e.FilePath)
+}
+
 // InvalidChunkSizeError indicates the size chunks are uploaded in is below the minimum.
 // The chunk size is the file size limit of the upload service.
 type InvalidChunkSizeError struct {
@@ -187,6 +198,11 @@ func NewSpecialFileError(path string, mode os.FileMode) *SpecialFileError {
 		FilePath: path,
 		Mode:     mode,
 	}
+}
+
+// NewSymlinkError creates a new SymlinkError with the given path.
+func NewSymlinkError(path string) *SymlinkError {
+	return &SymlinkError{FilePath: path}
 }
 
 // NewFilePathLengthLimitError creates a new FilePathLengthLimitError with the given parameters.

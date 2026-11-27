@@ -2,6 +2,8 @@ package fileupload
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"iter"
 	"os"
 
@@ -44,8 +46,41 @@ type batchingResult struct {
 	skippedFiles []SkippedFile
 }
 
-func readAndTranscode(path string, transcode ContentTranscoder) ([]byte, error) {
-	content, err := os.ReadFile(path)
+// errFileChanged reports that the file at a path is not the one that was checked before it was read.
+var errFileChanged = errors.New("file changed while it was opened")
+
+// readAndTranscode reads the file at path, named name in errors, and refuses to read through a symlink.
+// Batched files are read when they are streamed, long after they were checked, so the path may have been
+// replaced meanwhile. Like openLargeFile, the type is decided before the open, because opening a swapped-in
+// named pipe would block. The opened file must be the one the path currently names; comparing with a fresh
+// Lstat rather than with the identity from batching keeps editors' atomic-rename saves working.
+func readAndTranscode(path, name string, transcode ContentTranscoder) ([]byte, error) {
+	current, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if current.Mode()&os.ModeSymlink != 0 {
+		return nil, uploadrevision.NewSymlinkError(name)
+	}
+	if !current.Mode().IsRegular() {
+		return nil, uploadrevision.NewSpecialFileError(name, current.Mode())
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !os.SameFile(current, opened) {
+		return nil, uploadrevision.NewFileAccessError(name, errFileChanged)
+	}
+
+	content, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +111,14 @@ func checkReadable(path string) error {
 // Read calls io.Copy makes. They are released with the batch.
 type transcodedFileReader struct {
 	path      string
+	name      string
 	transcode ContentTranscoder
 	content   *bytes.Reader
 }
 
 func (r *transcodedFileReader) Read(p []byte) (int, error) {
 	if r.content == nil {
-		content, err := readAndTranscode(r.path, r.transcode)
+		content, err := readAndTranscode(r.path, r.name, r.transcode)
 		if err != nil {
 			return 0, err
 		}
@@ -109,9 +145,13 @@ func createUploadFile(
 
 	relPath = encodePath(relPath)
 
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewSymlinkError(relPath)}
 	}
 
 	// Reading a device file would never return, so this has to be decided before the read.
@@ -127,7 +167,7 @@ func createUploadFile(
 	// already gives its size and the file does not need reading here.
 	fileSize := info.Size()
 	if transcode != nil {
-		content, err := readAndTranscode(path, transcode)
+		content, err := readAndTranscode(path, relPath, transcode)
 		if err != nil {
 			return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
 		}
@@ -137,7 +177,7 @@ func createUploadFile(
 	return uploadrevision.UploadFile{
 		Path:   relPath,
 		Size:   fileSize,
-		Reader: &transcodedFileReader{path: path, transcode: transcode},
+		Reader: &transcodedFileReader{path: path, name: relPath, transcode: transcode},
 	}, nil
 }
 
