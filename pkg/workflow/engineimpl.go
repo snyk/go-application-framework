@@ -68,6 +68,8 @@ type engineRuntimeConfig struct {
 	ic      analytics.InstrumentationCollector
 	ctxFunc func() context.Context
 	nested  bool
+	// skipPostInvokeHooks keeps the post-invoke hooks from firing for this invocation only.
+	skipPostInvokeHooks bool
 	// invocationProfile is the configuration and network access of the profile the invocation runs on, nil for the
 	// engine's own.
 	invocationProfile *engineWrapper
@@ -104,6 +106,15 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 func withInvocationProfile(invocationProfile *engineWrapper) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
 		e.invocationProfile = invocationProfile
+	}
+}
+
+// WithoutPostInvokeHooks skips the post-invoke hooks for this root invocation only. Hooks of other invocations still
+// fire, nested invocations are unaffected (they never fire hooks), and the hook timeout handling is unchanged.
+// Passed to a nested invocation, it has no effect.
+func WithoutPostInvokeHooks() EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.skipPostInvokeHooks = true
 	}
 }
 
@@ -400,7 +411,7 @@ func (e *EngineImpl) Invoke(
 		err = fmt.Errorf("workflow '%v' not found", id)
 	}
 
-	if !options.nested {
+	if !options.nested && !options.skipPostInvokeHooks {
 		e.firePostInvokeHooks(hookCtx, id, output, err, &options)
 	}
 
@@ -629,7 +640,8 @@ func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 	e.extensionInitializer = append(e.extensionInitializer, initializer)
 }
 
-// AddPostInvokeHook registers a hook that fires after each top-level Invoke completes.
+// AddPostInvokeHook registers a hook that fires after each top-level Invoke completes, unless that invocation passes
+// WithoutPostInvokeHooks.
 // Hooks fire in registration order and are skipped for nested (sub-workflow) invocations.
 // Hooks must be registered before or during Init; calls after Init return an error.
 func (e *EngineImpl) AddPostInvokeHook(hook PostInvokeHook) error {

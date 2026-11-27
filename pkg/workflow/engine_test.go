@@ -1426,6 +1426,74 @@ func Test_PostInvokeHook_NestedInvokeContextBoundByHookTimeout(t *testing.T) {
 	}
 }
 
+func Test_PostInvokeHook_WithoutPostInvokeHooksSkipsOnlyThatInvocation(t *testing.T) {
+	tests := map[string]struct {
+		callback  Callback
+		wantErr   bool
+		wantPanic any
+	}{
+		"success": {},
+		"workflow_error": {
+			callback: func(InvocationContext, []Data) ([]Data, error) { return nil, errors.New("workflow failed") },
+			wantErr:  true,
+		},
+		"callback_panic": {
+			callback:  func(InvocationContext, []Data) ([]Data, error) { panic("callback blew up") },
+			wantPanic: "callback blew up",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			engine, wfId := setupHookTestEngine(t, "skip-hooks-"+name, tc.callback)
+			var hookCalls int
+			addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { hookCalls++ })
+			require.NoError(t, engine.Init())
+
+			invoke := func(opts ...EngineInvokeOption) (recovered any, err error) {
+				defer func() { recovered = recover() }()
+				_, err = engine.Invoke(wfId, opts...)
+				return nil, err
+			}
+
+			recovered, err := invoke(WithoutPostInvokeHooks())
+			assert.Equal(t, tc.wantErr, err != nil)
+			assert.Equal(t, tc.wantPanic, recovered)
+			assert.Zero(t, hookCalls, "the hook must not fire for an invocation that skips the hooks")
+
+			recovered, err = invoke()
+			assert.Equal(t, tc.wantErr, err != nil)
+			assert.Equal(t, tc.wantPanic, recovered)
+			assert.Equal(t, 1, hookCalls, "the hook must still fire for an invocation that does not skip them")
+		})
+	}
+}
+
+func Test_PostInvokeHook_WithoutPostInvokeHooksLeavesNestedInvocationsAlone(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewInMemory())
+	innerWfId := NewWorkflowIdentifier("skip-hooks-inner")
+	outerWfId := NewWorkflowIdentifier("skip-hooks-outer")
+	opts := ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	_, err := engine.Register(innerWfId, opts, func(InvocationContext, []Data) ([]Data, error) { return nil, nil })
+	require.NoError(t, err)
+	_, err = engine.Register(outerWfId, opts, func(inv InvocationContext, _ []Data) ([]Data, error) {
+		return inv.GetEngine().Invoke(innerWfId, WithoutPostInvokeHooks())
+	})
+	require.NoError(t, err)
+	var hookCalls int
+	addPostInvokeHook(t, engine, func(context.Context, Engine, InvokeOutput) { hookCalls++ })
+	require.NoError(t, engine.Init())
+
+	// The option of a nested invocation does not reach its root, which fires the hook once as before.
+	_, err = engine.Invoke(outerWfId)
+	require.NoError(t, err)
+	assert.Equal(t, 1, hookCalls)
+
+	// The option of the root skips the hook of the root; the nested invocation never fires hooks.
+	_, err = engine.Invoke(outerWfId, WithoutPostInvokeHooks())
+	require.NoError(t, err)
+	assert.Equal(t, 1, hookCalls)
+}
+
 // Run with -race: a configuration read can happen while the configuration is being replaced.
 func Test_Engine_GetConfigurationConcurrentWithSetConfigurationDoesNotRace(t *testing.T) {
 	engine := NewWorkFlowEngine(configuration.NewWithOpts())
