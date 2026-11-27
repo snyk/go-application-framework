@@ -17,7 +17,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
@@ -406,8 +405,11 @@ type trackedFiles struct {
 // a file below an excluded folder.
 type ruleMatcher struct {
 	rules     *scopedMatcher
-	negations *gitignore.GitIgnore // nil when no rule is negated
+	negations *scopedMatcher // nil when no rule is negated
 }
+
+// matchEveryPath compiles to "^(|.*/)|(|/.*)$" and matches every path; "*" misses some paths with newlines.
+const matchEveryPath = "|"
 
 // compileRuleMatcher detects negated rules as go-gitignore does. negations.MatchesPath(f) is false iff a negated rule matches f.
 func compileRuleMatcher(globs []string) ruleMatcher {
@@ -420,9 +422,9 @@ func compileRuleMatcher(globs []string) ruleMatcher {
 		}
 	}
 
-	var negations *gitignore.GitIgnore
+	var negations *scopedMatcher
 	if len(negated) > 0 {
-		negations = gitignore.CompileIgnoreLines(append([]string{matchEveryPath}, negated...)...)
+		negations = newScopedMatcher(append([]string{matchEveryPath}, negated...))
 	}
 
 	return ruleMatcher{rules: rules, negations: negations}

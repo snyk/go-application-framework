@@ -2,11 +2,13 @@ package utils
 
 import (
 	"path/filepath"
+	"regexp"
+	"regexp/syntax"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
-
-	gitignore "github.com/sabhiram/go-gitignore"
+	"unicode/utf8"
 )
 
 // scopedMatcher gives the same result as gitignore.CompileIgnoreLines(globs...).MatchesPath, but
@@ -15,6 +17,7 @@ import (
 // start if the pattern starts with "/", else at the start or after any "/" (a superset, as go-gitignore
 // anchors some of these too). With many nested ignore files, most globs cannot match a given path. Each
 // glob is compiled once, and folders with the same set of scopes share one list of applicable glob indices.
+// A regular expression only runs on paths that contain all literals it requires.
 type scopedMatcher struct {
 	globs      []scopedGlob
 	scopes     []string
@@ -24,7 +27,8 @@ type scopedMatcher struct {
 }
 
 type scopedGlob struct {
-	matcher    *gitignore.GitIgnore
+	regexp     *regexp.Regexp // nil when go-gitignore drops the glob
+	required   []string       // literals that every path the glob matches contains
 	negated    bool
 	scopeIndex int // index into scopes, -1 when the glob can match any path
 }
@@ -42,12 +46,13 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 
 	indexOfScope := map[string]int{}
 	for i, glob := range globs {
-		lines := []string{glob}
-		_, negated := globPattern(glob)
-		if negated {
-			lines = []string{matchEveryPath, glob}
+		expr, negated := globRegexp(glob)
+		m.globs[i] = scopedGlob{negated: negated, scopeIndex: -1}
+		// Like go-gitignore, drop a glob whose expression does not compile.
+		if compiled, err := regexp.Compile(expr); expr != "" && err == nil {
+			m.globs[i].regexp = compiled
+			m.globs[i].required = requiredLiterals(expr)
 		}
-		m.globs[i] = scopedGlob{matcher: gitignore.CompileIgnoreLines(lines...), negated: negated, scopeIndex: -1}
 
 		scope := scopeOfGlob(glob)
 		if scope == "" {
@@ -63,9 +68,6 @@ func newScopedMatcher(globs []string) *scopedMatcher {
 	}
 	return m
 }
-
-// matchEveryPath compiles to "^(|.*/)|(|/.*)$" and matches every path; "*" misses some paths with newlines.
-const matchEveryPath = "|"
 
 // globPattern trims glob as go-gitignore does before it compiles a line. Comments give an empty pattern.
 func globPattern(glob string) (pattern string, negated bool) {
@@ -115,7 +117,7 @@ func (m *scopedMatcher) MatchesPath(path string) bool {
 	applicable := m.globIndicesFor(slashPath[:strings.LastIndex(slashPath, "/")+1])
 	// go-gitignore's result is decided by the last glob that matches the path.
 	for i := len(applicable) - 1; i >= 0; i-- {
-		if glob := m.globs[applicable[i]]; glob.matcher.MatchesPath(slashPath) != glob.negated {
+		if glob := &m.globs[applicable[i]]; glob.matches(slashPath) {
 			return !glob.negated
 		}
 	}
@@ -153,4 +155,31 @@ func (m *scopedMatcher) globIndicesFor(dir string) []int {
 	}
 	m.byDir[dir] = applicable
 	return applicable
+}
+
+func (g *scopedGlob) matches(path string) bool {
+	for _, literal := range g.required {
+		if !strings.Contains(path, literal) {
+			return false
+		}
+	}
+	return g.regexp != nil && g.regexp.MatchString(path)
+}
+
+// requiredLiterals returns the literals at the top level of expr, longest first. Every string that
+// expr matches contains all of them. Literals with U+FFFD are left out, as expr matches U+FFFD on
+// invalid UTF-8 bytes.
+func requiredLiterals(expr string) []string {
+	parsed, err := syntax.Parse(expr, syntax.Perl)
+	if err != nil || parsed.Op != syntax.OpConcat {
+		return nil
+	}
+	var literals []string
+	for _, sub := range parsed.Sub {
+		if sub.Op == syntax.OpLiteral && sub.Flags&syntax.FoldCase == 0 && !slices.Contains(sub.Rune, utf8.RuneError) {
+			literals = append(literals, string(sub.Rune))
+		}
+	}
+	slices.SortStableFunc(literals, func(a, b string) int { return len(b) - len(a) })
+	return literals
 }
