@@ -42,6 +42,11 @@ type FileAccessError = uploadrevision.FileAccessError
 // SpecialFileError indicates a path points to a special file (device, pipe, socket, etc.) instead of a regular file.
 type SpecialFileError = uploadrevision.SpecialFileError
 
+// SymlinkError indicates a path is a symbolic link, which is never followed, so its target is not uploaded.
+// It is the upload client's counterpart of utils.SymlinkError and does not unwrap to it.
+// FilePath is the root-relative (encoded) path.
+type SymlinkError = uploadrevision.SymlinkError
+
 // HTTPError indicates an HTTP request/response error.
 type HTTPError = uploadrevision.HTTPError
 

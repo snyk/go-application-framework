@@ -180,9 +180,12 @@ func (r *chunkReader) Read(p []byte) (int, error) {
 func openLargeFile(path, name string, maxSize int64) (*os.File, int64, error) {
 	// Opening a special file such as a named pipe blocks until a writer appears and cannot be interrupted
 	// by cancellation, so the file type is decided before it is opened, like in the batched upload.
-	pre, err := os.Stat(path)
+	pre, err := os.Lstat(path)
 	if err != nil {
 		return nil, 0, uploadrevision.NewFileAccessError(name, err)
+	}
+	if pre.Mode()&os.ModeSymlink != 0 {
+		return nil, 0, uploadrevision.NewSymlinkError(name)
 	}
 	if !pre.Mode().IsRegular() {
 		return nil, 0, uploadrevision.NewSpecialFileError(name, pre.Mode())
@@ -193,7 +196,8 @@ func openLargeFile(path, name string, maxSize int64) (*os.File, int64, error) {
 		return nil, 0, uploadrevision.NewFileAccessError(name, err)
 	}
 
-	// The file may have been replaced between the stat above and the open, so the opened file is checked again.
+	// The opened file must be the one that was Lstat-ed, so a replacement by a symlink or any other file
+	// between the Lstat and the open is rejected.
 	info, err := file.Stat()
 	if err != nil {
 		file.Close()
@@ -201,6 +205,9 @@ func openLargeFile(path, name string, maxSize int64) (*os.File, int64, error) {
 	}
 
 	switch {
+	case !os.SameFile(pre, info):
+		file.Close()
+		return nil, 0, uploadrevision.NewFileAccessError(name, errFileChanged)
 	case !info.Mode().IsRegular():
 		file.Close()
 		return nil, 0, uploadrevision.NewSpecialFileError(name, info.Mode())
