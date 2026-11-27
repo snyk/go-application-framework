@@ -106,6 +106,17 @@ func (id *issueIgnoreDetailsImpl) GetPolicyID() *string {
 	return id.policyID
 }
 
+// GetRuleID returns the ID of the policy rule behind this ignore. Unlike the
+// policy ID, which can identify a per-test snapshot, the rule ID is created with
+// the ignore and stays the same across tests. It is nil for ignores without a rule.
+func (id *issueIgnoreDetailsImpl) GetRuleID() *string {
+	if id.ignoreData == nil || id.ignoreData.Rule == nil {
+		return nil
+	}
+	ruleID := id.ignoreData.Rule.Id.String()
+	return &ruleID
+}
+
 // === Ignore Action Details Methods ===
 
 func (id *issueIgnoreDetailsImpl) GetIgnoreReason() string {

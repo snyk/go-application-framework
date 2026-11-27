@@ -163,8 +163,9 @@
 						{{- if $finding.Attributes.Suppression }}
 						"suppressions" : [
 							{
-								{{- if $finding.Attributes.Suppression.Id }}
-								"guid": "{{ $finding.Attributes.Suppression.Id }}",
+								{{- $suppGuid := suppressionGuid $finding.Attributes.Suppression.Id }}
+								{{- if $suppGuid }}
+								"guid": {{ getQuotedString $suppGuid }},
 								{{- end }}
 								"status": "{{ $finding.Attributes.Suppression.Status }}",
 								{{- if $finding.Attributes.Suppression.Justification }}

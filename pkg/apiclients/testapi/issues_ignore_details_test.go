@@ -718,3 +718,78 @@ func TestIssueIgnoreDetails_Reviewer(t *testing.T) {
 		assert.Nil(t, details.GetReviewedBy())
 	})
 }
+
+// ruleIDProvider is the optional capability the SARIF presenter uses to derive a
+// stable identity for an ignore; it is deliberately not part of IssueIgnoreDetails.
+type ruleIDProvider interface {
+	GetRuleID() *string
+}
+
+func TestIssueIgnoreDetails_RuleID(t *testing.T) {
+	const (
+		policyID = "90b2fe3f-f811-4447-8f75-e32545d753ea"
+		ruleID   = "9a589a14-6ea4-49c5-9fd3-618dc3ebbbd1"
+	)
+
+	findingWithAppliedPolicy := func(t *testing.T, ruleJSON string) *testapi.FindingData {
+		t.Helper()
+		rule := ""
+		if ruleJSON != "" {
+			rule = `, "rule": ` + ruleJSON
+		}
+		raw := `{
+			"id": "1a1e9f0e-0d1f-4a1e-9f0e-0d1f4a1e9f0e",
+			"attributes": {
+				"finding_type": "sca",
+				"key": "test-key",
+				"suppression": {"status": "ignored", "policy": {"id": "` + policyID + `"}}
+			},
+			"relationships": {
+				"policy": {
+					"links": {},
+					"data": {
+						"id": "2b2e9f0e-0d1f-4a1e-9f0e-0d1f4a1e9f0e",
+						"type": "policy",
+						"attributes": {
+							"policies": [{
+								"id": "` + policyID + `",
+								"applied_policy": {
+									"action_type": "ignore",
+									"ignore": {"reason": "reason", "source": "api"}` + rule + `
+								}
+							}]
+						}
+					}
+				}
+			}
+		}`
+
+		var finding testapi.FindingData
+		require.NoError(t, json.Unmarshal([]byte(raw), &finding))
+		return &finding
+	}
+
+	t.Run("returns the rule ID, not the policy snapshot ID", func(t *testing.T) {
+		details := findingWithAppliedPolicy(t, `{
+			"id": "`+ruleID+`", "name": "", "created": "0001-01-01T00:00:00Z",
+			"modified": "0001-01-01T00:00:00Z", "review": "not-required"
+		}`).GetIgnoreDetails()
+		require.NotNil(t, details)
+
+		provider, ok := details.(ruleIDProvider)
+		require.True(t, ok)
+		require.NotNil(t, provider.GetRuleID())
+		assert.Equal(t, ruleID, *provider.GetRuleID())
+		require.NotNil(t, details.GetPolicyID())
+		assert.Equal(t, policyID, *details.GetPolicyID(), "GetPolicyID keeps its meaning")
+	})
+
+	t.Run("ignore without a rule has no rule ID", func(t *testing.T) {
+		details := findingWithAppliedPolicy(t, "").GetIgnoreDetails()
+		require.NotNil(t, details)
+
+		provider, ok := details.(ruleIDProvider)
+		require.True(t, ok)
+		assert.Nil(t, provider.GetRuleID())
+	})
+}

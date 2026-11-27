@@ -287,6 +287,8 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["getCoverageFromTestResult"] = getCoverageFromTestResult
 	fnMap["getFingerprints"] = getFingerprints
 	fnMap["getSnykCodeRuleFromIssue"] = getSnykCodeRuleFromIssue
+	fnMap["getIgnoreRuleID"] = getIgnoreRuleID
+	fnMap["suppressionGuid"] = suppressionGuid
 	fnMap["derefStr"] = derefStr
 	return fnMap
 }
