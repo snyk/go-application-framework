@@ -12,7 +12,7 @@ import (
 type excludedFolder struct {
 	byAll   bool
 	byOther bool
-	linked  bool // with FF_FILE_FILTER_GIT_SEMANTICS: the folder, or a folder above it below root, is a symlink
+	linked  bool // the folder, or a folder above it below root, is a symlink
 }
 
 // folderExclusions memoizes which folders below root the rules exclude, so each folder is matched once,
@@ -87,10 +87,10 @@ func (e *folderExclusions) excludedByFolder(file string) bool {
 }
 
 func (e *folderExclusions) isExcluded(file string) bool {
-	if !e.predicate.gitSemantics {
-		return e.excludedByFolder(file) || e.predicate.isExcluded(file)
+	if e.predicate.gitSemantics && inGitFolder(filepath.ToSlash(file)) {
+		return true
 	}
-	return inGitFolder(filepath.ToSlash(file)) || e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
+	return e.excludedByFolder(file) || e.predicate.isExcluded(file) || isSymlink(file)
 }
 
 // inGitFolder reports whether a path element of slashPath is .git.
@@ -123,7 +123,7 @@ func (e *folderExclusions) of(slashDir string) excludedFolder {
 			parent = e.of(parentDir)
 		}
 		exclusion.folder = e.predicate.folderState(slashDir, parent)
-		exclusion.folder.linked = e.predicate.gitSemantics && (parent.linked || isSymlink(filepath.FromSlash(slashDir)))
+		exclusion.folder.linked = parent.linked || isSymlink(filepath.FromSlash(slashDir))
 	})
 	return exclusion.folder
 }
