@@ -23,6 +23,12 @@ import (
 
 //go:generate go tool github.com/golang/mock/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
+const (
+	configFileName = "snyk"
+	configFileType = "json"
+	configFile     = configFileName + "." + configFileType
+)
+
 type DefaultValueFunction func(config Configuration, existingValue interface{}) (interface{}, error)
 
 type configType string
@@ -292,7 +298,7 @@ func NewWithOpts(opts ...Opts) Configuration {
 // New creates a new snyk configuration file.
 func New() Configuration {
 	config := NewWithOpts(
-		WithFiles("snyk"),
+		WithFiles(configFileName),
 		WithAutomaticEnv(),
 	)
 	return config
@@ -373,7 +379,7 @@ func (ev *extendedViper) pinFile() error {
 	ev.storage = NewJsonStorage(path, WithConfiguration(ev), withBlankFileAsEmpty(), withExactNumbers())
 	ev.configType = jsonFile
 	ev.viper.SetConfigFile(path)
-	ev.viper.SetConfigType("json")
+	ev.viper.SetConfigType(configFileType)
 
 	if content, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(content)) == 0 {
 		return nil
@@ -1007,7 +1013,7 @@ func (ev *extendedViper) GetStorage() Storage {
 // createFileStorage creates attempts to create a JSON file storage in the configPath.
 // If it fails, a dummy storage is returned.
 func (ev *extendedViper) createFileStorage(configPath string) Storage {
-	file := path.Join(configPath, "snyk.json")
+	file := path.Join(configPath, configFile)
 	return NewJsonStorage(file, WithConfiguration(ev))
 }
 
