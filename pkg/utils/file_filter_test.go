@@ -80,6 +80,38 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 	})
 }
 
+func TestFileFilter_GitSemanticsIsOnByDefault(t *testing.T) {
+	t.Run("no config defaults to gitSemantics on", func(t *testing.T) {
+		fw := NewFileFilter(t.TempDir(), &log.Logger)
+		assert.True(t, fw.gitSemantics())
+	})
+
+	t.Run("config with flag false disables gitSemantics", func(t *testing.T) {
+		fw := NewFileFilterFromConfig(
+			t.TempDir(),
+			&log.Logger,
+			newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: false}),
+		)
+		assert.False(t, fw.gitSemantics())
+	})
+
+	t.Run("config with flag true enables gitSemantics", func(t *testing.T) {
+		fw := NewFileFilterFromConfig(
+			t.TempDir(),
+			&log.Logger,
+			newTestConfig(map[string]bool{FF_FILE_FILTER_GIT_SEMANTICS: true}),
+		)
+		assert.True(t, fw.gitSemantics())
+	})
+
+	t.Run("environment variable sets gitSemantics to false", func(t *testing.T) {
+		config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		t.Setenv("INTERNAL_SNYK_FILE_FILTER_GIT_SEMANTICS_ENABLED", "false")
+		fw := NewFileFilterFromConfig(t.TempDir(), &log.Logger, config)
+		assert.False(t, fw.gitSemantics())
+	})
+}
+
 func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 	// create temp filesystem
 	tempDir := t.TempDir()
@@ -1431,6 +1463,41 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				"//?/C:/Users/someone/project/**/node_modules",
 			},
 		},
+		{
+			name:          "foo/** excludes contents, not foo itself",
+			rule:          "foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "/foo/** anchored contents, not foo itself",
+			rule:          "/foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/foo/*/**"},
+		},
+		{
+			name:          "**/foo/** floating contents, not foo itself",
+			rule:          "**/foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "** excludes everything except root",
+			rule:          "**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"/tmp/test/*/**"},
+		},
+		{
+			name:          "!foo/** re-includes contents via negation",
+			rule:          "!foo/**",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
+			expectedGlobs: []string{"!/tmp/test/**/foo/*/**"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1438,7 +1505,7 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			if tc.skipNonWindows && runtime.GOOS != "windows" {
 				t.Skip("UNC paths only exist on Windows")
 			}
-			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules, true)
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules, true, true)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Test Name: %s, Rule: %q, Expected: %v, Got: %v", tc.name, tc.rule, tc.expectedGlobs, globs)
 		})
@@ -1485,13 +1552,69 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 				"/tmp/test/foo",
 			},
 		},
+		{
+			name:          "foo/** excludes contents, not foo itself",
+			rule:          "foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "/foo/** anchored contents, not foo itself",
+			rule:          "/foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/foo/*/**"},
+		},
+		{
+			name:          "**/foo/** floating contents, not foo itself",
+			rule:          "**/foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/**/foo/*/**"},
+		},
+		{
+			name:          "** excludes everything except root",
+			rule:          "**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"/tmp/test/*/**"},
+		},
+		{
+			name:          "!foo/** re-includes contents via negation",
+			rule:          "!foo/**",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{"!/tmp/test/**/foo/*/**"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, []string{}, false)
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, []string{}, false, true)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Test Name: %s, Rule: %q, Expected: %v, Got: %v", tc.name, tc.rule, tc.expectedGlobs, globs)
+		})
+	}
+}
+
+func TestParseIgnoreRuleToGlobs_WithoutGitSemantics(t *testing.T) {
+	for _, enableMetacharacterFix := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enableMetacharacterFix=%v", enableMetacharacterFix), func(t *testing.T) {
+			baseDir := "/base"
+			cases := []struct {
+				rule     string
+				expected []string
+			}{
+				{"foo/**", []string{"/base/**/foo/**"}},
+				{"/foo/**", []string{"/base/foo/**"}},
+				{"**/foo/**", []string{"/base/**/foo/**"}},
+				{"**", []string{"/base/**"}},
+				{"/**", []string{"/base/**"}},
+				{"!foo/**", []string{"!/base/**/foo/**"}},
+			}
+			for _, tc := range cases {
+				t.Run(tc.rule, func(t *testing.T) {
+					globs := parseIgnoreRuleToGlobs(tc.rule, baseDir, []string{}, enableMetacharacterFix, false)
+					assert.ElementsMatch(t, tc.expected, globs,
+						"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expected, globs)
+				})
+			}
 		})
 	}
 }
@@ -2264,6 +2387,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 			config := newTestConfig(map[string]bool{
 				FF_FILE_FILTER_METACHARACTER_FIX:   test.metacharacterFix,
 				FF_GITIGNORE_RESPECT_TRACKED_FILES: test.respectTrackedFiles,
+				FF_FILE_FILTER_GIT_SEMANTICS:       true,
 			})
 			fileFilter := NewFileFilter(newRepo(t), &log.Logger, WithConfig(config), WithMetrics(recorder))
 
@@ -2291,6 +2415,7 @@ func TestFileFilter_Metrics(t *testing.T) {
 			assert.Equal(t, map[string]bool{
 				metricFeatureMetacharFix:  test.metacharacterFix,
 				metricFeatureTrackedFiles: test.respectTrackedFiles,
+				metricFeatureGitSemantics: true,
 			}, variant.bools)
 		})
 	}
