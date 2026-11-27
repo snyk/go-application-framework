@@ -44,6 +44,7 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 	config          configuration.Configuration
 	metrics         *metrics.Accumulator
+	symlinkRootWarn sync.Once
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -230,11 +231,18 @@ func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config configu
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory.
 // Symlinks are never followed or returned, because the file they point to may be outside the directory.
+// If the root itself is a symlink, nothing is returned and a warning is logged once per FileFilter.
 // With FF_FILE_FILTER_GIT_SEMANTICS, folders named .git are not entered.
 func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
+
+		// A path with a trailing separator makes the OS follow a symlinked root, so WalkDir would list its target.
+		if err := CheckNotSymlink(fw.path); err != nil {
+			fw.symlinkRootWarn.Do(func() { fw.logger.Warn().Err(err).Msg("skipping files of symlinked root") })
+			return
+		}
 
 		gitSemantics := fw.gitSemantics()
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
@@ -266,7 +274,12 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter.
 // Rule files that are symlinks are never read, as GetAllFiles does not return them.
+// It returns a *SymlinkError if the root itself is a symlink.
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
+	if err := CheckNotSymlink(fw.path); err != nil {
+		return nil, err
+	}
+
 	variant := fw.metricVariant()
 	start := time.Now()
 	defer fw.recordSumLazy(variant, metricRulesBuildDurationMs, func() int {
