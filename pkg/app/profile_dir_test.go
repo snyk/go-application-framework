@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -92,6 +93,117 @@ func Test_ProfileDir_ExplicitValueOverridesTheDefault(t *testing.T) {
 			assert.FileExists(t, filepath.Join(explicit, "x.json"))
 			_, statErr := os.Stat(filepath.Join(home, ".config", "configstore", "snyk_profiles"))
 			assert.ErrorIs(t, statErr, os.ErrNotExist, "the default directory must not be used")
+		})
+	}
+}
+
+// Test_ProfileDir_FollowsThePinnedConfigFile checks the resolution order of the profile directory: SNYK_CONFIG_PROFILE_DIR
+// when set, else snyk_profiles next to the pinned config file, else snyk_profiles in the default storage directory.
+func Test_ProfileDir_FollowsThePinnedConfigFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		explicit bool // SNYK_CONFIG_PROFILE_DIR is set to a directory of its own
+		pinned   bool // a config file is pinned in a directory of its own
+	}{
+		{name: "both_set_profile_dir_wins", explicit: true, pinned: true},
+		{name: "pinned_file_only_follows_the_file", explicit: false, pinned: true},
+		{name: "nothing_set_uses_the_default_storage_dir", explicit: false, pinned: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			configtest.IsolateEnvironmentForTest(t, "SNYK_CONFIG_PROFILE_DIR")
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			pinnedDir := t.TempDir()
+			explicitDir := t.TempDir()
+
+			var config configuration.Configuration
+			if tc.pinned {
+				config = configuration.NewWithOpts(configuration.WithAutomaticEnv(), configuration.WithPinnedFile(filepath.Join(pinnedDir, "snyk.json")))
+			} else {
+				config = configuration.NewInMemory()
+			}
+			if tc.explicit {
+				config.AddAlternativeKeys(profile.DirKey, []string{"SNYK_CONFIG_PROFILE_DIR"})
+				t.Setenv("SNYK_CONFIG_PROFILE_DIR", explicitDir)
+			}
+			config.PersistInStorage(profileDirTestKey)
+
+			want := filepath.Join(home, ".config", "configstore", "snyk_profiles")
+			switch {
+			case tc.explicit:
+				want = explicitDir
+			case tc.pinned:
+				want = filepath.Join(pinnedDir, "snyk_profiles")
+			}
+			engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(log.New(io.Discard, "", 0)))
+			require.NoError(t, engine.Init())
+			assert.Equal(t, want, config.GetString(profile.DirKey))
+
+			registry, err := workflow.GetProfileRegistry(engine)
+			require.NoError(t, err)
+			p, err := registry.Profile("x")
+			require.NoError(t, err)
+			p.Configuration().Set(profileDirTestKey, "written")
+			assert.FileExists(t, filepath.Join(want, "x.json"))
+		})
+	}
+}
+
+// Test_ProfileDir_PinnedFileWithoutHomeDirectory checks that a pinned config file gives a profile directory even when the
+// home directory is unknown, where the default storage directory is not available and profiles otherwise fail closed.
+func Test_ProfileDir_PinnedFileWithoutHomeDirectory(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t, "SNYK_CONFIG_PROFILE_DIR")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	pinnedDir := t.TempDir()
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv(), configuration.WithPinnedFile(filepath.Join(pinnedDir, "snyk.json")))
+	config.PersistInStorage(profileDirTestKey)
+	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(log.New(io.Discard, "", 0)))
+	require.NoError(t, engine.Init())
+
+	assert.Equal(t, filepath.Join(pinnedDir, "snyk_profiles"), config.GetString(profile.DirKey))
+	registry, err := workflow.GetProfileRegistry(engine)
+	require.NoError(t, err)
+	p, err := registry.Profile("x")
+	require.NoError(t, err)
+	p.Configuration().Set(profileDirTestKey, "written")
+	assert.FileExists(t, filepath.Join(pinnedDir, "snyk_profiles", "x.json"))
+	assert.Equal(t, filepath.Join(pinnedDir, "snyk_profiles"), p.Configuration().GetString(profile.DirKey),
+		"a profile is pinned to its own file, and still gets the directory next to the config file")
+}
+
+func Test_ProfileDir_RejectedPinnedFileGivesNoDefault(t *testing.T) {
+	tests := []struct {
+		name   string
+		pinned func(cwd string) string
+	}{
+		{name: "relative_path", pinned: func(string) string { return "snyk.json" }},
+		{name: "trailing_separator", pinned: func(cwd string) string { return filepath.Join(cwd, "snyk.json") + string(filepath.Separator) }},
+		{name: "existing_directory", pinned: func(cwd string) string { return cwd }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			configtest.IsolateEnvironmentForTest(t, "SNYK_CONFIG_PROFILE_DIR")
+			cwd := t.TempDir()
+			t.Chdir(cwd)
+			stdLog := log.Writer()
+			log.SetOutput(io.Discard)
+			t.Cleanup(func() { log.SetOutput(stdLog) })
+			config := configuration.NewWithOpts(configuration.WithAutomaticEnv(), configuration.WithPinnedFile(tc.pinned(cwd)))
+			engine, home := newProfileDirTestEngine(t, config)
+
+			assert.Empty(t, config.GetString(profile.DirKey))
+
+			_, err := workflow.GetProfileRegistry(engine)
+			var snykErr snyk_errors.Error
+			require.ErrorAs(t, err, &snykErr)
+			assert.Equal(t, "SNYK-CLI-0036", snykErr.ErrorCode)
+			assert.Contains(t, snykErr.Detail, "the pinned configuration file was rejected")
+			assert.NoDirExists(t, filepath.Join(cwd, "snyk_profiles"))
+			assert.NoDirExists(t, filepath.Join(filepath.Dir(cwd), "snyk_profiles"))
+			assert.NoDirExists(t, filepath.Join(home, ".config", "configstore", "snyk_profiles"))
 		})
 	}
 }

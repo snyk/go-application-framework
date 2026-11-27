@@ -230,3 +230,134 @@ func Test_WithPinnedFile_UncheckablePathIsNotRead(t *testing.T) {
 	assert.Nil(t, c.GetStorage())
 	assert.Contains(t, logs.String(), "cannot be checked")
 }
+
+func Test_PinnedFile_ReturnsTheCleanAbsolutePath(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "profile")
+	assert.Equal(t, file, PinnedFile(NewWithOpts(WithPinnedFile(file))))
+	assert.Equal(t, file, PinnedFile(NewWithOpts(WithPinnedFile(filepath.Join(dir, ".", "profile")))))
+}
+
+func Test_PinnedFile_EmptyWhenNothingIsPinned(t *testing.T) {
+	isolateHome(t)
+	assert.Empty(t, PinnedFile(nil))
+	assert.Empty(t, PinnedFile(NewInMemory()))
+	assert.Empty(t, PinnedFile(NewWithOpts(WithFiles(filepath.Join(t.TempDir(), "snyk.json")))))
+	assert.Empty(t, PinnedFile(foreignConfiguration{Configuration: NewInMemory()}))
+}
+
+func Test_PinnedFile_EmptyForARejectedPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		pinned func(dir string) string
+	}{
+		{name: "relative_path", pinned: func(string) string { return "profile.json" }},
+		{name: "trailing_separator", pinned: func(dir string) string { return filepath.Join(dir, "profile") + string(filepath.Separator) }},
+		{name: "existing_directory", pinned: func(dir string) string { return dir }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateHome(t)
+			captureLog(t)
+			c := NewWithOpts(WithPinnedFile(tc.pinned(t.TempDir())))
+			assert.Empty(t, PinnedFile(c))
+			assert.True(t, IsPinned(c), "a rejected path is still a pin")
+		})
+	}
+}
+
+func Test_PinnedFile_KeepsThePathOfAFileThatIsNotUsed(t *testing.T) {
+	isolateHome(t)
+	file := filepath.Join(t.TempDir(), "profile")
+	require.NoError(t, os.WriteFile(file, []byte("{corrupt"), 0o644))
+	captureLog(t)
+	c := NewWithOpts(WithPinnedFile(file))
+	assert.Nil(t, c.GetStorage(), "the corrupt file is not used")
+	assert.Equal(t, file, PinnedFile(c), "the directory of the pinned file still names the profile directory")
+}
+
+func Test_IsPinned(t *testing.T) {
+	isolateHome(t)
+	captureLog(t)
+	assert.True(t, IsPinned(NewWithOpts(WithPinnedFile(filepath.Join(t.TempDir(), "profile")))))
+	assert.True(t, IsPinned(NewWithOpts(WithPinnedFile("profile.json"))), "a rejected path is still a pin")
+	assert.False(t, IsPinned(nil))
+	assert.False(t, IsPinned(NewInMemory()))
+	assert.False(t, IsPinned(NewWithOpts(WithFiles("snyk"))))
+	assert.False(t, IsPinned(foreignConfiguration{Configuration: NewInMemory()}))
+}
+
+func Test_WithPinnedFile_CloneStaysPinned(t *testing.T) {
+	isolateHome(t)
+	file := filepath.Join(t.TempDir(), "profile")
+	require.NoError(t, os.WriteFile(file, []byte(`{"a":"b"}`), 0o644))
+	c := NewWithOpts(WithPinnedFile(file))
+	c.Set("in_memory", "value")
+
+	clone := c.Clone()
+	assert.Equal(t, file, PinnedFile(clone))
+	assert.True(t, IsPinned(clone))
+	assert.Same(t, c.GetStorage(), clone.GetStorage())
+	assert.Equal(t, "b", clone.GetString("a"))
+	assert.Equal(t, "value", clone.GetString("in_memory"))
+	assert.Equal(t, file, PinnedFile(clone.Clone()), "a clone of a clone stays pinned")
+}
+
+func Test_WithPinnedFile_CloneDoesNotReadTheFileAgain(t *testing.T) {
+	isolateHome(t)
+	file := filepath.Join(t.TempDir(), "profile")
+	require.NoError(t, os.WriteFile(file, []byte(`{"a":"b"}`), 0o644))
+	c := NewWithOpts(WithPinnedFile(file))
+	require.NoError(t, os.WriteFile(file, []byte(`{"a":"changed","added":"on disk"}`), 0o644))
+
+	clone := c.Clone()
+	assert.Equal(t, "b", clone.GetString("a"))
+	assert.False(t, clone.IsSet("added"))
+}
+
+func Test_WithPinnedFile_CloneOfAnUnusedPinLogsNothing(t *testing.T) {
+	tests := []struct {
+		name   string
+		pinned func(t *testing.T) string
+	}{
+		{name: "rejected_path", pinned: func(*testing.T) string { return "profile.json" }},
+		{
+			name: "corrupt_file",
+			pinned: func(t *testing.T) string {
+				t.Helper()
+				file := filepath.Join(t.TempDir(), "profile")
+				require.NoError(t, os.WriteFile(file, []byte("{corrupt"), 0o644))
+				return file
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateHome(t)
+			logs := captureLog(t)
+			c := NewWithOpts(WithPinnedFile(tc.pinned(t)))
+			logs.Reset()
+
+			clone := c.Clone()
+			assert.Empty(t, logs.String())
+			assert.Nil(t, clone.GetStorage())
+			assert.True(t, IsPinned(clone))
+			assert.Equal(t, PinnedFile(c), PinnedFile(clone))
+		})
+	}
+}
+
+func Test_WithPinnedFile_CloneWithoutHomeDirectoryLogsNothing(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	file := filepath.Join(t.TempDir(), "profile")
+	require.NoError(t, os.WriteFile(file, []byte(`{"a":"b"}`), 0o644))
+	logs := captureLog(t)
+
+	c := NewWithOpts(WithPinnedFile(file))
+	clone := c.Clone()
+	assert.Empty(t, logs.String())
+	assert.Same(t, c.GetStorage(), clone.GetStorage())
+	assert.Equal(t, "b", clone.GetString("a"))
+}

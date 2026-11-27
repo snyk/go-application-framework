@@ -391,11 +391,21 @@ func defaultMachineID(engine workflow.Engine, logger *zerolog.Logger, extraOpts 
 	return machineid.Resolve(append(opts, extraOpts...)...)
 }
 
-// defaultProfileDir is the default of profile.DirKey: the profile directory in the default storage directory. Without a
-// known home directory there is no default storage directory, so it returns the error instead of a path.
-func defaultProfileDir(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+// defaultProfileDir is the default of profile.DirKey: for a profile, the directory of its own pinned file; otherwise the
+// profile directory next to the pinned config file, else in the default storage directory. When the pinned file was
+// rejected, or there is no default storage directory, it returns the error instead of a path.
+func defaultProfileDir(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
 	if existingValue != nil {
 		return existingValue, nil
+	}
+	if pinned := configuration.PinnedFile(config); pinned != "" {
+		if profile.IsProfile(config) {
+			return filepath.Dir(pinned), nil
+		}
+		return filepath.Join(filepath.Dir(pinned), defaultProfileDirName), nil
+	}
+	if configuration.IsPinned(config) {
+		return "", errors.New("the pinned configuration file was rejected")
 	}
 	storageDir, err := configuration.DefaultStorageDir()
 	if err != nil {
