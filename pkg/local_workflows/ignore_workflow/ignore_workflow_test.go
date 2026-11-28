@@ -10,12 +10,15 @@ import (
 	"testing"
 	"time"
 
+	gogit "github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
@@ -43,16 +46,58 @@ const (
 	testRepoUrl    = "https://github.com/snyk/snyk-goof"
 	testBranchName = "main"
 	expectedUser   = "user@domain.com"
+
+	// Credential-looking values are obviously fake placeholders used only to check redaction.
+	// Tests concatenate them into URLs at runtime so no literal user:secret@host appears in this file.
+	fakeRemoteCredential = "FAKE-TOKEN"
+	fakeRemotePassword   = "FAKE-PASSWORD"
 )
 
-// Setup mock context for testing
-func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks.MockInvocationContext {
-	t.Helper()
-	logger := zerolog.Logger{}
-	return setupMockIgnoreContextWithLogger(t, payload, statusCode, &logger)
+// ignoreContextOption customizes the mock invocation context built by the ignore create test helpers.
+type ignoreContextOption func(*ignoreContextOptions)
+
+type ignoreContextOptions struct {
+	requestBody *[]byte
 }
 
-func setupMockIgnoreContextWithLogger(t *testing.T, payload string, statusCode int, logger *zerolog.Logger) *mocks.MockInvocationContext {
+// captureRequestBody makes the mock HTTP client store the body of the request it receives in dst.
+func captureRequestBody(dst *[]byte) ignoreContextOption {
+	return func(o *ignoreContextOptions) { o.requestBody = dst }
+}
+
+// newMockIgnoreHttpClient returns an HTTP client that answers every request with payload and statusCode.
+func newMockIgnoreHttpClient(t *testing.T, payload string, statusCode int, opts []ignoreContextOption) *http.Client {
+	t.Helper()
+	var options ignoreContextOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return testutils.NewTestClient(func(req *http.Request) *http.Response {
+		if options.requestBody != nil && req.Body != nil {
+			body, err := io.ReadAll(req.Body)
+			assert.NoError(t, err)
+			*options.requestBody = body
+		}
+		return &http.Response{
+			StatusCode: statusCode,
+			// Send response to be tested
+			Body: io.NopCloser(bytes.NewBufferString(payload)),
+			// Must be set to non-nil value or it panics
+			Header: http.Header{
+				"Content-Type": []string{"application/vnd.api+json"},
+			},
+		}
+	})
+}
+
+// Setup mock context for testing
+func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, opts ...ignoreContextOption) *mocks.MockInvocationContext {
+	t.Helper()
+	logger := zerolog.Logger{}
+	return setupMockIgnoreContextWithLogger(t, payload, statusCode, &logger, opts...)
+}
+
+func setupMockIgnoreContextWithLogger(t *testing.T, payload string, statusCode int, logger *zerolog.Logger, opts ...ignoreContextOption) *mocks.MockInvocationContext {
 	t.Helper()
 
 	// setup
@@ -70,17 +115,7 @@ func setupMockIgnoreContextWithLogger(t *testing.T, payload string, statusCode i
 	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
 	mockUserInterface.EXPECT().Input(gomock.Any()).Return("", nil).AnyTimes()
 
-	httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
-		return &http.Response{
-			StatusCode: statusCode,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(payload)),
-			// Must be set to non-nil value or it panics
-			Header: http.Header{
-				"Content-Type": []string{"application/vnd.api+json"},
-			},
-		}
-	})
+	httpClient := newMockIgnoreHttpClient(t, payload, statusCode, opts)
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
@@ -362,7 +397,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 	})
 }
 
-func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
+func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int, opts ...ignoreContextOption) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
 	t.Helper()
 
 	logger := zerolog.Logger{}
@@ -384,13 +419,7 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 
 	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
 
-	httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
-		return &http.Response{
-			StatusCode: mockApiStatusCode,
-			Body:       io.NopCloser(bytes.NewBufferString(mockApiResponse)),
-			Header:     http.Header{"Content-Type": []string{"application/vnd.api+json"}},
-		}
-	})
+	httpClient := newMockIgnoreHttpClient(t, mockApiResponse, mockApiStatusCode, opts)
 
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
@@ -888,4 +917,201 @@ func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
 		true,
 		false,
 	)
+}
+
+// successfulCreateIgnoreResponse is the policy response returned to the credential cases.
+func successfulCreateIgnoreResponse() string {
+	expiration := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	return getSuccessfulPolicyResponse(uuid.New().String(), "11111111-1111-1111-1111-111111111111", string(policyApi.TemporaryIgnore), "Test reason", expectedUser, &expiration)
+}
+
+// setCreateIgnoreFlags sets the inputs of a credential case so that no prompt is shown for them.
+func setCreateIgnoreFlags(config configuration.Configuration, inputDir string) {
+	config.Set(configuration.INPUT_DIRECTORY, inputDir)
+	config.Set(FindingsIdKey, "11111111-1111-1111-1111-111111111111")
+	config.Set(IgnoreTypeKey, string(policyApi.TemporaryIgnore))
+	config.Set(ReasonKey, "Test reason")
+	config.Set(ExpirationKey, "2030-01-01")
+}
+
+// arrangeNonInteractiveCreate returns a non-interactive ignore create context whose request body is captured into captured.
+func arrangeNonInteractiveCreate(t *testing.T, captured *[]byte, inputDir string) *mocks.MockInvocationContext {
+	t.Helper()
+	invocationCtx := setupMockIgnoreContext(t, successfulCreateIgnoreResponse(), http.StatusCreated, captureRequestBody(captured))
+	config := invocationCtx.GetConfiguration()
+	config.Set(InteractiveKey, false)
+	setCreateIgnoreFlags(config, inputDir)
+	return invocationCtx
+}
+
+// arrangeInteractiveCreate returns an interactive ignore create context whose request body is captured into captured.
+// It has no detected remote, so the repository URL is only known through the prompt or --remote-repo-url.
+func arrangeInteractiveCreate(t *testing.T, captured *[]byte) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
+	t.Helper()
+	invocationCtx, mockUI := setupInteractiveMockContext(t, successfulCreateIgnoreResponse(), http.StatusCreated, captureRequestBody(captured))
+	setCreateIgnoreFlags(invocationCtx.GetConfiguration(), t.TempDir())
+	return invocationCtx, mockUI
+}
+
+// requireCapturedRequest fails the test with a clear message when no create-ignore request was sent.
+func requireCapturedRequest(t *testing.T, captured []byte) []byte {
+	t.Helper()
+	require.NotEmpty(t, captured, "the ignore create request was not sent, so its body cannot be checked")
+	return captured
+}
+
+// sentRepoUrl returns the meta.repo_url value from a captured create-ignore request body.
+func sentRepoUrl(t *testing.T, body []byte) string {
+	t.Helper()
+	var payload struct {
+		Data struct {
+			Meta map[string]any `json:"meta"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload), "request body should be JSON")
+	repoUrl, ok := payload.Data.Meta["repo_url"].(string)
+	require.True(t, ok, "meta.repo_url should be a string")
+	return repoUrl
+}
+
+// initRepoWithOrigin creates a git repository in dir whose origin remote is remoteUrl.
+func initRepoWithOrigin(t *testing.T, dir string, remoteUrl string) {
+	t.Helper()
+	repo, err := gogit.PlainInit(dir, false)
+	require.NoError(t, err)
+	_, err = repo.CreateRemote(&gitconfig.RemoteConfig{Name: "origin", URLs: []string{remoteUrl}})
+	require.NoError(t, err)
+}
+
+func Test_ignoreCreateRepoUrlCredentials(t *testing.T) {
+	const (
+		credentialUrl = "https://user:" + fakeRemoteCredential + "@github.com/org/repo.git"
+		strippedUrl   = "https://github.com/org/repo.git"
+		scpUrl        = "git@github.com:org/repo.git"
+	)
+
+	tests := []struct {
+		name        string
+		arrange     func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext
+		wantRepoUrl string
+	}{
+		{
+			name: "credentials in git origin are not sent",
+			arrange: func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext {
+				t.Helper()
+				dir := t.TempDir()
+				initRepoWithOrigin(t, dir, credentialUrl)
+				return arrangeNonInteractiveCreate(t, captured, dir)
+			},
+			wantRepoUrl: strippedUrl,
+		},
+		{
+			name: "credentials in --remote-repo-url are not sent",
+			arrange: func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext {
+				t.Helper()
+				invocationCtx := arrangeNonInteractiveCreate(t, captured, t.TempDir())
+				invocationCtx.GetConfiguration().Set(RemoteRepoUrlKey, credentialUrl)
+				return invocationCtx
+			},
+			wantRepoUrl: strippedUrl,
+		},
+		{
+			name: "credentials in prompted repository URL are not sent",
+			arrange: func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext {
+				t.Helper()
+				invocationCtx, mockUI := arrangeInteractiveCreate(t, captured)
+				mockUI.EXPECT().Input(gomock.Eq(remoteRepoUrlDescription)).Return(credentialUrl, nil).Times(1)
+				return invocationCtx
+			},
+			wantRepoUrl: strippedUrl,
+		},
+		{
+			name: "scp-style git origin is sent unchanged",
+			arrange: func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext {
+				t.Helper()
+				dir := t.TempDir()
+				initRepoWithOrigin(t, dir, scpUrl)
+				return arrangeNonInteractiveCreate(t, captured, dir)
+			},
+			wantRepoUrl: scpUrl,
+		},
+		{
+			name: "scp-style --remote-repo-url is sent unchanged",
+			arrange: func(t *testing.T, captured *[]byte) *mocks.MockInvocationContext {
+				t.Helper()
+				invocationCtx := arrangeNonInteractiveCreate(t, captured, t.TempDir())
+				invocationCtx.GetConfiguration().Set(RemoteRepoUrlKey, scpUrl)
+				return invocationCtx
+			},
+			wantRepoUrl: scpUrl,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured []byte
+			invocationCtx := tt.arrange(t, &captured)
+
+			_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+			require.NoError(t, err)
+
+			body := requireCapturedRequest(t, captured)
+			assert.NotContains(t, string(body), fakeRemoteCredential)
+			assert.Equal(t, tt.wantRepoUrl, sentRepoUrl(t, body))
+		})
+	}
+}
+
+func Test_sanitizeRemoteRepoUrl(t *testing.T) {
+	t.Run("exact output", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    string
+			expected string
+		}{
+			{"empty", "", ""},
+			{"https with user and token", "https://user:" + fakeRemoteCredential + "@github.com/org/repo.git", "https://github.com/org/repo.git"},
+			{"https with token only", "https://" + fakeRemoteCredential + "@github.com/org/repo.git", "https://github.com/org/repo.git"},
+			{"ssh with user", "ssh://git@github.com/org/repo.git", "ssh://github.com/org/repo.git"},
+			{"ssh with user, password and port", "ssh://user:" + fakeRemotePassword + "@host:22/org/repo.git", "ssh://host:22/org/repo.git"},
+			{"git scheme unchanged", "git://host/org/repo.git", "git://host/org/repo.git"},
+			{"plain https unchanged", "https://github.com/org/repo.git", "https://github.com/org/repo.git"},
+			{"scp-style unchanged", "git@github.com:org/repo.git", "git@github.com:org/repo.git"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Equal(t, tt.expected, sanitizeRemoteRepoUrl(tt.input))
+			})
+		}
+	})
+
+	// These check that the credential is gone and the host is kept, without pinning the exact output.
+	t.Run("credentials removed and host kept", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			input string
+		}{
+			{"uppercase scheme", "HTTPS://user:" + fakeRemotePassword + "@host/org/repo.git"},
+			{"percent-encoded userinfo", "https://us%40er:" + fakeRemotePassword + "@host/org/repo.git"},
+			{"malformed url", "https://user:" + fakeRemotePassword + "@host:port8080/path"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := sanitizeRemoteRepoUrl(tt.input)
+				assert.NotContains(t, got, fakeRemotePassword)
+				assert.NotContains(t, got, "@", "userinfo should be removed")
+				assert.Contains(t, got, "host")
+			})
+		}
+	})
+}
+
+func Test_remoteRepoUrlDefaultFunc(t *testing.T) {
+	t.Run("non-string existing value is returned unchanged", func(t *testing.T) {
+		value, err := remoteRepoUrlDefaultFunc(42, configuration.New())
+		assert.NoError(t, err)
+		assert.Equal(t, 42, value)
+	})
 }
