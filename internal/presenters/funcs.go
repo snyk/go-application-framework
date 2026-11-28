@@ -253,7 +253,7 @@ func hasSuppression(finding local_models.FindingResource) bool {
 	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
-func getSarifTemplateFuncMap() template.FuncMap {
+func getSarifTemplateFuncMap(renderTime time.Time) template.FuncMap {
 	fnMap := template.FuncMap{}
 	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
@@ -266,7 +266,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		if projectName != "" {
 			projectName = projectName + "/"
 		}
-		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
+		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, renderTime.UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
 	// severityToSarifLevel is for string types (ufm.sarif.tmpl)

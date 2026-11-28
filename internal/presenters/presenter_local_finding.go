@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -33,6 +34,7 @@ type LocalFindingPresenter struct {
 	config       configuration.Configuration
 	writer       io.Writer
 	runtimeinfo  runtimeinfo.RuntimeInfo
+	renderTime   time.Time
 	templateImpl map[string]TemplateImplFunction
 }
 
@@ -54,11 +56,21 @@ func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
 	}
 }
 
+// WithRenderTime sets the time stamped into rendered output, so that all
+// outputs of one run can share it. It defaults to the renderer's creation time.
+func WithRenderTime(renderTime time.Time) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.renderTime = renderTime
+	}
+}
+
 func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
-	p := &LocalFindingPresenter{
-		Input:  localFindingsDoc,
-		config: config,
-		writer: writer,
+	var p *LocalFindingPresenter
+	p = &LocalFindingPresenter{
+		Input:      localFindingsDoc,
+		config:     config,
+		writer:     writer,
+		renderTime: time.Now(),
 		templateImpl: map[string]TemplateImplFunction{
 			NoneMimeType: func() (*template.Template, template.FuncMap, error) {
 				localFindingsTemplate, err := template.New(NoneMimeType).Parse("")
@@ -82,7 +94,7 @@ func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, con
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getSarifTemplateFuncMap()
+				functionMapMimeType := getSarifTemplateFuncMap(p.renderTime)
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},

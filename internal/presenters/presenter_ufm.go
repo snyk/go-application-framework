@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -75,7 +76,7 @@ func NewUfmRenderer(results []testapi.TestResult, config configuration.Configura
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getSarifTemplateFuncMap()
+				functionMapMimeType := getSarifTemplateFuncMap(time.Now())
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},
