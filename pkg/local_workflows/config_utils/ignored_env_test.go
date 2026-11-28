@@ -22,7 +22,7 @@ func Test_CheckIgnoredEnvVars(t *testing.T) {
 
 		result := CheckIgnoredEnvVars(config)
 		require.Len(t, result, 1)
-		assert.Equal(t, "Ignoring environment variable(s) SNYK_TOKEN: they are not applied to this configuration.", result[0].Description)
+		assert.Equal(t, "When using configuration profiles, the following environment variable(s) are not used SNYK_TOKEN", result[0].Description)
 		assert.NotContains(t, result[0].Description, "secret")
 	})
 
@@ -37,7 +37,7 @@ func Test_CheckIgnoredEnvVars(t *testing.T) {
 
 		result := CheckIgnoredEnvVars(config)
 		require.Len(t, result, 1)
-		assert.Equal(t, "Ignoring environment variable(s) SNYK-TOKEN, SNYK_OAUTH_TOKEN: they are not applied to this configuration.", result[0].Description)
+		assert.Equal(t, "When using configuration profiles, the following environment variable(s) are not used SNYK-TOKEN, SNYK_OAUTH_TOKEN", result[0].Description)
 	})
 
 	t.Run("an empty value reports nothing", func(t *testing.T) {
@@ -66,7 +66,7 @@ func Test_CheckIgnoredEnvVars(t *testing.T) {
 		)
 
 		assert.Contains(t, CheckSanity(config), SanityCheckResult{
-			Description: "Ignoring environment variable(s) SNYK_TOKEN: they are not applied to this configuration.",
+			Description: "When using configuration profiles, the following environment variable(s) are not used SNYK_TOKEN",
 		})
 	})
 
@@ -81,7 +81,7 @@ func Test_CheckIgnoredEnvVars(t *testing.T) {
 		work, err := registry.Profile("work")
 		require.NoError(t, err)
 		assert.Equal(t, []SanityCheckResult{{
-			Description: "Ignoring environment variable(s) SNYK_TOKEN: they are not applied to this configuration.",
+			Description: "When using configuration profiles, the following environment variable(s) are not used SNYK_TOKEN",
 		}}, CheckIgnoredEnvVars(work.Configuration()))
 
 		def, err := registry.Profile(profile.DefaultName)

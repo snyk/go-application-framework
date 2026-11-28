@@ -24,7 +24,7 @@ func CheckIgnoredEnvVars(config configuration.Configuration) []SanityCheckResult
 		return nil
 	}
 	return []SanityCheckResult{{
-		Description: fmt.Sprintf("Ignoring environment variable(s) %s: they are not applied to this configuration.",
+		Description: fmt.Sprintf("When using configuration profiles, the following environment variable(s) are not used %s",
 			strings.ToUpper(strings.Join(names, ", "))),
 	}}
 }
