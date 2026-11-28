@@ -375,3 +375,77 @@ func Test_JsonStorage_Set_AppliesDotDotInsideATargetTheWayTheOSDoes(t *testing.T
 	assert.FileExists(t, followed)
 	assert.NoFileExists(t, collapsed)
 }
+
+func Test_JsonStorage_Set_InvalidJsonLeavesTheFileUntouched(t *testing.T) {
+	t.Parallel()
+	for name, opts := range map[string][]configuration.JsonOption{"default": nil, "exact numbers": {configuration.WithExactNumbers()}} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			configFile := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(configFile, []byte(`{"a":`), 0o600))
+
+			assert.Error(t, configuration.NewJsonStorage(configFile, opts...).Set(key, expectedValue))
+
+			content, err := os.ReadFile(configFile)
+			require.NoError(t, err)
+			assert.Equal(t, `{"a":`, string(content))
+		})
+	}
+}
+
+func Test_JsonStorage_ReadAll(t *testing.T) {
+	t.Run("returns the keys of the file as stored, with the text of numbers", func(t *testing.T) {
+		configFile := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(configFile, []byte(`{"snyk_token":"t","num":1.50,"id":12345678901234567890,"b":true}`), 0o600))
+		config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+		config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"api"})
+		t.Setenv("SNYK_CFG_NUM", "from-env")
+
+		values, err := configuration.NewJsonStorage(configFile, configuration.WithConfiguration(config), configuration.WithExactNumbers()).ReadAll()
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{
+			"snyk_token": "t",
+			"num":        json.Number("1.50"),
+			"id":         json.Number("12345678901234567890"),
+			"b":          true,
+		}, values)
+	})
+
+	t.Run("rounds numbers without exact numbers", func(t *testing.T) {
+		values, err := storageWithTempConfigFile(t, []byte(`{"num":1.50}`)).ReadAll()
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{"num": 1.5}, values)
+	})
+
+	t.Run("a missing file is empty and is not created", func(t *testing.T) {
+		configFile := filepath.Join(t.TempDir(), "missing", "config.json")
+
+		values, err := configuration.NewJsonStorage(configFile).ReadAll()
+
+		require.NoError(t, err)
+		assert.Empty(t, values)
+		assert.NoFileExists(t, configFile)
+	})
+
+	t.Run("an empty file is empty", func(t *testing.T) {
+		values, err := storageWithTempConfigFile(t, nil).ReadAll()
+
+		require.NoError(t, err)
+		assert.Empty(t, values)
+	})
+
+	t.Run("invalid JSON is an error", func(t *testing.T) {
+		_, err := storageWithTempConfigFile(t, []byte(`{"a":`)).ReadAll()
+
+		assert.Error(t, err)
+	})
+}
+
+func Test_JsonStorage_Path(t *testing.T) {
+	t.Parallel()
+	configFile := filepath.Join(t.TempDir(), "config.json")
+
+	assert.Equal(t, configFile, configuration.NewJsonStorage(configFile).Path())
+}

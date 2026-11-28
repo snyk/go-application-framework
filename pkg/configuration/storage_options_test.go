@@ -21,14 +21,14 @@ func Test_JsonStorage_BlankFileOption(t *testing.T) {
 	t.Run("on: a blank file is an empty file", func(t *testing.T) {
 		file := filepath.Join(dir, "on.json")
 		require.NoError(t, os.WriteFile(file, []byte(" \n\t"), 0o644))
-		require.NoError(t, NewJsonStorage(file, withBlankFileAsEmpty()).Set("a", "x"))
+		require.NoError(t, NewJsonStorage(file, WithBlankFileAsEmpty()).Set("a", "x"))
 		assert.JSONEq(t, `{"a":"x"}`, readFileString(t, file))
 	})
 
 	t.Run("on: a file with content is unchanged by the option", func(t *testing.T) {
 		file := filepath.Join(dir, "content.json")
 		require.NoError(t, os.WriteFile(file, []byte(`{"b":"y"}`), 0o644))
-		require.NoError(t, NewJsonStorage(file, withBlankFileAsEmpty()).Set("a", "x"))
+		require.NoError(t, NewJsonStorage(file, WithBlankFileAsEmpty()).Set("a", "x"))
 		assert.JSONEq(t, `{"a":"x","b":"y"}`, readFileString(t, file))
 	})
 }
@@ -46,7 +46,7 @@ func Test_JsonStorage_ExactNumbersOption(t *testing.T) {
 	t.Run("on: other numbers keep their text", func(t *testing.T) {
 		file := filepath.Join(dir, "on.json")
 		require.NoError(t, os.WriteFile(file, []byte(`{"id":12345678901234567890,"big":9007199254740993}`), 0o644))
-		require.NoError(t, NewJsonStorage(file, withExactNumbers()).Set("other", "x"))
+		require.NoError(t, NewJsonStorage(file, WithExactNumbers()).Set("other", "x"))
 		content := readFileString(t, file)
 		assert.Contains(t, content, "12345678901234567890")
 		assert.Contains(t, content, "9007199254740993")
@@ -55,7 +55,7 @@ func Test_JsonStorage_ExactNumbersOption(t *testing.T) {
 	t.Run("on: trailing data still fails a write, as by default", func(t *testing.T) {
 		file := filepath.Join(dir, "trailing.json")
 		require.NoError(t, os.WriteFile(file, []byte(`{"a":1} {"b":2}`), 0o644))
-		assert.Error(t, NewJsonStorage(file, withExactNumbers()).Set("c", "x"))
+		assert.Error(t, NewJsonStorage(file, WithExactNumbers()).Set("c", "x"))
 		assert.Equal(t, `{"a":1} {"b":2}`, readFileString(t, file))
 	})
 }
@@ -70,7 +70,7 @@ func readFileString(t *testing.T, path string) string {
 func Test_JsonStorage_BlankFileOption_OnlyJSONWhiteSpaceIsBlank(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "vertical-tab.json")
 	require.NoError(t, os.WriteFile(file, []byte("\v"), 0o644))
-	assert.Error(t, NewJsonStorage(file, withBlankFileAsEmpty()).Set("a", "x"), "a vertical tab is not JSON white space")
+	assert.Error(t, NewJsonStorage(file, WithBlankFileAsEmpty()).Set("a", "x"), "a vertical tab is not JSON white space")
 	assert.Equal(t, "\v", readFileString(t, file))
 }
 
@@ -80,14 +80,14 @@ func Test_JsonStorage_ExactNumbersOption_NullAndWhiteSpace(t *testing.T) {
 	t.Run("null is an empty document", func(t *testing.T) {
 		file := filepath.Join(dir, "null.json")
 		require.NoError(t, os.WriteFile(file, []byte("null"), 0o644))
-		require.NoError(t, NewJsonStorage(file, withExactNumbers()).Set("a", "x"))
+		require.NoError(t, NewJsonStorage(file, WithExactNumbers()).Set("a", "x"))
 		assert.JSONEq(t, `{"a":"x"}`, readFileString(t, file))
 	})
 
 	t.Run("trailing white space is accepted", func(t *testing.T) {
 		file := filepath.Join(dir, "spaces.json")
 		require.NoError(t, os.WriteFile(file, []byte("{\"a\":1} \n\t"), 0o644))
-		require.NoError(t, NewJsonStorage(file, withExactNumbers()).Set("b", "x"))
+		require.NoError(t, NewJsonStorage(file, WithExactNumbers()).Set("b", "x"))
 		assert.JSONEq(t, `{"a":1,"b":"x"}`, readFileString(t, file))
 	})
 }
