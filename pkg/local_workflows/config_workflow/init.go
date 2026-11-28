@@ -16,6 +16,9 @@ func InitConfigWorkflows(engine workflow.Engine) error {
 		initEnvironmentWorkflow(engine),
 		register(engine, WORKFLOWID_CONFIG, configWorkflowEntryPoint),
 		register(engine, WORKFLOWID_CONFIG_GET, configGetWorkflowEntryPoint),
+		register(engine, WORKFLOWID_CONFIG_SET, configSetWorkflowEntryPoint),
+		register(engine, WORKFLOWID_CONFIG_UNSET, configUnsetWorkflowEntryPoint),
+		register(engine, WORKFLOWID_CONFIG_CLEAR, configClearWorkflowEntryPoint),
 	)
 }
 
